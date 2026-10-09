@@ -2,6 +2,8 @@
 
 ## 0.5.2 (2026-10-09)
 
+First release on npm as `@analitikisler/ai-tag-debugger`. The test script now also runs on Node 20.
+
 Fixes from the review of 0.5.1.
 
 - Meta's newer advanced matching fields (`udff[em]`, `udff[ph]`, …) are redacted like `ud[…]`.

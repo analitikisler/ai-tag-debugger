@@ -101,17 +101,25 @@ Adding a native provider means implementing two functions in [`src/providers.js`
 Requires Node 20+.
 
 ```bash
+npm install -g @analitikisler/ai-tag-debugger
+npx -y playwright@1.56.1 install chromium   # the browser version this release uses
+export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_KEY
+
+ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
+```
+
+Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
+
+### Try the demo shop (from source)
+
+The repository includes a demo shop with three deliberate tracking bugs:
+
+```bash
 git clone https://github.com/analitikisler/ai-tag-debugger.git
 cd ai-tag-debugger
 npm install
 npx playwright install chromium   # run again after upgrading, so the browser matches Playwright
-export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY, or GEMINI_API_KEY
-```
-
-Try it on the included demo shop. It has three deliberate tracking bugs:
-
-```bash
-npm run demo:serve        # in one terminal: http://localhost:4321
+npm run demo:serve                # in one terminal: http://localhost:4321
 node src/cli.js run --config examples/demo.config.json --out reports/demo
 open reports/demo/report.html
 ```
@@ -259,20 +267,22 @@ The browser runs on the computer where the server runs, so it can reach your sta
 
 ### Apps that start a local server: Claude Desktop, Gemini CLI, Cursor, VS Code, Claude Code
 
-Add the server to the app's MCP config, pointing at your copy of the repository. For Claude Desktop that is Settings → Developer → Edit Config (`claude_desktop_config.json`):
+Add the server to the app's MCP config. For Claude Desktop that is Settings → Developer → Edit Config (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "ai-tag-debugger": {
-      "command": "node",
-      "args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]
+      "command": "npx",
+      "args": ["-y", "@analitikisler/ai-tag-debugger", "mcp"]
     }
   }
 }
 ```
 
-Gemini CLI uses the same `mcpServers` block in `~/.gemini/settings.json`. Claude Code: `claude mcp add ai-tag-debugger -- node /path/to/ai-tag-debugger/src/cli.js mcp`. Restart the app, and the ai-tag-debugger tools appear. If the app can't find `node`, use its full path (`which node`). Reports are written to `~/ai-tag-debugger-reports`.
+Install the browser once with `npx -y playwright@1.56.1 install chromium`. Gemini CLI uses the same `mcpServers` block in `~/.gemini/settings.json`. Claude Code: `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`. Restart the app, and the ai-tag-debugger tools appear. If the app can't find `npx`, use its full path (`which npx`, for example `/opt/homebrew/bin/npx` on a Mac with Homebrew). Reports are written to `~/ai-tag-debugger-reports`.
+
+Running from a clone instead? Use `"command": "node"` and `"args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]`.
 
 ### Apps that connect to a URL: ChatGPT, Gemini
 
@@ -280,7 +290,7 @@ These apps connect to MCP servers over HTTPS (in ChatGPT, through developer mode
 
 ```bash
 cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787; note the https address it prints
-node src/cli.js mcp --http --port 8787 --public-url https://<your-tunnel-address>
+npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<your-tunnel-address>
 ```
 
 The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`) must be at least 16 characters.
