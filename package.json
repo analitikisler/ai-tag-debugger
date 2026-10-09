@@ -1,0 +1,58 @@
+{
+  "name": "@analitikisler/ai-tag-debugger",
+  "version": "0.5.1",
+  "description": "Open-source AI agent that QA-tests your website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok). Bring your own model (Claude, OpenAI, Gemini) or use it from your chat app over MCP.",
+  "type": "module",
+  "bin": {
+    "ai-tag-debugger": "src/cli.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "demo:serve": "node examples/serve.js",
+    "demo": "node src/cli.js run --config examples/demo.config.json --scripted --out reports/demo"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "analytics",
+    "ga4",
+    "google-tag-manager",
+    "tracking",
+    "qa",
+    "consent-mode",
+    "ai-agent",
+    "mcp",
+    "mcp-server",
+    "claude",
+    "openai",
+    "gemini",
+    "playwright",
+    "tag-debugger",
+    "gtm-debugger"
+  ],
+  "license": "MIT",
+  "author": "Analitik İşler (https://analitikisler.com)",
+  "homepage": "https://github.com/analitikisler/ai-tag-debugger#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/analitikisler/ai-tag-debugger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/analitikisler/ai-tag-debugger/issues"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@google/genai": "^2.28.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "openai": "^7.30.1",
+    "playwright": "1.56.1",
+    "zod": "^4.6.5"
+  }
+}

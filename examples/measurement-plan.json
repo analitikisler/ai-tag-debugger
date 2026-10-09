@@ -1,0 +1,16 @@
+{
+  "consent_mode": true,
+  "events": [
+    { "platform": "ga4", "name": "page_view", "allow_multiple": false },
+    { "platform": "ga4", "name": "view_item_list", "journeys": ["browse", "checkout"], "required_params": ["currency", "items"] },
+    { "platform": "ga4", "name": "view_item", "journeys": ["browse", "checkout"], "required_params": ["currency", "value", "items"] },
+    { "platform": "ga4", "name": "add_to_cart", "journeys": ["browse", "checkout"], "required_params": ["currency", "value", "items"] },
+    { "platform": "ga4", "name": "view_cart", "journeys": ["checkout"], "required_params": ["currency", "value"] },
+    { "platform": "ga4", "name": "begin_checkout", "journeys": ["checkout"], "required_params": ["currency", "value", "items"] },
+    { "platform": "ga4", "name": "purchase", "journeys": ["checkout"], "required_params": ["transaction_id", "currency", "value", "items"] },
+    { "platform": "meta", "name": "PageView" },
+    { "platform": "meta", "name": "AddToCart", "journeys": ["browse", "checkout"] },
+    { "platform": "meta", "name": "InitiateCheckout", "journeys": ["checkout"] },
+    { "platform": "meta", "name": "Purchase", "journeys": ["checkout"], "required_params": ["value", "currency"] }
+  ]
+}

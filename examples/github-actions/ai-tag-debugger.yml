@@ -1,0 +1,32 @@
+# Runs a tracking audit after every deploy and fails the job if tracking broke.
+# Copy to .github/workflows/ai-tag-debugger.yml and add your AI provider's API key as a repository secret.
+# The example uses ANTHROPIC_API_KEY; for OpenAI or Gemini, pass OPENAI_API_KEY or GEMINI_API_KEY instead.
+name: AI Tag Debugger
+on:
+  deployment_status:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    env:
+      # Pin a released version, and update it on purpose.
+      ATD_VERSION: 0.5.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Installed in its own folder, so the browser matches the Playwright version the tool uses.
+      - run: npm install --prefix "$RUNNER_TEMP/atd" "@analitikisler/ai-tag-debugger@$ATD_VERSION"
+      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/playwright" install --with-deps chromium'
+      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --out tracking-report'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tracking-report
+          path: tracking-report

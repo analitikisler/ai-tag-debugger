@@ -1,0 +1,33 @@
+{
+  "site": "http://localhost:4321",
+  "plan": "measurement-plan.json",
+  "viewports": ["desktop", "mobile"],
+  "block_hits": true,
+  "journeys": [
+    {
+      "id": "browse",
+      "goal": "Accept cookies, open any product from the home page and add it to the cart.",
+      "steps": [
+        { "action": "click", "selector": "#consent-accept", "accepts_consent": true, "reason": "Accept cookies" },
+        { "action": "click", "selector": "a.card", "reason": "Open the first product" },
+        { "action": "click", "selector": "#add-to-cart", "reason": "Add to cart" }
+      ]
+    },
+    {
+      "id": "checkout",
+      "goal": "Accept cookies, add any product to the cart, go to checkout and place the order with the test payment option until the thank-you page shows an order number.",
+      "steps": [
+        { "action": "click", "selector": "#consent-accept", "accepts_consent": true, "reason": "Accept cookies" },
+        { "action": "click", "selector": "a.card", "reason": "Open the first product" },
+        { "action": "click", "selector": "#add-to-cart", "reason": "Add to cart" },
+        { "action": "click", "selector": "#cart-link", "reason": "Open the cart" },
+        { "action": "click", "selector": "#checkout-btn", "reason": "Go to checkout" },
+        { "action": "fill", "selector": "input[name=name]", "value": "Test User", "reason": "Fill in name" },
+        { "action": "fill", "selector": "input[name=email]", "value": "qa-test@example.com", "reason": "Fill in email" },
+        { "action": "fill", "selector": "input[name=address]", "value": "1 Test Street", "reason": "Fill in address" },
+        { "action": "select", "selector": "select[name=payment]", "value": "test", "reason": "Choose test payment" },
+        { "action": "click", "selector": "button[type=submit]", "reason": "Place the order" }
+      ]
+    }
+  ]
+}
