@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Pin a released version, and update it on purpose.
-      ATD_VERSION: 0.5.1
+      ATD_VERSION: 0.5.2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

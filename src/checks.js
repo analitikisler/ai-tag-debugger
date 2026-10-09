@@ -168,6 +168,13 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }
   }
 
+  // Unhashed user data in the dataLayer. Valid for GTM enhanced conversions (Google hashes it
+  // before sending), but every other tag on the page can read it too.
+  const plainPush = run.dataLayerLog.find((e) => e.userData?.plain?.length);
+  if (plainPush) {
+    findings.push({ ...base, severity: "warning", check: "pii_datalayer", step: stepLabel(plainPush.step), detail: d.piiDataLayer(plainPush.userData.plain) });
+  }
+
   // Events that are not in the plan.
   const unplanned = [...new Set(run.hits.filter((h) => !planByKey.has(key(h.platform, h.name))).map((h) => key(h.platform, h.name)))];
   if (unplanned.length) {

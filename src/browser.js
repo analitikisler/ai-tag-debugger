@@ -1,6 +1,6 @@
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders } from "./parsers.js";
-import { redactBody, redactParams, redactUrl } from "./redact.js";
+import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
 
@@ -202,7 +202,7 @@ export class AuditSession {
     this.browser = await chromium.launch(launch);
     this.context = await this.browser.newContext({ ...device, locale: "en-US" });
     await this.context.exposeBinding("__atdRecord", (_source, entry) => {
-      this.record("dataLayerLog", { ...entry, step: this.currentStep, t: Date.now() });
+      this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
@@ -289,6 +289,14 @@ export class AuditSession {
     if (!found.fields.length) return hit;
     const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
     return this.opts.keepBodies ? { ...hit, userData } : { ...hit, url, params, userData };
+  }
+
+  /** A dataLayer entry with user data redacted, and userData: { fields, plain } when there was any. */
+  redactEntry(entry) {
+    const found = redactPush(entry.value);
+    if (!found.fields.length) return entry;
+    const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
+    return this.opts.keepBodies ? { ...entry, userData } : { ...entry, value: found.value, userData };
   }
 
   /** { postData } for a tracking POST, redacted, within the per-audit budget; { bodyDropped } past it. */

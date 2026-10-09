@@ -22,7 +22,7 @@ import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
-const VERSION = "0.5.1";
+const VERSION = "0.5.2";
 const MAX_OPEN_AUDITS = 4;
 const IDLE_MS = 15 * 60 * 1000; // an audit untouched this long is closed
 const MAX_BODY_BYTES = 1024 * 1024;

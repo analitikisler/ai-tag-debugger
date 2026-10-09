@@ -6,7 +6,7 @@ import { AuditSession, MAX_TOTAL_BODIES } from "../src/browser.js";
 import { checkRun } from "../src/checks.js";
 import { renderMarkdown } from "../src/report.js";
 import { resolveProviders } from "../src/parsers.js";
-import { redactBody, redactUrl } from "../src/redact.js";
+import { redactBody, redactParams, redactPush, redactUrl } from "../src/redact.js";
 
 const HASH = "a".repeat(64);
 
@@ -24,6 +24,26 @@ test("emails, phones and user ids are replaced with a marker that keeps the leng
   // A body cut at the size limit is not valid JSON, and is still redacted.
   const cut = redactBody('{"event":"Purchase","context":{"user":{"email":"me@x.com","exte');
   assert.doesNotMatch(cut.text, /me@x/);
+});
+
+test("newer Meta fields, email-like values under any name, and bodies cut inside a value are redacted", () => {
+  assert.doesNotMatch(redactUrl("https://www.facebook.com/tr/?id=1&udff[em]=a@b.c&udff[ph]=905551112233").url, /a%40b|a@b|905551112233/);
+  assert.match(redactParams({ customer_email: "me@x.com" }).customer_email, /^\[redacted/);
+  assert.doesNotMatch(redactBody("en=x&up.user_email=me%40x.com").text, /me%40x|me@x/);
+  const cut = redactBody('{"context":{"user":{"phone_number":905551112233,"x":1,"email":"plain@exampl');
+  assert.doesNotMatch(cut.text, /905551112233|plain@/);
+  assert.match(cut.text, /"x":1/);
+});
+
+test("user data in dataLayer pushes is redacted, page data with similar names is kept, and plain values raise a risk", () => {
+  const push = redactPush({ event: "purchase", user_data: { email: "me@x.com", phone_number: "+905551112233", address: { city: "Istanbul" } }, page: { city: "Ankara" } });
+  assert.doesNotMatch(JSON.stringify(push.value), /me@x|905551112233|Istanbul/);
+  assert.equal(push.value.page.city, "Ankara");
+  const gtag = redactPush(["set", "user_data", { email: "me@x.com", address: { first_name: "Ada" } }]);
+  assert.doesNotMatch(JSON.stringify(gtag.value), /me@x|Ada/);
+  const run = { journeyId: "j", viewport: "desktop", completed: true, hits: [], steps: [{ index: 0, label: "start" }, { index: 1, label: "Buy" }], consentStep: null,
+    dataLayerLog: [{ value: push.value, userData: { fields: push.fields, plain: push.plain }, step: 1 }] };
+  assert.match(checkRun({ events: [] }, run).find((f) => f.check === "pii_datalayer").detail, /user_data\.email/);
 });
 
 test("planned events for unselected providers are listed in an info line, platforms ignore case, and plan providers are added by default", () => {
@@ -49,6 +69,8 @@ test("the Markdown report escapes the title and journey id", () => {
 
 const big = "x".repeat(30 * 1024);
 const PAGE = `<!doctype html><script>
+  window.dataLayer = window.dataLayer || [];
+  dataLayer.push({ event: "purchase", user_data: { email: "me@x.com" } });
   fetch("https://www.facebook.com/tr/?id=1&ev=Purchase&ud[em]=me%40x.com", { mode: "no-cors" });
   navigator.sendBeacon("https://region1.google-analytics.com/g/collect?v=2&tid=G-1", "en=purchase&em=me%40x.com&ep.big=${big}");
   for (let i = 0; i < ${Math.ceil(MAX_TOTAL_BODIES / (30 * 1024)) + 5}; i++) fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1", { method: "POST", mode: "no-cors", body: "en=scroll&ep.big=${big}" });
@@ -68,7 +90,8 @@ test("the browser stores requests redacted, within a total body budget, and flag
   try {
     await session.act({ action: "goto", url });
     await session.page.waitForTimeout(1500);
-    const stored = JSON.stringify({ hits: session.hits, network: session.network });
+    const stored = JSON.stringify({ hits: session.hits, network: session.network, dataLayer: session.dataLayerLog });
+    assert.ok(session.dataLayerLog.some((e) => e.userData?.plain.includes("user_data.email")));
     assert.doesNotMatch(stored, /me(@|%40)x\.com/);
     assert.ok(session.hits.find((h) => h.platform === "meta").userData.plain.includes("ud[em]"));
     assert.ok(session.hits.find((h) => h.name === "purchase").userData.plain.includes("em"));

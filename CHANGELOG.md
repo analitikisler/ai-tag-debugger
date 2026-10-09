@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2 (2026-10-09)
+
+Fixes from the review of 0.5.1.
+
+- Meta's newer advanced matching fields (`udff[em]`, `udff[ph]`, …) are redacted like `ud[…]`.
+- dataLayer pushes are redacted too: email and phone fields, everything under `user_data` (including `gtag("set", "user_data", …)`), and email-like values. Page data with similar names, such as `page.city`, is kept. Unhashed user data in the dataLayer is reported as a warning: it is a valid setup for Google enhanced conversions, but every other tag on the page can read it. `--keep-bodies` keeps pushes as they were.
+- Any value that looks like an email address is redacted, whatever its field is called (for example `ep.customer_email`).
+- In bodies cut at the 32 KB limit, a value left open at the end is dropped, and numbers (such as a phone number sent as a number) are redacted by field name.
+
 ## 0.5.1 (2026-10-09)
 
 Fixes from the review of 0.5.0.
