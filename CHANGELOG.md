@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.6.0 (2026-10-10)
 
 - **Report v3.** The HTML report has four tabs: Overview, Findings, Journeys, and Scope and plan. They switch with the URL hash, so links work across tabs and every view can be shared. Still no scripts; printing shows everything.
   - Journeys show one journey at a time: a step list on the left and the selected step (with its Events, dataLayer and Network tabs) on the right. A journey opens on its first step with a problem.
