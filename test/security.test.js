@@ -153,7 +153,7 @@ test("the HTTP server rejects short tokens, big bodies and wrong secrets, and se
     assert.equal((await fetch(`${base}/mcp/${token}/reports/none/report.html`)).status, 404);
     const report = await fetch(`${base}/mcp/${token}/reports/audit1/report.html`);
     assert.equal(report.status, 200);
-    assert.match(report.headers.get("content-security-policy"), /default-src 'none'/);
+    assert.equal(report.headers.get("content-security-policy"), "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
     assert.equal(report.headers.get("x-content-type-options"), "nosniff");
   } finally {
     server.close();

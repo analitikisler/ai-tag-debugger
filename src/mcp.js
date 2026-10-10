@@ -22,7 +22,7 @@ import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
-const VERSION = "0.5.2";
+const VERSION = "0.6.0";
 const MAX_OPEN_AUDITS = 4;
 const IDLE_MS = 15 * 60 * 1000; // an audit untouched this long is closed
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -347,7 +347,7 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
     return m ? { ok: timingSafeEqual(digest(m[1]), secretDigest), rest: m[2] ?? "" } : { ok: false, rest: "" };
   };
   const securityHeaders = {
-    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   };

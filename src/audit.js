@@ -37,7 +37,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   await mkdir(outDir, { recursive: true });
   const title = messages(lang).ui.title(new URL(config.site).hostname);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const report = { title, generatedAt, findings, explained, runs, lang, branding };
+  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));

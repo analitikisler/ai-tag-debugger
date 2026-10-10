@@ -49,7 +49,7 @@ Platforms: GA4 (including server-side GTM endpoints), Google Ads conversions, Me
 
 By default an audit checks GA4, Google Ads, Meta and TikTok. Pick others with `--providers ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok and X; the others show their network requests.
 
-Requests to providers you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report shows "Providers checked: … · Out of scope: Microsoft Clarity, DoubleClick (61 requests skipped)", and each step says how many it skipped. Without `--providers`, any provider your measurement plan names is added to the default list. Planned events for providers you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
+Requests to providers you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--providers`, any provider your measurement plan names is added to the default list. Planned events for providers you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
 
 ## How it works
 
@@ -235,12 +235,16 @@ The exit code is `1` when findings reach `--fail-on` (default `broken`), so it c
 
 Output:
 
-- `report.html`: a summary with the most important problem first, findings grouped by severity (each with its impact, likely cause, evidence and fix steps), and a **full event timeline**. Every step of every journey has three tabs:
-  - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
-  - **dataLayer**: every push in the step.
-  - **Network requests**: every request to the chosen providers, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
+- `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
+  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, and the providers checked.
+  - **Findings**: grouped by severity and filterable. Each one has its impact, likely cause, evidence, numbered fix steps and the steps where it happened.
+  - **Journeys**: one journey at a time, with its steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
+    - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
+    - **dataLayer**: every push in the step.
+    - **Network requests**: every request to the chosen providers, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
+  - **Scope and plan**: whether each planned event was sent on each journey, and the providers checked or left out, with request counts.
 
-  Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts.
+  Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
 - `report.md`: the report in Markdown, e.g. for a pull request comment.
 - `capture.json`: everything captured, for your own analysis.

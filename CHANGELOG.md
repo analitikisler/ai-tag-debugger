@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 (unreleased)
+
+- **Report v3.** The HTML report has four tabs: Overview, Findings, Journeys, and Scope and plan. They switch with the URL hash, so links work across tabs and every view can be shared. Still no scripts; printing shows everything.
+  - Journeys show one journey at a time: a step list on the left and the selected step (with its Events, dataLayer and Network tabs) on the right. A journey opens on its first step with a problem.
+  - Finding cards have a severity icon and color, the platform and how many journeys and steps they cover, an impact callout, numbered fix steps and "Where" chips that open the step.
+  - Findings can be filtered by severity. Warnings are yellow and risks orange.
+  - The Scope and plan tab has a plan coverage table (each planned event on each journey: sent, not sent, or not expected) and the providers table with request counts. It replaces the "Matching the plan" list.
+  - Type sizes are 14, 12 and 24 px.
+- **Logos.** The AI Tag Debugger logo is in the header, with "by Analitik İşler" on the right and the Analitik İşler logo and an open source credit line in the footer. Each has a dark version, and there is a favicon. They are embedded in the report, and the MCP report server's CSP now allows `img-src data:` for them. `--no-branding` leaves the Analitik İşler parts out.
+- The AI is asked to mark numbers with `**…**` and names with backticks. The report shows those as bold and code and escapes everything else.
+- The report's top line reads "AI tracking audit" ("Yapay zekâ ile izleme denetimi" in Turkish) instead of "Tracking QA report".
+
 ## 0.5.2 (2026-10-09)
 
 First release on npm as `@analitikisler/ai-tag-debugger`. The test script now also runs on Node 20.
