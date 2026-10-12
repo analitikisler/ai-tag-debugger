@@ -1,3 +1,5 @@
+English | [Türkçe](README.tr.md)
+
 # AI Tag Debugger
 
 **An open-source AI agent that QA-tests your website's analytics and ad tracking.**
