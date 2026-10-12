@@ -26,12 +26,18 @@ function ga4Consent(searchParams) {
   return { ad_storage: state(gcs[2]), analytics_storage: state(gcs[3]) };
 }
 
+// Only www.google.<tld> and doubleclick.net: analytics.google.com is a primary GA4 endpoint.
+const GOOGLE_COMPANION_HOST = /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$|(^|\.)doubleclick\.net$/;
+
 /** @returns {Hit[] | null} */
 export function parseGa4(url, postData) {
   const u = new URL(url);
   // Matched on the GA4 protocol rather than the host, so server-side GTM
   // endpoints on first-party domains are captured too.
   if (!u.pathname.endsWith("/g/collect") || u.searchParams.get("v") !== "2") return null;
+  // gtag.js sends a copy of some events to www.google.com/g/collect (and doubleclick.net)
+  // for Google signals and ads features. GA4 doesn't count those, so they aren't hits.
+  if (GOOGLE_COMPANION_HOST.test(u.hostname)) return null;
   const base = new URLSearchParams(u.search);
   const lines = postData ? postData.split("\n").filter(Boolean) : [""];
   return lines.map((line) => {
@@ -130,6 +136,7 @@ export function parseTrackingRequest(url, postData) {
 const OTHER_BEACONS = [
   [/(^|\.)(doubleclick\.net|googleadservices\.com|google\.[a-z.]+)$/, /^\/pagead\/(viewthroughconversion|1p-user-list|landing)\//],
   [/(^|\.)google\.[a-z.]+$/, /^\/ccm\/collect/],
+  [GOOGLE_COMPANION_HOST, /\/g\/collect$/],
   [/^td\.doubleclick\.net$/, /^\/td\//],
   [/(^|\.)facebook\.com$/, /^\/privacy_sandbox\/pixel\//],
   [/^bat\.bing\.com$/, /^\/action\//],

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-10-12)
+
+- GA4 events were reported as "sent 2 times" on sites with Google signals or ads features. gtag.js also sends a copy of those events to `www.google.com/g/collect` (or `doubleclick.net`), which GA4 doesn't count. Those copies are now still answered locally and listed under network requests, but no longer counted as hits. Requests to `analytics.google.com` still count: it is a primary GA4 endpoint.
+- GA4 requests answered locally showed as "failed" in the network list, because Chromium reports answered keepalive requests as aborted. They now show the 204 the page received.
+- Hits are read as each request is sent, rather than when it is answered. A request sent while the page navigates away is then still counted, even if it is cancelled before it can be answered. Requests the private-network guard stops are taken back out and shown as "blocked".
+
 ## 0.6.0 (2026-10-10)
 
 - **Report v3.** The HTML report has four tabs: Overview, Findings, Journeys, and Scope and plan. They switch with the URL hash, so links work across tabs and every view can be shared. Still no scripts; printing shows everything.

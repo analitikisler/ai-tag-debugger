@@ -211,10 +211,21 @@ export class AuditSession {
     const onRequest = (request) => {
       const hits = parseTrackingRequest(request.url(), request.postData());
       if (!hits) return;
+      const recorded = [];
       for (const hit of hits) {
         if (!this.providers.includes(hit.platform)) continue;
-        this.record("hits", { ...this.redactHit(hit), step: this.currentStep, pageUrl: this.page.url(), t: Date.now() });
+        const entry = { ...this.redactHit(hit), step: this.currentStep, pageUrl: this.page.url(), t: Date.now() };
+        if (this.record("hits", entry)) recorded.push(entry);
       }
+      if (recorded.length) hitsOf.set(request, recorded);
+    };
+    // Hits of requests the guard below stops never left the browser, so they are taken back out.
+    const hitsOf = new WeakMap();
+    const unrecord = (request) => {
+      const dropped = new Set(hitsOf.get(request) ?? []);
+      if (dropped.size) this.hits = this.hits.filter((h) => !dropped.has(h));
+      const call = calls.get(request);
+      if (call) call.status = "blocked";
     };
     // Every call to an analytics, ad or consent vendor, for the timeline.
     const calls = new Map();
@@ -247,16 +258,20 @@ export class AuditSession {
     });
     this.context.on("requestfailed", (request) => {
       const call = calls.get(request);
-      if (call) call.status = "failed";
+      // Keepalive requests answered below are still reported as aborted; the page got the 204.
+      if (call && call.status === null) call.status = "failed";
     });
 
+    // Hits come from the request event rather than the route below: a request sent while
+    // the page navigates away (a page_view on the next load, a beacon on unload) can be
+    // cancelled before its route handler runs, but its request event has already fired.
+    this.context.on("request", onRequest);
     if (this.opts.blockHits) {
       await this.context.route((url) => isCollectionEndpoint(url.href), async (route) => {
-        onRequest(route.request());
         await route.fulfill({ status: 204, body: "" });
+        const call = calls.get(route.request());
+        if (call) call.status = 204;
       });
-    } else {
-      this.context.on("request", onRequest);
     }
 
     // Registered last, so it runs before the route above. Route handlers only see the
@@ -275,6 +290,7 @@ export class AuditSession {
       }
       if (!error) return route.fallback();
       if (isMainNavigation) this.blocked = { step: this.currentStep, url: request.url(), error };
+      unrecord(request);
       return route.abort("blockedbyclient");
     });
     this.beginStep("start");

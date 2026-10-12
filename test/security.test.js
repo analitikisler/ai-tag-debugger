@@ -223,3 +223,23 @@ test("with private addresses blocked, a page's WebSockets can't reach them eithe
     page.close();
   }
 });
+
+test("with private addresses blocked, a GA4 request to a private server-side endpoint is stopped and not counted as a hit", async () => {
+  const page = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(
+    `<script>fetch("http://127.0.0.2:9/g/collect?v=2&tid=G-1&en=private_hit", { method: "POST", keepalive: true });
+    fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1&en=page_view", { method: "POST", keepalive: true });</script>`,
+  ));
+  await new Promise((r) => page.listen(0, "127.0.0.1", r));
+  const pageUrl = `http://127.0.0.1:${page.address().port}/`;
+  const session = new AuditSession({ viewport: "desktop", site: pageUrl, blockHits: true, blockPrivate: (ip) => ip === "127.0.0.2" });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url: pageUrl });
+    await session.page.waitForTimeout(500);
+    assert.deepEqual(session.hits.map((h) => h.name), ["page_view"]);
+    assert.equal(session.network.find((c) => c.url.includes("127.0.0.2")).status, "blocked");
+  } finally {
+    await session.close();
+    page.close();
+  }
+});
