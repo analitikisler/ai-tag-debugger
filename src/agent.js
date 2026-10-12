@@ -1,3 +1,4 @@
+import path from "node:path";
 import { AuditSession } from "./browser.js";
 import { messages } from "./i18n.js";
 import { createProvider, PROVIDERS } from "./providers.js";
@@ -153,11 +154,19 @@ export async function runScriptedJourney(session, journey, opts = {}) {
   return { completed: true, note: "All scripted steps completed." };
 }
 
+/** The file a saved site keeps one journey's recorded responses in. */
+export const harName = (journeyId, viewport) => `${String(journeyId).replace(/[^\w.-]+/g, "_")}-${viewport}.har`;
+
 /**
  * Runs one journey on one viewport and returns everything the checks need.
+ * opts.saveSite records the site's responses into that folder; opts.replaySite answers from one.
  */
 export async function runJourney(config, journey, viewport, opts = {}) {
-  const session = new AuditSession({ viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, keepBodies: config.keep_bodies === true, blockHits: config.block_hits !== false, headless: !opts.headed });
+  const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
+  const session = new AuditSession({
+    viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, keepBodies: config.keep_bodies === true,
+    blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite),
+  });
   try {
     await session.start();
     const startUrl = new URL(journey.start ?? "/", config.site).href;

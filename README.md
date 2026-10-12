@@ -169,6 +169,19 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Replay without AI.** After one AI run, copy the steps into `journeys[].steps` and use `--scripted` (with `--no-ai` for zero model calls) on every deploy.
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
 
+### Check a new version against saved sites
+
+`--save-site <dir>` also saves every response the site sent and the steps taken. `replay` then audits the same pages again offline, with no network and no AI model, so it costs nothing. It lists findings that are new or gone compared with the saved run:
+
+```bash
+npx @analitikisler/ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-site saved/yourshop
+npx @analitikisler/ai-tag-debugger replay saved/*
+✗ https://www.yourshop.com (saved/yourshop): 0 new, 1 gone
+    - warning duplicate purchase desktop ga4 page_view
+```
+
+The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It holds the site's pages and scripts, so keep sites you don't own out of public repositories.
+
 ## Configure your site
 
 `ai-tag-debugger.config.json`:
@@ -229,6 +242,8 @@ ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<
                 [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
                 [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
                 [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
+                [--save-site <dir>]
+ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]
 ```

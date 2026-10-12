@@ -6,6 +6,7 @@ import { LANGUAGES, messages } from "./i18n.js";
 import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
+import { replaySavedSite } from "./replay.js";
 
 const USAGE = `ai-tag-debugger: an open-source AI agent that QA-tests your analytics and ad tracking.
 
@@ -13,6 +14,8 @@ Usage:
   ai-tag-debugger run --site <url> --journey purchase [options]   Audit ready-made journeys, no config needed.
   ai-tag-debugger run --site <url> --goal "<what to do>"          Audit a journey you describe in plain language.
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
+  ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
+                                                  and list findings that changed. Exits with code 1 when any did.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -41,6 +44,12 @@ Run options:
   --keep-bodies        Store tracking requests as sent. By default, emails, phone numbers and user ids sent
                        for ad matching are redacted in the report and capture.json ("keep_bodies" in the config).
   --no-branding        Leave the Analitik İşler logo and credit line out of the reports ("branding": false in the config).
+  --save-site <dir>    Also save the site's responses and the steps taken in this folder, so "replay" can audit
+                       the same pages again offline. Its findings become the expected ones.
+
+Replay options:
+  --update             Make this replay's findings the expected ones (after checking that the changes are right).
+  --out <dir>          Where to write the replay's reports (default: <dir>/last-replay).
 
 MCP options:
   --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
@@ -87,6 +96,8 @@ async function main() {
       token: { type: "string" },
       reports: { type: "string" },
       "public-url": { type: "string" },
+      "save-site": { type: "string" },
+      update: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -95,6 +106,22 @@ async function main() {
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
     await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"] });
+    return;
+  }
+  if (command === "replay" && !values.help) {
+    const dirs = positionals.slice(1);
+    if (!dirs.length) throw new Error("replay needs the folder of at least one site saved with --save-site.");
+    let changed = false;
+    for (const dir of dirs) {
+      const r = await replaySavedSite(dir, { update: values.update, outDir: dirs.length === 1 ? values.out : undefined });
+      const same = !r.missing.length && !r.extra.length;
+      changed ||= !same;
+      console.log(`${same ? "✓" : values.update ? "↻" : "✗"} ${r.site} (${dir}): ${same ? "same findings" : `${r.extra.length} new, ${r.missing.length} gone${values.update ? ", saved as expected" : ""}`}`);
+      for (const k of r.extra) console.log(`    + ${k}`);
+      for (const k of r.missing) console.log(`    - ${k}`);
+      for (const note of r.incomplete) console.log(`    ! ${note}`);
+    }
+    if (changed && !values.update) process.exitCode = 1;
     return;
   }
   if (values.help || command !== "run" || (!values.config && !values.site)) {
@@ -136,6 +163,7 @@ async function main() {
     headed: values.headed,
     branding: values["no-branding"] ? false : undefined,
     outDir: values.out,
+    saveSite: values["save-site"],
     log: (msg) => console.log(msg),
   });
 

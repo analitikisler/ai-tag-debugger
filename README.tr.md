@@ -171,6 +171,19 @@ Her gezinme adımı bir model çağrısıdır. Yani kullanım **senaryo × ekran
 - **Yapay zekâ olmadan tekrar oynatın.** Bir yapay zekâ çalıştırmasından sonra adımları `journeys[].steps` içine kopyalayın ve her deploy'da `--scripted` (hiç model çağrısı olmaması için `--no-ai` ile birlikte) kullanın.
 - **Bir yapay zekâ asistanı kullanın.** MCP üzerinden gezinmeyi asistanın kendi modeli yapar, hiç API anahtarı kullanılmaz.
 
+### Yeni bir sürümü kaydedilmiş sitelerle karşılaştırın
+
+`--save-site <klasör>`, sitenin gönderdiği her yanıtı ve atılan adımları da kaydeder. `replay` aynı sayfaları ağ ve yapay zekâ modeli olmadan, çevrimdışı olarak yeniden denetler; bu yüzden hiçbir maliyeti yoktur. Kaydedilen çalıştırmaya göre yeni çıkan ya da kaybolan bulguları listeler:
+
+```bash
+npx @analitikisler/ai-tag-debugger run --site https://www.magazaniz.com --journey purchase --save-site saved/magazaniz
+npx @analitikisler/ai-tag-debugger replay saved/*
+✗ https://www.magazaniz.com (saved/magazaniz): 0 new, 1 gone
+    - warning duplicate purchase desktop ga4 page_view
+```
+
+İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. Sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
+
 ## Sitenizi ayarlayın
 
 `ai-tag-debugger.config.json`:
@@ -231,6 +244,8 @@ ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<
                 [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
                 [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
                 [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
+                [--save-site <dir>]
+ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]
 ```

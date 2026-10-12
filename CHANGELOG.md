@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Saved sites and `replay`.** `run --save-site <dir>` also saves every response the site sent (as a Playwright HAR file per journey and viewport, without tracking requests or the cookies the browser sent) and the steps taken. `replay <dir>...` audits those pages again offline, with no network and no AI model, and lists findings that are new or gone. It exits with code 1 when any changed; `--update` makes the new findings the expected ones. Steps the AI took by ref are saved as CSS paths, or as visible text inside iframes.
+
 ## 0.6.3 (2026-10-12)
 
 - The audited site's own email address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, `gtm.elementText`), such as the contact link in a GTM `gtm.linkClick` push, is no longer reported as unhashed user data or redacted. An own-domain address anywhere else, and every named user data field (`email`, `user_data`, `em`, …), is still redacted and reported.
