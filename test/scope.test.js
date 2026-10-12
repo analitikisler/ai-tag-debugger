@@ -73,10 +73,30 @@ test("the browser records only the chosen providers, keeps GA4 batch bodies, and
   }
 });
 
-test("GA4 resends (gaf=1) and copies to www.google.com are not hits, and are labelled as resends", async () => {
-  const { parseTrackingRequest, vendorOf } = await import("../src/parsers.js");
-  assert.equal(parseTrackingRequest("https://sgtm.shop.com/g/collect?v=2&tid=G-1&en=page_view&gaf=1", null), null);
+test("GA4 resends and copies to www.google.com are not hits, and are labelled as resends", async () => {
+  const { parseTrackingRequest, vendorOf, isCollectionEndpoint } = await import("../src/parsers.js");
+  // Primary hits can carry gaf (seen as gaf=2 on analytics.google.com): still hits, still answered locally.
+  const primary = "https://analytics.google.com/g/collect?v=2&tid=G-1&en=page_view&gaf=2";
+  assert.equal(parseTrackingRequest(primary, null)?.[0]?.name, "page_view");
+  assert.equal(parseTrackingRequest("https://sgtm.shop.com/g/collect?v=2&tid=G-1&en=page_view&gaf=1", null)?.[0]?.name, "page_view");
+  assert.ok(isCollectionEndpoint(primary));
   assert.equal(parseTrackingRequest("https://www.google.com/g/collect?v=2&tid=G-1&en=page_view", null), null);
   assert.equal(vendorOf("https://www.google.com/g/collect?v=2&gaf=1"), "Google Analytics (resend)");
   assert.equal(vendorOf("https://sgtm.shop.com/g/collect?v=2"), "Google Analytics (server-side)");
+});
+
+test("other Google tag pings are answered locally, never sent to the real accounts", async () => {
+  const { isCollectionEndpoint, parseTrackingRequest } = await import("../src/parsers.js");
+  for (const url of [
+    "https://analytics.google.com/g/s/collect?v=2&tid=G-1",
+    "https://www.google.com/rmkt/collect/123456/?random=1&en=add_to_cart",
+    "https://www.merchant-center-analytics.goog/mc/collect?v=2&en=page_view",
+    "https://ad.doubleclick.net/ccm/s/collect?en=page_view",
+    "https://www.google.com/ccm/collect?en=page_view",
+    "https://www.shop.co.uk/fR7vNz2w/gs/ccm/collect?en=page_view",
+  ]) {
+    assert.ok(isCollectionEndpoint(url), url);
+    assert.equal(parseTrackingRequest(url, null), null, url);
+  }
+  assert.ok(!isCollectionEndpoint("https://www.shop.co.uk/collections/shoes"));
 });

@@ -88,6 +88,19 @@ export function validateAction(input) {
   return null;
 }
 
+// One hung page or model request must not stall a whole run.
+const MODEL_TIMEOUT_MS = 180_000;
+const ACTION_TIMEOUT_MS = 120_000;
+
+class StepTimeout extends Error {}
+
+/** The promise's value, or a StepTimeout with this message once ms have passed. */
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => (timer = setTimeout(() => reject(new StepTimeout(message)), ms)));
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Lets the AI model drive the browser through one journey.
  * @param {AuditSession} session
@@ -107,7 +120,7 @@ export async function runAgentJourney(session, journey, opts = {}) {
   });
 
   for (let turn = 0; turn < maxSteps; turn++) {
-    const { toolCalls, stop } = await chat.next();
+    const { toolCalls, stop } = await withTimeout(chat.next(), MODEL_TIMEOUT_MS, "The model did not answer within 3 minutes.");
     if (stop === "refusal") return { completed: false, note: "The model declined to continue this journey." };
     if (toolCalls.length === 0) {
       if (stop === "max_tokens") return { completed: false, note: "The model response was cut off." };
@@ -133,7 +146,7 @@ export async function runAgentJourney(session, journey, opts = {}) {
         continue;
       }
       log(`  ${call.input.reason}`);
-      const error = await session.act(call.input);
+      const error = await withTimeout(session.act(call.input), ACTION_TIMEOUT_MS, "The browser action did not finish within 2 minutes.");
       results.push({ id: call.id, content: pageView(await session.snapshot(), error) });
     }
     if (finished) return finished;
@@ -173,9 +186,10 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${startUrl}` });
     if (startError) return { ...collect(session, journey, viewport), completed: false, note: `Could not open the start page: ${startError}` };
 
-    const outcome = opts.scripted
-      ? await runScriptedJourney(session, journey, opts)
-      : await runAgentJourney(session, journey, opts);
+    const outcome = await (opts.scripted ? runScriptedJourney(session, journey, opts) : runAgentJourney(session, journey, opts)).catch((err) => {
+      if (err instanceof StepTimeout) return { completed: false, note: err.message };
+      throw err;
+    });
     return { ...collect(session, journey, viewport), ...outcome, cookies: await session.cookies() };
   } finally {
     await session.close();

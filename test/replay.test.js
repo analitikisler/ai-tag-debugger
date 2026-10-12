@@ -14,7 +14,8 @@ const send = (en, extra = "") =>
 const PAGES = {
   "/": `<!doctype html><script src="/app.js"></script>
 <div class="banner"><div class="btn" style="cursor:pointer">Accept all</div></div>
-<a href="/product">Product</a>`,
+<a href="/product">Product</a><img src="/logo.png">`,
+  "/logo.png": "png",
   // Served as a script, so a replay has to answer it from the recording.
   "/app.js": `${send("page_view")}
 document.addEventListener("click", (e) => { if (e.target.closest(".btn")) { ${send("consent_given")} } });`,
@@ -28,7 +29,8 @@ before(async () => {
   server = createServer((req, res) => {
     const page = PAGES[new URL(req.url, "http://x").pathname];
     if (page === undefined) return res.writeHead(404).end();
-    res.writeHead(200, { "content-type": req.url.endsWith(".js") ? "text/javascript" : "text/html" }).end(page);
+    const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : "text/html";
+    res.writeHead(200, { "content-type": type }).end(page);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   url = `http://127.0.0.1:${server.address().port}/`;
@@ -72,7 +74,7 @@ test("a saved site replays offline with the same hits and findings", async () =>
   assert.ok(site.expected.includes("warning duplicate browse desktop ga4 view_item"));
 
   const recorded = JSON.parse(await readFile(path.join(dir, "browse-desktop.har"), "utf8")).log.entries.map((e) => new URL(e.request.url).pathname);
-  assert.deepEqual(recorded, ["/", "/app.js", "/product"], "tracking requests are left out of the recording");
+  assert.deepEqual(recorded, ["/", "/app.js", "/product"], "images and tracking requests are left out of the recording");
 
   server.close(); // the replay must not need the site
   const replay = await replaySavedSite(dir);

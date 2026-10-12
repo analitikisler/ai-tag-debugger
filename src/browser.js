@@ -224,14 +224,17 @@ async function replayTarget(a, locator) {
   return found?.text ? { text: found.text } : a.text ? { text: a.text } : {};
 }
 
+// Images, fonts and video don't change what tracking sends, and are most of a recording's size.
+const MEDIA = /^(image|font|video|audio)\//;
+
 /**
- * Drops tracking requests from a recording (they are answered locally on replay, and their
+ * Drops images, fonts, video and tracking requests from a recording (they are answered locally on replay, and their
  * URLs can hold the user data redacted everywhere else) and the cookies the browser sent.
  */
 async function cleanRecording(file) {
   const har = JSON.parse(await readFile(file, "utf8"));
   har.log.entries = har.log.entries
-    .filter((e) => !isCollectionEndpoint(e.request.url))
+    .filter((e) => !isCollectionEndpoint(e.request.url) && !MEDIA.test(e.response?.content?.mimeType ?? ""))
     .map((e) => ({ ...e, request: { ...e.request, cookies: [], headers: e.request.headers.filter((h) => !/^cookie$/i.test(h.name)) } }));
   await writeFile(file, JSON.stringify(har));
 }
@@ -705,8 +708,9 @@ export class AuditSession {
 
   async close() {
     if (this.opts.recordHar && this.context) {
-      await this.context.close(); // writes the recording
-      await cleanRecording(this.opts.recordHar);
+      // Writes the recording. If the browser already went away, there is none to clean.
+      const written = await this.context.close().then(() => true, () => false);
+      if (written) await cleanRecording(this.opts.recordHar);
     }
     await this.browser?.close();
     await this.egress?.close();
