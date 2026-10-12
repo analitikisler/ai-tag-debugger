@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
@@ -196,6 +197,45 @@ function trackingBody(request) {
   return body ? (body.length > MAX_BODY ? body.slice(0, MAX_BODY) : body) : null;
 }
 
+/**
+ * How a scripted run can find the element an action used again: the selector it was given,
+ * else a CSS path to the element, else its visible text. Refs only mean something in one run.
+ */
+async function replayTarget(a, locator) {
+  if (a.selector) return { selector: a.selector };
+  const found = await locator
+    .evaluate((el) => {
+      const text = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      if (window !== window.top) return { text };
+      const parts = [];
+      for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+        if (n.id && document.querySelectorAll(`#${CSS.escape(n.id)}`).length === 1) {
+          parts.unshift(`#${CSS.escape(n.id)}`);
+          break;
+        }
+        let i = 1;
+        for (let s = n.previousElementSibling; s; s = s.previousElementSibling) if (s.tagName === n.tagName) i++;
+        parts.unshift(`${n.tagName.toLowerCase()}:nth-of-type(${i})`);
+      }
+      return { selector: parts.join(" > "), text };
+    }, null, { timeout: 5000 })
+    .catch(() => null);
+  if (found?.selector) return { selector: found.selector };
+  return found?.text ? { text: found.text } : a.text ? { text: a.text } : {};
+}
+
+/**
+ * Drops tracking requests from a recording (they are answered locally on replay, and their
+ * URLs can hold the user data redacted everywhere else) and the cookies the browser sent.
+ */
+async function cleanRecording(file) {
+  const har = JSON.parse(await readFile(file, "utf8"));
+  har.log.entries = har.log.entries
+    .filter((e) => !isCollectionEndpoint(e.request.url))
+    .map((e) => ({ ...e, request: { ...e.request, cookies: [], headers: e.request.headers.filter((h) => !/^cookie$/i.test(h.name)) } }));
+  await writeFile(file, JSON.stringify(har));
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
@@ -204,6 +244,8 @@ export class AuditSession {
    *   providers: which tracking providers to record (default GA4, Google Ads, Meta, TikTok). Requests to the
    *     others are still answered locally, but only counted, per step, in this.skipped.
    *   site: navigation is limited to this site's host and its subdomains, plus allowedHosts.
+   *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
+   *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
    *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
    */
@@ -240,7 +282,8 @@ export class AuditSession {
       launch.args = ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"];
     }
     this.browser = await chromium.launch(launch);
-    this.context = await this.browser.newContext({ ...device, locale: "en-US" });
+    const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
+    this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
     await this.context.exposeBinding("__atdRecord", (_source, entry) => {
       this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
@@ -315,6 +358,8 @@ export class AuditSession {
     // the page navigates away (a page_view on the next load, a beacon on unload) can be
     // cancelled before its route handler runs, but its request event has already fired.
     this.context.on("request", onRequest);
+    // Registered first, so the routes below run before it and tracking requests are still answered locally.
+    if (this.opts.replayHar) await this.context.routeFromHAR(this.opts.replayHar, { notFound: "abort" });
     if (this.opts.blockHits) {
       await this.context.route((url) => isCollectionEndpoint(url.href), async (route) => {
         await route.fulfill({ status: 204, body: "" });
@@ -598,12 +643,14 @@ export class AuditSession {
   async act(a) {
     const describe = a.reason || `${a.action} ${a.selector ?? (a.ref != null ? `#${a.ref}` : a.text != null ? `"${a.text}"` : a.url ?? "")}`.trim();
     this.beginStep(describe, { action: a.action, acceptsConsent: !!a.accepts_consent });
+    const step = this.steps[this.currentStep];
     try {
       switch (a.action) {
         case "goto": {
           const target = new URL(a.url, this.page.url() === "about:blank" ? undefined : this.page.url()).href;
           const refused = await this.checkUrl(target);
           if (refused) return refused;
+          step.replay = { action: "goto", url: target };
           await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
           break;
         }
@@ -617,12 +664,14 @@ export class AuditSession {
             if (found.error) return found.error;
             target = found.locator;
           } else return `${a.action} needs a ref or the element's visible text.`;
+          step.replay = { action: a.action, ...(await replayTarget(a, target)), ...(a.value !== undefined ? { value: a.value } : {}) };
           if (a.action === "click") await this.click(target);
           else if (a.action === "fill") await target.fill(a.value ?? "", { timeout: 10000 });
           else await target.selectOption(a.value ?? "", { timeout: 10000 });
           break;
         }
         case "scroll": {
+          step.replay = { action: "scroll", ...(a.value !== undefined ? { value: a.value } : {}) };
           const dy = /^up$/i.test(a.value ?? "") ? -900 : 900;
           const size = this.page.viewportSize() ?? { width: 800, height: 600 };
           const before = await this.page.evaluate(() => window.scrollY);
@@ -634,6 +683,7 @@ export class AuditSession {
           break;
         }
         case "wait":
+          step.replay = { action: "wait", ...(a.value !== undefined ? { value: a.value } : {}) };
           await this.page.waitForTimeout(Math.min(Number(a.value) || 1000, 10000));
           break;
         default:
@@ -654,6 +704,10 @@ export class AuditSession {
   }
 
   async close() {
+    if (this.opts.recordHar && this.context) {
+      await this.context.close(); // writes the recording
+      await cleanRecording(this.opts.recordHar);
+    }
     await this.browser?.close();
     await this.egress?.close();
   }

@@ -9,6 +9,7 @@ import { LANGUAGES, messages } from "./i18n.js";
 import { createProvider } from "./providers.js";
 import { filterFindings, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
+import { writeSavedSite } from "./replay.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -48,10 +49,12 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
 /**
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
- *   outDir?: string, branding?: boolean, providers?: string[], log?: (m: string) => void }} opts
+ *   outDir?: string, branding?: boolean, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok).
+ *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
+ *   replaySite: answer every request from a folder saved with saveSite, without the network.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
@@ -76,17 +79,22 @@ export async function runAudit(opts) {
   const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url }) : null;
   if (provider) log(`Using ${provider.name} (${provider.model})`);
 
+  if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   const runs = [];
   for (const journey of journeys) {
     for (const viewport of viewports) {
       log(`\n▶ ${journey.id} (${viewport})`);
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log });
+      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite });
       log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
       runs.push(run);
     }
   }
 
   const findings = filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events);
+  if (opts.saveSite) {
+    await writeSavedSite(opts.saveSite, { config, plan, runs, findings });
+    log(`\nSaved the site for offline replay in ${opts.saveSite}`);
+  }
   let explained = null;
   if (provider) {
     log("\nAsking the model to explain the findings…");
