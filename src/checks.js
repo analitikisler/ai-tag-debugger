@@ -2,9 +2,10 @@
 // They run without any API call; the AI model only explains the results.
 
 import { messages } from "./i18n.js";
+import { isOwnAddress } from "./redact.js";
 
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
-const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
@@ -22,6 +23,24 @@ function pageOf(hit) {
     if (p) return p;
   } catch { /* no URL */ }
   return hit.params?.page_location ?? hit.pageUrl ?? "";
+}
+
+// Just before an address: a mailto: link or a link field (link_url=..., "link_text":"...").
+const LINK_BEFORE = /(mailto:|\b(link_url|link_text|click_url|click_text)(=|":"))$/i;
+
+/**
+ * Whether text holds an email address that could be a visitor's. The site's own address in a
+ * mailto: link or a link field is a contact link it shows; anywhere else it still counts.
+ */
+function visitorEmailIn(text, hit) {
+  let site = null;
+  try {
+    site = new URL(hit.params?.page_location ?? hit.pageUrl).hostname;
+  } catch { /* no page address */ }
+  return [...text.matchAll(EMAIL)].some((m) => {
+    const link = LINK_BEFORE.test(text.slice(Math.max(0, m.index - 16), m.index));
+    return !(link && isOwnAddress(m[0].replace(/%40/i, "@"), site));
+  });
 }
 
 function expectedIn(planEvent, journeyId) {
@@ -172,7 +191,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (hit.userData?.plain?.length) {
       piiSeen.add(key(hit.platform, hit.name));
       findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.piiUnhashed(hit.platform, hit.name, hit.userData.plain) });
-    } else if (EMAIL.test(haystack)) {
+    } else if (visitorEmailIn(haystack, hit)) {
       piiSeen.add(key(hit.platform, hit.name));
       findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.pii(hit.platform, hit.name) });
     }

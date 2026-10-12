@@ -22,6 +22,14 @@ export const VIEWPORTS = {
 // log survives page navigations.
 /** A page address without its hash, for matching page_location to navigations. */
 const pageKey = (url) => String(url ?? "").split("#")[0];
+/** The host of a URL, or null. */
+const hostOf = (url) => {
+  try {
+    return new URL(url).hostname || null;
+  } catch {
+    return null;
+  }
+};
 
 const INIT_SCRIPT = `(() => {
   const record = (entry) => {
@@ -354,9 +362,10 @@ export class AuditSession {
   /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
   redactHit({ userFields, ...hit }) {
     const found = { fields: [], plain: [] };
-    const url = redactUrl(hit.url, found).url;
-    const params = redactParams(hit.params, found);
-    redactParams(userFields, found); // fields from the POST body that the hit doesn't keep
+    const site = hostOf(hit.params?.page_location) ?? hostOf(this.page.url());
+    const url = redactUrl(hit.url, found, site).url;
+    const params = redactParams(hit.params, found, site);
+    redactParams(userFields, found, site); // fields from the POST body that the hit doesn't keep
     if (!found.fields.length) return hit;
     const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
     return this.opts.keepBodies ? { ...hit, userData } : { ...hit, url, params, userData };
@@ -364,7 +373,7 @@ export class AuditSession {
 
   /** A dataLayer entry with user data redacted, and userData: { fields, plain } when there was any. */
   redactEntry(entry) {
-    const found = redactPush(entry.value);
+    const found = redactPush(entry.value, undefined, hostOf(this.page.url()));
     if (!found.fields.length) return entry;
     const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
     return this.opts.keepBodies ? { ...entry, userData } : { ...entry, value: found.value, userData };

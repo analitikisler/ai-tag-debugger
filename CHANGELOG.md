@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 (2026-10-12)
+
+- The audited site's own email address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, `gtm.elementText`), such as the contact link in a GTM `gtm.linkClick` push, is no longer reported as unhashed user data or redacted. An own-domain address anywhere else, and every named user data field (`email`, `user_data`, `em`, …), is still redacted and reported.
+
 ## 0.6.2 (2026-10-12)
 
 Fixes from Bahadır's audit of analitikisler.com.

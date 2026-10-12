@@ -14,9 +14,48 @@ const USER_KEYS = new Set([
 const PUSH_KEYS = new Set(["email", "email_address", "phone", "phone_number", "sha256_email_address", "sha256_phone_number", "sha256_email", "sha256_phone"]);
 const USER_OBJECTS = /(^|\.)(user_data|user_provided_data|enhanced_conversion_data)(\.|$)/;
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** A value that is an email address, whatever its field is called. */
-const isEmail = (v) => typeof v === "string" && EMAIL.test(v.trim());
+const EMAIL = /^(mailto:)?[^\s@]+@([^\s@?]+\.[^\s@?]+)(\?.*)?$/i;
+
+// Second levels that are shared under a country code (shop.com.tr, shop.co.uk), and hosting
+// suffixes whose subdomains belong to different owners (shop.myshopify.com).
+const SHARED_SECOND_LEVELS = new Set(["com", "co", "org", "net", "gov", "edu", "ac", "gen", "web", "bel", "k12", "or", "ne", "go"]);
+const SHARED_SUFFIXES = ["myshopify.com", "github.io", "vercel.app", "pages.dev", "netlify.app", "herokuapp.com", "web.app", "firebaseapp.com", "appspot.com", "wixsite.com", "blogspot.com", "azurewebsites.net", "cloudfront.net", "workers.dev"];
+
+/** "www.shop.example.com.tr" -> "example.com.tr", "a.shop.myshopify.com" -> "shop.myshopify.com": the part one owner controls. */
+function siteOf(host) {
+  const labels = String(host).toLowerCase().replace(/\.$/, "").split(".");
+  const name = labels.join(".");
+  const shared = SHARED_SUFFIXES.find((s) => name === s || name.endsWith(`.${s}`));
+  let n = 2;
+  if (shared) n = shared.split(".").length + 1;
+  else if (labels.length >= 3 && labels.at(-1).length === 2 && SHARED_SECOND_LEVELS.has(labels.at(-2))) n = 3;
+  return labels.slice(-n).join(".");
+}
+
+/** Whether an email address is on the audited site's own domain, like hello@shop.com on a link at shop.com. */
+export function isOwnAddress(email, siteHost) {
+  if (!siteHost) return false;
+  const domain = String(email).trim().match(EMAIL)?.[2];
+  return Boolean(domain) && siteOf(domain) === siteOf(siteHost);
+}
+
+// Fields that hold a link or its text. The site's own address there is a contact link it shows.
+const LINK_KEYS = new Set(["link_url", "link_text", "click_url", "click_text"]);
+const isLinkKey = (key) => {
+  const k = String(key ?? "").toLowerCase();
+  return LINK_KEYS.has(k.split(".").pop()) || /(^|\.)gtm\.element(url|text)$/.test(k);
+};
+
+/**
+ * A value that is an email address (or a mailto: link to one), whatever its field is called.
+ * The site's own address in a mailto: link or a link field is a contact link it shows, not
+ * visitor data. Anywhere else even an own-domain address could be a visitor's (staff, B2B).
+ */
+const isEmail = (v, site, key) => {
+  if (typeof v !== "string" || !EMAIL.test(v.trim())) return false;
+  const link = /^mailto:/i.test(v.trim()) || isLinkKey(key);
+  return !(link && isOwnAddress(v, site));
+};
 
 /** Whether a request parameter (or dotted JSON path) carries user data for ad matching. */
 export function isUserDataKey(key) {
@@ -49,34 +88,34 @@ function note(found, key, value) {
 }
 
 /** Redacts form-encoded parameters (a URL query or a GA4 body line). Returns null when nothing needed it. */
-function redactParamString(text, found) {
+function redactParamString(text, found, site) {
   const params = new URLSearchParams(text);
-  if (![...params].some(([k, v]) => isUserDataKey(k) || isEmail(v))) return null;
+  if (![...params].some(([k, v]) => isUserDataKey(k) || isEmail(v, site, k))) return null;
   const out = new URLSearchParams();
-  for (const [k, v] of params) out.append(k, isUserDataKey(k) || isEmail(v) ? note(found, k, v) : v);
+  for (const [k, v] of params) out.append(k, isUserDataKey(k) || isEmail(v, site, k) ? note(found, k, v) : v);
   return out.toString();
 }
 
-/** Redacts user data in a URL's query. Returns the URL unchanged when there is none. */
-export function redactUrl(url, found = emptyFound()) {
+/** Redacts user data in a URL's query. Returns the URL unchanged when there is none. site: see isOwnAddress. */
+export function redactUrl(url, found = emptyFound(), site = null) {
   let u;
   try {
     u = new URL(url);
   } catch {
     return { url, ...found };
   }
-  const query = redactParamString(u.search, found);
+  const query = redactParamString(u.search, found, site);
   if (query === null) return { url, ...found };
   u.search = query;
   return { url: u.href, ...found };
 }
 
-function redactJson(value, path, found, isKey) {
-  if (Array.isArray(value)) return value.map((v) => redactJson(v, path, found, isKey));
+function redactJson(value, path, found, isKey, site = null) {
+  if (Array.isArray(value)) return value.map((v) => redactJson(v, path, found, isKey, site));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactJson(v, path ? `${path}.${k}` : k, found, isKey)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactJson(v, path ? `${path}.${k}` : k, found, isKey, site)]));
   }
-  if ((typeof value === "string" || typeof value === "number") && ((path && isKey(path)) || isEmail(value))) return note(found, path || "(value)", value);
+  if ((typeof value === "string" || typeof value === "number") && ((path && isKey(path)) || isEmail(value, site, path))) return note(found, path || "(value)", value);
   return value;
 }
 
@@ -110,21 +149,21 @@ export function redactBody(body, found = emptyFound()) {
   return { text, ...found };
 }
 
-/** Redacts user-data entries in parsed hit parameters. */
-export function redactParams(params, found = emptyFound()) {
+/** Redacts user-data entries in parsed hit parameters. site: see isOwnAddress. */
+export function redactParams(params, found = emptyFound(), site = null) {
   const out = {};
-  for (const [k, v] of Object.entries(params ?? {})) out[k] = isUserDataKey(k) || isEmail(v) ? note(found, k, v) : v;
+  for (const [k, v] of Object.entries(params ?? {})) out[k] = isUserDataKey(k) || isEmail(v, site, k) ? note(found, k, v) : v;
   return out;
 }
 
 /**
  * Redacts user data in a dataLayer push (GTM objects or gtag.js arguments):
- * email and phone fields, anything under user_data, and email-like values.
+ * email and phone fields, anything under user_data, and email-like values not on the site's own domain.
  */
-export function redactPush(value, found = emptyFound()) {
+export function redactPush(value, found = emptyFound(), site = null) {
   // gtag("set", "user_data", {...}) has no user_data key: the objects after the name are the user data.
   if (Array.isArray(value) && value.includes("user_data")) {
     return { value: value.map((v) => (v && typeof v === "object" ? redactJson(v, "user_data", found, isPushUserKey) : v)), ...found };
   }
-  return { value: redactJson(value, "", found, isPushUserKey), ...found };
+  return { value: redactJson(value, "", found, isPushUserKey, site), ...found };
 }

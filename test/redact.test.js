@@ -6,7 +6,7 @@ import { AuditSession, MAX_TOTAL_BODIES } from "../src/browser.js";
 import { checkRun } from "../src/checks.js";
 import { renderMarkdown } from "../src/report.js";
 import { resolveProviders } from "../src/parsers.js";
-import { redactBody, redactParams, redactPush, redactUrl } from "../src/redact.js";
+import { isOwnAddress, redactBody, redactParams, redactPush, redactUrl } from "../src/redact.js";
 
 const HASH = "a".repeat(64);
 
@@ -102,4 +102,37 @@ test("the browser stores requests redacted, within a total body budget, and flag
   } finally {
     await session.close();
   }
+});
+
+test("the site's own email addresses, like a mailto link GTM reports on a click, are not visitor data", () => {
+  const click = { event: "gtm.linkClick", "gtm.elementUrl": "mailto:hello@analitikisler.com", "gtm.elementText": "hello@analitikisler.com" };
+  const own = redactPush(click, undefined, "www.analitikisler.com");
+  assert.deepEqual(own.value, click);
+  assert.deepEqual(own.plain, []);
+  // On another site the same push is still redacted, and named user data fields always are.
+  assert.deepEqual(redactPush(click, undefined, "shop.example.com").plain, ["gtm.elementUrl", "gtm.elementText"]);
+  assert.deepEqual(redactPush({ user_data: { email: "hello@analitikisler.com" } }, undefined, "analitikisler.com").plain, ["user_data.email"]);
+  assert.match(redactParams({ ep_contact: "me@gmail.com" }, undefined, "analitikisler.com").ep_contact, /^\[redacted/);
+  // A shared second level (com.tr, co.uk) is not one site.
+  assert.ok(isOwnAddress("info@shop.com.tr", "www.shop.com.tr"));
+  assert.ok(!isOwnAddress("me@other.com.tr", "www.shop.com.tr"));
+  assert.ok(!isOwnAddress("me@co.uk", "shop.co.uk"));
+  assert.ok(!isOwnAddress("me@x.com", null));
+  // Tenants of a shared host are different owners; a short ccTLD brand is one site.
+  assert.ok(!isOwnAddress("owner@other.myshopify.com", "shop.myshopify.com"));
+  assert.ok(isOwnAddress("hello@shop.myshopify.com", "www.shop.myshopify.com"));
+  assert.ok(isOwnAddress("hello@abc.de", "www.abc.de"));
+  // Outside a link, an own-domain address may be a visitor's (staff, B2B), so it still counts.
+  assert.match(redactParams({ "ep.customer": "staff@analitikisler.com" }, undefined, "analitikisler.com")["ep.customer"], /^\[redacted/);
+  assert.equal(redactParams({ "ep.link_url": "hello@analitikisler.com" }, undefined, "analitikisler.com")["ep.link_url"], "hello@analitikisler.com");
+  assert.deepEqual(redactPush({ event: "lead", "form.email_field": "staff@analitikisler.com" }, undefined, "analitikisler.com").plain, ["form.email_field"]);
+
+  const hit = { platform: "ga4", name: "contact_click", step: 1, url: "https://www.google-analytics.com/g/collect?en=contact_click", params: { link_url: "mailto:hello@analitikisler.com", page_location: "https://analitikisler.com/" } };
+  const run = { journeyId: "j", viewport: "desktop", completed: true, hits: [hit], steps: [{ index: 0, label: "start" }, { index: 1, label: "Contact" }], consentStep: null,
+    dataLayerLog: [{ value: own.value, userData: undefined, step: 1 }] };
+  assert.ok(!checkRun({ events: [] }, run).some((f) => f.check.startsWith("pii")));
+  hit.params.link_url = "mailto:visitor@gmail.com";
+  assert.ok(checkRun({ events: [] }, run).some((f) => f.check === "pii"));
+  hit.params = { customer: "staff@analitikisler.com", page_location: "https://analitikisler.com/" };
+  assert.ok(checkRun({ events: [] }, run).some((f) => f.check === "pii"), "an own-domain address outside a link still counts");
 });
