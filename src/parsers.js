@@ -35,9 +35,9 @@ export function parseGa4(url, postData) {
   // Matched on the GA4 protocol rather than the host, so server-side GTM
   // endpoints on first-party domains are captured too.
   if (!u.pathname.endsWith("/g/collect") || u.searchParams.get("v") !== "2") return null;
-  // gtag.js sends a copy of some events to www.google.com/g/collect (and doubleclick.net)
-  // for Google signals and ads features. GA4 doesn't count those, so they aren't hits.
-  if (GOOGLE_COMPANION_HOST.test(u.hostname)) return null;
+  // gtag.js resends a hit to www.google.com/g/collect (marked gaf=1) when the first send
+  // seems lost, and copies some to doubleclick.net. GA4 doesn't count these twice, so they aren't hits.
+  if (GOOGLE_COMPANION_HOST.test(u.hostname) || u.searchParams.has("gaf")) return null;
   const base = new URLSearchParams(u.search);
   const lines = postData ? postData.split("\n").filter(Boolean) : [""];
   return lines.map((line) => {
@@ -236,6 +236,10 @@ export function resolveProviders(list, plan) {
 export function vendorOf(url) {
   const p = providerOf(url);
   if (!p) return null;
-  if (p.key === "ga4") return /(^|\.)(google-analytics|analytics\.google|googletagmanager)\.com$/.test(new URL(url).hostname) ? "Google Analytics" : "Google Analytics (server-side)";
+  if (p.key === "ga4") {
+    const host = new URL(url).hostname;
+    if (/(^|\.)(google-analytics|analytics\.google|googletagmanager)\.com$/.test(host)) return "Google Analytics";
+    return GOOGLE_COMPANION_HOST.test(host) ? "Google Analytics (resend)" : "Google Analytics (server-side)";
+  }
   return p.label;
 }

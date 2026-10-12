@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 (2026-10-12)
+
+Fixes from Bahadır's audit of analitikisler.com.
+
+- GA4 resends (`gaf=1`, which gtag.js sends when it thinks the first send was lost) are not counted as hits on any host. Copies to `www.google.com` are labelled "Google Analytics (resend)" instead of "server-side".
+- The duplicate check counts per page load (GA4's `_p`, or the page address). A step that opens a new page no longer adds the previous page's last `page_view` to the new one.
+- A `page_view` sent while its page unloads is filed under the step that loaded that page, not the next step. A `page_view` for the page that is still open (for example GTM resending it after consent) stays in the step that sent it.
+- dataLayer entries holding DOM elements or objects that refer to themselves (such as GTM click events) are kept, with the element shown as `<tag#id>` and only true cycles cut, instead of becoming "[object Object]".
+
 ## 0.6.1 (2026-10-12)
 
 - GA4 events were reported as "sent 2 times" on sites with Google signals or ads features. gtag.js also sends a copy of those events to `www.google.com/g/collect` (or `doubleclick.net`), which GA4 doesn't count. Those copies are now still answered locally and listed under network requests, but no longer counted as hits. Requests to `analytics.google.com` still count: it is a primary GA4 endpoint.

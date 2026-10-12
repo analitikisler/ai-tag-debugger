@@ -73,3 +73,12 @@ test("writes finding texts in Turkish with --lang tr", () => {
   const missing = findings.find((f) => f.check === "missing_params");
   assert.equal(missing.detail, '"purchase" olayı "value" parametresi olmadan gönderildi.');
 });
+
+test("the duplicate check counts per page load, so a step that loads a new page doesn't add up both pages", async () => {
+  const { checkRun } = await import("../src/checks.js");
+  const hit = (p) => ({ platform: "ga4", name: "page_view", params: {}, url: `https://region1.google-analytics.com/g/collect?v=2&en=page_view&_p=${p}`, step: 1 });
+  const run = (hits) => ({ journeyId: "j", viewport: "desktop", completed: true, hits, steps: [{ index: 0, label: "start" }, { index: 1, label: "Open privacy" }], consentStep: null, dataLayerLog: [] });
+  const dup = (hits) => checkRun({ events: [] }, run(hits)).filter((f) => f.check === "duplicate");
+  assert.equal(dup([hit("a"), hit("b")]).length, 0);
+  assert.equal(dup([hit("a"), hit("a")]).length, 1);
+});

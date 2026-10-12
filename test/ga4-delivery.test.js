@@ -40,3 +40,57 @@ test("GA4 keepalive requests count once, companion copies are not hits, and a pa
     await session.close();
   }
 });
+
+const PAGES2 = {
+  // Sends its page_view only as it unloads, as some setups do.
+  "/late": `<!doctype html><a id="go" href="/done">go</a><script>
+    addEventListener("pagehide", () => fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1&_p=111&en=page_view&dl=" + encodeURIComponent(location.href), { method: "POST", keepalive: true }));
+    const shared = { id: 1 };
+    const o = { event: "gtm.click", "gtm.element": document.body, n: 1n, a: shared, b: shared }; o.self = o;
+    dataLayer.push(o);</script>`,
+  "/done": `<!doctype html><p>done</p>`,
+  // GTM resends page_view for the same page when consent is granted, without navigating.
+  "/consent": `<!doctype html><button id="ok" onclick="fetch('https://region1.google-analytics.com/g/collect?v=2&tid=G-1&_p=222&gcs=G111&en=page_view&dl=' + encodeURIComponent(location.href), { method: 'POST', keepalive: true })">OK</button>`,
+};
+let server2;
+let url2;
+before(async () => {
+  server2 = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(PAGES2[new URL(req.url, "http://x").pathname] ?? ""));
+  await new Promise((r) => server2.listen(0, "127.0.0.1", r));
+  url2 = `http://127.0.0.1:${server2.address().port}`;
+});
+after(() => server2.close());
+
+test("a page_view sent while its page unloads belongs to the step that loaded the page, and dataLayer objects with DOM elements are kept", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url2, providers: ["ga4"], blockHits: true });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url: `${url2}/late` });
+    const loadStep = session.currentStep;
+    await session.act({ action: "click", selector: "#go" });
+    await session.page.waitForURL(/\/done$/);
+    await session.page.waitForTimeout(500);
+    const pv = session.hits.find((h) => h.name === "page_view");
+    assert.ok(pv, "page_view recorded");
+    assert.equal(pv.step, loadStep);
+    assert.ok(session.currentStep > loadStep);
+    const click = session.dataLayerLog.find((e) => e.value?.event === "gtm.click");
+    assert.deepEqual(click.value, { event: "gtm.click", "gtm.element": "<body>", n: "1", a: { id: 1 }, b: { id: 1 }, self: "[circular]" });
+  } finally {
+    await session.close();
+  }
+});
+
+test("a page_view resent for the page still open stays in the step that sent it", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url2, providers: ["ga4"], blockHits: true });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url: `${url2}/consent` });
+    await session.act({ action: "click", selector: "#ok", accepts_consent: true });
+    await session.page.waitForTimeout(500);
+    const pv = session.hits.find((h) => h.name === "page_view");
+    assert.equal(pv.step, session.currentStep);
+  } finally {
+    await session.close();
+  }
+});

@@ -20,13 +20,43 @@ export const VIEWPORTS = {
 // Runs in the page before any site script: reports every dataLayer push
 // (including gtag consent commands) to Node through an exposed binding, so the
 // log survives page navigations.
+/** A page address without its hash, for matching page_location to navigations. */
+const pageKey = (url) => String(url ?? "").split("#")[0];
+
 const INIT_SCRIPT = `(() => {
   const record = (entry) => {
     let value = entry;
     try {
       // gtag() pushes an arguments object; store it as a plain array.
       if (entry && typeof entry === "object" && typeof entry.length === "number" && !Array.isArray(entry)) value = Array.from(entry);
-      value = JSON.parse(JSON.stringify(value));
+      // GTM click and form events carry DOM elements and objects that refer to themselves.
+      // Copied by hand so only true cycles (an object inside itself) are cut, not shared objects.
+      const copy = (v, parents) => {
+        if (typeof v === "bigint") return String(v);
+        if (typeof v === "function" || typeof v === "symbol") return undefined;
+        if (!v || typeof v !== "object") return v;
+        if (typeof Element !== "undefined" && v instanceof Element) return "<" + v.tagName.toLowerCase() + (v.id ? "#" + v.id : "") + ">";
+        if (typeof Node !== "undefined" && v instanceof Node) return "[node]";
+        if (v === window) return "[window]";
+        if (parents.includes(v)) return "[circular]";
+        if (parents.length > 20) return "[too deep]";
+        if (typeof v.toJSON === "function") { try { return copy(v.toJSON(), parents); } catch { return String(v); } }
+        parents.push(v);
+        let out;
+        if (Array.isArray(v)) out = v.map((x) => { const c = copy(x, parents); return c === undefined ? null : c; });
+        else {
+          out = {};
+          for (const k of Object.keys(v)) {
+            let x;
+            try { x = v[k]; } catch { continue; }
+            const c = copy(x, parents);
+            if (c !== undefined) out[k] = c;
+          }
+        }
+        parents.pop();
+        return out;
+      };
+      value = JSON.parse(JSON.stringify(copy(value, [])));
     } catch { value = String(entry); }
     if (window.__atdRecord) window.__atdRecord({ url: location.href, value });
   };
@@ -183,6 +213,8 @@ export class AuditSession {
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.skipped = {}; // step index -> { vendor label: requests }
+    this.loadedIn = new Map(); // page address -> the last step whose main-frame navigation reached it
+    this.leaving = null; // the page address being navigated away from, until the next page commits
     this.bodyBytes = 0;
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
     this.startedAt = Date.now();
@@ -207,6 +239,15 @@ export class AuditSession {
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
+    this.page.on("framenavigated", (frame) => {
+      if (frame !== this.page.mainFrame()) return;
+      this.loadedIn.set(pageKey(frame.url()), this.currentStep);
+      this.leaving = null;
+    });
+    // From the moment the main frame starts loading another document, the open page is leaving.
+    this.page.on("request", (request) => {
+      if (request.isNavigationRequest() && request.frame() === this.page.mainFrame()) this.leaving = pageKey(this.page.url());
+    });
 
     const onRequest = (request) => {
       const hits = parseTrackingRequest(request.url(), request.postData());
@@ -214,7 +255,7 @@ export class AuditSession {
       const recorded = [];
       for (const hit of hits) {
         if (!this.providers.includes(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.currentStep, pageUrl: this.page.url(), t: Date.now() };
+        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now() };
         if (this.record("hits", entry)) recorded.push(entry);
       }
       if (recorded.length) hitsOf.set(request, recorded);
@@ -296,6 +337,20 @@ export class AuditSession {
     this.beginStep("start");
   }
 
+  /**
+   * The step a hit belongs to. A page_view sent as the page unloads arrives after the next
+   * step has started, so it goes to the step that loaded its page, when that was earlier.
+   */
+  stepForHit(hit) {
+    if (hit.name !== "page_view" || !hit.params?.page_location) return this.currentStep;
+    // Only when its page is going or gone: a page_view for the page still open (GTM resending
+    // it after consent, a virtual page view) belongs to the current step.
+    const page = pageKey(hit.params.page_location);
+    if (page === pageKey(this.page.url()) && page !== this.leaving) return this.currentStep;
+    const loaded = this.loadedIn.get(page);
+    return loaded !== undefined && loaded < this.currentStep ? loaded : this.currentStep;
+  }
+
   /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
   redactHit({ userFields, ...hit }) {
     const found = { fields: [], plain: [] };
@@ -366,6 +421,7 @@ export class AuditSession {
   }
 
   beginStep(label, extra = {}) {
+    this.leaving = null; // a navigation that never committed (a download, a 204) ends with its step
     this.steps.push({ index: this.steps.length, label, t: Date.now(), ...extra });
   }
 

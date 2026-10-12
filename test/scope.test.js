@@ -72,3 +72,11 @@ test("the browser records only the chosen providers, keeps GA4 batch bodies, and
     await session.close();
   }
 });
+
+test("GA4 resends (gaf=1) and copies to www.google.com are not hits, and are labelled as resends", async () => {
+  const { parseTrackingRequest, vendorOf } = await import("../src/parsers.js");
+  assert.equal(parseTrackingRequest("https://sgtm.shop.com/g/collect?v=2&tid=G-1&en=page_view&gaf=1", null), null);
+  assert.equal(parseTrackingRequest("https://www.google.com/g/collect?v=2&tid=G-1&en=page_view", null), null);
+  assert.equal(vendorOf("https://www.google.com/g/collect?v=2&gaf=1"), "Google Analytics (resend)");
+  assert.equal(vendorOf("https://sgtm.shop.com/g/collect?v=2"), "Google Analytics (server-side)");
+});

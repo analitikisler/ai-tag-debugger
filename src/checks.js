@@ -15,6 +15,15 @@ const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 const key = (platform, name) => `${platform}:${name}`;
 
+/** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
+function pageOf(hit) {
+  try {
+    const p = new URL(hit.url).searchParams.get("_p");
+    if (p) return p;
+  } catch { /* no URL */ }
+  return hit.params?.page_location ?? hit.pageUrl ?? "";
+}
+
 function expectedIn(planEvent, journeyId) {
   return !planEvent.journeys || planEvent.journeys.includes(journeyId);
 }
@@ -95,10 +104,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }
   }
 
-  // The same event sent more than once by a single action.
+  // The same event sent more than once by a single action on one page. A step that loads a
+  // new page can also carry the previous page's last hits, so the page is part of the key.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${key(hit.platform, hit.name)}`;
+    const k = `${hit.step}|${key(hit.platform, hit.name)}|${pageOf(hit)}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
