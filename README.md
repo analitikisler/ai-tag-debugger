@@ -180,7 +180,7 @@ npx @analitikisler/ai-tag-debugger replay saved/*
     - warning duplicate purchase desktop ga4 page_view
 ```
 
-The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It holds the site's pages and scripts, so keep sites you don't own out of public repositories.
+The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It leaves out tracking requests, images and video, cookies, authorization headers, form data, and requests with an email or other user data in their address. It still holds the site's pages and scripts, so keep sites you don't own out of public repositories.
 
 ## Configure your site
 

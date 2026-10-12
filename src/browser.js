@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
@@ -227,15 +227,29 @@ async function replayTarget(a, locator) {
 // Images, fonts and video don't change what tracking sends, and are most of a recording's size.
 const MEDIA = /^(image|font|video|audio)\//;
 
+const SECRET_REQUEST_HEADER = /^(cookie|authorization|proxy-authorization)$/i;
+
 /**
  * Drops images, fonts, video and tracking requests from a recording (they are answered locally on replay, and their
- * URLs can hold the user data redacted everywhere else) and the cookies the browser sent.
+ * URLs can hold the user data redacted everywhere else), requests with user data in their address, form bodies,
+ * cookies both ways and authorization headers.
  */
+
 async function cleanRecording(file) {
   const har = JSON.parse(await readFile(file, "utf8"));
   har.log.entries = har.log.entries
     .filter((e) => !isCollectionEndpoint(e.request.url) && !MEDIA.test(e.response?.content?.mimeType ?? ""))
-    .map((e) => ({ ...e, request: { ...e.request, cookies: [], headers: e.request.headers.filter((h) => !/^cookie$/i.test(h.name)) } }));
+    // A request whose address holds user data (an email in a form GET, for example) is left out whole.
+    .filter((e) => redactUrl(e.request.url).url === e.request.url)
+    .map((e) => {
+      // Form bodies are dropped; replay then matches POSTs by address and method.
+      const { postData: _postData, ...request } = e.request;
+      return {
+        ...e,
+        request: { ...request, cookies: [], headers: request.headers.filter((h) => !SECRET_REQUEST_HEADER.test(h.name)) },
+        response: { ...e.response, cookies: [], headers: e.response.headers.filter((h) => !/^set-cookie$/i.test(h.name)) },
+      };
+    });
   await writeFile(file, JSON.stringify(har));
 }
 
@@ -710,7 +724,8 @@ export class AuditSession {
     if (this.opts.recordHar && this.context) {
       // Writes the recording. If the browser already went away, there is none to clean.
       const written = await this.context.close().then(() => true, () => false);
-      if (written) await cleanRecording(this.opts.recordHar);
+      // A recording that could not be cleaned may hold cookies or form data, so it is deleted.
+      if (written) await cleanRecording(this.opts.recordHar).catch(() => rm(this.opts.recordHar, { force: true }));
     }
     await this.browser?.close();
     await this.egress?.close();
