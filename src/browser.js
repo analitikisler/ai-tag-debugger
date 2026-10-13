@@ -322,6 +322,11 @@ export class AuditSession {
       launch.proxy = { server: this.egress.url, bypass: "<-loopback>" };
       launch.args = ["--force-webrtc-ip-handling-policy=disable_non_proxied_udp"];
     }
+    if (this.opts.replayHar) {
+      // A replay never goes online: requests the routes below don't answer, including any still in
+      // flight once they are removed at the end, go to a proxy that isn't there.
+      launch.proxy = { server: "http://127.0.0.1:9", bypass: "<-loopback>" };
+    }
     this.browser = await chromium.launch(launch);
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
@@ -407,6 +412,12 @@ export class AuditSession {
         (isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort()).catch(() => {}),
       );
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
+      // A saved redirect to a page the browser may not open fails here, as it did when saved. Left to the
+      // recording, the redirect would be followed outside any handler, and its failure would end the run.
+      const refusedRedirects = await this.refusedRedirects(this.opts.replayHar);
+      if (refusedRedirects.size) {
+        await this.context.route((url) => refusedRedirects.has(url.href), (route) => route.abort("blockedbyclient").catch(() => {}));
+      }
     }
     if (this.opts.blockHits) {
       await this.context.route((url) => isCollectionEndpoint(url.href), async (route) => {
@@ -493,6 +504,21 @@ export class AuditSession {
     }
     this[log].push(entry);
     return true;
+  }
+
+  /** Addresses whose saved answer redirects somewhere the browser may not go. */
+  async refusedRedirects(file) {
+    const refused = new Set();
+    const har = JSON.parse(await readFile(file, "utf8"));
+    for (const e of har.log.entries) {
+      const status = e.response?.status;
+      if (status < 300 || status >= 400) continue;
+      const location = e.response.redirectURL || e.response.headers?.find((h) => /^location$/i.test(h.name))?.value;
+      if (!location) continue;
+      const target = new URL(location, e.request.url).href;
+      if (await this.checkUrl(target)) refused.add(e.request.url);
+    }
+    return refused;
   }
 
   /** Error message when the browser may not be on this URL, or null. */
@@ -766,14 +792,18 @@ export class AuditSession {
     // Leaving the page first cancels what it is still loading (the recording would otherwise wait for it),
     // while tracking requests sent on the way out are still answered locally.
     if (this.opts.recordHar) await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
-    // Requests still in flight then get no route callback that would throw once the browser is gone.
-    // A page stuck in a script never answers, so this waits at most 5 seconds.
-    let unrouteTimer;
-    await Promise.race([
-      this.context?.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {}),
-      new Promise((resolve) => (unrouteTimer = setTimeout(resolve, 5000))),
-    ]);
-    clearTimeout(unrouteTimer);
+    if (this.opts.replayHar) {
+      // The recording's own route callbacks would otherwise throw for requests still in flight once the
+      // browser is gone. Without routes, those go nowhere (see start). Elsewhere the routes stay, so a
+      // hit sent while the browser closes is still answered locally instead of reaching the real account.
+      // A page stuck in a script never answers, so this waits at most 5 seconds.
+      let unrouteTimer;
+      await Promise.race([
+        this.context?.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {}),
+        new Promise((resolve) => (unrouteTimer = setTimeout(resolve, 5000))),
+      ]);
+      clearTimeout(unrouteTimer);
+    }
     if (this.opts.recordHar && this.context) {
       // Writes the recording. If the browser already went away, or writing it takes too long, there is
       // none to clean: closing the browser below then ends the run's wait.

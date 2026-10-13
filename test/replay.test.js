@@ -127,11 +127,13 @@ test("a saved site replays offline with the same hits and findings", async () =>
   assert.ok(names(capture.runs).includes("consent_given"));
 });
 
-test("a replay repeats failed steps, late tags, left-out media, unanswered requests and unfinished journeys as they were", async () => {
+test("a replay repeats failed steps, late tags, left-out media, unanswered requests, refused redirects and unfinished journeys as they were", async () => {
   const late = await mkdtemp(path.join(tmpdir(), "atd-replay-late-"));
   let slowAsked = 0;
   const lateServer = createServer((req, res) => {
     if (req.url === "/slow.js" && !slowAsked++) return; // the first request gets no answer
+    // Another host, so the browser may not open it. Only the first hop is checked when saved, so it loads then.
+    if (req.url === "/moved") return res.writeHead(301, { location: `http://localhost:${lateServer.address().port}/late` }).end();
     const page = PAGES[new URL(req.url, "http://x").pathname];
     res.writeHead(page === undefined ? 404 : 200, { "content-type": req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".svg") ? "image/svg+xml" : "text/html" }).end(page ?? "");
   });
@@ -145,6 +147,7 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
         { id: "away", start: "https://elsewhere.example/", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
         { id: "next", start: "/late", steps: [{ action: "goto", url: "/next", reason: "Open the next page" }] },
         { id: "stuck", start: "/late", steps: [{ action: "click", selector: "#checkout", reason: "Check out" }] },
+        { id: "moved", start: "/moved", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
       ],
     };
     const plan = { events: [{ platform: "ga4", name: "add_to_cart" }] };
@@ -164,6 +167,7 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     assert.ok(capture.runs[0].hits.some((h) => h.name === "add_to_cart"), "the badge left out of the recording still loads, so the button shows");
     assert.equal(capture.runs[1].completed, false);
     assert.equal(capture.runs[3].completed, false);
+    assert.equal(capture.runs[4].completed, false, "a saved redirect off the site is refused again instead of ending the replay");
   } finally {
     lateServer.close();
     lateServer.closeAllConnections();
