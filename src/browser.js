@@ -404,7 +404,7 @@ export class AuditSession {
       // Requests the recording lacks fail, except the media left out of it: those get an empty answer,
       // since a failed image or icon can stop a script (a consent banner waiting for its logo, for example).
       await this.context.route("**/*", (route) =>
-        isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort(),
+        (isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort()).catch(() => {}),
       );
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
     }
@@ -703,9 +703,9 @@ export class AuditSession {
       switch (a.action) {
         case "goto": {
           const target = new URL(a.url, this.page.url() === "about:blank" ? undefined : this.page.url()).href;
+          step.replay = { action: "goto", url: target };
           const refused = await this.checkUrl(target);
           if (refused) return refused;
-          step.replay = { action: "goto", url: target };
           await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
           break;
         }
@@ -763,9 +763,18 @@ export class AuditSession {
   }
 
   async close() {
+    // Leaving the page first cancels what it is still loading (the recording would otherwise wait for it),
+    // while tracking requests sent on the way out are still answered locally.
+    if (this.opts.recordHar) await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
+    // Requests still in flight then get no route callback that would throw once the browser is gone.
+    // A page stuck in a script never answers, so this waits at most 5 seconds.
+    let unrouteTimer;
+    await Promise.race([
+      this.context?.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {}),
+      new Promise((resolve) => (unrouteTimer = setTimeout(resolve, 5000))),
+    ]);
+    clearTimeout(unrouteTimer);
     if (this.opts.recordHar && this.context) {
-      // Leaving the page first cancels what it is still loading, which the recording would otherwise wait for.
-      await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
       // Writes the recording. If the browser already went away, or writing it takes too long, there is
       // none to clean: closing the browser below then ends the run's wait.
       let timer;

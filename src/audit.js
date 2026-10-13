@@ -72,7 +72,7 @@ export async function runAudit(opts) {
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
   if (!journeys.length) throw new Error("No journeys to run. Pick one with --journey (e.g. purchase) or describe one with --goal.");
   if (opts.scripted) {
-    const unscripted = journeys.filter((j) => !j.steps?.length).map((j) => j.id);
+    const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
     if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}.`);
   }
 

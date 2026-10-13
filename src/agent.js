@@ -164,8 +164,8 @@ export async function runAgentJourney(session, journey, opts = {}) {
 /** Replays fixed steps from the config, without calling an AI model. */
 export async function runScriptedJourney(session, journey, opts = {}) {
   const log = opts.log ?? (() => {});
-  if (!journey.steps?.length) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
-  for (const step of journey.steps) {
+  if (!journey.steps?.length && !journey.incomplete) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
+  for (const step of journey.steps ?? []) {
     log(`  ${step.reason ?? `${step.action} ${step.selector ?? step.url ?? ""}`}`);
     const error = await session.act(step);
     if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
@@ -194,7 +194,8 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     await session.start();
     const startUrl = new URL(journey.start ?? "/", config.site).href;
     const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${startUrl}` });
-    if (startError) return { ...collect(session, journey, viewport), completed: false, note: `Could not open the start page: ${startError}` };
+    // A replayed journey that was unfinished when saved keeps its saved note, however it fails this time.
+    if (startError) return { ...collect(session, journey, viewport), completed: false, note: journey.incomplete ?? `Could not open the start page: ${startError}` };
 
     const outcome = await (opts.scripted ? runScriptedJourney(session, journey, opts) : runAgentJourney(session, journey, opts)).catch((err) => {
       if (err instanceof StepTimeout) return { completed: false, note: err.message };

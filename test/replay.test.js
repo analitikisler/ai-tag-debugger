@@ -142,6 +142,7 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
       providers: ["ga4"],
       journeys: [
         { id: "buy", start: "/late", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
+        { id: "away", start: "https://elsewhere.example/", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
         { id: "next", start: "/late", steps: [{ action: "goto", url: "/next", reason: "Open the next page" }] },
         { id: "stuck", start: "/late", steps: [{ action: "click", selector: "#checkout", reason: "Check out" }] },
       ],
@@ -150,8 +151,10 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     const saved = await runAudit({ config, plan, scripted: true, ai: false, saveSite: late, outDir: path.join(late, "first") });
     assert.ok(saved.runs[0].hits.some((h) => h.name === "add_to_cart"), "the tag sent after the last click is captured");
     const site = JSON.parse(await readFile(path.join(late, SAVED_SITE_FILE), "utf8"));
-    assert.equal(site.journeys[2].steps[0].optional, true, "a step that failed is optional on replay, so the steps after it still run");
-    assert.match(site.journeys[2].incomplete, /Step "Check out" failed/);
+    assert.equal(site.journeys[3].steps[0].optional, true, "a step that failed is optional on replay, so the steps after it still run");
+    assert.match(site.journeys[3].incomplete, /Step "Check out" failed/);
+    assert.deepEqual(site.journeys[1].steps, [], "a journey whose start page was blocked has no steps to replay");
+    assert.match(site.journeys[1].incomplete, /Could not open the start page/);
 
     lateServer.close();
     lateServer.closeAllConnections();
@@ -159,7 +162,8 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     assert.deepEqual({ missing: replay.missing, extra: replay.extra, incomplete: replay.incomplete }, { missing: [], extra: [], incomplete: [] });
     const capture = JSON.parse(await readFile(path.join(late, "last-replay", "capture.json"), "utf8"));
     assert.ok(capture.runs[0].hits.some((h) => h.name === "add_to_cart"), "the badge left out of the recording still loads, so the button shows");
-    assert.equal(capture.runs[2].completed, false);
+    assert.equal(capture.runs[1].completed, false);
+    assert.equal(capture.runs[3].completed, false);
   } finally {
     lateServer.close();
     lateServer.closeAllConnections();
