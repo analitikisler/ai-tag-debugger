@@ -21,6 +21,15 @@ const PAGES = {
   // Served as a script, so a replay has to answer it from the recording.
   "/app.js": `${send("page_view")}
 document.addEventListener("click", (e) => { if (e.target.closest(".btn")) { ${send("consent_given")} } });`,
+  // The button only shows once the badge loads, and its tag sends a moment after the click.
+  "/late": `<!doctype html><script src="/late.js"></script>`,
+  // Asks for the script the page before was still waiting for when it was left.
+  "/next": `<!doctype html><script src="/slow.js"></script><p>Next</p>`,
+  "/slow.js": "",
+  "/late.js": `fetch("/slow.js");
+fetch("/badge.svg").then((r) => { if (r.ok) document.body.insertAdjacentHTML("beforeend", '<button id="buy">Add to cart</button>'); });
+document.addEventListener("click", (e) => { if (e.target.id === "buy") setTimeout(() => { ${send("add_to_cart")} }, 1500); });`,
+  "/badge.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
   "/product": `<!doctype html><script>${send("page_view")}${send("view_item")}${send("view_item")}</script><p>Product</p>`,
 };
 
@@ -31,9 +40,9 @@ before(async () => {
   server = createServer((req, res) => {
     const page = PAGES[new URL(req.url, "http://x").pathname];
     if (page === undefined) return res.writeHead(404).end();
-    const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : "text/html";
+    const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : req.url.endsWith(".svg") ? "image/svg+xml" : "text/html";
     const headers = { "content-type": type };
-    if (req.url === "/account") headers["set-cookie"] = "session=s3cret; Path=/";
+    if (req.url === "/account") headers["set-cookie"] = ["session=s3cret; Path=/; HttpOnly", "country=TR; Path=/"];
     res.writeHead(200, headers).end(page);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -65,7 +74,7 @@ test("a click by ref is saved as a CSS path a scripted run can repeat", async ()
   }
 });
 
-test("a recording keeps no cookies, authorization headers or form data", async () => {
+test("a recording keeps no session cookies, authorization headers or form data", async () => {
   const har = path.join(dir, "private.har");
   const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], recordHar: har });
   await session.start();
@@ -82,6 +91,16 @@ test("a recording keeps no cookies, authorization headers or form data", async (
   for (const secret of ["s3cret", "t0ken", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
   const entries = JSON.parse(text).log.entries.map((e) => `${e.request.method} ${new URL(e.request.url).pathname}`);
   assert.deepEqual(entries, ["GET /account", "POST /api/profile"]);
+
+  // The cookie the page's scripts can read is still set on replay.
+  const replay = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], replayHar: har });
+  await replay.start();
+  try {
+    await replay.act({ action: "goto", url: `${url}account` });
+    assert.equal(await replay.page.evaluate(() => document.cookie), "country=TR");
+  } finally {
+    await replay.close();
+  }
 });
 
 test("a saved site replays offline with the same hits and findings", async () => {
@@ -106,6 +125,46 @@ test("a saved site replays offline with the same hits and findings", async () =>
   const names = (runs) => runs[0].hits.map((h) => h.name).sort();
   assert.deepEqual(names(capture.runs), names(saved.runs));
   assert.ok(names(capture.runs).includes("consent_given"));
+});
+
+test("a replay repeats failed steps, late tags, left-out media, unanswered requests and unfinished journeys as they were", async () => {
+  const late = await mkdtemp(path.join(tmpdir(), "atd-replay-late-"));
+  let slowAsked = 0;
+  const lateServer = createServer((req, res) => {
+    if (req.url === "/slow.js" && !slowAsked++) return; // the first request gets no answer
+    const page = PAGES[new URL(req.url, "http://x").pathname];
+    res.writeHead(page === undefined ? 404 : 200, { "content-type": req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".svg") ? "image/svg+xml" : "text/html" }).end(page ?? "");
+  });
+  await new Promise((r) => lateServer.listen(0, "127.0.0.1", r));
+  try {
+    const config = {
+      site: `http://127.0.0.1:${lateServer.address().port}/`,
+      providers: ["ga4"],
+      journeys: [
+        { id: "buy", start: "/late", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
+        { id: "next", start: "/late", steps: [{ action: "goto", url: "/next", reason: "Open the next page" }] },
+        { id: "stuck", start: "/late", steps: [{ action: "click", selector: "#checkout", reason: "Check out" }] },
+      ],
+    };
+    const plan = { events: [{ platform: "ga4", name: "add_to_cart" }] };
+    const saved = await runAudit({ config, plan, scripted: true, ai: false, saveSite: late, outDir: path.join(late, "first") });
+    assert.ok(saved.runs[0].hits.some((h) => h.name === "add_to_cart"), "the tag sent after the last click is captured");
+    const site = JSON.parse(await readFile(path.join(late, SAVED_SITE_FILE), "utf8"));
+    assert.equal(site.journeys[2].steps[0].optional, true, "a step that failed is optional on replay, so the steps after it still run");
+    assert.match(site.journeys[2].incomplete, /Step "Check out" failed/);
+
+    lateServer.close();
+    lateServer.closeAllConnections();
+    const replay = await replaySavedSite(late);
+    assert.deepEqual({ missing: replay.missing, extra: replay.extra, incomplete: replay.incomplete }, { missing: [], extra: [], incomplete: [] });
+    const capture = JSON.parse(await readFile(path.join(late, "last-replay", "capture.json"), "utf8"));
+    assert.ok(capture.runs[0].hits.some((h) => h.name === "add_to_cart"), "the badge left out of the recording still loads, so the button shows");
+    assert.equal(capture.runs[2].completed, false);
+  } finally {
+    lateServer.close();
+    lateServer.closeAllConnections();
+    await rm(late, { recursive: true, force: true });
+  }
 });
 
 test("compareKeys counts repeats", () => {

@@ -3,6 +3,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { runJourney } from "../src/agent.js";
 import { explainFindings, renderCsv, renderHtml } from "../src/report.js";
 import { checkRun } from "../src/checks.js";
@@ -90,6 +91,22 @@ test("invalid tool input is returned to the model as an error instead of crashin
   assert.equal(run.completed, false);
   const toolResult = client.requests[1].messages.at(-1).content[0];
   assert.equal(toolResult.is_error, true);
+});
+
+test("a page that stops responding ends the journey instead of the run", async () => {
+  // The button's script never returns, so the page can't be read afterwards.
+  const frozen = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(`<button onclick="for (;;) {}">Check the cart</button>`));
+  await new Promise((r) => frozen.listen(0, "127.0.0.1", r));
+  try {
+    const client = fakeClient([{ tool: "browser_action", match: /Check the cart/, input: { action: "click", reason: "Check the cart" } }]);
+    const config = { site: `http://127.0.0.1:${frozen.address().port}` };
+    const run = await runJourney(config, { id: "cart", goal: "Check the cart." }, "desktop", { client, timeouts: { page: 2000 } });
+    assert.equal(run.completed, false);
+    assert.equal(run.note, "The page stopped responding: it could not be read for 2 seconds.");
+    assert.equal(client.requests.length, 1, "the model is not asked again about a page it can't see");
+  } finally {
+    frozen.close();
+  }
 });
 
 test("explanations are matched to grouped findings", async () => {

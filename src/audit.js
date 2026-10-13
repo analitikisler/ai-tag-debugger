@@ -92,8 +92,9 @@ export async function runAudit(opts) {
 
   const findings = filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events);
   if (opts.saveSite) {
-    await writeSavedSite(opts.saveSite, { config, plan, runs, findings });
-    log(`\nSaved the site for offline replay in ${opts.saveSite}`);
+    await writeSavedSite(opts.saveSite, { config, plan, runs, findings })
+      .then(() => log(`\nSaved the site for offline replay in ${opts.saveSite}`))
+      .catch((err) => log(`\nCould not save the site in ${opts.saveSite}: ${err.message}`));
   }
   let explained = null;
   if (provider) {

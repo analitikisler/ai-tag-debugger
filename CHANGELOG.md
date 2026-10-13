@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.1 (2026-10-13)
+
+- A page whose script stops responding after a step can no longer stall a run. Reading the page now has a 1 minute limit too, and when it runs out the journey ends as incomplete with a note. Before, only the model call and the browser action itself had a limit.
+- When a saved site's recording can't be cleaned, a warning now says so before the file is deleted.
+
+Replays of saved sites are closer to the saved run, after the first save of 18 real shops:
+
+- Scripted runs, and so replays, wait 3 seconds after the last step, so tags that send a moment after the last click (GA4 batches events) are captured as in an AI run.
+- A step that failed in the saved run is tried again on replay without ending the journey there.
+- A journey the AI could not finish (no cart, a bot check) stays unfinished on replay, so its missing events are not reported as broken.
+- Cookies the server sets for the page's scripts, such as a country, are kept in the recording; HttpOnly cookies, where sessions and logins live, are still left out. Some sites don't render without them, for example a cookie banner that never appears.
+- Images, fonts and video left out of the recording get an empty answer on replay instead of failing, since a failed image can stop a script.
+- Requests that had no answer yet when the browser closed are left out of the recording. On replay they made the page that asked for them again never finish loading.
+- A site whose recording is missing (the browser closed early) is not saved, and `replay` reports a saved site it can't replay and goes on with the next one instead of stopping.
+
 ## 0.7.0 (2026-10-12)
 
 Fixes from the first audit run across 18 real shops.

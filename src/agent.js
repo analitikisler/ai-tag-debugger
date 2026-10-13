@@ -88,9 +88,11 @@ export function validateAction(input) {
   return null;
 }
 
-// One hung page or model request must not stall a whole run.
-const MODEL_TIMEOUT_MS = 180_000;
-const ACTION_TIMEOUT_MS = 120_000;
+// One hung page or model request must not stall a whole run. A page whose script never
+// stops (an endless loop after a click, for example) can't be read, so reading it has a limit too.
+const TIMEOUTS = { model: 180_000, action: 120_000, page: 60_000 };
+
+const LAST_STEP_WAIT_MS = 3000;
 
 class StepTimeout extends Error {}
 
@@ -105,14 +107,18 @@ function withTimeout(promise, ms, message) {
  * Lets the AI model drive the browser through one journey.
  * @param {AuditSession} session
  * @param {{ id: string, goal: string }} journey
- * @param {{ provider?: any, providerName?: string, client?: any, model?: string, maxSteps?: number, lang?: string, log?: (msg: string) => void }} opts
+ * @param {{ provider?: any, providerName?: string, client?: any, model?: string, maxSteps?: number, lang?: string, log?: (msg: string) => void, timeouts?: { model?: number, action?: number, page?: number } }} opts
+ *   timeouts: milliseconds for one model answer, one browser action and one read of the page.
  */
 export async function runAgentJourney(session, journey, opts = {}) {
   const provider = opts.provider ?? (await createProvider({ name: opts.providerName, model: opts.model, client: opts.client }));
   const maxSteps = opts.maxSteps ?? 30;
   const log = opts.log ?? (() => {});
+  const limit = { ...TIMEOUTS, ...opts.timeouts };
+  const seconds = (ms) => (ms % 60_000 ? `${Math.round(ms / 1000)} seconds` : ms === 60_000 ? "a minute" : `${ms / 60_000} minutes`);
+  const readPage = () => withTimeout(session.snapshot(), limit.page, `The page stopped responding: it could not be read for ${seconds(limit.page)}.`);
 
-  const first = await session.snapshot();
+  const first = await readPage();
   const chat = provider.conversation({
     system: systemPrompt(opts.lang ?? "en"),
     tools: TOOLS,
@@ -120,7 +126,7 @@ export async function runAgentJourney(session, journey, opts = {}) {
   });
 
   for (let turn = 0; turn < maxSteps; turn++) {
-    const { toolCalls, stop } = await withTimeout(chat.next(), MODEL_TIMEOUT_MS, "The model did not answer within 3 minutes.");
+    const { toolCalls, stop } = await withTimeout(chat.next(), limit.model, `The model did not answer within ${seconds(limit.model)}.`);
     if (stop === "refusal") return { completed: false, note: "The model declined to continue this journey." };
     if (toolCalls.length === 0) {
       if (stop === "max_tokens") return { completed: false, note: "The model response was cut off." };
@@ -146,8 +152,8 @@ export async function runAgentJourney(session, journey, opts = {}) {
         continue;
       }
       log(`  ${call.input.reason}`);
-      const error = await withTimeout(session.act(call.input), ACTION_TIMEOUT_MS, "The browser action did not finish within 2 minutes.");
-      results.push({ id: call.id, content: pageView(await session.snapshot(), error) });
+      const error = await withTimeout(session.act(call.input), limit.action, `The browser action did not finish within ${seconds(limit.action)}.`);
+      results.push({ id: call.id, content: pageView(await readPage(), error) });
     }
     if (finished) return finished;
     chat.addToolResults(results);
@@ -164,6 +170,10 @@ export async function runScriptedJourney(session, journey, opts = {}) {
     const error = await session.act(step);
     if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
   }
+  // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
+  // while the model answers; a scripted run would otherwise close the browser first.
+  await session.page.waitForTimeout(LAST_STEP_WAIT_MS);
+  if (journey.incomplete) return { completed: false, note: journey.incomplete };
   return { completed: true, note: "All scripted steps completed." };
 }
 
