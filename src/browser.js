@@ -407,6 +407,12 @@ export class AuditSession {
         (isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort()).catch(() => {}),
       );
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
+      // A saved redirect to a page the browser may not open fails here, as it did when saved. Left to the
+      // recording, the redirect would be followed outside any handler, and its failure would end the run.
+      const refusedRedirects = await this.refusedRedirects(this.opts.replayHar);
+      if (refusedRedirects.size) {
+        await this.context.route((url) => refusedRedirects.has(url.href), (route) => route.abort("blockedbyclient").catch(() => {}));
+      }
     }
     if (this.opts.blockHits) {
       await this.context.route((url) => isCollectionEndpoint(url.href), async (route) => {
@@ -493,6 +499,21 @@ export class AuditSession {
     }
     this[log].push(entry);
     return true;
+  }
+
+  /** Addresses whose saved answer redirects somewhere the browser may not go. */
+  async refusedRedirects(file) {
+    const refused = new Set();
+    const har = JSON.parse(await readFile(file, "utf8"));
+    for (const e of har.log.entries) {
+      const status = e.response?.status;
+      if (status < 300 || status >= 400) continue;
+      const location = e.response.redirectURL || e.response.headers?.find((h) => /^location$/i.test(h.name))?.value;
+      if (!location) continue;
+      const target = new URL(location, e.request.url).href;
+      if (await this.checkUrl(target)) refused.add(e.request.url);
+    }
+    return refused;
   }
 
   /** Error message when the browser may not be on this URL, or null. */

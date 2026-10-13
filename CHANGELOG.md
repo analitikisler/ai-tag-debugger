@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 (2026-10-13)
+
+- `replay` no longer crashes with `NavigationAbortedError: net::ERR_BLOCKED_BY_CLIENT` when a saved page redirects to another site. The redirect is refused again, so the journey stays unfinished as it was saved, and the other sites are still replayed.
+
 ## 0.7.2 (2026-10-13)
 
 - **GA4 and Google Ads hits sent through Google tag gateway are captured.** Sites using the gateway send GA4 to a short path on their own domain (`/<prefix>/ag/g/c`, `/<prefix>/ga/g/c`) and Google Ads to `/<prefix>/as/p/c/<id>/`. These were neither recognized nor answered locally, so their events were reported as missing and the audit's visits reached the site's real accounts. A `/g/c` path counts as GA4 only with a GA4 measurement id (`tid=G-…`).
