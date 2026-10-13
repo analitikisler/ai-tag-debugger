@@ -3,6 +3,7 @@
 ## 0.7.3 (2026-10-13)
 
 - `replay` no longer crashes with `NavigationAbortedError: net::ERR_BLOCKED_BY_CLIENT` when a saved page redirects to another site. The redirect is refused again, so the journey stays unfinished as it was saved, and the other sites are still replayed.
+- Tracking hits sent while the browser closes are answered locally again on normal runs. In 0.7.2 the routes were removed before closing, so a hit sent at that moment could reach the real account. They are now removed only on `replay`, which never goes online.
 
 ## 0.7.2 (2026-10-13)
 
