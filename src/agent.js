@@ -164,15 +164,15 @@ export async function runAgentJourney(session, journey, opts = {}) {
 /** Replays fixed steps from the config, without calling an AI model. */
 export async function runScriptedJourney(session, journey, opts = {}) {
   const log = opts.log ?? (() => {});
-  if (!journey.steps?.length) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
-  for (const step of journey.steps) {
+  if (!journey.steps?.length && !journey.incomplete) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
+  for (const step of journey.steps ?? []) {
     log(`  ${step.reason ?? `${step.action} ${step.selector ?? step.url ?? ""}`}`);
     const error = await session.act(step);
     if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
   }
   // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
   // while the model answers; a scripted run would otherwise close the browser first.
-  await session.page.waitForTimeout(LAST_STEP_WAIT_MS);
+  await session.page.waitForTimeout(LAST_STEP_WAIT_MS).catch(() => {});
   if (journey.incomplete) return { completed: false, note: journey.incomplete };
   return { completed: true, note: "All scripted steps completed." };
 }
@@ -194,7 +194,8 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     await session.start();
     const startUrl = new URL(journey.start ?? "/", config.site).href;
     const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${startUrl}` });
-    if (startError) return { ...collect(session, journey, viewport), completed: false, note: `Could not open the start page: ${startError}` };
+    // A replayed journey that was unfinished when saved keeps its saved note, however it fails this time.
+    if (startError) return { ...collect(session, journey, viewport), completed: false, note: journey.incomplete ?? `Could not open the start page: ${startError}` };
 
     const outcome = await (opts.scripted ? runScriptedJourney(session, journey, opts) : runAgentJourney(session, journey, opts)).catch((err) => {
       if (err instanceof StepTimeout) return { completed: false, note: err.message };
@@ -202,6 +203,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     });
     return { ...collect(session, journey, viewport), ...outcome, cookies: await session.cookies() };
   } finally {
+    if (opts.saveSite) opts.log?.("  Writing the recording…");
     await session.close();
   }
 }

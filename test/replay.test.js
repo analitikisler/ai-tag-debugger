@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAudit } from "../src/audit.js";
 import { AuditSession } from "../src/browser.js";
-import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE } from "../src/replay.js";
+import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE, writeSavedSite } from "../src/replay.js";
 
 const send = (en, extra = "") =>
   `fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1&cid=1.2&_s=1&en=${en}${extra}", { method: "POST", keepalive: true });`;
@@ -42,7 +42,7 @@ before(async () => {
     if (page === undefined) return res.writeHead(404).end();
     const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : req.url.endsWith(".svg") ? "image/svg+xml" : "text/html";
     const headers = { "content-type": type };
-    if (req.url === "/account") headers["set-cookie"] = ["session=s3cret; Path=/; HttpOnly", "country=TR; Path=/"];
+    if (req.url === "/account") headers["set-cookie"] = ["session=s3cret; Path=/; HttpOnly", "auth_token=t0k3n; Path=/", "user=jane%40example.org; Path=/", "country=TR; Path=/"];
     res.writeHead(200, headers).end(page);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -88,7 +88,7 @@ test("a recording keeps no session cookies, authorization headers or form data",
     await session.close();
   }
   const text = await readFile(har, "utf8");
-  for (const secret of ["s3cret", "t0ken", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
+  for (const secret of ["s3cret", "t0ken", "t0k3n", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
   const entries = JSON.parse(text).log.entries.map((e) => `${e.request.method} ${new URL(e.request.url).pathname}`);
   assert.deepEqual(entries, ["GET /account", "POST /api/profile"]);
 
@@ -142,6 +142,7 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
       providers: ["ga4"],
       journeys: [
         { id: "buy", start: "/late", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
+        { id: "away", start: "https://elsewhere.example/", steps: [{ action: "click", selector: "#buy", reason: "Add to cart" }] },
         { id: "next", start: "/late", steps: [{ action: "goto", url: "/next", reason: "Open the next page" }] },
         { id: "stuck", start: "/late", steps: [{ action: "click", selector: "#checkout", reason: "Check out" }] },
       ],
@@ -150,8 +151,10 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     const saved = await runAudit({ config, plan, scripted: true, ai: false, saveSite: late, outDir: path.join(late, "first") });
     assert.ok(saved.runs[0].hits.some((h) => h.name === "add_to_cart"), "the tag sent after the last click is captured");
     const site = JSON.parse(await readFile(path.join(late, SAVED_SITE_FILE), "utf8"));
-    assert.equal(site.journeys[2].steps[0].optional, true, "a step that failed is optional on replay, so the steps after it still run");
-    assert.match(site.journeys[2].incomplete, /Step "Check out" failed/);
+    assert.equal(site.journeys[3].steps[0].optional, true, "a step that failed is optional on replay, so the steps after it still run");
+    assert.match(site.journeys[3].incomplete, /Step "Check out" failed/);
+    assert.deepEqual(site.journeys[1].steps, [], "a journey whose start page was blocked has no steps to replay");
+    assert.match(site.journeys[1].incomplete, /Could not open the start page/);
 
     lateServer.close();
     lateServer.closeAllConnections();
@@ -159,11 +162,35 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     assert.deepEqual({ missing: replay.missing, extra: replay.extra, incomplete: replay.incomplete }, { missing: [], extra: [], incomplete: [] });
     const capture = JSON.parse(await readFile(path.join(late, "last-replay", "capture.json"), "utf8"));
     assert.ok(capture.runs[0].hits.some((h) => h.name === "add_to_cart"), "the badge left out of the recording still loads, so the button shows");
-    assert.equal(capture.runs[2].completed, false);
+    assert.equal(capture.runs[1].completed, false);
+    assert.equal(capture.runs[3].completed, false);
   } finally {
     lateServer.close();
     lateServer.closeAllConnections();
     await rm(late, { recursive: true, force: true });
+  }
+});
+
+test("a recording that takes too long to write is skipped instead of stalling the run", async () => {
+  const har = path.join(dir, "stuck.har");
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], recordHar: har, closeTimeoutMs: 1000 });
+  await session.start();
+  await session.act({ action: "goto", url: `${url}account` });
+  session.context.close = () => new Promise(() => {}); // as if the browser never finished writing it
+  const started = Date.now();
+  await session.close();
+  assert.ok(Date.now() - started < 10_000, "close() returns");
+  await assert.rejects(readFile(har), "no partly written recording is left");
+});
+
+test("a site whose recording is missing is not saved", async () => {
+  const empty = await mkdtemp(path.join(tmpdir(), "atd-replay-empty-"));
+  try {
+    const runs = [{ journeyId: "j", viewport: "desktop", completed: true, note: "", steps: [] }];
+    await assert.rejects(writeSavedSite(empty, { config: { site: url }, plan: null, runs, findings: [] }), /recording of j \(desktop\) is missing/);
+    await assert.rejects(readFile(path.join(empty, SAVED_SITE_FILE)));
+  } finally {
+    await rm(empty, { recursive: true, force: true });
   }
 });
 

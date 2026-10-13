@@ -180,6 +180,7 @@ async function main() {
     const threshold = levels.indexOf(failOn);
     if (levels.slice(0, threshold + 1).some((l) => result.counts[l] > 0)) process.exitCode = 1;
   }
+  if (result.saveError) process.exitCode = 1;
 }
 
 main().catch((err) => {

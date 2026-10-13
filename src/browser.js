@@ -232,13 +232,22 @@ const isDroppedMedia = (request) =>
   ["image", "font", "media"].includes(request.resourceType()) || MEDIA_FILE.test(new URL(request.url()).pathname);
 
 // Cookies the server sets for the page's scripts (a country or language, for example) are kept, since
-// sites often need them to render; HttpOnly ones, where sessions and logins live, are dropped. Replay
-// applies only one Set-Cookie header, so the kept ones are joined into one, one cookie per line.
+// sites often need them to render. HttpOnly ones, where sessions and logins usually live, are dropped,
+// and so are ones named or holding like a login. Replay applies only one Set-Cookie header, so the
+// kept ones are joined into one, one cookie per line.
+const LOGIN_COOKIE = /sess|sid|token|auth|jwt|login|csrf|xsrf|remember/i;
 function keptHeaders(headers) {
   const isSetCookie = (h) => /^set-cookie$/i.test(h.name);
-  const cookies = headers.filter(isSetCookie).flatMap((h) => h.value.split("\n")).filter((c) => !/;\s*httponly\s*(;|$)/i.test(c));
+  const isPrivate = (cookie) => {
+    const [pair] = cookie.split(";");
+    const name = pair.slice(0, pair.indexOf("=")).trim();
+    return /;\s*httponly\s*(;|$)/i.test(cookie) || LOGIN_COOKIE.test(name) || /@|%40/.test(pair);
+  };
+  const cookies = headers.filter(isSetCookie).flatMap((h) => h.value.split("\n")).filter((c) => !isPrivate(c));
   return [...headers.filter((h) => !isSetCookie(h)), ...(cookies.length ? [{ name: "Set-Cookie", value: cookies.join("\n") }] : [])];
 }
+
+const CLOSE_TIMEOUT_MS = 30_000;
 
 const SECRET_REQUEST_HEADER = /^(cookie|authorization|proxy-authorization)$/i;
 
@@ -276,6 +285,7 @@ export class AuditSession {
    *     others are still answered locally, but only counted, per step, in this.skipped.
    *   site: navigation is limited to this site's host and its subdomains, plus allowedHosts.
    *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
+   *     closeTimeoutMs: how long close() waits for the recording to be written (default 30 s) before skipping it.
    *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
    *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
@@ -394,7 +404,7 @@ export class AuditSession {
       // Requests the recording lacks fail, except the media left out of it: those get an empty answer,
       // since a failed image or icon can stop a script (a consent banner waiting for its logo, for example).
       await this.context.route("**/*", (route) =>
-        isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort(),
+        (isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort()).catch(() => {}),
       );
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
     }
@@ -693,9 +703,9 @@ export class AuditSession {
       switch (a.action) {
         case "goto": {
           const target = new URL(a.url, this.page.url() === "about:blank" ? undefined : this.page.url()).href;
+          step.replay = { action: "goto", url: target };
           const refused = await this.checkUrl(target);
           if (refused) return refused;
-          step.replay = { action: "goto", url: target };
           await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
           break;
         }
@@ -745,13 +755,39 @@ export class AuditSession {
   }
 
   async cookies() {
-    return (await this.context.cookies()).map((c) => ({ name: c.name, domain: c.domain }));
+    let timer;
+    const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve([]), 10_000)));
+    const cookies = await Promise.race([this.context.cookies().catch(() => []), tooLong]);
+    clearTimeout(timer);
+    return cookies.map((c) => ({ name: c.name, domain: c.domain }));
   }
 
   async close() {
+    // Leaving the page first cancels what it is still loading (the recording would otherwise wait for it),
+    // while tracking requests sent on the way out are still answered locally.
+    if (this.opts.recordHar) await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
+    // Requests still in flight then get no route callback that would throw once the browser is gone.
+    // A page stuck in a script never answers, so this waits at most 5 seconds.
+    let unrouteTimer;
+    await Promise.race([
+      this.context?.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {}),
+      new Promise((resolve) => (unrouteTimer = setTimeout(resolve, 5000))),
+    ]);
+    clearTimeout(unrouteTimer);
     if (this.opts.recordHar && this.context) {
-      // Writes the recording. If the browser already went away, there is none to clean.
-      const written = await this.context.close().then(() => true, () => false);
+      // Writes the recording. If the browser already went away, or writing it takes too long, there is
+      // none to clean: closing the browser below then ends the run's wait.
+      let timer;
+      const limit = this.opts.closeTimeoutMs ?? CLOSE_TIMEOUT_MS;
+      const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve("timeout"), limit)));
+      const closed = await Promise.race([this.context.close().then(() => "closed", () => "gone"), tooLong]);
+      clearTimeout(timer);
+      if (closed === "timeout") {
+        console.warn(`Writing the recording ${this.opts.recordHar} took over ${Math.round(limit / 1000)} seconds, so it was skipped.`);
+        await this.browser?.close().catch(() => {});
+        await rm(this.opts.recordHar, { force: true }); // a partly written file
+      }
+      const written = closed === "closed";
       // A recording that could not be cleaned may hold cookies or form data, so it is deleted.
       if (written) {
         await cleanRecording(this.opts.recordHar).catch(async (err) => {
