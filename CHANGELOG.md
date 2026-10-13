@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1 (2026-10-13)
+
+- A page whose script stops responding after a step can no longer stall a run. Reading the page now has a 1 minute limit too, and when it runs out the journey ends as incomplete with a note. Before, only the model call and the browser action itself had a limit.
+- When a saved site's recording can't be cleaned, a warning now says so before the file is deleted.
+
 ## 0.7.0 (2026-10-12)
 
 Fixes from the first audit run across 18 real shops.

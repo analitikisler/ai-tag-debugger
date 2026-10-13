@@ -234,7 +234,6 @@ const SECRET_REQUEST_HEADER = /^(cookie|authorization|proxy-authorization)$/i;
  * URLs can hold the user data redacted everywhere else), requests with user data in their address, form bodies,
  * cookies both ways and authorization headers.
  */
-
 async function cleanRecording(file) {
   const har = JSON.parse(await readFile(file, "utf8"));
   har.log.entries = har.log.entries
@@ -725,7 +724,12 @@ export class AuditSession {
       // Writes the recording. If the browser already went away, there is none to clean.
       const written = await this.context.close().then(() => true, () => false);
       // A recording that could not be cleaned may hold cookies or form data, so it is deleted.
-      if (written) await cleanRecording(this.opts.recordHar).catch(() => rm(this.opts.recordHar, { force: true }));
+      if (written) {
+        await cleanRecording(this.opts.recordHar).catch(async (err) => {
+          console.warn(`Could not clean the recording ${this.opts.recordHar}, so it was deleted: ${err.message}`);
+          await rm(this.opts.recordHar, { force: true });
+        });
+      }
     }
     await this.browser?.close();
     await this.egress?.close();
