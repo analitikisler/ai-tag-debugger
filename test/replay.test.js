@@ -14,7 +14,10 @@ const send = (en, extra = "") =>
 const PAGES = {
   "/": `<!doctype html><script src="/app.js"></script>
 <div class="banner"><div class="btn" style="cursor:pointer">Accept all</div></div>
-<a href="/product">Product</a>`,
+<a href="/product">Product</a><img src="/logo.png">`,
+  "/logo.png": "png",
+  "/account": `<!doctype html><p>Account</p>`,
+  "/api/profile": `{"ok":true}`,
   // Served as a script, so a replay has to answer it from the recording.
   "/app.js": `${send("page_view")}
 document.addEventListener("click", (e) => { if (e.target.closest(".btn")) { ${send("consent_given")} } });`,
@@ -28,7 +31,10 @@ before(async () => {
   server = createServer((req, res) => {
     const page = PAGES[new URL(req.url, "http://x").pathname];
     if (page === undefined) return res.writeHead(404).end();
-    res.writeHead(200, { "content-type": req.url.endsWith(".js") ? "text/javascript" : "text/html" }).end(page);
+    const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : "text/html";
+    const headers = { "content-type": type };
+    if (req.url === "/account") headers["set-cookie"] = "session=s3cret; Path=/";
+    res.writeHead(200, headers).end(page);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   url = `http://127.0.0.1:${server.address().port}/`;
@@ -59,6 +65,25 @@ test("a click by ref is saved as a CSS path a scripted run can repeat", async ()
   }
 });
 
+test("a recording keeps no cookies, authorization headers or form data", async () => {
+  const har = path.join(dir, "private.har");
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], recordHar: har });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url: `${url}account` });
+    await session.page.evaluate(async () => {
+      await fetch("/api/profile", { method: "POST", headers: { authorization: "Bearer t0ken" }, body: "email=jane%40example.org" });
+      await fetch("/api/profile?email=jane%40example.org");
+    });
+  } finally {
+    await session.close();
+  }
+  const text = await readFile(har, "utf8");
+  for (const secret of ["s3cret", "t0ken", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
+  const entries = JSON.parse(text).log.entries.map((e) => `${e.request.method} ${new URL(e.request.url).pathname}`);
+  assert.deepEqual(entries, ["GET /account", "POST /api/profile"]);
+});
+
 test("a saved site replays offline with the same hits and findings", async () => {
   const config = {
     site: url,
@@ -72,7 +97,7 @@ test("a saved site replays offline with the same hits and findings", async () =>
   assert.ok(site.expected.includes("warning duplicate browse desktop ga4 view_item"));
 
   const recorded = JSON.parse(await readFile(path.join(dir, "browse-desktop.har"), "utf8")).log.entries.map((e) => new URL(e.request.url).pathname);
-  assert.deepEqual(recorded, ["/", "/app.js", "/product"], "tracking requests are left out of the recording");
+  assert.deepEqual(recorded, ["/", "/app.js", "/product"], "images and tracking requests are left out of the recording");
 
   server.close(); // the replay must not need the site
   const replay = await replaySavedSite(dir);

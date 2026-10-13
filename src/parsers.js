@@ -35,9 +35,10 @@ export function parseGa4(url, postData) {
   // Matched on the GA4 protocol rather than the host, so server-side GTM
   // endpoints on first-party domains are captured too.
   if (!u.pathname.endsWith("/g/collect") || u.searchParams.get("v") !== "2") return null;
-  // gtag.js resends a hit to www.google.com/g/collect (marked gaf=1) when the first send
-  // seems lost, and copies some to doubleclick.net. GA4 doesn't count these twice, so they aren't hits.
-  if (GOOGLE_COMPANION_HOST.test(u.hostname) || u.searchParams.has("gaf")) return null;
+  // gtag.js resends a hit to www.google.com/g/collect when the first send seems lost, and
+  // copies some to doubleclick.net. GA4 doesn't count these twice, so they aren't hits.
+  // (Primary hits can carry gaf too, e.g. gaf=2, so the host decides, not the parameter.)
+  if (GOOGLE_COMPANION_HOST.test(u.hostname)) return null;
   const base = new URLSearchParams(u.search);
   const lines = postData ? postData.split("\n").filter(Boolean) : [""];
   return lines.map((line) => {
@@ -135,8 +136,12 @@ export function parseTrackingRequest(url, postData) {
 // hits: Google Ads remarketing and consent pings, and the other common ad pixels.
 const OTHER_BEACONS = [
   [/(^|\.)(doubleclick\.net|googleadservices\.com|google\.[a-z.]+)$/, /^\/pagead\/(viewthroughconversion|1p-user-list|landing)\//],
-  [/(^|\.)google\.[a-z.]+$/, /^\/ccm\/collect/],
+  [/(^|\.)google\.[a-z.]+$/, /^\/rmkt\/collect\//],
   [GOOGLE_COMPANION_HOST, /\/g\/collect$/],
+  [/(^|\.)merchant-center-analytics\.goog$/, /^\/mc\/collect/],
+  // Google tag pings on any host: consent mode (ccm), the Google tag's own /g/s/collect, and
+  // Google tag gateway paths served from the site's own domain (/<id>/gs/ccm/collect).
+  [/./, /\/(ccm|ccm\/s|g\/s)\/collect$/],
   [/^td\.doubleclick\.net$/, /^\/td\//],
   [/(^|\.)facebook\.com$/, /^\/privacy_sandbox\/pixel\//],
   [/^bat\.bing\.com$/, /^\/action\//],

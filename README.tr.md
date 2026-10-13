@@ -182,7 +182,7 @@ npx @analitikisler/ai-tag-debugger replay saved/*
     - warning duplicate purchase desktop ga4 page_view
 ```
 
-İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. Sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
+İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. İzleme isteklerini, görselleri ve videoları, çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi olan istekleri içermez. Yine de sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
 
 ## Sitenizi ayarlayın
 
