@@ -6,6 +6,7 @@
 - Google Tag Manager and gtag.js loaded from the site's own domain are labelled as such in the network timeline.
 - Two more Google pings are answered locally instead of reaching Google: `www.google.com/measurement/conversion` and `google.<tld>/ads/ga-audiences`.
 - Saved sites also leave out cookies named like a login or token (`auth_token`, `sid`, `csrftoken`, …) and cookies holding an email address, even when they aren't HttpOnly.
+- Writing a saved site's recording can no longer stall a run: the page is left first, so what it is still loading is cancelled, and after 30 seconds the recording is skipped (the site is then not saved). The log says when the recording is being written. Reading the browser's cookies at the end of a journey has a time limit too.
 - When a site can't be saved, a `site.json` from an earlier save is removed so it can't be replayed against the new recordings, and `run` exits with code 1.
 
 ## 0.7.1 (2026-10-13)

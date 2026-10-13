@@ -202,6 +202,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     });
     return { ...collect(session, journey, viewport), ...outcome, cookies: await session.cookies() };
   } finally {
+    if (opts.saveSite) opts.log?.("  Writing the recording…");
     await session.close();
   }
 }

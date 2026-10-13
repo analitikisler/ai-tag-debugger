@@ -247,6 +247,8 @@ function keptHeaders(headers) {
   return [...headers.filter((h) => !isSetCookie(h)), ...(cookies.length ? [{ name: "Set-Cookie", value: cookies.join("\n") }] : [])];
 }
 
+const CLOSE_TIMEOUT_MS = 30_000;
+
 const SECRET_REQUEST_HEADER = /^(cookie|authorization|proxy-authorization)$/i;
 
 /**
@@ -283,6 +285,7 @@ export class AuditSession {
    *     others are still answered locally, but only counted, per step, in this.skipped.
    *   site: navigation is limited to this site's host and its subdomains, plus allowedHosts.
    *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
+   *     closeTimeoutMs: how long close() waits for the recording to be written (default 30 s) before skipping it.
    *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
    *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
@@ -752,13 +755,30 @@ export class AuditSession {
   }
 
   async cookies() {
-    return (await this.context.cookies()).map((c) => ({ name: c.name, domain: c.domain }));
+    let timer;
+    const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve([]), 10_000)));
+    const cookies = await Promise.race([this.context.cookies().catch(() => []), tooLong]);
+    clearTimeout(timer);
+    return cookies.map((c) => ({ name: c.name, domain: c.domain }));
   }
 
   async close() {
     if (this.opts.recordHar && this.context) {
-      // Writes the recording. If the browser already went away, there is none to clean.
-      const written = await this.context.close().then(() => true, () => false);
+      // Leaving the page first cancels what it is still loading, which the recording would otherwise wait for.
+      await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
+      // Writes the recording. If the browser already went away, or writing it takes too long, there is
+      // none to clean: closing the browser below then ends the run's wait.
+      let timer;
+      const limit = this.opts.closeTimeoutMs ?? CLOSE_TIMEOUT_MS;
+      const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve("timeout"), limit)));
+      const closed = await Promise.race([this.context.close().then(() => "closed", () => "gone"), tooLong]);
+      clearTimeout(timer);
+      if (closed === "timeout") {
+        console.warn(`Writing the recording ${this.opts.recordHar} took over ${Math.round(limit / 1000)} seconds, so it was skipped.`);
+        await this.browser?.close().catch(() => {});
+        await rm(this.opts.recordHar, { force: true }); // a partly written file
+      }
+      const written = closed === "closed";
       // A recording that could not be cleaned may hold cookies or form data, so it is deleted.
       if (written) {
         await cleanRecording(this.opts.recordHar).catch(async (err) => {

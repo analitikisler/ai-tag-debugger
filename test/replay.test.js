@@ -167,6 +167,18 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
   }
 });
 
+test("a recording that takes too long to write is skipped instead of stalling the run", async () => {
+  const har = path.join(dir, "stuck.har");
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], recordHar: har, closeTimeoutMs: 1000 });
+  await session.start();
+  await session.act({ action: "goto", url: `${url}account` });
+  session.context.close = () => new Promise(() => {}); // as if the browser never finished writing it
+  const started = Date.now();
+  await session.close();
+  assert.ok(Date.now() - started < 10_000, "close() returns");
+  await assert.rejects(readFile(har), "no partly written recording is left");
+});
+
 test("a site whose recording is missing is not saved", async () => {
   const empty = await mkdtemp(path.join(tmpdir(), "atd-replay-empty-"));
   try {
