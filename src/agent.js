@@ -92,6 +92,8 @@ export function validateAction(input) {
 // stops (an endless loop after a click, for example) can't be read, so reading it has a limit too.
 const TIMEOUTS = { model: 180_000, action: 120_000, page: 60_000 };
 
+const LAST_STEP_WAIT_MS = 3000;
+
 class StepTimeout extends Error {}
 
 /** The promise's value, or a StepTimeout with this message once ms have passed. */
@@ -168,6 +170,10 @@ export async function runScriptedJourney(session, journey, opts = {}) {
     const error = await session.act(step);
     if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
   }
+  // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
+  // while the model answers; a scripted run would otherwise close the browser first.
+  await session.page.waitForTimeout(LAST_STEP_WAIT_MS);
+  if (journey.incomplete) return { completed: false, note: journey.incomplete };
   return { completed: true, note: "All scripted steps completed." };
 }
 

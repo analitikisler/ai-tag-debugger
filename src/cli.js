@@ -113,7 +113,12 @@ async function main() {
     if (!dirs.length) throw new Error("replay needs the folder of at least one site saved with --save-site.");
     let changed = false;
     for (const dir of dirs) {
-      const r = await replaySavedSite(dir, { update: values.update, outDir: dirs.length === 1 ? values.out : undefined });
+      const r = await replaySavedSite(dir, { update: values.update, outDir: dirs.length === 1 ? values.out : undefined }).catch((err) => {
+        console.log(`✗ ${dir}: could not replay: ${err.message.split("\n")[0]}`);
+        changed = true;
+        return null;
+      });
+      if (!r) continue;
       const same = !r.missing.length && !r.extra.length;
       changed ||= !same;
       console.log(`${same ? "✓" : values.update ? "↻" : "✗"} ${r.site} (${dir}): ${same ? "same findings" : `${r.extra.length} new, ${r.missing.length} gone${values.update ? ", saved as expected" : ""}`}`);

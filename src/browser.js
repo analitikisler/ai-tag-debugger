@@ -227,17 +227,32 @@ async function replayTarget(a, locator) {
 // Images, fonts and video don't change what tracking sends, and are most of a recording's size.
 const MEDIA = /^(image|font|video|audio)\//;
 
+const MEDIA_FILE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot|mp4|webm|mov|mp3|m4a|ogg|wav)$/i;
+const isDroppedMedia = (request) =>
+  ["image", "font", "media"].includes(request.resourceType()) || MEDIA_FILE.test(new URL(request.url()).pathname);
+
+// Cookies the server sets for the page's scripts (a country or language, for example) are kept, since
+// sites often need them to render; HttpOnly ones, where sessions and logins live, are dropped. Replay
+// applies only one Set-Cookie header, so the kept ones are joined into one, one cookie per line.
+function keptHeaders(headers) {
+  const isSetCookie = (h) => /^set-cookie$/i.test(h.name);
+  const cookies = headers.filter(isSetCookie).flatMap((h) => h.value.split("\n")).filter((c) => !/;\s*httponly\s*(;|$)/i.test(c));
+  return [...headers.filter((h) => !isSetCookie(h)), ...(cookies.length ? [{ name: "Set-Cookie", value: cookies.join("\n") }] : [])];
+}
+
 const SECRET_REQUEST_HEADER = /^(cookie|authorization|proxy-authorization)$/i;
 
 /**
  * Drops images, fonts, video and tracking requests from a recording (they are answered locally on replay, and their
- * URLs can hold the user data redacted everywhere else), requests with user data in their address, form bodies,
- * cookies both ways and authorization headers.
+ * URLs can hold the user data redacted everywhere else), unanswered requests, requests with user data in their address, form bodies,
+ * the cookies the browser sent, HttpOnly cookies the server set, and authorization headers.
  */
 async function cleanRecording(file) {
   const har = JSON.parse(await readFile(file, "utf8"));
   har.log.entries = har.log.entries
     .filter((e) => !isCollectionEndpoint(e.request.url) && !MEDIA.test(e.response?.content?.mimeType ?? ""))
+    // A request that had no answer yet when the browser closed would never finish on replay either.
+    .filter((e) => e.response?.status > 0)
     // A request whose address holds user data (an email in a form GET, for example) is left out whole.
     .filter((e) => redactUrl(e.request.url).url === e.request.url)
     .map((e) => {
@@ -246,7 +261,7 @@ async function cleanRecording(file) {
       return {
         ...e,
         request: { ...request, cookies: [], headers: request.headers.filter((h) => !SECRET_REQUEST_HEADER.test(h.name)) },
-        response: { ...e.response, cookies: [], headers: e.response.headers.filter((h) => !/^set-cookie$/i.test(h.name)) },
+        response: { ...e.response, cookies: [], headers: keptHeaders(e.response.headers) },
       };
     });
   await writeFile(file, JSON.stringify(har));
@@ -375,7 +390,14 @@ export class AuditSession {
     // cancelled before its route handler runs, but its request event has already fired.
     this.context.on("request", onRequest);
     // Registered first, so the routes below run before it and tracking requests are still answered locally.
-    if (this.opts.replayHar) await this.context.routeFromHAR(this.opts.replayHar, { notFound: "abort" });
+    if (this.opts.replayHar) {
+      // Requests the recording lacks fail, except the media left out of it: those get an empty answer,
+      // since a failed image or icon can stop a script (a consent banner waiting for its logo, for example).
+      await this.context.route("**/*", (route) =>
+        isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort(),
+      );
+      await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
+    }
     if (this.opts.blockHits) {
       await this.context.route((url) => isCollectionEndpoint(url.href), async (route) => {
         await route.fulfill({ status: 204, body: "" });
@@ -657,6 +679,13 @@ export class AuditSession {
    * @param {{ action: string, ref?: number, selector?: string, text?: string, value?: string, url?: string, reason?: string, accepts_consent?: boolean }} a
    */
   async act(a) {
+    const error = await this.perform(a);
+    // A scripted replay of this step may fail the same way, which must not end the journey there.
+    if (error) this.steps[this.currentStep].error = error;
+    return error;
+  }
+
+  async perform(a) {
     const describe = a.reason || `${a.action} ${a.selector ?? (a.ref != null ? `#${a.ref}` : a.text != null ? `"${a.text}"` : a.url ?? "")}`.trim();
     this.beginStep(describe, { action: a.action, acceptsConsent: !!a.accepts_consent });
     const step = this.steps[this.currentStep];
