@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2 (2026-10-13)
+
+- **GA4 and Google Ads hits sent through Google tag gateway are captured.** Sites using the gateway send GA4 to a short path on their own domain (`/<prefix>/ag/g/c`, `/<prefix>/ga/g/c`) and Google Ads to `/<prefix>/as/p/c/<id>/`. These were neither recognized nor answered locally, so their events were reported as missing and the audit's visits reached the site's real accounts. A `/g/c` path counts as GA4 only with a GA4 measurement id (`tid=G-…`).
+- Google Tag Manager and gtag.js loaded from the site's own domain are labelled as such in the network timeline.
+- Two more Google pings are answered locally instead of reaching Google: `www.google.com/measurement/conversion` and `google.<tld>/ads/ga-audiences`.
+- Saved sites also leave out cookies named like a login or token (`auth_token`, `sid`, `csrftoken`, …) and cookies holding an email address, even when they aren't HttpOnly.
+- When a site can't be saved, a `site.json` from an earlier save is removed so it can't be replayed against the new recordings, and `run` exits with code 1.
+
 ## 0.7.1 (2026-10-13)
 
 - A page whose script stops responding after a step can no longer stall a run. Reading the page now has a 1 minute limit too, and when it runs out the journey ends as incomplete with a note. Before, only the model call and the browser action itself had a limit.

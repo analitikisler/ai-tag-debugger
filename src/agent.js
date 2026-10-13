@@ -172,7 +172,7 @@ export async function runScriptedJourney(session, journey, opts = {}) {
   }
   // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
   // while the model answers; a scripted run would otherwise close the browser first.
-  await session.page.waitForTimeout(LAST_STEP_WAIT_MS);
+  await session.page.waitForTimeout(LAST_STEP_WAIT_MS).catch(() => {});
   if (journey.incomplete) return { completed: false, note: journey.incomplete };
   return { completed: true, note: "All scripted steps completed." };
 }

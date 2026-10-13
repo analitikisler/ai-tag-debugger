@@ -29,12 +29,19 @@ function ga4Consent(searchParams) {
 // Only www.google.<tld> and doubleclick.net: analytics.google.com is a primary GA4 endpoint.
 const GOOGLE_COMPANION_HOST = /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$|(^|\.)doubleclick\.net$/;
 
+/**
+ * Google tag gateway serves Google's endpoints from a path on the site's own domain, with
+ * short names: /<prefix>/ag/g/c or /<prefix>/ga/g/c for GA4's /g/collect. Only accepted with a
+ * GA4 measurement id, since "/g/c" alone is too common a path.
+ */
+const isGa4Path = (u) => u.pathname.endsWith("/g/collect") || (/\/g\/c$/.test(u.pathname) && /^G-[A-Z0-9]+$/.test(u.searchParams.get("tid") ?? ""));
+
 /** @returns {Hit[] | null} */
 export function parseGa4(url, postData) {
   const u = new URL(url);
   // Matched on the GA4 protocol rather than the host, so server-side GTM
   // endpoints on first-party domains are captured too.
-  if (!u.pathname.endsWith("/g/collect") || u.searchParams.get("v") !== "2") return null;
+  if (!isGa4Path(u) || u.searchParams.get("v") !== "2") return null;
   // gtag.js resends a hit to www.google.com/g/collect when the first send seems lost, and
   // copies some to doubleclick.net. GA4 doesn't count these twice, so they aren't hits.
   // (Primary hits can carry gaf too, e.g. gaf=2, so the host decides, not the parameter.)
@@ -74,11 +81,14 @@ export function parseMeta(url) {
 /** @returns {Hit[] | null} */
 export function parseGoogleAds(url) {
   const u = new URL(url);
+  // Google tag gateway serves /pagead/conversion/<id>/ as /<prefix>/as/p/c/<id>/ on the site's own domain.
+  const gateway = u.pathname.match(/\/as\/p\/c\/(\d+)\/?$/);
   const isAds =
     (u.hostname === "www.googleadservices.com" && u.pathname.startsWith("/pagead/conversion/")) ||
-    (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname.startsWith("/pagead/1p-conversion/"));
+    (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname.startsWith("/pagead/1p-conversion/")) ||
+    (gateway && u.searchParams.has("cv"));
   if (!isAds) return null;
-  const conversionId = u.pathname.split("/").filter(Boolean)[2];
+  const conversionId = gateway ? gateway[1] : u.pathname.split("/").filter(Boolean)[2];
   const params = {};
   for (const key of ["label", "value", "currency_code", "oid"]) {
     if (u.searchParams.has(key)) params[key === "currency_code" ? "currency" : key === "oid" ? "transaction_id" : key] = u.searchParams.get(key);
@@ -136,7 +146,7 @@ export function parseTrackingRequest(url, postData) {
 // hits: Google Ads remarketing and consent pings, and the other common ad pixels.
 const OTHER_BEACONS = [
   [/(^|\.)(doubleclick\.net|googleadservices\.com|google\.[a-z.]+)$/, /^\/pagead\/(viewthroughconversion|1p-user-list|landing)\//],
-  [/(^|\.)google\.[a-z.]+$/, /^\/rmkt\/collect\//],
+  [/(^|\.)google\.[a-z.]+$/, /^\/(rmkt\/collect\/|measurement\/conversion|ads\/ga-audiences)/],
   [GOOGLE_COMPANION_HOST, /\/g\/collect$/],
   [/(^|\.)merchant-center-analytics\.goog$/, /^\/mc\/collect/],
   // Google tag pings on any host: consent mode (ccm), the Google tag's own /g/s/collect, and
@@ -217,8 +227,12 @@ export function providerOf(url) {
   if (/(^|\.)(doubleclick\.net|google\.[a-z.]+)$/.test(host) && /^\/(pagead|ccm)\//.test(u.pathname)) return of("google_ads");
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
   for (const [pattern, key] of HOSTS) if (pattern.test(host)) return of(key);
-  if (u.pathname.endsWith("/g/collect")) return of("ga4");
-  if (u.pathname.startsWith("/pagead/")) return of("google_ads");
+  if (isGa4Path(u)) return of("ga4");
+  if (u.pathname.startsWith("/pagead/") || /\/as\/p\/c\/\d+\/?$/.test(u.pathname)) return of("google_ads");
+  // Google Tag Manager and gtag.js served from the site's own domain (server-side GTM, Google tag gateway).
+  const id = u.searchParams.get("id") ?? "";
+  if (/^GTM-[A-Z0-9]+$/.test(id)) return of("gtm");
+  if (/\/gtag\/js$/.test(u.pathname) && id.startsWith("G-")) return of("ga4");
   return null;
 }
 

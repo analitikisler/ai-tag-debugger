@@ -232,11 +232,18 @@ const isDroppedMedia = (request) =>
   ["image", "font", "media"].includes(request.resourceType()) || MEDIA_FILE.test(new URL(request.url()).pathname);
 
 // Cookies the server sets for the page's scripts (a country or language, for example) are kept, since
-// sites often need them to render; HttpOnly ones, where sessions and logins live, are dropped. Replay
-// applies only one Set-Cookie header, so the kept ones are joined into one, one cookie per line.
+// sites often need them to render. HttpOnly ones, where sessions and logins usually live, are dropped,
+// and so are ones named or holding like a login. Replay applies only one Set-Cookie header, so the
+// kept ones are joined into one, one cookie per line.
+const LOGIN_COOKIE = /sess|sid|token|auth|jwt|login|csrf|xsrf|remember/i;
 function keptHeaders(headers) {
   const isSetCookie = (h) => /^set-cookie$/i.test(h.name);
-  const cookies = headers.filter(isSetCookie).flatMap((h) => h.value.split("\n")).filter((c) => !/;\s*httponly\s*(;|$)/i.test(c));
+  const isPrivate = (cookie) => {
+    const [pair] = cookie.split(";");
+    const name = pair.slice(0, pair.indexOf("=")).trim();
+    return /;\s*httponly\s*(;|$)/i.test(cookie) || LOGIN_COOKIE.test(name) || /@|%40/.test(pair);
+  };
+  const cookies = headers.filter(isSetCookie).flatMap((h) => h.value.split("\n")).filter((c) => !isPrivate(c));
   return [...headers.filter((h) => !isSetCookie(h)), ...(cookies.length ? [{ name: "Set-Cookie", value: cookies.join("\n") }] : [])];
 }
 

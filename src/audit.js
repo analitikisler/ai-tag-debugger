@@ -1,6 +1,6 @@
 // A full audit from a config file: run every journey, check, explain, write the reports.
 // Shared by the CLI and the MCP server's run_audit tool.
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { runJourney } from "./agent.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
@@ -9,7 +9,7 @@ import { LANGUAGES, messages } from "./i18n.js";
 import { createProvider } from "./providers.js";
 import { filterFindings, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
-import { writeSavedSite } from "./replay.js";
+import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -91,10 +91,17 @@ export async function runAudit(opts) {
   }
 
   const findings = filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events);
+  let saveError = null;
   if (opts.saveSite) {
-    await writeSavedSite(opts.saveSite, { config, plan, runs, findings })
-      .then(() => log(`\nSaved the site for offline replay in ${opts.saveSite}`))
-      .catch((err) => log(`\nCould not save the site in ${opts.saveSite}: ${err.message}`));
+    try {
+      await writeSavedSite(opts.saveSite, { config, plan, runs, findings });
+      log(`\nSaved the site for offline replay in ${opts.saveSite}`);
+    } catch (err) {
+      // A site.json from an earlier save would no longer match the recordings next to it.
+      await rm(path.join(opts.saveSite, SAVED_SITE_FILE), { force: true });
+      saveError = err.message;
+      log(`\nCould not save the site in ${opts.saveSite}: ${err.message}`);
+    }
   }
   let explained = null;
   if (provider) {
@@ -105,5 +112,5 @@ export async function runAudit(opts) {
   const outDir = path.resolve(opts.outDir ?? defaultOutDir());
   const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, branding: opts.branding ?? config.branding !== false });
   const counts = summarize(groupFindings(findings));
-  return { runs, findings, explained, counts, reportPath, outDir, lang };
+  return { runs, findings, explained, counts, reportPath, outDir, lang, ...(saveError ? { saveError } : {}) };
 }

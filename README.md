@@ -45,7 +45,7 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Personal data | An email address sent to an ad platform in plain text |
 | Unplanned events | Events firing that aren't in your measurement plan |
 
-Platforms: GA4 (including server-side GTM endpoints), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
+Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
 
 ### Choose the providers to check
 
@@ -180,7 +180,7 @@ npx @analitikisler/ai-tag-debugger replay saved/*
     - warning duplicate purchase desktop ga4 page_view
 ```
 
-The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It leaves out tracking requests, images and video, session cookies and the cookies the browser sent, authorization headers, form data, and requests with an email or other user data in their address. It still holds the site's pages and scripts, so keep sites you don't own out of public repositories.
+The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It leaves out tracking requests, images and video, HttpOnly and login cookies and the cookies the browser sent, authorization headers, form data, and requests with an email or other user data in their address. It still holds the site's pages and scripts, so keep sites you don't own out of public repositories.
 
 ## Configure your site
 

@@ -45,7 +45,7 @@ Tag'leri elle test etmek bunu yakalar, ama zahmetli olduğu için her sürümden
 | Kişisel veri | Bir e-posta adresi reklam platformuna açık metin olarak gönderildi |
 | Planda olmayan event'ler | Ölçümleme planınızda bulunmayan event'ler gönderiliyor |
 
-Platformlar: GA4 (server-side GTM adresleri dahil), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
+Platformlar: GA4 (server-side GTM adresleri ve sitenin kendi alan adındaki Google tag gateway yolları dahil), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
 
 ### Kontrol edilecek platformları seçin
 
@@ -182,7 +182,7 @@ npx @analitikisler/ai-tag-debugger replay saved/*
     - warning duplicate purchase desktop ga4 page_view
 ```
 
-İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. İzleme isteklerini, görselleri ve videoları, oturum çerezlerini ve tarayıcının gönderdiği çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi olan istekleri içermez. Yine de sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
+İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. İzleme isteklerini, görselleri ve videoları, HttpOnly ve oturum açma çerezlerini ve tarayıcının gönderdiği çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi olan istekleri içermez. Yine de sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
 
 ## Sitenizi ayarlayın
 

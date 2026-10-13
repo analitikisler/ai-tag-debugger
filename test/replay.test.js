@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAudit } from "../src/audit.js";
 import { AuditSession } from "../src/browser.js";
-import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE } from "../src/replay.js";
+import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE, writeSavedSite } from "../src/replay.js";
 
 const send = (en, extra = "") =>
   `fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1&cid=1.2&_s=1&en=${en}${extra}", { method: "POST", keepalive: true });`;
@@ -42,7 +42,7 @@ before(async () => {
     if (page === undefined) return res.writeHead(404).end();
     const type = req.url.endsWith(".js") ? "text/javascript" : req.url.endsWith(".png") ? "image/png" : req.url.endsWith(".svg") ? "image/svg+xml" : "text/html";
     const headers = { "content-type": type };
-    if (req.url === "/account") headers["set-cookie"] = ["session=s3cret; Path=/; HttpOnly", "country=TR; Path=/"];
+    if (req.url === "/account") headers["set-cookie"] = ["session=s3cret; Path=/; HttpOnly", "auth_token=t0k3n; Path=/", "user=jane%40example.org; Path=/", "country=TR; Path=/"];
     res.writeHead(200, headers).end(page);
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -88,7 +88,7 @@ test("a recording keeps no session cookies, authorization headers or form data",
     await session.close();
   }
   const text = await readFile(har, "utf8");
-  for (const secret of ["s3cret", "t0ken", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
+  for (const secret of ["s3cret", "t0ken", "t0k3n", "jane"]) assert.ok(!text.includes(secret), `${secret} is not in the recording`);
   const entries = JSON.parse(text).log.entries.map((e) => `${e.request.method} ${new URL(e.request.url).pathname}`);
   assert.deepEqual(entries, ["GET /account", "POST /api/profile"]);
 
@@ -164,6 +164,17 @@ test("a replay repeats failed steps, late tags, left-out media, unanswered reque
     lateServer.close();
     lateServer.closeAllConnections();
     await rm(late, { recursive: true, force: true });
+  }
+});
+
+test("a site whose recording is missing is not saved", async () => {
+  const empty = await mkdtemp(path.join(tmpdir(), "atd-replay-empty-"));
+  try {
+    const runs = [{ journeyId: "j", viewport: "desktop", completed: true, note: "", steps: [] }];
+    await assert.rejects(writeSavedSite(empty, { config: { site: url }, plan: null, runs, findings: [] }), /recording of j \(desktop\) is missing/);
+    await assert.rejects(readFile(path.join(empty, SAVED_SITE_FILE)));
+  } finally {
+    await rm(empty, { recursive: true, force: true });
   }
 });
 

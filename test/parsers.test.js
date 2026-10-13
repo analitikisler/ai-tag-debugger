@@ -27,6 +27,16 @@ test("captures GA4 sent to a server-side GTM endpoint", () => {
   assert.equal(hits[0].name, "page_view");
 });
 
+test("captures GA4 and Google Ads hits sent through Google tag gateway on the site's own domain", () => {
+  const [ga4] = parseTrackingRequest("https://www.shop.co.uk/fR7vNz2w/ag/g/c?v=2&tid=G-8MZ&gtm=45g&_p=1&cid=1.2", "en=add_to_cart&cu=GBP");
+  assert.deepEqual([ga4.platform, ga4.name, ga4.id, ga4.params.currency], ["ga4", "add_to_cart", "G-8MZ", "GBP"]);
+  assert.equal(parseTrackingRequest("https://www.shop.co.uk/fR7vNz2w/ga/g/c?v=2&tid=G-8MZ&en=page_view", null)?.[0]?.name, "page_view");
+  const [ads] = parseTrackingRequest("https://www.shop.co.uk/fR7vNz2w/as/p/c/1044474867/?random=1&cv=11&fst=1&fmt=3&label=abc&value=5", null);
+  assert.deepEqual([ads.platform, ads.id, ads.name], ["google_ads", "1044474867", "conversion:abc"]);
+  // Without a GA4 measurement id, a /g/c path is ordinary site traffic.
+  assert.equal(parseTrackingRequest("https://www.shop.co.uk/catalog/g/c?v=2&tid=123", null), null);
+});
+
 test("parses Meta Pixel, Google Ads and TikTok hits", () => {
   const [meta] = parseTrackingRequest("https://www.facebook.com/tr/?id=1&ev=Purchase&cd[value]=10&cd[currency]=EUR", null);
   assert.deepEqual([meta.platform, meta.name, meta.params.value], ["meta", "Purchase", "10"]);
@@ -49,5 +59,8 @@ test("names analytics and ad vendors for the network timeline", async () => {
   assert.equal(vendorOf("https://connect.facebook.net/en_US/fbevents.js"), "Meta");
   assert.equal(vendorOf("https://www.google.com/pagead/1p-conversion/123/"), "Google Ads");
   assert.equal(vendorOf("https://metrics.shop.com/g/collect?v=2"), "Google Analytics (server-side)");
+  assert.equal(vendorOf("https://www.shop.co.uk/fR7vNz2w/?id=GTM-TBW"), "Google Tag Manager");
+  assert.equal(vendorOf("https://collect.shop.app/gtm.js?id=GTM-PRK"), "Google Tag Manager");
+  assert.equal(vendorOf("https://collect.shop.app/gtag/js?id=G-1234"), "Google Analytics (server-side)");
   assert.equal(vendorOf("https://shop.com/app.js"), null);
 });

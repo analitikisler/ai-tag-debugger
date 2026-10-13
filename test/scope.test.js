@@ -90,6 +90,8 @@ test("other Google tag pings are answered locally, never sent to the real accoun
   for (const url of [
     "https://analytics.google.com/g/s/collect?v=2&tid=G-1",
     "https://www.google.com/rmkt/collect/123456/?random=1&en=add_to_cart",
+    "https://www.google.com/measurement/conversion?random=1&cv=11&tid=G-1&en=session_start",
+    "https://www.google.com.tr/ads/ga-audiences?v=1&t=sr&tid=G-1&cid=1.2",
     "https://www.merchant-center-analytics.goog/mc/collect?v=2&en=page_view",
     "https://ad.doubleclick.net/ccm/s/collect?en=page_view",
     "https://www.google.com/ccm/collect?en=page_view",
