@@ -65,7 +65,7 @@ export async function writeSavedSite(dir, { config, plan, runs, findings }) {
 /**
  * Audits a saved site again, offline and without AI, and compares the findings with the expected ones.
  * update: make this replay's findings the expected ones.
- * @returns {Promise<{ site: string, missing: string[], extra: string[], reportPaths: string[], incomplete: string[] }>}
+ * @returns {Promise<{ site: string, missing: string[], extra: string[], reportPaths: string[], incomplete: string[], foundByText: string[] }>}
  */
 export async function replaySavedSite(dir, { update = false, outDir, log = () => {} } = {}) {
   const file = path.join(dir, SAVED_SITE_FILE);
@@ -79,6 +79,7 @@ export async function replaySavedSite(dir, { update = false, outDir, log = () =>
   const findings = [];
   const reportPaths = [];
   const incomplete = [];
+  const foundByText = [];
   for (const viewport of viewports) {
     const journeys = saved.journeys.filter((j) => j.viewport === viewport).map(({ viewport: _v, ...j }) => j);
     const out = path.resolve(outDir ?? path.join(dir, "last-replay"), viewports.length > 1 ? viewport : "");
@@ -98,11 +99,14 @@ export async function replaySavedSite(dir, { update = false, outDir, log = () =>
     // Journeys that were already unfinished when saved are compared through their findings only.
     const wasIncomplete = (r) => journeys.find((j) => j.id === r.journeyId)?.incomplete === r.note;
     incomplete.push(...result.runs.filter((r) => !r.completed && !wasIncomplete(r)).map((r) => `${r.journeyId} (${r.viewport}): ${r.note}`));
+    for (const r of result.runs) {
+      for (const s of r.steps.filter((s) => s.foundBy === "text")) foundByText.push(`${r.journeyId} (${r.viewport}): "${s.label}" was clicked by its text, since nothing was at its saved place.`);
+    }
   }
   const actual = findingKeys(findings);
   const { missing, extra } = compareKeys(saved.expected ?? [], actual);
   if (update && (missing.length || extra.length)) {
     await writeFile(file, JSON.stringify({ ...saved, expected: actual }, null, 2));
   }
-  return { site: saved.config.site, missing, extra, reportPaths, incomplete };
+  return { site: saved.config.site, missing, extra, reportPaths, incomplete, foundByText };
 }

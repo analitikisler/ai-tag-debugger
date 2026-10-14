@@ -125,6 +125,7 @@ async function main() {
       for (const k of r.extra) console.log(`    + ${k}`);
       for (const k of r.missing) console.log(`    - ${k}`);
       for (const note of r.incomplete) console.log(`    ! ${note}`);
+      for (const note of r.foundByText) console.log(`    ~ ${note}`);
     }
     if (changed && !values.update) process.exitCode = 1;
     return;

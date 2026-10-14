@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.6 (2026-10-14)
+
+- `replay` says when a saved click was found by its text rather than its saved place (`~` lines), since that may not be the element that was saved.
+- Only clicks fall back to their text. Typing into a field or choosing an option uses its saved place only.
+- A click's text is not saved when it looks like an email address or phone number.
+
 ## 0.7.5 (2026-10-14)
 
 - A saved click keeps the element's text as well as its path through the page. When a replay finds nothing visible at that path (a banner or overlay shifted the layout), it clicks the element with that text instead. Sites saved before 0.7.5 have no text to fall back on; save them again to use it.
