@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.4 (2026-10-14)
+
+- Saving a site no longer fails on pages that keep a request open after they are left (a GA4 hit to `www.google.com/g/collect`, for example). The recording waited for it until the 30-second limit and was then skipped, so the site was not saved. The browser's pages are now closed before the recording is written.
+- Fewer test hits from popups reach the real account while a recording is written.
+
 ## 0.7.3 (2026-10-13)
 
 - `replay` no longer crashes with `NavigationAbortedError: net::ERR_BLOCKED_BY_CLIENT` when a saved page redirects to another site. The redirect is refused again, so the journey stays unfinished as it was saved, and the other sites are still replayed.
