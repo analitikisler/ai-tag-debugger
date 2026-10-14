@@ -66,9 +66,24 @@ test("a click by ref is saved as a CSS path a scripted run can repeat", async ()
     const journey = replayableJourney({ journeyId: "j", viewport: "desktop", steps: session.steps });
     assert.equal(journey.start, url);
     assert.deepEqual(journey.steps, [
-      { action: "click", selector: "body:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1)", reason: "Accept cookies", accepts_consent: true },
+      { action: "click", selector: "body:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1)", text: "Accept all", reason: "Accept cookies", accepts_consent: true },
       { action: "wait", value: "500", reason: "wait" },
     ]);
+  } finally {
+    await session.close();
+  }
+});
+
+test("a saved click whose path no longer matches is found by its text", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"] });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url });
+    // As if a banner added before the button shifted the layout since the site was saved.
+    const step = { action: "click", selector: "body:nth-of-type(1) > div:nth-of-type(7) > div:nth-of-type(1)", text: "Accept all", accepts_consent: true };
+    assert.equal(await session.act(step), null);
+    await session.act({ action: "wait", value: "500" });
+    assert.ok(session.hits.some((h) => h.name === "consent_given"));
   } finally {
     await session.close();
   }
