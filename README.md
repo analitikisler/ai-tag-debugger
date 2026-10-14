@@ -45,7 +45,7 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Personal data | An email address sent to an ad platform in plain text |
 | Unplanned events | Events firing that aren't in your measurement plan |
 
-Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
+Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
 
 ### Choose the providers to check
 

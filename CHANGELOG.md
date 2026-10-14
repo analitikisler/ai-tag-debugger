@@ -5,6 +5,9 @@
 - A planned event is found under the name the site uses: `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` all count as `add_to_cart`, and similar variants of the other ecommerce events too. Sites like these no longer get a false "missing add_to_cart". A plan event can list more names in `aliases`.
 - A required parameter is also found under its usual other name (`products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`).
 - The plan coverage table in the report uses the same matching.
+- Server-side tagging is recognised where the browser can see it. A GA4 hit to a server container (server-side GTM, Stape, Elevar) is marked server-side, a hit through Google tag gateway (`/g/c`) is not, and requests to Stape and Elevar hosts show in the timeline. An info finding lists, per platform, which events went server-side and which went from the browser. The report tags server-side events.
+- Meta (`eid`) and TikTok (`event_id`) event IDs are read from the browser hit. The duplicate check no longer flags hits that repeat one event ID, since the platform counts those once.
+- New info finding when a server-side setup is seen and a Meta or TikTok browser event has no event ID, so the platform can't match it to its server copy. Meta Conversions API and TikTok Events API requests themselves are sent server to server and can't be seen from the browser.
 
 ## 0.7.8 (2026-10-14)
 

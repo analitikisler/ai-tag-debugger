@@ -180,6 +180,10 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (hits.length < 2 || ev?.allow_multiple) continue;
     // TikTok sends unnamed pings (no event name) on its own schedule, so their count varies between runs.
     if (hits[0].platform === "tiktok" && hits[0].name === "(unnamed)") continue;
+    // Hits that repeat an event ID are one event to the platform (it keeps the first), so only
+    // distinct IDs, and hits without an ID, count as separate sends.
+    const sends = new Set(hits.map((h, i) => (h.eventId ? `id:${h.eventId}` : `n:${i}`))).size;
+    if (sends < 2) continue;
     findings.push({
       ...base,
       severity: "warning",
@@ -187,8 +191,30 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       platform: hits[0].platform,
       event: hits[0].name,
       step: stepLabel(hits[0].step),
-      detail: d.duplicate(hits[0].name, hits.length),
+      detail: d.duplicate(hits[0].name, sends),
     });
+  }
+
+  // Server-side tagging. Only what the browser can see: a GA4 hit to a server container, and requests
+  // to Stape or Elevar. Meta's and TikTok's server-side copies never pass through the browser.
+  const serverHits = run.hits.filter((h) => h.delivery === "server");
+  if (serverHits.length) {
+    const names = (list) => [...new Set(list.map((h) => h.name))];
+    const byPlatform = [...new Set(run.hits.map((h) => h.platform))].map((platform) => {
+      const own = run.hits.filter((h) => h.platform === platform);
+      return { platform, server: names(own.filter((h) => h.delivery === "server")), browser: names(own.filter((h) => h.delivery !== "server")) };
+    }).filter((p) => p.server.length);
+    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser) });
+  }
+  const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
+  if (serverVendors.length || serverHits.length) {
+    const noId = new Map();
+    for (const hit of run.hits) {
+      if ((hit.platform === "meta" || hit.platform === "tiktok") && !hit.eventId && !noId.has(key(hit.platform, hit.name))) noId.set(key(hit.platform, hit.name), hit);
+    }
+    for (const [, hit] of noId) {
+      findings.push({ ...base, severity: "info", check: "dedup_id_missing", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.dedupIdMissing(hit.platform, hit.name) });
+    }
   }
 
   // Consent.
