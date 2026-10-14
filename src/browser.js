@@ -202,6 +202,41 @@ function trackingBody(request) {
  * else a CSS path to the element, else its visible text. Refs only mean something in one run.
  */
 // Text that looks like an email address or phone number is not saved with a click.
+/** Query parameters that only carry the time or a cache-buster, so they differ between a recording and its replay. */
+const STAMP_PARAMS = /^(_|_t|ts|timestamp|cb|cachebust|nocache)$/i;
+/** The address without its timestamp parameters. */
+function unstamped(href) {
+  const url = new URL(href);
+  for (const name of [...url.searchParams.keys()]) if (STAMP_PARAMS.test(name)) url.searchParams.delete(name);
+  return url.href;
+}
+/**
+ * The GET answers in a recording whose address carries a timestamp, by address without it.
+ * Entries the recording has no body for (still loading when the page was left) are not included.
+ */
+async function restampedAnswers(file) {
+  const answers = new Map();
+  answers.exact = new Set();
+  const har = JSON.parse(await readFile(file, "utf8"));
+  for (const e of har.log.entries) {
+    const { request, response } = e;
+    answers.exact.add(request.url);
+    if (request.method !== "GET" || response.status < 200 || response.status >= 300 || typeof response.content?.text !== "string") continue;
+    const key = unstamped(request.url);
+    if (key === request.url) continue;
+    const headers = {};
+    for (const h of response.headers ?? []) {
+      const name = h.name.toLowerCase();
+      if (["content-encoding", "content-length", "transfer-encoding"].includes(name)) continue;
+      headers[name] = name === "set-cookie" && headers[name] ? `${headers[name]}\n${h.value}` : h.value;
+    }
+    const body = response.content.encoding === "base64" ? Buffer.from(response.content.text, "base64") : response.content.text;
+    const entry = answers.get(key) ?? { queue: [] };
+    entry.queue.push({ status: response.status, headers, body });
+    answers.set(key, entry);
+  }
+  return answers;
+}
 const savableText = (text) => (typeof text === "string" && text && !/@|\d[\d\s().+-]{6,}\d/.test(text) ? text : undefined);
 
 async function replayTarget(a, locator) {
@@ -228,7 +263,7 @@ async function replayTarget(a, locator) {
   const text = found?.text || a.text;
   // The text too, since a path through the page's layout breaks when a banner or overlay shifts it.
   if (found?.selector) return { selector: found.selector, ...(keepText && savableText(text) ? { text } : {}) };
-  return text ? { text } : {};
+  return keepText && savableText(text) ? { text } : {};
 }
 
 // Images, fonts and video don't change what tracking sends, and are most of a recording's size.
@@ -421,6 +456,21 @@ export class AuditSession {
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
       // A saved redirect to a page the browser may not open fails here, as it did when saved. Left to the
       // recording, the redirect would be followed outside any handler, and its failure would end the run.
+      // A page asks again for what it asked when saved, with a new timestamp on the address. Registered
+      // after the recording, so it runs first and leaves every exact match to the recording.
+      const restamped = await restampedAnswers(this.opts.replayHar);
+      if (restamped.size) {
+        await this.context.route(
+          (url) => restamped.has(unstamped(url.href)),
+          (route) => {
+            const request = route.request();
+            const answers = restamped.get(unstamped(request.url()));
+            if (request.method() !== "GET" || restamped.exact.has(request.url())) return route.fallback().catch(() => {});
+            const answer = answers.queue.length > 1 ? answers.queue.shift() : answers.queue[0];
+            return route.fulfill(answer).catch(() => {});
+          },
+        );
+      }
       const refusedRedirects = await this.refusedRedirects(this.opts.replayHar);
       if (refusedRedirects.size) {
         await this.context.route((url) => refusedRedirects.has(url.href), (route) => route.abort("blockedbyclient").catch(() => {}));
