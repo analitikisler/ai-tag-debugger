@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.7 (2026-10-14)
+
+- A replay answers a request from the recording when the address only differs by a timestamp (`_=1791977697130`, `ts`, `timestamp`, `cb`, `nocache`). Magento sites reload the basket this way after "add to basket", so the replay never got the answer that makes the page send `add_to_cart`. Exact matches still come from the recording as before.
+- A click found without a saved path no longer keeps its text when it looks like an email address or phone number.
+
 ## 0.7.6 (2026-10-14)
 
 - `replay` says when a saved click was found by its text rather than its saved place (`~` lines), since that may not be the element that was saved.

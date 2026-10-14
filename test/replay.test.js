@@ -30,6 +30,9 @@ document.addEventListener("click", (e) => { if (e.target.closest(".btn")) { ${se
 fetch("/badge.svg").then((r) => { if (r.ok) document.body.insertAdjacentHTML("beforeend", '<button id="buy">Add to cart</button>'); });
 document.addEventListener("click", (e) => { if (e.target.id === "buy") setTimeout(() => { ${send("add_to_cart")} }, 1500); });`,
   "/badge.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>",
+  // Asks for the cart with a new timestamp each time, and tags what it gets.
+  "/cart": `<!doctype html><script>fetch("/section?sections=cart&_=" + Date.now() + Math.random()).then((r) => r.text()).then((t) => { if (t === "in-cart") { ${send("add_to_cart")} } });</script>`,
+  "/section": "in-cart",
   "/product": `<!doctype html><script>${send("page_view")}${send("view_item")}${send("view_item")}</script><p>Product</p>`,
 };
 
@@ -131,6 +134,28 @@ test("a recording keeps no session cookies, authorization headers or form data",
   try {
     await replay.act({ action: "goto", url: `${url}account` });
     assert.equal(await replay.page.evaluate(() => document.cookie), "country=TR");
+  } finally {
+    await replay.close();
+  }
+});
+
+test("a replay answers a request that only differs by its timestamp from the recording", async () => {
+  const har = path.join(dir, "stamped.har");
+  const record = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], recordHar: har });
+  await record.start();
+  try {
+    await record.act({ action: "goto", url: `${url}cart` });
+    await record.act({ action: "wait", value: "500" });
+    assert.ok(record.hits.some((h) => h.name === "add_to_cart"));
+  } finally {
+    await record.close();
+  }
+  const replay = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], replayHar: har });
+  await replay.start();
+  try {
+    await replay.act({ action: "goto", url: `${url}cart` });
+    await replay.act({ action: "wait", value: "500" });
+    assert.ok(replay.hits.some((h) => h.name === "add_to_cart"), "the recorded answer is used although the timestamp is new");
   } finally {
     await replay.close();
   }
