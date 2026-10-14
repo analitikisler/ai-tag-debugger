@@ -9,12 +9,56 @@ const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
- * @typedef {{ platform: string, name: string, required_params?: string[], journeys?: string[], allow_multiple?: boolean }} PlanEvent
+ * @typedef {{ platform: string, name: string, aliases?: string[], required_params?: string[], journeys?: string[], allow_multiple?: boolean }} PlanEvent
  * @typedef {{ consent_mode?: boolean, events: PlanEvent[] }} Plan
  * @typedef {{ severity: "broken"|"risk"|"warning"|"info"|"ok", check: string, journey: string, viewport: string, platform?: string, event?: string, step?: string, detail: string, evidence?: string }} Finding
  */
 
 const key = (platform, name) => `${platform}:${name}`;
+
+// Sites name events in their own way: Elevar's dl_add_to_cart, UA-style addToCart, Add To Cart.
+// Names are compared without case, spaces, dashes, underscores and a leading "dl", then through
+// SYNONYMS to one canonical name. A plan event can add its own names with "aliases".
+const SYNONYMS = {
+  viewitem: ["productview", "productdetail", "productdetails", "detail", "viewproduct", "viewcontent"],
+  viewitemlist: ["productlist", "viewproductlist", "productimpressions", "viewcollection", "viewcategory"],
+  addtocart: ["add", "addtobasket", "addtobag", "cartadd"],
+  removefromcart: ["remove", "removefrombasket", "removefrombag", "cartremove"],
+  viewcart: ["cartview", "viewbasket", "viewbag"],
+  begincheckout: ["checkout", "initiatecheckout", "checkoutstart", "checkoutbegin"],
+  addshippinginfo: ["checkoutshipping", "shippinginfo"],
+  addpaymentinfo: ["checkoutpayment", "paymentinfo", "addpayment"],
+  purchase: ["transaction", "ordercomplete", "ordercompleted", "orderconfirmation", "checkoutcomplete", "checkoutcompleted"],
+};
+const CANONICAL = new Map(Object.entries(SYNONYMS).flatMap(([c, list]) => list.map((a) => [a, c])));
+
+/** One comparable form of an event name. */
+export function canonicalEvent(name) {
+  let n = String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (n.startsWith("dl") && n.length > 2) n = n.slice(2);
+  return CANONICAL.get(n) ?? n;
+}
+
+/** Whether a captured hit is the planned event, by its exact name, an alias or a common variant. */
+export function hitMatchesEvent(ev, hit) {
+  if (hit.platform !== ev.platform) return false;
+  if (hit.name === ev.name) return true;
+  const h = canonicalEvent(hit.name);
+  return h === canonicalEvent(ev.name) || (ev.aliases ?? []).some((a) => canonicalEvent(a) === h);
+}
+
+// Ecommerce parameters sites send under another name (UA-style products/revenue, order ids).
+const PARAM_ALIASES = {
+  items: ["products", "item_list", "contents"],
+  value: ["revenue", "total"],
+  transaction_id: ["order_id", "orderid", "oid"],
+  currency: ["currency_code", "cu"],
+};
+
+/** Whether a hit carries a required parameter, under its own name or a common alias. */
+export function hasParam(hit, name) {
+  return [name, ...(PARAM_ALIASES[name] ?? [])].some((n) => hit.params?.[n] !== undefined && hit.params[n] !== "");
+}
 
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
 function pageOf(hit) {
@@ -79,7 +123,8 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (skipped.length) findings.push({ ...base, severity: "info", check: "planned_out_of_scope", detail: d.plannedOutOfScope(skipped.map((e) => key(e.platform, e.name))) });
   }
   const stepLabel = (i) => run.steps[i]?.label ?? `step ${i}`;
-  const planByKey = new Map(plan.events.map((e) => [key(e.platform, e.name), e]));
+  const planEventFor = (hit) => plan.events.find((e) => hitMatchesEvent(e, hit));
+  const planKeyOf = (hit) => { const e = planEventFor(hit); return e ? key(e.platform, e.name) : key(hit.platform, hit.name); };
 
   if (!run.completed) {
     findings.push({ ...base, severity: "warning", check: "journey_incomplete", detail: d.journeyIncomplete(run.note) });
@@ -88,7 +133,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Expected events that never fired.
   for (const ev of plan.events) {
     if (!expectedIn(ev, run.journeyId)) continue;
-    const fired = run.hits.some((h) => h.platform === ev.platform && h.name === ev.name);
+    const fired = run.hits.some((h) => hitMatchesEvent(ev, h));
     if (!fired) {
       findings.push({
         ...base,
@@ -104,9 +149,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Required parameters missing on events that did fire (reported once per event).
   const paramsReported = new Set();
   for (const hit of run.hits) {
-    const ev = planByKey.get(key(hit.platform, hit.name));
+    const ev = planEventFor(hit);
     if (!ev?.required_params?.length) continue;
-    const missing = ev.required_params.filter((p) => hit.params[p] === undefined || hit.params[p] === "");
+    const missing = ev.required_params.filter((p) => !hasParam(hit, p));
     const reportKey = `${key(hit.platform, hit.name)}|${missing.join(",")}`;
     if (missing.length && !paramsReported.has(reportKey)) {
       paramsReported.add(reportKey);
@@ -127,11 +172,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // new page can also carry the previous page's last hits, so the page is part of the key.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${key(hit.platform, hit.name)}|${pageOf(hit)}`;
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
-    const ev = planByKey.get(key(hits[0].platform, hits[0].name));
+    const ev = planEventFor(hits[0]);
     if (hits.length < 2 || ev?.allow_multiple) continue;
     // TikTok sends unnamed pings (no event name) on its own schedule, so their count varies between runs.
     if (hits[0].platform === "tiktok" && hits[0].name === "(unnamed)") continue;
@@ -207,14 +252,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // Events that are not in the plan.
-  const unplanned = [...new Set(run.hits.filter((h) => !planByKey.has(key(h.platform, h.name))).map((h) => key(h.platform, h.name)))];
+  const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h)).map((h) => key(h.platform, h.name)))];
   if (unplanned.length) {
     findings.push({ ...base, severity: "info", check: "unplanned_events", detail: d.unplanned(unplanned) });
   }
 
   // Planned events that fired cleanly.
   const problemKeys = new Set(findings.filter((f) => f.event).map((f) => key(f.platform, f.event)));
-  const okKeys = [...new Set(run.hits.map((h) => key(h.platform, h.name)))].filter((k) => planByKey.has(k) && !problemKeys.has(k));
+  const okKeys = [...new Set(run.hits.filter((h) => planEventFor(h)).map((h) => key(h.platform, h.name)))].filter((k) => !problemKeys.has(k));
   if (okKeys.length) {
     findings.push({ ...base, severity: "ok", check: "matches_plan", detail: d.matches(okKeys) });
   }

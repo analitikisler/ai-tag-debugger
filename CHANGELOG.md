@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.9 (2026-10-14)
+
+- A planned event is found under the name the site uses: `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` all count as `add_to_cart`, and similar variants of the other ecommerce events too. Sites like these no longer get a false "missing add_to_cart". A plan event can list more names in `aliases`.
+- A required parameter is also found under its usual other name (`products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`).
+- The plan coverage table in the report uses the same matching.
+
 ## 0.7.8 (2026-10-14)
 
 - Unnamed TikTok pings are left out of the duplicate check. TikTok sends them on its own timing, so their count changed between a save and its replay without the site changing.

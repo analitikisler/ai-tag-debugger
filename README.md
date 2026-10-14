@@ -235,6 +235,8 @@ The first run's findings become the expected ones. When a change is right, for e
 
 `platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
 
+Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
+
 ## CLI
 
 ```

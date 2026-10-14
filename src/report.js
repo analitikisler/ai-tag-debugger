@@ -1,5 +1,5 @@
 import { createProvider } from "./providers.js";
-import { groupFindings, summarize } from "./checks.js";
+import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
@@ -618,7 +618,7 @@ function coverageCard(m, plan, runs) {
     .map((e) => {
       const cells = runs.map((r) => {
         if (!checks(r, e) || (e.journeys && !e.journeys.includes(r.journeyId))) return '<td class="c o">–</td>';
-        return r.hits.some((h) => h.platform === e.platform && h.name === e.name) ? '<td class="c y">✓</td>' : '<td class="c x">✗</td>';
+        return r.hits.some((h) => hitMatchesEvent(e, h)) ? '<td class="c y">✓</td>' : '<td class="c x">✗</td>';
       });
       const unchecked = !runs.some((r) => checks(r, e));
       return `<tr><td><span class="ptag p-${safeKey(e.platform)}">${escapeHtml(platformLabel(e.platform))}</span> <code>${escapeHtml(e.name)}</code>${unchecked ? ` ${badge("muted", m.ui.notChecked)}` : ""}</td>${cells.join("")}</tr>`;

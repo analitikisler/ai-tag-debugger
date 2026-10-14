@@ -90,3 +90,28 @@ test("unnamed TikTok pings are not reported as duplicates, named ones still are"
   assert.equal(dup([tt("(unnamed)"), tt("(unnamed)"), tt("(unnamed)")]).length, 0);
   assert.equal(dup([tt("AddToCart"), tt("AddToCart")]).length, 1);
 });
+
+test("finds planned events under site-specific names and parameter aliases", () => {
+  const p = { events: [
+    { platform: "ga4", name: "add_to_cart", required_params: ["value", "items"] },
+    { platform: "ga4", name: "purchase", required_params: ["transaction_id", "value"], aliases: ["order_done"] },
+  ] };
+  const findings = checkRun(p, run({
+    hits: [
+      hit("ga4", "dl_add_to_cart", 3, { revenue: "10", products: "x" }),
+      hit("ga4", "order_done", 4, { order_id: "A1", value: "10" }),
+    ],
+  }));
+  const checks = findings.map((f) => `${f.check}:${f.event ?? ""}`);
+  assert.ok(!checks.some((c) => c.startsWith("missing_event")), checks.join());
+  assert.ok(!checks.some((c) => c.startsWith("missing_params")), checks.join());
+  assert.ok(!checks.some((c) => c.startsWith("unplanned_events")), checks.join());
+});
+
+test("addToCart, Add To Cart and transaction match, but a different event does not", () => {
+  const p = { events: [{ platform: "ga4", name: "add_to_cart" }, { platform: "ga4", name: "purchase" }] };
+  for (const name of ["addToCart", "Add To Cart", "dl_add_to_cart"]) {
+    assert.ok(!checkRun(p, run({ hits: [hit("ga4", name, 3), hit("ga4", "transaction", 4)] })).some((f) => f.check === "missing_event"), name);
+  }
+  assert.ok(checkRun(p, run({ hits: [hit("ga4", "view_cart", 3), hit("ga4", "transaction", 4)] })).some((f) => f.check === "missing_event" && f.event === "add_to_cart"));
+});
