@@ -1,5 +1,5 @@
 import { createProvider } from "./providers.js";
-import { groupFindings, summarize } from "./checks.js";
+import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
@@ -192,7 +192,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   return lines.join("\n");
 }
 
-const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x"];
+const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x", "pinterest", "snapchat", "klaviyo", "hotjar"];
 const platformLabel = (p) => PROVIDERS[p] ?? String(p).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const platformRank = (p) => (PLATFORM_ORDER.includes(p) ? PLATFORM_ORDER.indexOf(p) : PLATFORM_ORDER.length);
 
@@ -331,6 +331,7 @@ function eventRow(m, findings, run, step, hit) {
   if (items.length) bits.push(m.ui.itemsCount(items.length));
   if (hit.params?.value) bits.push(`${hit.params.value} ${hit.params.currency ?? ""}`.trim());
   if (!items.length && hit.platform === "ga4" && ECOMMERCE_EVENTS.has(hit.name)) bits.push(m.ui.noItems);
+  if (hit.delivery === "server") bits.push(m.ui.serverSideTag);
   const consent = hit.consent ? `<h5>${m.ui.consent}</h5><div class="consents">${Object.entries(hit.consent).map(([k, v]) => `<span class="consent ${v === "granted" ? "granted" : "denied"}">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join("")}</div>` : "";
   const pushLine = pushes.length ? pushes.map((e) => `<span class="mono">${escapeHtml(pushEvent(e.value) ?? "")} · ${escapeHtml(seconds(run, e.t))}</span>`).join("") : `<span class="muted">${m.ui.noMatchingPush}</span>`;
   const reqText = calls.length
@@ -618,7 +619,7 @@ function coverageCard(m, plan, runs) {
     .map((e) => {
       const cells = runs.map((r) => {
         if (!checks(r, e) || (e.journeys && !e.journeys.includes(r.journeyId))) return '<td class="c o">–</td>';
-        return r.hits.some((h) => h.platform === e.platform && h.name === e.name) ? '<td class="c y">✓</td>' : '<td class="c x">✗</td>';
+        return r.hits.some((h) => hitMatchesEvent(e, h)) ? '<td class="c y">✓</td>' : '<td class="c x">✗</td>';
       });
       const unchecked = !runs.some((r) => checks(r, e));
       return `<tr><td><span class="ptag p-${safeKey(e.platform)}">${escapeHtml(platformLabel(e.platform))}</span> <code>${escapeHtml(e.name)}</code>${unchecked ? ` ${badge("muted", m.ui.notChecked)}` : ""}</td>${cells.join("")}</tr>`;

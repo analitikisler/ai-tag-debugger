@@ -174,7 +174,7 @@ export function buildServer(opts) {
     {
       title: "Act in the audit browser",
       description:
-        "Performs one action in the audit's browser and returns the updated page plus the tracking hits that action sent. Actions: goto (url), click (ref or text), fill (ref or text, value), select (ref or text, value), scroll (value = down or up), wait (value = milliseconds). Refs come from the latest page view, which lists on-screen elements first; if an element has no ref, scroll or pass its visible text in text. If a cookie banner appears, accept it and set accepts_consent to true on that click. Use test data in forms and never enter real payment details.",
+        "Performs one action in the audit's browser and returns the updated page plus the tracking hits that action sent. Actions: goto (url), click (ref or text), fill (ref or text, value), select (ref or text, value), scroll (value = down or up), wait (value = milliseconds). Refs come from the latest page view, which lists on-screen elements first; if an element has no ref, scroll or pass its visible text in text. If a cookie banner appears, accept it and set accepts_consent to true on that click (or, on a journey that is about declining cookies, reject it and set rejects_consent to true). Use test data in forms and never enter real payment details.",
       inputSchema: {
         audit_id: z.string(),
         action: z.enum(["goto", "click", "fill", "select", "scroll", "wait"]),
@@ -184,6 +184,7 @@ export function buildServer(opts) {
         url: z.string().optional().describe("Destination for goto, absolute or relative to the current page."),
         reason: z.string().describe("Short description of the step, e.g. 'Add the first product to the cart'. Shown in the report."),
         accepts_consent: z.boolean().optional().describe("True only when this click accepts the cookie or consent banner."),
+        rejects_consent: z.boolean().optional().describe("True only when this click rejects or declines all cookies on the consent banner."),
       },
     },
     async (input) => {

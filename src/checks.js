@@ -6,15 +6,62 @@ import { isOwnAddress } from "./redact.js";
 
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
 const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
+const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
+const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
- * @typedef {{ platform: string, name: string, required_params?: string[], journeys?: string[], allow_multiple?: boolean }} PlanEvent
+ * @typedef {{ platform: string, name: string, aliases?: string[], required_params?: string[], journeys?: string[], allow_multiple?: boolean }} PlanEvent
  * @typedef {{ consent_mode?: boolean, events: PlanEvent[] }} Plan
  * @typedef {{ severity: "broken"|"risk"|"warning"|"info"|"ok", check: string, journey: string, viewport: string, platform?: string, event?: string, step?: string, detail: string, evidence?: string }} Finding
  */
 
 const key = (platform, name) => `${platform}:${name}`;
+
+// Sites name events in their own way: Elevar's dl_add_to_cart, UA-style addToCart, Add To Cart.
+// Names are compared without case, spaces, dashes, underscores and a leading "dl", then through
+// SYNONYMS to one canonical name. A plan event can add its own names with "aliases".
+const SYNONYMS = {
+  viewitem: ["productview", "productdetail", "productdetails", "detail", "viewproduct", "viewcontent"],
+  viewitemlist: ["productlist", "viewproductlist", "productimpressions", "viewcollection", "viewcategory"],
+  addtocart: ["add", "addtobasket", "addtobag", "cartadd"],
+  removefromcart: ["remove", "removefrombasket", "removefrombag", "cartremove"],
+  viewcart: ["cartview", "viewbasket", "viewbag"],
+  begincheckout: ["checkout", "initiatecheckout", "checkoutstart", "checkoutbegin"],
+  addshippinginfo: ["checkoutshipping", "shippinginfo"],
+  addpaymentinfo: ["checkoutpayment", "paymentinfo", "addpayment"],
+  purchase: ["transaction", "ordercomplete", "ordercompleted", "orderconfirmation", "checkoutcomplete", "checkoutcompleted"],
+};
+const CANONICAL = new Map(Object.entries(SYNONYMS).flatMap(([c, list]) => list.map((a) => [a, c])));
+
+/** One comparable form of an event name. */
+export function canonicalEvent(name) {
+  let n = String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (n.startsWith("dl") && n.length > 2) n = n.slice(2);
+  return CANONICAL.get(n) ?? n;
+}
+
+/** Whether a captured hit is the planned event, by its exact name, an alias or a common variant. */
+export function hitMatchesEvent(ev, hit) {
+  if (hit.platform !== ev.platform) return false;
+  if (hit.name === ev.name) return true;
+  const h = canonicalEvent(hit.name);
+  return h === canonicalEvent(ev.name) || (ev.aliases ?? []).some((a) => canonicalEvent(a) === h);
+}
+
+// Ecommerce parameters sites send under another name (UA-style products/revenue, order ids).
+const PARAM_ALIASES = {
+  items: ["products", "item_list", "contents"],
+  value: ["revenue", "total"],
+  transaction_id: ["order_id", "orderid", "oid"],
+  currency: ["currency_code", "cu"],
+};
+
+/** Whether a hit carries a required parameter, under its own name or a common alias. */
+export function hasParam(hit, name) {
+  return [name, ...(PARAM_ALIASES[name] ?? [])].some((n) => hit.params?.[n] !== undefined && hit.params[n] !== "");
+}
 
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
 function pageOf(hit) {
@@ -79,7 +126,8 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (skipped.length) findings.push({ ...base, severity: "info", check: "planned_out_of_scope", detail: d.plannedOutOfScope(skipped.map((e) => key(e.platform, e.name))) });
   }
   const stepLabel = (i) => run.steps[i]?.label ?? `step ${i}`;
-  const planByKey = new Map(plan.events.map((e) => [key(e.platform, e.name), e]));
+  const planEventFor = (hit) => plan.events.find((e) => hitMatchesEvent(e, hit));
+  const planKeyOf = (hit) => { const e = planEventFor(hit); return e ? key(e.platform, e.name) : key(hit.platform, hit.name); };
 
   if (!run.completed) {
     findings.push({ ...base, severity: "warning", check: "journey_incomplete", detail: d.journeyIncomplete(run.note) });
@@ -88,7 +136,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Expected events that never fired.
   for (const ev of plan.events) {
     if (!expectedIn(ev, run.journeyId)) continue;
-    const fired = run.hits.some((h) => h.platform === ev.platform && h.name === ev.name);
+    const fired = run.hits.some((h) => hitMatchesEvent(ev, h));
     if (!fired) {
       findings.push({
         ...base,
@@ -104,9 +152,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Required parameters missing on events that did fire (reported once per event).
   const paramsReported = new Set();
   for (const hit of run.hits) {
-    const ev = planByKey.get(key(hit.platform, hit.name));
+    const ev = planEventFor(hit);
     if (!ev?.required_params?.length) continue;
-    const missing = ev.required_params.filter((p) => hit.params[p] === undefined || hit.params[p] === "");
+    const missing = ev.required_params.filter((p) => !hasParam(hit, p));
     const reportKey = `${key(hit.platform, hit.name)}|${missing.join(",")}`;
     if (missing.length && !paramsReported.has(reportKey)) {
       paramsReported.add(reportKey);
@@ -127,14 +175,18 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // new page can also carry the previous page's last hits, so the page is part of the key.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${key(hit.platform, hit.name)}|${pageOf(hit)}`;
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
-    const ev = planByKey.get(key(hits[0].platform, hits[0].name));
+    const ev = planEventFor(hits[0]);
     if (hits.length < 2 || ev?.allow_multiple) continue;
     // TikTok sends unnamed pings (no event name) on its own schedule, so their count varies between runs.
     if (hits[0].platform === "tiktok" && hits[0].name === "(unnamed)") continue;
+    // Hits that repeat an event ID are one event to the platform (it keeps the first), so only
+    // distinct IDs, and hits without an ID, count as separate sends.
+    const sends = new Set(hits.map((h, i) => (h.eventId ? `id:${h.eventId}` : `n:${i}`))).size;
+    if (sends < 2) continue;
     findings.push({
       ...base,
       severity: "warning",
@@ -142,8 +194,30 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       platform: hits[0].platform,
       event: hits[0].name,
       step: stepLabel(hits[0].step),
-      detail: d.duplicate(hits[0].name, hits.length),
+      detail: d.duplicate(hits[0].name, sends),
     });
+  }
+
+  // Server-side tagging. Only what the browser can see: a GA4 hit to a server container, and requests
+  // to Stape or Elevar. Meta's and TikTok's server-side copies never pass through the browser.
+  const serverHits = run.hits.filter((h) => h.delivery === "server");
+  if (serverHits.length) {
+    const names = (list) => [...new Set(list.map((h) => h.name))];
+    const byPlatform = [...new Set(run.hits.map((h) => h.platform))].map((platform) => {
+      const own = run.hits.filter((h) => h.platform === platform);
+      return { platform, server: names(own.filter((h) => h.delivery === "server")), browser: names(own.filter((h) => h.delivery !== "server")) };
+    }).filter((p) => p.server.length);
+    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser) });
+  }
+  const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
+  if (serverVendors.length || serverHits.length) {
+    const noId = new Map();
+    for (const hit of run.hits) {
+      if ((hit.platform === "meta" || hit.platform === "tiktok") && !hit.eventId && !noId.has(key(hit.platform, hit.name))) noId.set(key(hit.platform, hit.name), hit);
+    }
+    for (const [, hit] of noId) {
+      findings.push({ ...base, severity: "info", check: "dedup_id_missing", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.dedupIdMissing(hit.platform, hit.name) });
+    }
   }
 
   // Consent.
@@ -157,8 +231,63 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       findings.push({ ...base, severity: "risk", check: "consent_default_late", detail: d.consentDefaultLate() });
     }
   }
+  const defaults = run.dataLayerLog.filter((e) => isConsentCommand(e, "default"));
+  if (plan.consent_mode && defaults.length) {
+    const declared = new Set(defaults.flatMap((e) => Object.keys(e.value[2] ?? {})));
+    const missing = V2_SIGNALS.filter((k) => !declared.has(k));
+    if (missing.length) findings.push({ ...base, severity: "risk", check: "consent_v2_missing", detail: d.consentV2Missing(missing) });
+  }
+  if (granted !== null) {
+    const updates = run.dataLayerLog.filter((e) => isConsentCommand(e, "update"));
+    if (updates.length) {
+      const grantedKeys = new Set(updates.flatMap((e) => Object.entries(e.value[2] ?? {}).filter(([, v]) => v === "granted").map(([k]) => k)));
+      const missing = V2_SIGNALS.filter((k) => !grantedKeys.has(k));
+      if (missing.length) findings.push({ ...base, severity: "warning", check: "consent_v2_update", detail: d.consentV2Update(missing) });
+    }
+  }
+
+  // Declining: nothing may be sent or stored for ads after the visitor said no.
+  const rejectStep = run.rejectStep ?? null;
+  if (rejectStep !== null) {
+    const reject = run.steps.find((s) => s.index === rejectStep);
+    const regranted = run.dataLayerLog.find(
+      (e) => e.step >= rejectStep && isConsentCommand(e, "update") && Object.values(e.value[2] ?? {}).includes("granted"),
+    );
+    if (regranted) findings.push({ ...base, severity: "broken", check: "reject_ignored", step: stepLabel(regranted.step), detail: d.rejectIgnored() });
+    else if (reject?.bannerOpenAfter) findings.push({ ...base, severity: "broken", check: "reject_button_failed", step: stepLabel(rejectStep), detail: d.rejectButtonFailed() });
+    const afterReject = new Map();
+    for (const hit of run.hits) {
+      if (hit.step < rejectStep) continue;
+      const claimsGranted = hit.consent?.ad_storage === "granted" || hit.consent?.analytics_storage === "granted";
+      if (NON_GOOGLE_AD_PLATFORMS.has(hit.platform) || claimsGranted) {
+        const k = key(hit.platform, hit.name);
+        if (!afterReject.has(k)) afterReject.set(k, hit);
+      }
+    }
+    for (const [, hit] of afterReject) {
+      findings.push({ ...base, severity: "broken", check: "after_reject", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.afterReject(hit.platform, hit.name) });
+    }
+  }
+
+  // Cookies set before the visitor chose (or after they said no).
+  const cookieCutoff = rejectStep ?? granted;
+  const earlyCookies = (run.cookieLog ?? []).filter((c) => TRACKING_COOKIE.test(c.name) && (cookieCutoff === null || c.step < cookieCutoff));
+  if (earlyCookies.length) {
+    const names = [...new Set(earlyCookies.map((c) => c.name))];
+    findings.push({ ...base, severity: "risk", check: "cookies_before_consent", step: stepLabel(Math.min(...earlyCookies.map((c) => c.step))), detail: granted === null && rejectStep === null ? d.cookiesNeverConsent(names) : d.cookiesBeforeConsent(names) });
+  }
+  if (rejectStep !== null) {
+    const lateCookies = (run.cookieLog ?? []).filter((c) => TRACKING_COOKIE.test(c.name) && c.step >= rejectStep);
+    if (lateCookies.length) {
+      const names = [...new Set(lateCookies.map((c) => c.name))];
+      findings.push({ ...base, severity: "broken", check: "cookies_after_reject", step: stepLabel(Math.min(...lateCookies.map((c) => c.step))), detail: d.cookiesAfterReject(names) });
+    }
+  }
+
   const beforeConsent = new Map();
   for (const hit of run.hits) {
+    // Hits from the reject click on are covered by the after_reject check.
+    if (rejectStep !== null && hit.step >= rejectStep) continue;
     const early = granted === null || hit.step < granted;
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);
@@ -207,14 +336,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // Events that are not in the plan.
-  const unplanned = [...new Set(run.hits.filter((h) => !planByKey.has(key(h.platform, h.name))).map((h) => key(h.platform, h.name)))];
+  const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h)).map((h) => key(h.platform, h.name)))];
   if (unplanned.length) {
     findings.push({ ...base, severity: "info", check: "unplanned_events", detail: d.unplanned(unplanned) });
   }
 
   // Planned events that fired cleanly.
   const problemKeys = new Set(findings.filter((f) => f.event).map((f) => key(f.platform, f.event)));
-  const okKeys = [...new Set(run.hits.map((h) => key(h.platform, h.name)))].filter((k) => planByKey.has(k) && !problemKeys.has(k));
+  const okKeys = [...new Set(run.hits.filter((h) => planEventFor(h)).map((h) => key(h.platform, h.name)))].filter((k) => !problemKeys.has(k));
   if (okKeys.length) {
     findings.push({ ...base, severity: "ok", check: "matches_plan", detail: d.matches(okKeys) });
   }

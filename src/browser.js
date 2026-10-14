@@ -5,6 +5,13 @@ import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
 
+// Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
+// one of these always blocks the journey, and a reject click is checked against them afterwards.
+export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
+#truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
+#sp_message_container, [id^="sp_message_container_"], #cookie-law-info-bar, #BorlabsCookieBox, .klaro, #termly-code-snippet-support, #cookie-information-template-wrapper, #coiOverlay, \
+#cmpwrapper, #cmpbox2, .fc-consent-root, #ppms_cm_popup_overlay, [aria-label*="cookie" i][role=dialog]`;
+
 // Caps on what one audit records, so a looping page can't grow memory without limit.
 const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000 };
 
@@ -341,6 +348,8 @@ export class AuditSession {
     this.hits = [];
     this.steps = [];
     this.consentStep = null;
+    this.rejectStep = null;
+    this.cookieLog = []; // each cookie name and domain with the step it was first seen at (never values)
     this.errors = [];
     this.dataLayerLog = [];
     this.network = [];
@@ -717,7 +726,7 @@ export class AuditSession {
       if (!/intercepts pointer events|not stable|outside of the viewport/.test(err.message)) throw err;
     }
     const cover = await locator
-      .evaluate((el) => {
+      .evaluate((el, selectors) => {
         const r = el.getBoundingClientRect();
         const x = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth - 1);
         const y = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
@@ -742,13 +751,13 @@ export class AuditSession {
           const modal = n.matches("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]");
           // Cookie and consent banners block even when they cover only part of the screen.
           const consent =
-            n.matches("#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container") ||
+            n.matches(selectors) ||
             (/(cookie|consent|gdpr|kvkk)/i.test(`${n.id} ${typeof n.className === "string" ? n.className : ""}`) && ["fixed", "sticky"].includes(getComputedStyle(n).position));
           if (consent) return { blocking: true, what: describe(n) };
           if (modal || b.width * b.height >= screen * 0.5) return { blocking: true, what: describe(n) };
         }
         return { blocking: false, what: describe(hit), free };
-      })
+      }, CMP_BANNER_SELECTORS)
       .catch(() => null);
     if (cover?.blocking) {
       throw new Error(`The element is covered by ${cover.what}. Deal with that first (for example accept or close it), as a visitor would.`);
@@ -770,10 +779,11 @@ export class AuditSession {
   /**
    * Performs one action and records it as a step. Returns an error message
    * instead of throwing, so the agent can recover.
-   * @param {{ action: string, ref?: number, selector?: string, text?: string, value?: string, url?: string, reason?: string, accepts_consent?: boolean }} a
+   * @param {{ action: string, ref?: number, selector?: string, text?: string, value?: string, url?: string, reason?: string, accepts_consent?: boolean, rejects_consent?: boolean }} a
    */
   async act(a) {
     const error = await this.perform(a);
+    await this.trackCookies();
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
     return error;
@@ -781,7 +791,7 @@ export class AuditSession {
 
   async perform(a) {
     const describe = a.reason || `${a.action} ${a.selector ?? (a.ref != null ? `#${a.ref}` : a.text != null ? `"${a.text}"` : a.url ?? "")}`.trim();
-    this.beginStep(describe, { action: a.action, acceptsConsent: !!a.accepts_consent });
+    this.beginStep(describe, { action: a.action, acceptsConsent: !!a.accepts_consent, rejectsConsent: !!a.rejects_consent });
     const step = this.steps[this.currentStep];
     try {
       switch (a.action) {
@@ -843,9 +853,25 @@ export class AuditSession {
       const blocked = await this.enforce();
       if (blocked) return blocked;
       if (a.accepts_consent && this.consentStep === null) this.consentStep = this.currentStep;
+      if (a.rejects_consent && this.rejectStep === null) {
+        this.rejectStep = this.currentStep;
+        // A rejected banner should close; one that is still showing means the button did nothing.
+        step.bannerOpenAfter = await this.page.evaluate((sel) => [...document.querySelectorAll(sel)].some((n) => {
+          const r = n.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(n).visibility !== "hidden";
+        }), CMP_BANNER_SELECTORS).catch(() => false);
+      }
       return null;
     } catch (err) {
       return (await this.enforce().catch(() => null)) ?? err.message.split("\n")[0];
+    }
+  }
+
+  /** Notes which cookies appeared during the step just taken (names and domains only). */
+  async trackCookies() {
+    const seen = new Set(this.cookieLog.map((c) => `${c.domain}|${c.name}`));
+    for (const c of await this.cookies()) {
+      if (!seen.has(`${c.domain}|${c.name}`) && this.cookieLog.length < 500) this.cookieLog.push({ ...c, step: this.currentStep });
     }
   }
 

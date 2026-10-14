@@ -41,11 +41,11 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Missing events | `purchase` never fired on the checkout journey |
 | Missing parameters | `purchase` sent without `value` and `currency` on mobile |
 | Duplicates | `add_to_cart` sent twice by one click |
-| Consent | Meta `PageView` fired before the visitor accepted cookies, Consent Mode default missing or set too late |
+| Consent | Meta `PageView` fired before the visitor accepted cookies, Consent Mode default missing or set too late, Consent Mode v2 signals (`ad_user_data`, `ad_personalization`) missing, tracking cookies set before consent, tags or cookies still active after the `decline_cookies` journey rejects the banner, a reject button that does nothing |
 | Personal data | An email address sent to an ad platform in plain text |
 | Unplanned events | Events firing that aren't in your measurement plan |
 
-Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
+Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
 
 ### Choose the providers to check
 
@@ -234,6 +234,8 @@ The first run's findings become the expected ones. When a change is right, for e
 ```
 
 `platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
+
+Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
 
 ## CLI
 

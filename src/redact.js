@@ -7,7 +7,7 @@
 const USER_KEYS = new Set([
   "em", "ph", "fn", "ln", "ge", "db", "ct", "st", "zp", "country", "external_id", "uid", "user_id", "_uid",
   "email", "phone", "phone_number", "first_name", "last_name", "street", "city", "region", "postal_code", "zip",
-  "sha256_email_address", "sha256_phone_number", "sha256_email", "sha256_phone", "email_address",
+  "sha256_email_address", "sha256_phone_number", "sha256_email", "sha256_phone", "email_address", "u_hem", "u_hpn",
 ]);
 // In dataLayer pushes, short names like "city" or "country" are often page data, so only
 // these names, values under a user data object, and email-like values are redacted there.

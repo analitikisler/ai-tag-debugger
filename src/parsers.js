@@ -36,6 +36,17 @@ const GOOGLE_COMPANION_HOST = /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$|(^|\.)d
  */
 const isGa4Path = (u) => u.pathname.endsWith("/g/collect") || (/\/g\/c$/.test(u.pathname) && /^G-[A-Z0-9]+$/.test(u.searchParams.get("tid") ?? ""));
 
+const GOOGLE_PRIMARY_HOST = /(^|\.)(google-analytics\.com|analytics\.google\.com|googletagmanager\.com)$/;
+
+/**
+ * Where a GA4 hit goes. "browser": Google's own hosts, or the short /g/c path of Google tag gateway
+ * (which only forwards to Google). "server": /g/collect on any other host, which is a server
+ * container (server-side GTM, Stape, Elevar) answering for the site.
+ */
+function ga4Delivery(u) {
+  return GOOGLE_PRIMARY_HOST.test(u.hostname) || /\/g\/c$/.test(u.pathname) ? "browser" : "server";
+}
+
 /** @returns {Hit[] | null} */
 export function parseGa4(url, postData) {
   const u = new URL(url);
@@ -55,6 +66,7 @@ export function parseGa4(url, postData) {
     const user = [...merged].filter(([k]) => isUserDataKey(k));
     return {
       platform: "ga4",
+      delivery: ga4Delivery(u),
       name: merged.get("en") || "(unnamed)",
       id: merged.get("tid") || undefined,
       params: ga4ParamsFrom(merged),
@@ -75,7 +87,11 @@ export function parseMeta(url) {
     const m = k.match(/^cd\[(.+)\]$/);
     if (m) params[m[1]] = v;
   }
-  return [{ platform: "meta", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, params, url }];
+  // eid is the event ID a server-side (Conversions API) copy of the event must repeat for Meta to count it once.
+  const eventId = u.searchParams.get("eid") || undefined;
+  if (eventId) params.event_id = eventId;
+  const user = [...u.searchParams].filter(([k]) => isUserDataKey(k));
+  return [{ platform: "meta", delivery: "browser", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, ...(eventId ? { eventId } : {}), params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
 }
 
 /** @returns {Hit[] | null} */
@@ -105,7 +121,8 @@ export function parseTikTok(url, postData) {
   const props = body.properties || body.context?.properties || {};
   const params = Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]));
   const user = Object.entries(body.context?.user ?? {}).filter(([k, v]) => isUserDataKey(`context.user.${k}`) && v);
-  return [{ platform: "tiktok", name: body.event || "(unnamed)", id: body.context?.pixel?.code, params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`context.user.${k}`, String(v)])) } : {}), url }];
+  const eventId = body.event_id ? String(body.event_id) : undefined;
+  return [{ platform: "tiktok", delivery: "browser", name: body.event || "(unnamed)", id: body.context?.pixel?.code, ...(eventId ? { eventId } : {}), params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`context.user.${k}`, String(v)])) } : {}), url }];
 }
 
 /**
@@ -128,7 +145,67 @@ export function parseX(url) {
   return [{ platform: "x", name: name || "(unnamed)", id: q.get("txn_id") || undefined, params, url }];
 }
 
-const PARSERS = [parseGa4, parseMeta, parseGoogleAds, parseTikTok, parseX];
+const jsonOr = (text, fallback) => { try { return JSON.parse(text); } catch { return fallback; } };
+const scalars = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === "object" ? obj : {}).filter(([, v]) => v !== null && typeof v !== "object").map(([k, v]) => [k, String(v)]));
+
+/** Pinterest tag: ct.pinterest.com/v3/ with event, tid, ed (event data) and pd (hashed user data). @returns {Hit[] | null} */
+export function parsePinterest(url) {
+  const u = new URL(url);
+  const q = u.searchParams;
+  if (u.hostname !== "ct.pinterest.com" || !/^\/v3\/?$/.test(u.pathname) || !q.has("event")) return null;
+  const params = scalars(jsonOr(q.get("ed") ?? "{}", {}));
+  if (q.has("event_id")) params.event_id = q.get("event_id");
+  const user = Object.entries(scalars(jsonOr(q.get("pd") ?? "{}", {}))).filter(([k, v]) => isUserDataKey(k) && v);
+  return [{ platform: "pinterest", name: q.get("event"), id: q.get("tid") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`pd.${k}`, v])) } : {}), url }];
+}
+
+/** Snap Pixel: tr.snapchat.com/p (query or form body) with pid, ev, and price/currency/transaction fields. @returns {Hit[] | null} */
+export function parseSnapchat(url, postData) {
+  const u = new URL(url);
+  if (u.hostname !== "tr.snapchat.com" || !/^\/(p|tr)\/?$/.test(u.pathname)) return null;
+  const q = new URLSearchParams(u.search);
+  if (postData && !postData.trim().startsWith("{")) for (const [k, v] of new URLSearchParams(postData)) q.set(k, v);
+  else if (postData) for (const [k, v] of Object.entries(scalars(jsonOr(postData, {})))) q.set(k, v);
+  if (!q.has("pid") && !q.has("ev")) return null;
+  const params = {};
+  for (const [from, to] of [["pr", "value"], ["cur", "currency"], ["tid", "transaction_id"], ["ic", "quantity"], ["ci", "content_ids"], ["u", "page_location"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const user = [...q].filter(([k, v]) => isUserDataKey(k) && v);
+  return [{ platform: "snapchat", name: q.get("ev") || "(unnamed)", id: q.get("pid") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
+}
+
+/**
+ * Klaviyo onsite tracking: a JSON:API POST to a.klaviyo.com/client/events/ with the metric
+ * name, event properties and the profile it belongs to. Profile fields are user data.
+ * @returns {Hit[] | null}
+ */
+export function parseKlaviyo(url, postData) {
+  const u = new URL(url);
+  if (u.hostname !== "a.klaviyo.com" || !/^\/client\/events\/?$/.test(u.pathname)) return null;
+  const attrs = jsonOr(postData ?? "{}", {})?.data?.attributes ?? {};
+  const profile = scalars(attrs.profile?.data?.attributes ?? attrs.profile);
+  const user = Object.entries(profile).filter(([k, v]) => isUserDataKey(k) && v);
+  return [{
+    platform: "klaviyo",
+    name: attrs.metric?.data?.attributes?.name ?? attrs.metric?.name ?? "(unnamed)",
+    id: u.searchParams.get("company_id") || undefined,
+    params: { ...scalars(attrs.properties), ...(attrs.value !== undefined ? { value: String(attrs.value) } : {}) },
+    ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`profile.${k}`, v])) } : {}),
+    url,
+  }];
+}
+
+/** Hotjar: calls to its in.hotjar.com / .hotjar.io API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
+export function parseHotjar(url) {
+  const u = new URL(url);
+  if (!/(^|\.)hotjar\.(com|io)$/.test(u.hostname)) return null;
+  const m = u.pathname.match(/^\/api\/v\d+\/client\/sites\/(\d+)\/([a-z-]+)/i);
+  if (!m) return null;
+  return [{ platform: "hotjar", name: m[2], id: m[1], params: {}, url }];
+}
+
+const PARSERS = [parseGa4, parseMeta, parseGoogleAds, parseTikTok, parseX, parsePinterest, parseSnapchat, parseKlaviyo, parseHotjar];
 
 /** Returns normalized hits for a request, or null when it is not a tracking request. */
 export function parseTrackingRequest(url, postData) {
@@ -184,6 +261,7 @@ export const PROVIDERS = {
   microsoft_ads: "Microsoft Ads",
   pinterest: "Pinterest",
   snapchat: "Snapchat",
+  klaviyo: "Klaviyo",
   clarity: "Microsoft Clarity",
   hotjar: "Hotjar",
   doubleclick: "DoubleClick",
@@ -191,9 +269,12 @@ export const PROVIDERS = {
 };
 export const DEFAULT_PROVIDERS = ["ga4", "google_ads", "meta", "tiktok"];
 // Tag managers and consent platforms are always shown: they explain how the tags loaded.
-const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform" };
+// Server-side tagging providers are too: their requests show where events are sent from.
+const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform", stape: "Stape", elevar: "Elevar" };
 
 const HOSTS = [
+  [/(^|\.)stape\.(io|jp)$/, "stape"],
+  [/(^|\.)getelevar\.com$/, "elevar"],
   [/(^|\.)(google-analytics|analytics\.google)\.com$/, "ga4"],
   [/(^|\.)googleadservices\.com$/, "google_ads"],
   [/(^|\.)googlesyndication\.com$/, "adsense"],
@@ -206,7 +287,8 @@ const HOSTS = [
   [/(^|\.)hotjar\.(com|io)$/, "hotjar"],
   [/(^|\.)(pinterest\.com|pinimg\.com)$/, "pinterest"],
   [/(^|\.)(snapchat\.com|sc-static\.net)$/, "snapchat"],
-  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.eu|cookieyes\.com)$/, "consent"],
+  [/(^|\.)klaviyo\.com$/, "klaviyo"],
+  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.(eu|com)|cookieyes\.com|didomi\.io|privacy-center\.org|trustarc\.com|truste\.com|consensu\.org|quantcast\.com|osano\.com|iubenda\.com|termly\.io|cookiefirst\.com|axeptio\.eu|sourcepoint\.com|sp-prod\.net|consentmanager\.net|cookiescript\.com|cookie-script\.com|cookieinformation\.com|civiccomputing\.com|piwik\.pro|complianz\.io|cdn\.privacy-mgmt\.com)$/, "consent"],
 ];
 
 /**
@@ -226,6 +308,8 @@ export function providerOf(url) {
   }
   if (/(^|\.)(doubleclick\.net|google\.[a-z.]+)$/.test(host) && /^\/(pagead|ccm)\//.test(u.pathname)) return of("google_ads");
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
+  // Before the vendor hosts: a GA4 hit to a Stape or Elevar endpoint is still a GA4 hit.
+  if (isGa4Path(u) && !GOOGLE_COMPANION_HOST.test(host)) return of("ga4");
   for (const [pattern, key] of HOSTS) if (pattern.test(host)) return of(key);
   if (isGa4Path(u)) return of("ga4");
   if (u.pathname.startsWith("/pagead/") || /\/as\/p\/c\/\d+\/?$/.test(u.pathname)) return of("google_ads");
@@ -258,7 +342,8 @@ export function vendorOf(url) {
   if (p.key === "ga4") {
     const host = new URL(url).hostname;
     if (/(^|\.)(google-analytics|analytics\.google|googletagmanager)\.com$/.test(host)) return "Google Analytics";
-    return GOOGLE_COMPANION_HOST.test(host) ? "Google Analytics (resend)" : "Google Analytics (server-side)";
+    if (GOOGLE_COMPANION_HOST.test(host)) return "Google Analytics (resend)";
+    return ga4Delivery(new URL(url)) === "server" ? "Google Analytics (server-side)" : "Google Analytics (Google tag gateway)";
   }
   return p.label;
 }

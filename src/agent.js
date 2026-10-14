@@ -14,7 +14,7 @@ How to work:
 - Do one action per call and read the new page before the next action.
 - Elements on screen are listed first. If what you need isn't listed, scroll, or use text instead of ref to act on an element by its visible text or label (e.g. text "Rezervasyon Yap").
 - Date pickers and custom dropdowns usually need clicks rather than fill: click the field, then click the date or option.
-- If a cookie or consent banner appears, accept all cookies (as most visitors do) and set accepts_consent to true on that click.
+- If a cookie or consent banner appears, accept all cookies (as most visitors do) and set accepts_consent to true on that click. (A journey whose goal says to reject or decline cookies does that instead and sets rejects_consent to true on that click; if the banner has no reject-all button, use the one that declines non-essential cookies, and never accept.)
 - Use obvious test data in forms: name "Test User", email "qa-test@example.com", phone "5550100", address "1 Test Street", city "Testville", postcode "00000".
 - Never enter real payment card details. If the site offers a test or demo payment option, use it. If completing the journey would require a real payment or a real account you don't have, stop and call finish with success false and explain why.
 - If something is broken (an error, a button that does nothing), try a reasonable alternative once, then finish with success false and describe what happened.
@@ -39,6 +39,7 @@ export const TOOLS = [
         url: { type: "string", description: "Destination for goto." },
         reason: { type: "string", description: "Short description of the step, e.g. 'Add the first product to the cart'. Shown in the report." },
         accepts_consent: { type: "boolean", description: "True only when this click accepts the cookie or consent banner." },
+        rejects_consent: { type: "boolean", description: "True only when this click rejects or declines all cookies on the consent banner." },
       },
       required: ["action", "reason"],
     },
@@ -215,6 +216,8 @@ export function collect(session, journey, viewport) {
     hits: session.hits,
     steps: session.steps,
     consentStep: session.consentStep,
+    rejectStep: session.rejectStep,
+    cookieLog: session.cookieLog,
     dataLayerLog: session.dataLayerLog,
     network: session.network,
     providers: session.providers,

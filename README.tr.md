@@ -41,7 +41,7 @@ Tag'leri elle test etmek bunu yakalar, ama zahmetli olduğu için her sürümden
 | Eksik event'ler | `purchase`, ödeme senaryosunda hiç gönderilmedi |
 | Eksik parametreler | `purchase`, mobilde `value` ve `currency` olmadan gönderildi |
 | Tekrar eden event'ler | `add_to_cart` tek tıklamada iki kez gönderildi |
-| Çerez onayı | Meta `PageView`, ziyaretçi çerezleri kabul etmeden gönderildi; Consent Mode varsayılanı yok ya da çok geç ayarlanmış |
+| Çerez onayı | Meta `PageView`, ziyaretçi çerezleri kabul etmeden gönderildi; Consent Mode varsayılanı yok ya da çok geç ayarlanmış, Consent Mode v2 sinyalleri (`ad_user_data`, `ad_personalization`) eksik, onaydan önce yazılan izleme çerezleri, `decline_cookies` yolculuğu bandı reddettikten sonra hâlâ çalışan etiketler ya da çerezler, işe yaramayan reddet düğmesi |
 | Kişisel veri | Bir e-posta adresi reklam platformuna açık metin olarak gönderildi |
 | Planda olmayan event'ler | Ölçümleme planınızda bulunmayan event'ler gönderiliyor |
 

@@ -64,3 +64,26 @@ test("names analytics and ad vendors for the network timeline", async () => {
   assert.equal(vendorOf("https://collect.shop.app/gtag/js?id=G-1234"), "Google Analytics (server-side)");
   assert.equal(vendorOf("https://shop.com/app.js"), null);
 });
+
+test("parses Pinterest, Snap, Klaviyo and Hotjar hits", () => {
+  const [pin] = parseTrackingRequest('https://ct.pinterest.com/v3/?event=checkout&tid=2612&event_id=e1&ed={"value":"19.9","currency":"EUR"}&pd={"em":"abc"}', null);
+  assert.deepEqual([pin.platform, pin.name, pin.id, pin.params.value, pin.params.event_id, Object.keys(pin.userFields)], ["pinterest", "checkout", "2612", "19.9", "e1", ["pd.em"]]);
+  assert.equal(parseTrackingRequest("https://ct.pinterest.com/user/?tid=1", null), null);
+
+  const [snap] = parseTrackingRequest("https://tr.snapchat.com/p", "pid=abc-1&ev=PURCHASE&pr=10&cur=EUR&u_hem=h");
+  assert.deepEqual([snap.platform, snap.name, snap.id, snap.params.currency, Object.keys(snap.userFields)], ["snapchat", "PURCHASE", "abc-1", "EUR", ["u_hem"]]);
+
+  const body = JSON.stringify({ data: { type: "event", attributes: { metric: { data: { attributes: { name: "Viewed Product" } } }, properties: { Price: 5, nested: { a: 1 } }, profile: { data: { attributes: { email: "a@b.co" } } } } } });
+  const [kl] = parseTrackingRequest("https://a.klaviyo.com/client/events/?company_id=AbC123", body);
+  assert.deepEqual([kl.platform, kl.name, kl.id, kl.params, Object.keys(kl.userFields)], ["klaviyo", "Viewed Product", "AbC123", { Price: "5" }, ["profile.email"]]);
+
+  const [hj] = parseTrackingRequest("https://in.hotjar.com/api/v2/client/sites/123456/visit-data?sv=7", null);
+  assert.deepEqual([hj.platform, hj.id], ["hotjar", "123456"]);
+  assert.equal(parseTrackingRequest("https://static.hotjar.com/c/hotjar-123456.js?sv=7", null), null);
+});
+
+test("Meta hit carries event_id and advanced matching fields", () => {
+  const [meta] = parseTrackingRequest("https://www.facebook.com/tr/?id=1&ev=Purchase&eid=ord-5&ud[em]=abc", null);
+  assert.equal(meta.params.event_id, "ord-5");
+  assert.deepEqual(Object.keys(meta.userFields), ["ud[em]"]);
+});
