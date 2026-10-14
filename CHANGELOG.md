@@ -11,6 +11,10 @@
 - New parsers for the Pinterest tag, Snap Pixel, Klaviyo onsite events and Hotjar API calls. Pinterest, Snap and Klaviyo hits show their event name, id, value fields and, when present, the hashed or plain user data they send (redacted like Meta's). Hotjar shows the site id.
 - A Meta hit now shows `event_id` (`eid`), the value a Conversions API copy must repeat to be deduplicated, and its advanced matching fields (`ud[...]`).
 - Klaviyo is a selectable provider.
+- Consent Mode v2: the report flags a default that leaves out `ad_user_data` or `ad_personalization`, and an accept whose update does not grant them.
+- New `decline_cookies` journey (also `decline`, `reject`): the AI rejects all cookies, browses on, and the report checks that nothing is sent afterwards. It flags ad pixels and Google hits that claim consent after the reject, a Consent Mode update that grants consent after it, and a banner that is still showing after the reject click. Clicks carry `rejects_consent`, like `accepts_consent` for accepting; replays keep it.
+- Tracking cookies (`_ga`, `_fbp`, `_gcl_*`, `_ttp` and similar) are noted with the step that set them, by name only. Ones set before the visitor chose, or after they rejected, are flagged.
+- More consent platforms are recognized as banners that block a click (Osano, Iubenda, Complianz, CookieFirst, Axeptio, Sourcepoint, TrustArc, Borlabs, Klaro, Termly and others) and as consent requests in the timeline (Didomi, Quantcast, TrustArc, Sourcepoint, Iubenda, Termly and others).
 
 ## 0.7.8 (2026-10-14)
 

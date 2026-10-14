@@ -20,7 +20,7 @@ export function replayableJourney(run) {
     ...(run.completed ? {} : { incomplete: run.note }),
     steps: (start ? steps.slice(1) : steps)
       .filter((s) => s.replay)
-      .map((s) => ({ ...s.replay, reason: s.label, ...(s.acceptsConsent ? { accepts_consent: true } : {}), ...(s.error ? { optional: true } : {}) })),
+      .map((s) => ({ ...s.replay, reason: s.label, ...(s.acceptsConsent ? { accepts_consent: true } : {}), ...(s.rejectsConsent ? { rejects_consent: true } : {}), ...(s.error ? { optional: true } : {}) })),
   };
 }
 
