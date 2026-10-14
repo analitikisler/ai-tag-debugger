@@ -75,7 +75,10 @@ export function parseMeta(url) {
     const m = k.match(/^cd\[(.+)\]$/);
     if (m) params[m[1]] = v;
   }
-  return [{ platform: "meta", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, params, url }];
+  // eid is the event_id the Conversions API copy of the event must repeat to be deduplicated.
+  if (u.searchParams.has("eid")) params.event_id = u.searchParams.get("eid");
+  const user = [...u.searchParams].filter(([k]) => isUserDataKey(k));
+  return [{ platform: "meta", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
 }
 
 /** @returns {Hit[] | null} */
@@ -128,7 +131,67 @@ export function parseX(url) {
   return [{ platform: "x", name: name || "(unnamed)", id: q.get("txn_id") || undefined, params, url }];
 }
 
-const PARSERS = [parseGa4, parseMeta, parseGoogleAds, parseTikTok, parseX];
+const jsonOr = (text, fallback) => { try { return JSON.parse(text); } catch { return fallback; } };
+const scalars = (obj) => Object.fromEntries(Object.entries(obj && typeof obj === "object" ? obj : {}).filter(([, v]) => v !== null && typeof v !== "object").map(([k, v]) => [k, String(v)]));
+
+/** Pinterest tag: ct.pinterest.com/v3/ with event, tid, ed (event data) and pd (hashed user data). @returns {Hit[] | null} */
+export function parsePinterest(url) {
+  const u = new URL(url);
+  const q = u.searchParams;
+  if (u.hostname !== "ct.pinterest.com" || !/^\/v3\/?$/.test(u.pathname) || !q.has("event")) return null;
+  const params = scalars(jsonOr(q.get("ed") ?? "{}", {}));
+  if (q.has("event_id")) params.event_id = q.get("event_id");
+  const user = Object.entries(scalars(jsonOr(q.get("pd") ?? "{}", {}))).filter(([k, v]) => isUserDataKey(k) && v);
+  return [{ platform: "pinterest", name: q.get("event"), id: q.get("tid") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`pd.${k}`, v])) } : {}), url }];
+}
+
+/** Snap Pixel: tr.snapchat.com/p (query or form body) with pid, ev, and price/currency/transaction fields. @returns {Hit[] | null} */
+export function parseSnapchat(url, postData) {
+  const u = new URL(url);
+  if (u.hostname !== "tr.snapchat.com" || !/^\/(p|tr)\/?$/.test(u.pathname)) return null;
+  const q = new URLSearchParams(u.search);
+  if (postData && !postData.trim().startsWith("{")) for (const [k, v] of new URLSearchParams(postData)) q.set(k, v);
+  else if (postData) for (const [k, v] of Object.entries(scalars(jsonOr(postData, {})))) q.set(k, v);
+  if (!q.has("pid") && !q.has("ev")) return null;
+  const params = {};
+  for (const [from, to] of [["pr", "value"], ["cur", "currency"], ["tid", "transaction_id"], ["ic", "quantity"], ["ci", "content_ids"], ["u", "page_location"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const user = [...q].filter(([k, v]) => isUserDataKey(k) && v);
+  return [{ platform: "snapchat", name: q.get("ev") || "(unnamed)", id: q.get("pid") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
+}
+
+/**
+ * Klaviyo onsite tracking: a JSON:API POST to a.klaviyo.com/client/events/ with the metric
+ * name, event properties and the profile it belongs to. Profile fields are user data.
+ * @returns {Hit[] | null}
+ */
+export function parseKlaviyo(url, postData) {
+  const u = new URL(url);
+  if (u.hostname !== "a.klaviyo.com" || !/^\/client\/events\/?$/.test(u.pathname)) return null;
+  const attrs = jsonOr(postData ?? "{}", {})?.data?.attributes ?? {};
+  const profile = scalars(attrs.profile?.data?.attributes ?? attrs.profile);
+  const user = Object.entries(profile).filter(([k, v]) => isUserDataKey(k) && v);
+  return [{
+    platform: "klaviyo",
+    name: attrs.metric?.data?.attributes?.name ?? attrs.metric?.name ?? "(unnamed)",
+    id: u.searchParams.get("company_id") || undefined,
+    params: { ...scalars(attrs.properties), ...(attrs.value !== undefined ? { value: String(attrs.value) } : {}) },
+    ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`profile.${k}`, v])) } : {}),
+    url,
+  }];
+}
+
+/** Hotjar: calls to its in.hotjar.com / .hotjar.io API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
+export function parseHotjar(url) {
+  const u = new URL(url);
+  if (!/(^|\.)hotjar\.(com|io)$/.test(u.hostname)) return null;
+  const m = u.pathname.match(/^\/api\/v\d+\/client\/sites\/(\d+)\/([a-z-]+)/i);
+  if (!m) return null;
+  return [{ platform: "hotjar", name: m[2], id: m[1], params: {}, url }];
+}
+
+const PARSERS = [parseGa4, parseMeta, parseGoogleAds, parseTikTok, parseX, parsePinterest, parseSnapchat, parseKlaviyo, parseHotjar];
 
 /** Returns normalized hits for a request, or null when it is not a tracking request. */
 export function parseTrackingRequest(url, postData) {
@@ -184,6 +247,7 @@ export const PROVIDERS = {
   microsoft_ads: "Microsoft Ads",
   pinterest: "Pinterest",
   snapchat: "Snapchat",
+  klaviyo: "Klaviyo",
   clarity: "Microsoft Clarity",
   hotjar: "Hotjar",
   doubleclick: "DoubleClick",
@@ -206,6 +270,7 @@ const HOSTS = [
   [/(^|\.)hotjar\.(com|io)$/, "hotjar"],
   [/(^|\.)(pinterest\.com|pinimg\.com)$/, "pinterest"],
   [/(^|\.)(snapchat\.com|sc-static\.net)$/, "snapchat"],
+  [/(^|\.)klaviyo\.com$/, "klaviyo"],
   [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.eu|cookieyes\.com)$/, "consent"],
 ];
 

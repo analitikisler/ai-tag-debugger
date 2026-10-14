@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.9 (unreleased)
+
+- New parsers for the Pinterest tag, Snap Pixel, Klaviyo onsite events and Hotjar API calls. Pinterest, Snap and Klaviyo hits show their event name, id, value fields and, when present, the hashed or plain user data they send (redacted like Meta's). Hotjar shows the site id.
+- A Meta hit now shows `event_id` (`eid`), the value a Conversions API copy must repeat to be deduplicated, and its advanced matching fields (`ud[...]`).
+- Klaviyo is a selectable provider.
+
 ## 0.7.8 (2026-10-14)
 
 - Unnamed TikTok pings are left out of the duplicate check. TikTok sends them on its own timing, so their count changed between a save and its replay without the site changing.
