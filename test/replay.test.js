@@ -74,6 +74,23 @@ test("a click by ref is saved as a CSS path a scripted run can repeat", async ()
   }
 });
 
+test("a saved click keeps no text that looks like an email or phone number, and a field keeps none", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"] });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url });
+    await session.page.evaluate(() => document.body.insertAdjacentHTML("beforeend", '<button>jane@example.org</button><button>Call +90 532 123 45 67</button><input placeholder="Name">'));
+    assert.equal(await session.act({ action: "click", text: "jane@example.org" }), null);
+    assert.equal(await session.act({ action: "click", text: "Call +90 532 123 45 67" }), null);
+    assert.equal(await session.act({ action: "fill", text: "Name", value: "Jane" }), null);
+    const steps = replayableJourney({ journeyId: "j", viewport: "desktop", steps: session.steps }).steps;
+    assert.deepEqual(steps.map((s) => s.text), [undefined, undefined, undefined]);
+    assert.ok(steps.every((s) => s.selector));
+  } finally {
+    await session.close();
+  }
+});
+
 test("a saved click whose path no longer matches is found by its text", async () => {
   const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"] });
   await session.start();
@@ -82,6 +99,7 @@ test("a saved click whose path no longer matches is found by its text", async ()
     // As if a banner added before the button shifted the layout since the site was saved.
     const step = { action: "click", selector: "body:nth-of-type(1) > div:nth-of-type(7) > div:nth-of-type(1)", text: "Accept all", accepts_consent: true };
     assert.equal(await session.act(step), null);
+    assert.equal(session.steps.at(-1).foundBy, "text", "the replay summary can say the click was found by its text");
     await session.act({ action: "wait", value: "500" });
     assert.ok(session.hits.some((h) => h.name === "consent_given"));
   } finally {
