@@ -133,6 +133,8 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   for (const [, hits] of perStep) {
     const ev = planByKey.get(key(hits[0].platform, hits[0].name));
     if (hits.length < 2 || ev?.allow_multiple) continue;
+    // TikTok sends unnamed pings (no event name) on its own schedule, so their count varies between runs.
+    if (hits[0].platform === "tiktok" && hits[0].name === "(unnamed)") continue;
     findings.push({
       ...base,
       severity: "warning",
