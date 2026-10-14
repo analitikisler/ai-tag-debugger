@@ -303,7 +303,16 @@ Add the server to the app's MCP config. For Claude Desktop that is Settings → 
 }
 ```
 
-Install the browser once with `npx -y playwright@1.56.1 install chromium`. Gemini CLI uses the same `mcpServers` block in `~/.gemini/settings.json`. Claude Code: `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`. Restart the app, and the ai-tag-debugger tools appear. If the app can't find `npx`, use its full path (`which npx`, for example `/opt/homebrew/bin/npx` on a Mac with Homebrew). Reports are written to `~/ai-tag-debugger-reports`.
+The browser (Chromium) downloads itself the first time you run an audit, about a minute, one time. To get it ahead of time: `npx -y playwright@1.56.1 install chromium`.
+
+One-click and one-line setup:
+
+- **Claude Code:** `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`
+- **Cursor:** [Add to Cursor](https://cursor.com/en/install-mcp?name=ai-tag-debugger&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhbmFsaXRpa2lzbGVyL2FpLXRhZy1kZWJ1Z2dlciIsIm1jcCJdfQ==)
+- **VS Code:** [Install in VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D), or `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`
+- **Claude Desktop, Gemini CLI and others:** the JSON block above. Gemini CLI uses the same `mcpServers` block in `~/.gemini/settings.json`.
+
+Restart the app, and the ai-tag-debugger tools appear. If the app can't find `npx`, use its full path (`which npx`, for example `/opt/homebrew/bin/npx` on a Mac with Homebrew). Reports are written to `~/ai-tag-debugger-reports`.
 
 Running from a clone instead? Use `"command": "node"` and `"args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]`.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0 (2026-10-14)
+
+- The browser installs itself the first time an audit starts, so connecting the MCP server no longer needs a separate `playwright install` step. Progress goes to stderr.
+- Listed in the official MCP Registry as `io.github.analitikisler/ai-tag-debugger` (`mcpName` in package.json, `server.json`).
+- The README has one-line and one-click setup for Claude Code, Cursor and VS Code.
+- The MCP server reports its real version instead of a fixed 0.6.3.
+
 ## 0.7.9 (2026-10-14)
 
 - A planned event is found under the name the site uses: `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` all count as `add_to_cart`, and similar variants of the other ecommerce events too. Sites like these no longer get a false "missing add_to_cart". A plan event can list more names in `aliases`.

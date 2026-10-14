@@ -1,4 +1,7 @@
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
@@ -7,6 +10,19 @@ import { startEgressProxy } from "./egress.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
+let browserInstall = null;
+/** Downloads Chromium with Playwright's own installer. Output goes to stderr, because stdout carries the MCP protocol. */
+export function installBrowser() {
+  browserInstall ??= new Promise((resolve, reject) => {
+    const cli = path.join(path.dirname(createRequire(import.meta.url).resolve("playwright/package.json")), "cli.js");
+    console.error("ai-tag-debugger: installing the Chromium browser (one time, about a minute)...");
+    const child = spawn(process.execPath, [cli, "install", "chromium"], { stdio: ["ignore", 2, 2] });
+    child.on("error", reject);
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.56.1 install chromium`))));
+  }).finally(() => { browserInstall = null; });
+  return browserInstall;
+}
+
 export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
 #truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
 #sp_message_container, [id^="sp_message_container_"], #cookie-law-info-bar, #BorlabsCookieBox, .klaro, #termly-code-snippet-support, #cookie-information-template-wrapper, #coiOverlay, \
@@ -378,7 +394,13 @@ export class AuditSession {
       // flight once they are removed at the end, go to a proxy that isn't there.
       launch.proxy = { server: "http://127.0.0.1:9", bypass: "<-loopback>" };
     }
-    this.browser = await chromium.launch(launch);
+    try {
+      this.browser = await chromium.launch(launch);
+    } catch (err) {
+      if (!/Executable doesn't exist|playwright install/i.test(String(err?.message))) throw err;
+      await installBrowser();
+      this.browser = await chromium.launch(launch);
+    }
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
     await this.context.exposeBinding("__atdRecord", (_source, entry) => {
