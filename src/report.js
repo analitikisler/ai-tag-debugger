@@ -192,7 +192,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   return lines.join("\n");
 }
 
-const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x"];
+const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x", "pinterest", "snapchat", "klaviyo", "hotjar"];
 const platformLabel = (p) => PROVIDERS[p] ?? String(p).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const platformRank = (p) => (PLATFORM_ORDER.includes(p) ? PLATFORM_ORDER.indexOf(p) : PLATFORM_ORDER.length);
 
