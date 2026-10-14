@@ -303,7 +303,16 @@ Sunucuyu uygulamanın MCP ayarlarına ekleyin. Claude Desktop'ta bu Settings →
 }
 ```
 
-Tarayıcıyı bir kez `npx -y playwright@1.56.1 install chromium` ile kurun. Gemini CLI, `~/.gemini/settings.json` içinde aynı `mcpServers` bloğunu kullanır. Claude Code için: `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`. Uygulamayı yeniden başlatın, ai-tag-debugger araçları görünür. Uygulama `npx`'i bulamazsa tam yolunu kullanın (`which npx`; örneğin Homebrew kurulu bir Mac'te `/opt/homebrew/bin/npx`). Raporlar `~/ai-tag-debugger-reports` klasörüne yazılır.
+Tarayıcı (Chromium), ilk denetimi çalıştırdığınızda kendiliğinden iner (bir kez, yaklaşık bir dakika). Önceden kurmak için: `npx -y playwright@1.56.1 install chromium`.
+
+Tek tıkla ve tek satırla kurulum:
+
+- **Claude Code:** `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`
+- **Cursor:** [Cursor'a ekle](https://cursor.com/en/install-mcp?name=ai-tag-debugger&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhbmFsaXRpa2lzbGVyL2FpLXRhZy1kZWJ1Z2dlciIsIm1jcCJdfQ==)
+- **VS Code:** [VS Code'a kur](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D) veya `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`
+- **Claude Desktop, Gemini CLI ve diğerleri:** yukarıdaki JSON bloğu. Gemini CLI, `~/.gemini/settings.json` içinde aynı `mcpServers` bloğunu kullanır.
+
+Uygulamayı yeniden başlatın, ai-tag-debugger araçları görünür. Uygulama `npx`'i bulamazsa tam yolunu kullanın (`which npx`; örneğin Homebrew kurulu bir Mac'te `/opt/homebrew/bin/npx`). Raporlar `~/ai-tag-debugger-reports` klasörüne yazılır.
 
 Kaynak koddan mı çalıştırıyorsunuz? `"command": "node"` ve `"args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]` kullanın.
 

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.analitikisler/ai-tag-debugger",
+  "title": "AI Tag Debugger",
+  "description": "AI agent that QA-tests a website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok) from your chat app.",
+  "repository": {
+    "url": "https://github.com/analitikisler/ai-tag-debugger",
+    "source": "github"
+  },
+  "version": "0.8.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@analitikisler/ai-tag-debugger",
+      "version": "0.8.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}
