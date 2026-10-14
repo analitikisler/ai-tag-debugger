@@ -206,7 +206,7 @@ const HOSTS = [
   [/(^|\.)hotjar\.(com|io)$/, "hotjar"],
   [/(^|\.)(pinterest\.com|pinimg\.com)$/, "pinterest"],
   [/(^|\.)(snapchat\.com|sc-static\.net)$/, "snapchat"],
-  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.eu|cookieyes\.com)$/, "consent"],
+  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.(eu|com)|cookieyes\.com|didomi\.io|privacy-center\.org|trustarc\.com|truste\.com|consensu\.org|quantcast\.com|osano\.com|iubenda\.com|termly\.io|cookiefirst\.com|axeptio\.eu|sourcepoint\.com|sp-prod\.net|consentmanager\.net|cookiescript\.com|cookie-script\.com|cookieinformation\.com|civiccomputing\.com|piwik\.pro|complianz\.io|cdn\.privacy-mgmt\.com)$/, "consent"],
 ];
 
 /**

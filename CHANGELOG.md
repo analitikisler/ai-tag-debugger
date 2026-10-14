@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.9 (2026-10-14)
+
+- Consent Mode v2: the report flags a default that leaves out `ad_user_data` or `ad_personalization`, and an accept whose update does not grant them.
+- New `decline_cookies` journey (also `decline`, `reject`): the AI rejects all cookies, browses on, and the report checks that nothing is sent afterwards. It flags ad pixels and Google hits that claim consent after the reject, a Consent Mode update that grants consent after it, and a banner that is still showing after the reject click. Clicks carry `rejects_consent`, like `accepts_consent` for accepting; replays keep it.
+- Tracking cookies (`_ga`, `_fbp`, `_gcl_*`, `_ttp` and similar) are noted with the step that set them, by name only. Ones set before the visitor chose, or after they rejected, are flagged.
+- More consent platforms are recognized as banners that block a click (Osano, Iubenda, Complianz, CookieFirst, Axeptio, Sourcepoint, TrustArc, Borlabs, Klaro, Termly and others) and as consent requests in the timeline (Didomi, Quantcast, TrustArc, Sourcepoint, Iubenda, Termly and others).
+
 ## 0.7.8 (2026-10-14)
 
 - Unnamed TikTok pings are left out of the duplicate check. TikTok sends them on its own timing, so their count changed between a save and its replay without the site changing.

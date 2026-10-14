@@ -6,6 +6,9 @@ import { isOwnAddress } from "./redact.js";
 
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
 const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
+const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
+const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
@@ -157,8 +160,63 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       findings.push({ ...base, severity: "risk", check: "consent_default_late", detail: d.consentDefaultLate() });
     }
   }
+  const defaults = run.dataLayerLog.filter((e) => isConsentCommand(e, "default"));
+  if (plan.consent_mode && defaults.length) {
+    const declared = new Set(defaults.flatMap((e) => Object.keys(e.value[2] ?? {})));
+    const missing = V2_SIGNALS.filter((k) => !declared.has(k));
+    if (missing.length) findings.push({ ...base, severity: "risk", check: "consent_v2_missing", detail: d.consentV2Missing(missing) });
+  }
+  if (granted !== null) {
+    const updates = run.dataLayerLog.filter((e) => isConsentCommand(e, "update"));
+    if (updates.length) {
+      const grantedKeys = new Set(updates.flatMap((e) => Object.entries(e.value[2] ?? {}).filter(([, v]) => v === "granted").map(([k]) => k)));
+      const missing = V2_SIGNALS.filter((k) => !grantedKeys.has(k));
+      if (missing.length) findings.push({ ...base, severity: "warning", check: "consent_v2_update", detail: d.consentV2Update(missing) });
+    }
+  }
+
+  // Declining: nothing may be sent or stored for ads after the visitor said no.
+  const rejectStep = run.rejectStep ?? null;
+  if (rejectStep !== null) {
+    const reject = run.steps.find((s) => s.index === rejectStep);
+    const regranted = run.dataLayerLog.find(
+      (e) => e.step >= rejectStep && isConsentCommand(e, "update") && Object.values(e.value[2] ?? {}).includes("granted"),
+    );
+    if (regranted) findings.push({ ...base, severity: "broken", check: "reject_ignored", step: stepLabel(regranted.step), detail: d.rejectIgnored() });
+    else if (reject?.bannerOpenAfter) findings.push({ ...base, severity: "broken", check: "reject_button_failed", step: stepLabel(rejectStep), detail: d.rejectButtonFailed() });
+    const afterReject = new Map();
+    for (const hit of run.hits) {
+      if (hit.step < rejectStep) continue;
+      const claimsGranted = hit.consent?.ad_storage === "granted" || hit.consent?.analytics_storage === "granted";
+      if (NON_GOOGLE_AD_PLATFORMS.has(hit.platform) || claimsGranted) {
+        const k = key(hit.platform, hit.name);
+        if (!afterReject.has(k)) afterReject.set(k, hit);
+      }
+    }
+    for (const [, hit] of afterReject) {
+      findings.push({ ...base, severity: "broken", check: "after_reject", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.afterReject(hit.platform, hit.name) });
+    }
+  }
+
+  // Cookies set before the visitor chose (or after they said no).
+  const cookieCutoff = rejectStep ?? granted;
+  const earlyCookies = (run.cookieLog ?? []).filter((c) => TRACKING_COOKIE.test(c.name) && (cookieCutoff === null || c.step < cookieCutoff));
+  if (earlyCookies.length) {
+    const names = [...new Set(earlyCookies.map((c) => c.name))];
+    findings.push({ ...base, severity: "risk", check: "cookies_before_consent", step: stepLabel(Math.min(...earlyCookies.map((c) => c.step))), detail: granted === null && rejectStep === null ? d.cookiesNeverConsent(names) : d.cookiesBeforeConsent(names) });
+  }
+  if (rejectStep !== null) {
+    const lateCookies = (run.cookieLog ?? []).filter((c) => TRACKING_COOKIE.test(c.name) && c.step >= rejectStep);
+    if (lateCookies.length) {
+      const names = [...new Set(lateCookies.map((c) => c.name))];
+      findings.push({ ...base, severity: "broken", check: "cookies_after_reject", step: stepLabel(Math.min(...lateCookies.map((c) => c.step))), detail: d.cookiesAfterReject(names) });
+    }
+  }
+
   const beforeConsent = new Map();
   for (const hit of run.hits) {
+    // Hits from the reject click on are covered by the after_reject check.
+    if (rejectStep !== null && hit.step >= rejectStep) continue;
     const early = granted === null || hit.step < granted;
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);

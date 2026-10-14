@@ -46,9 +46,13 @@ export const JOURNEY_PRESETS = {
       { platform: "meta", name: "Search" },
     ],
   },
+  decline_cookies: {
+    goal: "Reject all cookies on the cookie banner (the reject-all or decline button, never accept) and set rejects_consent to true on that click. Then browse the site like a visitor who said no: scroll the home page, open a product or article page, and open a second page. Stop there.",
+    events: [],
+  },
 };
 
-const ALIASES = { checkout: "purchase", order: "purchase", cart: "add_to_cart", signup: "sign_up", register: "sign_up", registration: "sign_up", contact: "lead", form: "lead" };
+const ALIASES = { checkout: "purchase", order: "purchase", cart: "add_to_cart", signup: "sign_up", decline: "decline_cookies", reject: "decline_cookies", reject_cookies: "decline_cookies", consent: "decline_cookies", register: "sign_up", registration: "sign_up", contact: "lead", form: "lead" };
 
 /** The preset for a name like "purchase" or "signup", or null. */
 export function presetFor(name) {
