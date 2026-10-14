@@ -201,12 +201,12 @@ function trackingBody(request) {
  * How a scripted run can find the element an action used again: the selector it was given,
  * else a CSS path to the element, else its visible text. Refs only mean something in one run.
  */
-// Text that looks like an email address or phone number is not saved with a click.
 /** Query parameters that only carry the time or a cache-buster, so they differ between a recording and its replay. */
 const STAMP_PARAMS = /^(_|_t|ts|timestamp|cb|cachebust|nocache)$/i;
 /** The address without its timestamp parameters. */
 function unstamped(href) {
-  const url = new URL(href);
+  let url;
+  try { url = new URL(href); } catch { return href; }
   for (const name of [...url.searchParams.keys()]) if (STAMP_PARAMS.test(name)) url.searchParams.delete(name);
   return url.href;
 }
@@ -214,10 +214,9 @@ function unstamped(href) {
  * The GET answers in a recording whose address carries a timestamp, by address without it.
  * Entries the recording has no body for (still loading when the page was left) are not included.
  */
-async function restampedAnswers(file) {
+function restampedAnswers(har) {
   const answers = new Map();
   answers.exact = new Set();
-  const har = JSON.parse(await readFile(file, "utf8"));
   for (const e of har.log.entries) {
     const { request, response } = e;
     answers.exact.add(request.url);
@@ -237,6 +236,7 @@ async function restampedAnswers(file) {
   }
   return answers;
 }
+// Text that looks like an email address or phone number is not saved with a click.
 const savableText = (text) => (typeof text === "string" && text && !/@|\d[\d\s().+-]{6,}\d/.test(text) ? text : undefined);
 
 async function replayTarget(a, locator) {
@@ -454,11 +454,10 @@ export class AuditSession {
         (isDroppedMedia(route.request()) ? route.fulfill({ status: 200, body: "" }) : route.abort()).catch(() => {}),
       );
       await this.context.routeFromHAR(this.opts.replayHar, { notFound: "fallback" });
-      // A saved redirect to a page the browser may not open fails here, as it did when saved. Left to the
-      // recording, the redirect would be followed outside any handler, and its failure would end the run.
+      const har = JSON.parse(await readFile(this.opts.replayHar, "utf8"));
       // A page asks again for what it asked when saved, with a new timestamp on the address. Registered
       // after the recording, so it runs first and leaves every exact match to the recording.
-      const restamped = await restampedAnswers(this.opts.replayHar);
+      const restamped = restampedAnswers(har);
       if (restamped.size) {
         await this.context.route(
           (url) => restamped.has(unstamped(url.href)),
@@ -471,7 +470,9 @@ export class AuditSession {
           },
         );
       }
-      const refusedRedirects = await this.refusedRedirects(this.opts.replayHar);
+      // A saved redirect to a page the browser may not open fails here, as it did when saved. Left to the
+      // recording, the redirect would be followed outside any handler, and its failure would end the run.
+      const refusedRedirects = await this.refusedRedirects(har);
       if (refusedRedirects.size) {
         await this.context.route((url) => refusedRedirects.has(url.href), (route) => route.abort("blockedbyclient").catch(() => {}));
       }
@@ -564,15 +565,15 @@ export class AuditSession {
   }
 
   /** Addresses whose saved answer redirects somewhere the browser may not go. */
-  async refusedRedirects(file) {
+  async refusedRedirects(har) {
     const refused = new Set();
-    const har = JSON.parse(await readFile(file, "utf8"));
     for (const e of har.log.entries) {
       const status = e.response?.status;
       if (status < 300 || status >= 400) continue;
       const location = e.response.redirectURL || e.response.headers?.find((h) => /^location$/i.test(h.name))?.value;
       if (!location) continue;
-      const target = new URL(location, e.request.url).href;
+      let target;
+      try { target = new URL(location, e.request.url).href; } catch { continue; }
       if (await this.checkUrl(target)) refused.add(e.request.url);
     }
     return refused;

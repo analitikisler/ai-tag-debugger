@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.8 (2026-10-14)
+
+- Unnamed TikTok pings are left out of the duplicate check. TikTok sends them on its own timing, so their count changed between a save and its replay without the site changing.
+- A replay skips a malformed address in a recording instead of stopping, and reads the recording once.
+
 ## 0.7.7 (2026-10-14)
 
 - A replay answers a request from the recording when the address only differs by a timestamp (`_=1791977697130`, `ts`, `timestamp`, `cb`, `nocache`). Magento sites reload the basket this way after "add to basket", so the replay never got the answer that makes the page send `add_to_cart`. Exact matches still come from the recording as before.

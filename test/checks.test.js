@@ -82,3 +82,11 @@ test("the duplicate check counts per page load, so a step that loads a new page 
   assert.equal(dup([hit("a"), hit("b")]).length, 0);
   assert.equal(dup([hit("a"), hit("a")]).length, 1);
 });
+
+test("unnamed TikTok pings are not reported as duplicates, named ones still are", () => {
+  const tt = (name) => ({ platform: "tiktok", name, params: {}, url: "https://analytics.tiktok.com/api/v2/pixel", step: 1 });
+  const base = { journeyId: "j", viewport: "desktop", completed: true, steps: [{ index: 0, label: "start" }, { index: 1, label: "Open home" }], consentStep: 1, dataLayerLog: [] };
+  const dup = (hits) => checkRun({ events: [] }, { ...base, hits }).filter((f) => f.check === "duplicate");
+  assert.equal(dup([tt("(unnamed)"), tt("(unnamed)"), tt("(unnamed)")]).length, 0);
+  assert.equal(dup([tt("AddToCart"), tt("AddToCart")]).length, 1);
+});
