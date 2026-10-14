@@ -202,7 +202,7 @@ function trackingBody(request) {
  * else a CSS path to the element, else its visible text. Refs only mean something in one run.
  */
 async function replayTarget(a, locator) {
-  if (a.selector) return { selector: a.selector };
+  if (a.selector) return { selector: a.selector, ...(a.text ? { text: a.text } : {}) };
   const found = await locator
     .evaluate((el) => {
       const text = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -220,8 +220,10 @@ async function replayTarget(a, locator) {
       return { selector: parts.join(" > "), text };
     }, null, { timeout: 5000 })
     .catch(() => null);
-  if (found?.selector) return { selector: found.selector };
-  return found?.text ? { text: found.text } : a.text ? { text: a.text } : {};
+  const text = found?.text || a.text;
+  // The text too, since a path through the page's layout breaks when a banner or overlay shifts it.
+  if (found?.selector) return { selector: found.selector, ...(text ? { text } : {}) };
+  return text ? { text } : {};
 }
 
 // Images, fonts and video don't change what tracking sends, and are most of a recording's size.
@@ -739,7 +741,15 @@ export class AuditSession {
         case "fill":
         case "select": {
           let target;
-          if (a.selector || Number.isInteger(a.ref)) target = this.locatorFor(a);
+          if (a.selector && typeof a.text === "string" && a.text.trim()) {
+            // A saved step: its path first, then its text if the path finds nothing to click.
+            target = this.locatorFor(a);
+            const shown = await target.waitFor({ state: "visible", timeout: 5000 }).then(() => true, () => false);
+            if (!shown) {
+              const found = await this.locateByText(a.text.trim());
+              if (!found.error) target = found.locator;
+            }
+          } else if (a.selector || Number.isInteger(a.ref)) target = this.locatorFor(a);
           else if (typeof a.text === "string" && a.text.trim()) {
             const found = await this.locateByText(a.text.trim());
             if (found.error) return found.error;

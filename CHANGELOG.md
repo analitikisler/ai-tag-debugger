@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.5 (2026-10-14)
+
+- A saved click keeps the element's text as well as its path through the page. When a replay finds nothing visible at that path (a banner or overlay shifted the layout), it clicks the element with that text instead. Sites saved before 0.7.5 have no text to fall back on; save them again to use it.
+
 ## 0.7.4 (2026-10-14)
 
 - Saving a site no longer fails on pages that keep a request open after they are left (a GA4 hit to `www.google.com/g/collect`, for example). The recording waited for it until the 30-second limit and was then skipped, so the site was not saved. The browser's pages are now closed before the recording is written.
