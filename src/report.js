@@ -331,6 +331,7 @@ function eventRow(m, findings, run, step, hit) {
   if (items.length) bits.push(m.ui.itemsCount(items.length));
   if (hit.params?.value) bits.push(`${hit.params.value} ${hit.params.currency ?? ""}`.trim());
   if (!items.length && hit.platform === "ga4" && ECOMMERCE_EVENTS.has(hit.name)) bits.push(m.ui.noItems);
+  if (hit.delivery === "server") bits.push(m.ui.serverSideTag);
   const consent = hit.consent ? `<h5>${m.ui.consent}</h5><div class="consents">${Object.entries(hit.consent).map(([k, v]) => `<span class="consent ${v === "granted" ? "granted" : "denied"}">${escapeHtml(k)}: ${escapeHtml(v)}</span>`).join("")}</div>` : "";
   const pushLine = pushes.length ? pushes.map((e) => `<span class="mono">${escapeHtml(pushEvent(e.value) ?? "")} · ${escapeHtml(seconds(run, e.t))}</span>`).join("") : `<span class="muted">${m.ui.noMatchingPush}</span>`;
   const reqText = calls.length

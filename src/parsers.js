@@ -36,6 +36,17 @@ const GOOGLE_COMPANION_HOST = /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$|(^|\.)d
  */
 const isGa4Path = (u) => u.pathname.endsWith("/g/collect") || (/\/g\/c$/.test(u.pathname) && /^G-[A-Z0-9]+$/.test(u.searchParams.get("tid") ?? ""));
 
+const GOOGLE_PRIMARY_HOST = /(^|\.)(google-analytics\.com|analytics\.google\.com|googletagmanager\.com)$/;
+
+/**
+ * Where a GA4 hit goes. "browser": Google's own hosts, or the short /g/c path of Google tag gateway
+ * (which only forwards to Google). "server": /g/collect on any other host, which is a server
+ * container (server-side GTM, Stape, Elevar) answering for the site.
+ */
+function ga4Delivery(u) {
+  return GOOGLE_PRIMARY_HOST.test(u.hostname) || /\/g\/c$/.test(u.pathname) ? "browser" : "server";
+}
+
 /** @returns {Hit[] | null} */
 export function parseGa4(url, postData) {
   const u = new URL(url);
@@ -55,6 +66,7 @@ export function parseGa4(url, postData) {
     const user = [...merged].filter(([k]) => isUserDataKey(k));
     return {
       platform: "ga4",
+      delivery: ga4Delivery(u),
       name: merged.get("en") || "(unnamed)",
       id: merged.get("tid") || undefined,
       params: ga4ParamsFrom(merged),
@@ -75,7 +87,9 @@ export function parseMeta(url) {
     const m = k.match(/^cd\[(.+)\]$/);
     if (m) params[m[1]] = v;
   }
-  return [{ platform: "meta", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, params, url }];
+  // eid is the event ID a server-side (Conversions API) copy of the event must repeat for Meta to count it once.
+  const eventId = u.searchParams.get("eid") || undefined;
+  return [{ platform: "meta", delivery: "browser", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, ...(eventId ? { eventId } : {}), params, url }];
 }
 
 /** @returns {Hit[] | null} */
@@ -105,7 +119,8 @@ export function parseTikTok(url, postData) {
   const props = body.properties || body.context?.properties || {};
   const params = Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]));
   const user = Object.entries(body.context?.user ?? {}).filter(([k, v]) => isUserDataKey(`context.user.${k}`) && v);
-  return [{ platform: "tiktok", name: body.event || "(unnamed)", id: body.context?.pixel?.code, params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`context.user.${k}`, String(v)])) } : {}), url }];
+  const eventId = body.event_id ? String(body.event_id) : undefined;
+  return [{ platform: "tiktok", delivery: "browser", name: body.event || "(unnamed)", id: body.context?.pixel?.code, ...(eventId ? { eventId } : {}), params, ...(user.length ? { userFields: Object.fromEntries(user.map(([k, v]) => [`context.user.${k}`, String(v)])) } : {}), url }];
 }
 
 /**
@@ -191,9 +206,12 @@ export const PROVIDERS = {
 };
 export const DEFAULT_PROVIDERS = ["ga4", "google_ads", "meta", "tiktok"];
 // Tag managers and consent platforms are always shown: they explain how the tags loaded.
-const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform" };
+// Server-side tagging providers are too: their requests show where events are sent from.
+const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform", stape: "Stape", elevar: "Elevar" };
 
 const HOSTS = [
+  [/(^|\.)stape\.(io|jp)$/, "stape"],
+  [/(^|\.)getelevar\.com$/, "elevar"],
   [/(^|\.)(google-analytics|analytics\.google)\.com$/, "ga4"],
   [/(^|\.)googleadservices\.com$/, "google_ads"],
   [/(^|\.)googlesyndication\.com$/, "adsense"],
@@ -226,6 +244,8 @@ export function providerOf(url) {
   }
   if (/(^|\.)(doubleclick\.net|google\.[a-z.]+)$/.test(host) && /^\/(pagead|ccm)\//.test(u.pathname)) return of("google_ads");
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
+  // Before the vendor hosts: a GA4 hit to a Stape or Elevar endpoint is still a GA4 hit.
+  if (isGa4Path(u) && !GOOGLE_COMPANION_HOST.test(host)) return of("ga4");
   for (const [pattern, key] of HOSTS) if (pattern.test(host)) return of(key);
   if (isGa4Path(u)) return of("ga4");
   if (u.pathname.startsWith("/pagead/") || /\/as\/p\/c\/\d+\/?$/.test(u.pathname)) return of("google_ads");
@@ -258,7 +278,8 @@ export function vendorOf(url) {
   if (p.key === "ga4") {
     const host = new URL(url).hostname;
     if (/(^|\.)(google-analytics|analytics\.google|googletagmanager)\.com$/.test(host)) return "Google Analytics";
-    return GOOGLE_COMPANION_HOST.test(host) ? "Google Analytics (resend)" : "Google Analytics (server-side)";
+    if (GOOGLE_COMPANION_HOST.test(host)) return "Google Analytics (resend)";
+    return ga4Delivery(new URL(url)) === "server" ? "Google Analytics (server-side)" : "Google Analytics (Google tag gateway)";
   }
   return p.label;
 }
