@@ -791,7 +791,20 @@ export class AuditSession {
   async close() {
     // Leaving the page first cancels what it is still loading (the recording would otherwise wait for it),
     // while tracking requests sent on the way out are still answered locally.
-    if (this.opts.recordHar) await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
+    if (this.opts.recordHar && this.context) {
+      await this.page?.goto("about:blank", { timeout: 5000 }).catch(() => {});
+      // The recording also waits for requests the browser holds for an open page, such as a tracking hit
+      // sent as the page was left, which can stay open for good. Once their page is closed it stops waiting.
+      // A moment first lets hits already sent be answered locally: once their page is closed,
+      // the browser would send them on its own.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      let pagesTimer;
+      await Promise.race([
+        Promise.all(this.context.pages().map((p) => p.close().catch(() => {}))),
+        new Promise((resolve) => (pagesTimer = setTimeout(resolve, 5000))),
+      ]);
+      clearTimeout(pagesTimer);
+    }
     if (this.opts.replayHar) {
       // The recording's own route callbacks would otherwise throw for requests still in flight once the
       // browser is gone. Without routes, those go nowhere (see start). Elsewhere the routes stay, so a
