@@ -18,3 +18,7 @@ test("the help lists --version", () => {
 test("the help lists --save-steps", () => {
   assert.match(cli("--help"), /--save-steps <file>/);
 });
+
+test("the help lists the plan command", () => {
+  assert.match(cli("--help"), /plan --from <capture\.json>/);
+});

@@ -8,6 +8,7 @@ import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
+import { writePlanFromRun } from "./plan.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -19,6 +20,8 @@ Usage:
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
   ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
                                                   and list findings that changed. Exits with code 1 when any did.
+  ai-tag-debugger plan --from <capture.json> [--out <file>]
+                                                  Draft a measurement plan from the events and parameters a run saw.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -56,6 +59,12 @@ Run options:
 Replay options:
   --update             Make this replay's findings the expected ones (after checking that the changes are right).
   --out <dir>          Where to write the replay's reports (default: <dir>/last-replay).
+
+Plan options:
+  --from <file>        A run's capture.json, or the report folder that holds it.
+  --out <file>         Where to write the plan (default: measurement-plan.json). An existing file is kept
+                       unless --force is given.
+  --force              Replace the --out file if it exists.
 
 MCP options:
   --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
@@ -108,6 +117,8 @@ async function main() {
       "save-site": { type: "string" },
       "save-steps": { type: "string" },
       update: { type: "boolean", default: false },
+      from: { type: "string" },
+      force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
     },
@@ -143,6 +154,12 @@ async function main() {
       for (const note of r.foundByText) console.log(`    ~ ${note}`);
     }
     if (changed && !values.update) process.exitCode = 1;
+    return;
+  }
+  if (command === "plan" && !values.help) {
+    if (!values.from) throw new Error("plan needs --from <capture.json>: the capture.json a run wrote, or its report folder.");
+    const { plan, out } = await writePlanFromRun(values.from, values.out, { force: values.force });
+    console.log(`✓ Wrote ${plan.events.length} events to ${out}. Review it, then use it as "plan" in your config.`);
     return;
   }
   if (values.help || command !== "run" || (!values.config && !values.site)) {

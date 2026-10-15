@@ -110,7 +110,7 @@ function expectedIn(planEvent, journeyId) {
   return !planEvent.journeys || planEvent.journeys.includes(journeyId);
 }
 
-function isConsentCommand(entry, kind) {
+export function isConsentCommand(entry, kind) {
   return Array.isArray(entry.value) && entry.value[0] === "consent" && entry.value[1] === kind;
 }
 
