@@ -128,3 +128,43 @@ test("addToCart, Add To Cart and transaction match, but a different event does n
   }
   assert.ok(checkRun(p, run({ hits: [hit("ga4", "view_cart", 3), hit("ga4", "transaction", 4)] })).some((f) => f.check === "missing_event" && f.event === "add_to_cart"));
 });
+
+test("flags purchase values that are 0, not a number, a bad currency or empty items", () => {
+  const findings = checkRun(plan, run({
+    hits: [
+      hit("ga4", "purchase", 4, { value: "0", currency: "eur", transaction_id: "T1" }),
+      hit("meta", "Purchase", 4, { value: "1.234,50", currency: "EUR", order_id: "T1", contents: "[]" }),
+    ],
+  }));
+  const checks = findings.map((f) => `${f.severity}:${f.check}:${f.platform}`);
+  assert.ok(checks.includes("broken:purchase_value_invalid:ga4"));
+  assert.ok(checks.includes("broken:purchase_value_invalid:meta"));
+  assert.ok(checks.includes("broken:purchase_currency_invalid:ga4"));
+  assert.ok(checks.includes("warning:purchase_items_empty:ga4"));
+  assert.ok(checks.includes("warning:purchase_items_empty:meta"));
+});
+
+test("leaves a clean purchase alone", () => {
+  const findings = checkRun(plan, run({
+    hits: [
+      hit("ga4", "purchase", 4, { value: "49.9", currency: "EUR", transaction_id: "T1", items: "id1~nmShirt" }),
+      hit("meta", "Purchase", 4, { value: "49.90", currency: "EUR", order_id: "T1", content_ids: "[\"id1\"]" }),
+    ],
+  }));
+  assert.ok(!findings.some((f) => f.check.startsWith("purchase_")));
+});
+
+test("flags GA4 and Meta disagreeing on the same order, in English and Turkish", () => {
+  const hits = [
+    hit("ga4", "purchase", 4, { value: "100", currency: "EUR", transaction_id: "T9", items: "x" }),
+    hit("meta", "Purchase", 4, { value: "80", currency: "TRY", order_id: "T9" }),
+  ];
+  const en = checkRun(plan, run({ hits })).find((f) => f.check === "purchase_mismatch");
+  assert.equal(en.severity, "warning");
+  assert.match(en.detail, /value "100" in GA4 and "80" in Meta; currency "EUR" in GA4 and "TRY" in Meta/);
+  const tr = checkRun(plan, run({ hits }), { lang: "tr" }).find((f) => f.check === "purchase_mismatch");
+  assert.match(tr.detail, /para birimi GA4'te "EUR", Meta'da "TRY"/);
+  // Different orders are not compared.
+  const other = checkRun(plan, run({ hits: [hits[0], { ...hits[1], params: { ...hits[1].params, order_id: "T10" } }] }));
+  assert.ok(!other.some((f) => f.check === "purchase_mismatch"));
+});
