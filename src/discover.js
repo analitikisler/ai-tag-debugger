@@ -3,7 +3,7 @@ import { runAgentJourney, StepTimeout } from "./agent.js";
 
 /** The goal of the browsing part: one page of each type, nothing submitted. */
 export const DISCOVER_GOAL = `Explore this site to draft its analytics measurement plan. You are not completing a purchase or any other task: visit ONE example of each kind of page that exists here and look at what a visitor can do on it, then call finish with success true.
-Visit, where the site has them: the home page, one category or listing page, one product, item or article page, the cart (add one item first if there is an add-to-cart button), the first checkout step, the search results (search for something the site sells), and the sign-up, login, contact or newsletter forms.
+Visit, where the site has them (a small site may have only a few; that is fine, don't look for pages that aren't linked): the home page, one category or listing page, one product, item or article page, the cart (add one item first if there is an add-to-cart button), the first checkout step, the search results (search for something the site sells), and the sign-up, login, contact or newsletter forms.
 Rules: never pay, never submit a form with personal details, never open more than one page of the same kind, and accept the cookie banner when it appears. Stop as soon as every kind of page above has been seen once.`;
 
 const PLAN_SYSTEM = `You are a senior digital analytics consultant writing a GA4 measurement plan for a website that may have no tracking yet. You get the pages an explorer visited (their type, address, visible text and interactive elements) and any tracking hits the site already sent.
@@ -52,6 +52,17 @@ const PLAN_SCHEMA = {
   required: ["pages", "events", "user_properties"],
   additionalProperties: false,
 };
+
+/** Page types the plan reports on; a site that has fewer of them (a two-page site) is normal, not a failure. */
+export const PAGE_TYPES = ["home", "listing", "detail", "search", "cart", "checkout", "signup", "login", "contact", "newsletter"];
+
+/** Which of PAGE_TYPES the plan's pages cover, and which are absent. Unrecognised type names are ignored. */
+export function pageTypeCoverage(pages = []) {
+  const norm = (t) => String(t ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+  const aliases = { homepage: "home", category: "listing", product: "detail", item: "detail", article: "detail", register: "signup", registration: "signup", basket: "cart", lead: "contact", form: "contact" };
+  const found = new Set(pages.map((p) => aliases[norm(p.type)] ?? norm(p.type)));
+  return { found: PAGE_TYPES.filter((t) => found.has(t)), absent: PAGE_TYPES.filter((t) => !found.has(t)) };
+}
 
 const MAX_PAGES = 15;
 const cut = (s, n) => (s && s.length > n ? `${s.slice(0, n)}…` : s ?? "");
@@ -129,5 +140,9 @@ export async function discoverPlan(opts) {
     schema: PLAN_SCHEMA,
   });
   if (result.error) throw new Error(`The model did not return a plan (${result.error}).`);
-  return { plan: toPlan(opts.site, result.value, session.hits), outcome };
+  const plan = toPlan(opts.site, result.value, session.hits);
+  const coverage = pageTypeCoverage(plan.pages);
+  log(`Page types found: ${coverage.found.join(", ") || "none"}`);
+  if (coverage.absent.length) log(`Not present on this site: ${coverage.absent.join(", ")}`);
+  return { plan, outcome, coverage };
 }

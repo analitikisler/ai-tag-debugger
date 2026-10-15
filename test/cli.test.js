@@ -26,3 +26,7 @@ test("the help lists the plan command", () => {
 test("plan --site refuses to replace an existing file before exploring", () => {
   assert.throws(() => execFileSync(process.execPath, ["src/cli.js", "plan", "--site", "https://x.test", "--out", "package.json"], { encoding: "utf8", stdio: "pipe" }), /package\.json already exists/);
 });
+
+test("the help explains what a bare run does", () => {
+  assert.match(cli("--help"), /Without --journey and --goal:.*"browse"/s);
+});

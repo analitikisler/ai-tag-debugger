@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { loadConfig, runAudit } from "./audit.js";
+import { loadConfig, readJson, runAudit } from "./audit.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
@@ -15,6 +15,9 @@ const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.u
 const USAGE = `ai-tag-debugger: an open-source AI agent that QA-tests your analytics and ad tracking.
 
 Usage:
+  ai-tag-debugger run --site <url> [options]                      With no --journey or --goal: runs the journeys of
+                                                  ./measurement-plan.json if it exists (or of the config's plan),
+                                                  else a general "browse the main pages" journey.
   ai-tag-debugger run --site <url> --journey purchase [options]   Audit ready-made journeys, no config needed.
   ai-tag-debugger run --site <url> --goal "<what to do>"          Audit a journey you describe in plain language.
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
@@ -23,6 +26,7 @@ Usage:
   ai-tag-debugger plan --site <url> [--out <file>]
                                                   Let the AI explore one page of each type and propose a measurement
                                                   plan: events (custom ones too), parameters and user properties.
+                                                  Prints the page types it found and those the site doesn't have.
   ai-tag-debugger plan --from <capture.json> [--out <file>]
                                                   Draft a measurement plan from the events and parameters a run saw.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
@@ -32,6 +36,8 @@ Run options:
   --config <file>      Audit config (JSON). See examples/demo.config.json.
   --journey <id>       Run this journey (repeatable): a journey id from the config, or a ready-made
                        journey: ${Object.keys(JOURNEY_PRESETS).join(", ")}.
+                       Without --journey and --goal: the config's journeys, else the journeys a plan
+                       names, else "browse" (the main pages, nothing submitted).
   --goal "<text>"      Run a journey you describe in plain language (repeatable).
   --events <names>     Only check these events, comma separated, e.g. purchase,add_to_cart.
   --max-steps <n>      Most AI steps per journey (default 30). Lower it to cap API usage.
@@ -87,6 +93,12 @@ Short alias: aitd (aitd run ... is the same as ai-tag-debugger run ...).
 
 API keys: set one of ${Object.values(PROVIDERS).map((p) => p.env).join(", ")}.
 Any OpenAI-compatible API: --provider openai-compatible --base-url <url> --model <id>, with the key in OPENAI_COMPATIBLE_API_KEY.`;
+
+async function loadPlanFile(file) {
+  const plan = await readJson(file);
+  if (!Array.isArray(plan.events)) throw new Error(`${file} needs an "events" list.`);
+  return plan;
+}
 
 async function main() {
   const { values, positionals } = parseArgs({
@@ -199,6 +211,12 @@ async function main() {
   if (values.site) loaded.config = { ...loaded.config, site: values.site };
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
+  const bare = !values.journey?.length && !values.goal?.length;
+  if (bare && !loaded.plan && !loaded.config.journeys?.length && existsSync("measurement-plan.json")) {
+    const found = await loadPlanFile("measurement-plan.json");
+    loaded.plan = found;
+    console.log("No --journey or --goal: using ./measurement-plan.json.");
+  }
   try {
     new URL(loaded.config.site);
   } catch {

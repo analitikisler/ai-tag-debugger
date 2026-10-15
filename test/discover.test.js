@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { discoverPlan, pagesSeen, toPlan } from "../src/discover.js";
+import { discoverPlan, pageTypeCoverage, pagesSeen, toPlan } from "../src/discover.js";
 
 const PORT = 4411;
 let server;
@@ -69,4 +69,10 @@ test("toPlan marks events the site already sends", () => {
 test("pagesSeen keeps one entry per address, without fragments", () => {
   const pages = pagesSeen([{ url: "https://x.test/a#top", title: "A1" }, { url: "about:blank" }, { url: "https://x.test/a", title: "A2" }]);
   assert.deepEqual(pages.map((p) => [p.url, p.title]), [["https://x.test/a", "A2"]]);
+});
+
+test("pageTypeCoverage lists found and absent page types, so a two-page site is not a failure", () => {
+  const { found, absent } = pageTypeCoverage([{ type: "Home page", url: "/" }, { type: "product", url: "/r" }]);
+  assert.deepEqual(found, ["home", "detail"]);
+  assert.ok(absent.includes("cart") && absent.includes("checkout") && !absent.includes("home"));
 });
