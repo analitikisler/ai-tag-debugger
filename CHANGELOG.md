@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `aitd plan --site <url>` proposes a measurement plan for a site that may track nothing yet. The AI browses one page of each type (home, a category, a product, cart, first checkout step, search, sign-up and contact forms) without paying or submitting personal details, then suggests GA4 events, custom ones included, each with a description, the page and element that trigger it, its parameters (custom ones marked) with example values, and suggested user properties. Events the site already sends are marked `seen`. The file works as `"plan"` in a config as is.
 - `aitd plan --from <capture.json>` drafts a measurement plan from a run: each event seen once per platform, the parameters it sent every time as `required_params`, the journeys it appeared on (when not all of them), and `consent_mode` when a Consent Mode default was pushed. `--from` also takes the report folder; the plan goes to `measurement-plan.json` or `--out <file>`, and an existing file is kept unless `--force` is given.
 
 ## 0.9.0 (2026-10-15)
