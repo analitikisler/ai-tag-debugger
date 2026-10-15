@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A journey that fails with an error, such as the AI provider's API refusing a request or the browser crashing, no longer ends the whole audit. That journey is marked unfinished with the error as its note, what it captured until then is kept, the other journeys still run, and the report is written. This applies to the CLI and to `run_audit` over MCP.
 - New short command `aitd`, an alias for `ai-tag-debugger` installed alongside it.
 - For contributors: `npm run setup` checks the Node version, installs the dependencies and Chromium, and says whether an AI provider key is set. A dev container (`.devcontainer/devcontainer.json`) runs it, so VS Code and Codespaces open the repository ready to run.
 
