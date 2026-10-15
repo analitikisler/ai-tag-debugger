@@ -24,6 +24,53 @@ export function replayableJourney(run) {
   };
 }
 
+/**
+ * Writes the steps each journey took into journeys[].steps of a config file, so a later
+ * --scripted --no-ai run repeats them without an AI model. Creates the file when it doesn't exist.
+ * A journey run on several viewports keeps the steps of its first one. Journeys that took no
+ * repeatable steps are left as they were. A config with no plan gets the run's, so ready-made
+ * journeys keep their expected events.
+ * @returns {Promise<{ saved: string[], skipped: string[] }>}
+ */
+export async function writeSavedSteps(file, { site, plan, journeys, runs }) {
+  let config = {};
+  const text = await readFile(file, "utf8").catch((err) => {
+    if (err.code === "ENOENT") return null;
+    throw new Error(`Could not read ${file}: ${err.message}`);
+  });
+  if (text !== null) {
+    try {
+      config = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`Could not read ${file}: ${err.message}`);
+    }
+  }
+  config.site ??= site;
+  if (config.plan === undefined && plan?.events?.length) config.plan = plan;
+  const list = [...(config.journeys ?? [])];
+  const saved = [];
+  const skipped = [];
+  for (const journey of journeys) {
+    const run = runs.find((r) => r.journeyId === journey.id);
+    const { viewport: _v, ...steps } = run ? replayableJourney(run) : { steps: [] };
+    if (!steps.steps.length && !steps.start) {
+      skipped.push(journey.id);
+      continue;
+    }
+    const i = list.findIndex((j) => j.id === journey.id);
+    const { start: _s, steps: _st, incomplete: _in, ...kept } = i === -1 ? { id: journey.id, ...(journey.goal ? { goal: journey.goal } : {}) } : list[i];
+    const entry = { ...kept, ...steps, id: journey.id };
+    if (i === -1) list.push(entry);
+    else list[i] = entry;
+    saved.push(journey.id);
+  }
+  if (saved.length) {
+    await mkdir(path.dirname(path.resolve(file)), { recursive: true });
+    await writeFile(file, `${JSON.stringify({ ...config, journeys: list }, null, 2)}\n`);
+  }
+  return { saved, skipped };
+}
+
 /** One line per finding, sorted: what a replay is compared on. */
 export function findingKeys(findings) {
   return findings.map((f) => [f.severity, f.check, f.journey, f.viewport, f.platform ?? "-", f.event ?? "-"].join(" ")).sort();

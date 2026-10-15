@@ -7,7 +7,7 @@ import { LANGUAGES, messages } from "./i18n.js";
 import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
-import { replaySavedSite } from "./replay.js";
+import { replaySavedSite, writeSavedSteps } from "./replay.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -49,6 +49,9 @@ Run options:
   --no-branding        Leave the Analitik İşler logo and credit line out of the reports ("branding": false in the config).
   --save-site <dir>    Also save the site's responses and the steps taken in this folder, so "replay" can audit
                        the same pages again offline. Its findings become the expected ones.
+  --save-steps <file>  Write the steps each journey took into "journeys[].steps" of this config file (created
+                       if missing), so "run --config <file> --scripted --no-ai" repeats them with no AI model
+                       or API key. A journey run on several viewports keeps the steps of the first.
 
 Replay options:
   --update             Make this replay's findings the expected ones (after checking that the changes are right).
@@ -103,6 +106,7 @@ async function main() {
       reports: { type: "string" },
       "public-url": { type: "string" },
       "save-site": { type: "string" },
+      "save-steps": { type: "string" },
       update: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
@@ -193,6 +197,16 @@ async function main() {
     if (levels.slice(0, threshold + 1).some((l) => result.counts[l] > 0)) process.exitCode = 1;
   }
   if (result.saveError) process.exitCode = 1;
+  if (values["save-steps"]) {
+    try {
+      const { saved, skipped } = await writeSavedSteps(values["save-steps"], { site: loaded.config.site, plan: result.plan, journeys: result.journeys, runs: result.runs });
+      if (saved.length) console.log(`Saved the steps of ${saved.join(", ")} in ${values["save-steps"]}. Repeat them with: aitd run --config ${values["save-steps"]} --scripted --no-ai`);
+      if (skipped.length) console.log(`No steps to save for ${skipped.join(", ")}.`);
+    } catch (err) {
+      console.log(`Could not save the steps in ${values["save-steps"]}: ${err.message}`);
+      process.exitCode = 1;
+    }
+  }
 }
 
 main().catch((err) => {

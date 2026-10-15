@@ -119,5 +119,5 @@ export async function runAudit(opts) {
   const outDir = path.resolve(opts.outDir ?? defaultOutDir());
   const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, branding: opts.branding ?? config.branding !== false });
   const counts = summarize(groupFindings(findings));
-  return { runs, findings, explained, counts, reportPath, outDir, lang, ...(saveError ? { saveError } : {}) };
+  return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(saveError ? { saveError } : {}) };
 }

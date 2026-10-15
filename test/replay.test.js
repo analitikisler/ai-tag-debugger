@@ -2,12 +2,12 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runAudit } from "../src/audit.js";
+import { loadConfig, runAudit } from "../src/audit.js";
 import { AuditSession } from "../src/browser.js";
-import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE, writeSavedSite } from "../src/replay.js";
+import { compareKeys, replaySavedSite, replayableJourney, SAVED_SITE_FILE, writeSavedSite, writeSavedSteps } from "../src/replay.js";
 
 const send = (en, extra = "") =>
   `fetch("https://region1.google-analytics.com/g/collect?v=2&tid=G-1&cid=1.2&_s=1&en=${en}${extra}", { method: "POST", keepalive: true });`;
@@ -253,6 +253,76 @@ test("a site whose recording is missing is not saved", async () => {
     await assert.rejects(readFile(path.join(empty, SAVED_SITE_FILE)));
   } finally {
     await rm(empty, { recursive: true, force: true });
+  }
+});
+
+test("--save-steps writes the steps taken into a new config that a run without AI repeats", async () => {
+  const out = await mkdtemp(path.join(tmpdir(), "atd-steps-"));
+  // Its own server, since an earlier test closes the shared one.
+  const own = createServer((req, res) => {
+    const page = PAGES[new URL(req.url, "http://x").pathname];
+    res.writeHead(page === undefined ? 404 : 200, { "content-type": req.url.endsWith(".js") ? "text/javascript" : "text/html" }).end(page ?? "");
+  });
+  await new Promise((r) => own.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${own.address().port}/`;
+  try {
+    const config = { site: url, providers: ["ga4"], journeys: [{ id: "browse", goal: "Accept cookies and open a product", steps: [{ action: "click", text: "Accept all", accepts_consent: true }, { action: "click", text: "Product" }] }] };
+    const plan = { events: [{ platform: "ga4", name: "view_item", journeys: ["browse"] }] };
+    const first = await runAudit({ config, plan, scripted: true, ai: false, outDir: path.join(out, "first") });
+    const file = path.join(out, "saved", "steps.json");
+    assert.deepEqual(await writeSavedSteps(file, { site: url, plan: first.plan, journeys: first.journeys, runs: first.runs }), { saved: ["browse"], skipped: [] });
+
+    const written = JSON.parse(await readFile(file, "utf8"));
+    assert.equal(written.site, url);
+    assert.deepEqual(written.plan, plan);
+    assert.equal(written.journeys[0].goal, "Accept cookies and open a product");
+    assert.equal(written.journeys[0].steps[0].accepts_consent, true);
+    assert.equal(written.journeys[0].viewport, undefined);
+
+    const again = await runAudit({ ...(await loadConfig(file)), scripted: true, ai: false, outDir: path.join(out, "again") });
+    const names = (r) => r.runs[0].hits.map((h) => h.name).sort();
+    assert.ok(again.runs[0].completed, again.runs[0].note);
+    assert.deepEqual(names(again), names(first));
+    assert.ok(names(again).includes("view_item"));
+  } finally {
+    own.close();
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+test("--save-steps replaces only the saved journeys' steps in an existing config", async () => {
+  const out = await mkdtemp(path.join(tmpdir(), "atd-steps-"));
+  try {
+    const file = path.join(out, "site.config.json");
+    const existing = {
+      site: "https://shop.example",
+      plan: "plan.json",
+      journeys: [
+        { id: "buy", goal: "Buy something", start: "/old", incomplete: "old note", steps: [{ action: "wait", value: "1" }], note: "kept" },
+        { id: "other", steps: [{ action: "wait", value: "2" }] },
+      ],
+    };
+    await writeFile(file, JSON.stringify(existing));
+    const step = (index, replay, extra = {}) => ({ index, label: `step ${index}`, replay, ...extra });
+    const runs = [
+      { journeyId: "buy", viewport: "desktop", completed: true, steps: [step(0), step(1, { action: "goto", url: "https://shop.example/p" }), step(2, { action: "click", text: "Add" })] },
+      { journeyId: "buy", viewport: "mobile", completed: true, steps: [step(1, { action: "click", text: "Mobile" })] },
+      { journeyId: "custom", viewport: "desktop", completed: false, note: "no cart", steps: [step(1, { action: "click", text: "Shop" })] },
+      { journeyId: "empty", viewport: "desktop", completed: false, note: "error", steps: [] },
+    ];
+    const journeys = [{ id: "buy", goal: "Buy something" }, { id: "custom", goal: "Find the cart" }, { id: "empty", goal: "x" }];
+    const result = await writeSavedSteps(file, { site: "https://other.example", plan: { events: [{ platform: "ga4", name: "purchase" }] }, journeys, runs });
+    assert.deepEqual(result, { saved: ["buy", "custom"], skipped: ["empty"] });
+    const written = JSON.parse(await readFile(file, "utf8"));
+    assert.equal(written.site, "https://shop.example");
+    assert.equal(written.plan, "plan.json", "a plan the config already has is kept");
+    assert.deepEqual(written.journeys, [
+      { id: "buy", goal: "Buy something", note: "kept", start: "https://shop.example/p", steps: [{ action: "click", text: "Add", reason: "step 2" }] },
+      existing.journeys[1],
+      { id: "custom", goal: "Find the cart", incomplete: "no cart", steps: [{ action: "click", text: "Shop", reason: "step 1" }] },
+    ]);
+  } finally {
+    await rm(out, { recursive: true, force: true });
   }
 });
 
