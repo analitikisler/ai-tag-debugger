@@ -2,7 +2,8 @@
 // Shared by the CLI and the MCP server's run_audit tool.
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { runJourney } from "./agent.js";
+import { failedRun, runJourney } from "./agent.js";
+import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
@@ -70,6 +71,10 @@ export async function runAudit(opts) {
   const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events });
   config = { ...config, providers: resolveProviders(opts.providers ?? config.providers, plan) };
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
+  const allowed = Object.keys(VIEWPORTS).join(", ");
+  if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
+  const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
+  if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
   if (!journeys.length) throw new Error("No journeys to run. Pick one with --journey (e.g. purchase) or describe one with --goal.");
   if (opts.scripted) {
     const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
@@ -84,7 +89,9 @@ export async function runAudit(opts) {
   for (const journey of journeys) {
     for (const viewport of viewports) {
       log(`\n▶ ${journey.id} (${viewport})`);
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite });
+      // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
+      // so one journey can't cost the report of the others.
+      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
       log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
       runs.push(run);
     }

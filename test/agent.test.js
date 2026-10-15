@@ -4,7 +4,11 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { runJourney } from "../src/agent.js";
+import { runAudit } from "../src/audit.js";
 import { explainFindings, renderCsv, renderHtml } from "../src/report.js";
 import { checkRun } from "../src/checks.js";
 
@@ -106,6 +110,40 @@ test("a page that stops responding ends the journey instead of the run", async (
     assert.equal(client.requests.length, 1, "the model is not asked again about a page it can't see");
   } finally {
     frozen.close();
+  }
+});
+
+test("a journey whose model API fails is reported as unfinished and the audit carries on", async () => {
+  // An OpenAI-compatible API that answers the first step, then refuses every request.
+  let calls = 0;
+  const api = createServer(async (req, res) => {
+    let body = "";
+    for await (const c of req) body += c;
+    const reply = (obj, status = 200) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(obj));
+    if (calls++) return reply({ error: { message: "The model is overloaded." } }, 400);
+    const page = JSON.parse(body).messages.at(-1).content;
+    const ref = Number(page.split("\n").find((l) => /^\[\d+\]/.test(l) && /Accept all/.test(l)).match(/^\[(\d+)\]/)[1]);
+    const args = { action: "click", ref, reason: "Accept cookies", accepts_consent: true };
+    reply({ id: "x", object: "chat.completion", choices: [{ index: 0, finish_reason: "tool_calls", message: { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "browser_action", arguments: JSON.stringify(args) } }] } }] });
+  });
+  await new Promise((r) => api.listen(0, "127.0.0.1", r));
+  const outDir = await mkdtemp(path.join(tmpdir(), "atd-journey-error-"));
+  try {
+    const config = {
+      site: `http://localhost:${PORT}`,
+      providers: ["ga4"],
+      journeys: [{ id: "first", goal: "Add a product to the cart." }, { id: "second", goal: "Open a product." }],
+    };
+    const result = await runAudit({ config, plan: { events: [] }, baseUrl: `http://127.0.0.1:${api.address().port}/v1`, model: "test", outDir });
+    assert.deepEqual(result.runs.map((r) => [r.journeyId, r.completed]), [["first", false], ["second", false]]);
+    for (const run of result.runs) assert.match(run.note, /^The journey stopped with an error: 400 The model is overloaded\./);
+    assert.ok(result.runs[0].steps.some((s) => s.label === "Accept cookies"), "what was captured before the error is kept");
+    assert.ok(result.findings.some((f) => f.check === "journey_incomplete" && f.journey === "second"));
+    const html = await readFile(result.reportPath, "utf8");
+    assert.match(html, /The journey stopped with an error/);
+  } finally {
+    api.close();
+    await rm(outDir, { recursive: true, force: true });
   }
 });
 

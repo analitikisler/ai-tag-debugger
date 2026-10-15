@@ -43,3 +43,14 @@ test("an events filter narrows the plan and the findings", () => {
   assert.deepEqual(filterFindings(findings, ["Purchase"]).map((f) => f.check), ["missing_params", "consent_default_missing"]);
   assert.equal(filterFindings(findings, []).length, 4);
 });
+
+test("an unknown viewport stops the audit before the browser or model starts", async () => {
+  const { runAudit } = await import("../src/audit.js");
+  const logged = [];
+  const config = { site: "http://127.0.0.1:9", journeys: [{ id: "home", steps: [{ action: "wait", value: "1" }] }] };
+  const base = { config, plan: { events: [] }, provider: "anthropic", log: (m) => logged.push(m) };
+  await assert.rejects(runAudit({ ...base, viewports: ["tablet"] }), /^Error: Unknown viewport "tablet"\. Use: desktop, mobile\.$/);
+  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: ["desktop", "phone"] } }), /Unknown viewport "phone"/);
+  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: "mobile" } }), /"viewports" must be a list/);
+  assert.deepEqual(logged, [], "no model was set up and no journey started");
+});

@@ -60,6 +60,19 @@ test("flags a missing consent default and email addresses in hits", () => {
   assert.ok(findings.some((f) => f.check === "pii"));
 });
 
+test("a consent default pushed after a Google hit on the same step is late", () => {
+  const late = checkRun(plan, run({
+    dataLayerLog: [{ step: 0, t: 900, value: ["consent", "default", { ad_storage: "denied" }] }],
+    hits: [hit("ga4", "page_view", 0, {}, { t: 100 })],
+  }));
+  assert.ok(late.some((f) => f.check === "consent_default_late"));
+  const early = checkRun(plan, run({
+    dataLayerLog: [{ step: 0, t: 100, value: ["consent", "default", { ad_storage: "denied" }] }],
+    hits: [hit("ga4", "page_view", 0, {}, { t: 900 }), hit("meta", "PageView", 0, {}, { t: 50 })],
+  }));
+  assert.ok(!early.some((f) => f.check === "consent_default_late"), "only Google hits count, and this one came after the default");
+});
+
 test("groups the same problem across viewports", () => {
   const a = checkRun(plan, run({ viewport: "desktop", hits: [hit("meta", "PageView", 1)] }));
   const b = checkRun(plan, run({ viewport: "mobile", hits: [hit("meta", "PageView", 1)] }));

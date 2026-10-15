@@ -203,10 +203,25 @@ export async function runJourney(config, journey, viewport, opts = {}) {
       throw err;
     });
     return { ...collect(session, journey, viewport), ...outcome, cookies: await session.cookies() };
+  } catch (err) {
+    // The model's API, the browser or the site can fail in many ways. That ends this journey, not the run,
+    // and what was captured until then is kept.
+    return { ...collect(session, journey, viewport), completed: false, note: journeyError(err) };
   } finally {
     if (opts.saveSite) opts.log?.("  Writing the recording…");
     await session.close();
   }
+}
+
+/** The note of a journey that ended with an error. */
+export const journeyError = (err) => `The journey stopped with an error: ${err?.message ?? err}`;
+
+/** A journey that failed before anything was captured, so the report can still list it. */
+export function failedRun(journey, viewport, err, providers) {
+  return {
+    journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
+    cookieLog: [], dataLayerLog: [], network: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+  };
 }
 
 export function collect(session, journey, viewport) {
