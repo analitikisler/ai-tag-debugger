@@ -1,8 +1,11 @@
 # Changelog
 
-## 0.9.0 (2026-10-15)
+## Unreleased
 
 - `aitd plan --from <capture.json>` drafts a measurement plan from a run: each event seen once per platform, the parameters it sent every time as `required_params`, the journeys it appeared on (when not all of them), and `consent_mode` when a Consent Mode default was pushed. `--from` also takes the report folder; the plan goes to `measurement-plan.json` or `--out <file>`, and an existing file is kept unless `--force` is given.
+
+## 0.9.0 (2026-10-15)
+
 - `aitd run ... --save-steps <file>` writes the steps each journey took into `journeys[].steps` of that config file (creating it if needed, and adding the run's plan when the config has none). A later `aitd run --config <file> --scripted --no-ai` repeats them with no AI model or API key. A journey run on several viewports keeps the steps of its first viewport.
 - New purchase checks: a purchase sent with a value that is 0, negative or not a number (`purchase_value_invalid`), a currency that isn't a 3-letter ISO code such as USD (`purchase_currency_invalid`), or no items (`purchase_items_empty`). GA4 and Meta reporting the same order with a different value or currency is flagged as `purchase_mismatch`; purchases are paired by order ID, or taken as one order when the journey has a single purchase on each.
 
