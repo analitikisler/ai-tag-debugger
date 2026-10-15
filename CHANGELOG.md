@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 (2026-10-15)
 
 - A journey that fails with an error, such as the AI provider's API refusing a request or the browser crashing, no longer ends the whole audit. That journey is marked unfinished with the error as its note, what it captured until then is kept, the other journeys still run, and the report is written. This applies to the CLI and to `run_audit` over MCP.
+- A Consent Mode default pushed after the first Google hit is now reported as late (`consent_default_late`) when both happen on the same step, such as the start page. The check used to compare only step numbers, so it missed this. Only Google hits count, since Consent Mode only governs Google tags.
+- An unknown viewport, given with `--viewport` or in the config's `viewports`, now stops the audit at once with a message listing the allowed values (desktop, mobile). Before, it failed only when the browser started for that journey, after the model was set up and earlier journeys had run.
+- `ai-tag-debugger --version` (or `aitd -v`) prints the installed version.
 - New short command `aitd`, an alias for `ai-tag-debugger` installed alongside it.
 - For contributors: `npm run setup` checks the Node version, installs the dependencies and Chromium, and says whether an AI provider key is set. A dev container (`.devcontainer/devcontainer.json`) runs it, so VS Code and Codespaces open the repository ready to run.
 
