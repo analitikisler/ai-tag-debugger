@@ -3,6 +3,7 @@
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
+import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
@@ -70,6 +71,10 @@ export async function runAudit(opts) {
   const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events });
   config = { ...config, providers: resolveProviders(opts.providers ?? config.providers, plan) };
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
+  const allowed = Object.keys(VIEWPORTS).join(", ");
+  if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
+  const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
+  if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
   if (!journeys.length) throw new Error("No journeys to run. Pick one with --journey (e.g. purchase) or describe one with --goal.");
   if (opts.scripted) {
     const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
