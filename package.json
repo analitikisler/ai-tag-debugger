@@ -1,7 +1,7 @@
 {
   "name": "@analitikisler/ai-tag-debugger",
   "mcpName": "io.github.analitikisler/ai-tag-debugger",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Open-source AI agent that QA-tests your website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok). Bring your own model (Claude, OpenAI, Gemini) or use it from your chat app over MCP.",
   "type": "module",
   "bin": {
@@ -16,7 +16,7 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "demo:serve": "node examples/serve.js",
-    "demo": "node src/cli.js run --config examples/demo.config.json --scripted --out reports/demo"
+    "demo": "node src/cli.js run --config examples/demo.config.json --scripted --no-ai --out reports/demo"
   },
   "engines": {
     "node": ">=20"

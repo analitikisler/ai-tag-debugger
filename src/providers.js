@@ -28,6 +28,12 @@ export function resolveProviderName(name, env = process.env) {
   return "anthropic";
 }
 
+const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay the fixed steps with --scripted --no-ai.`;
+
+function hasApiKey(env) {
+  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
+}
+
 /**
  * @param {{ name?: string, model?: string, baseUrl?: string, client?: any }} opts
  *   baseUrl: for openai-compatible, e.g. https://api.deepseek.com or http://localhost:11434/v1.
@@ -36,6 +42,10 @@ export function resolveProviderName(name, env = process.env) {
 export async function createProvider(opts = {}, env = process.env) {
   // A bare client (tests, embedding) is an Anthropic client unless named otherwise.
   const name = opts.client && !opts.name ? "anthropic" : opts.baseUrl && !opts.name ? "openai-compatible" : resolveProviderName(opts.name, env);
+  // With no provider named and no key set, the SDK would only fail at the first step with an
+  // unclear auth error, after the browser has started. A named provider skips this check, since
+  // its SDK may find credentials elsewhere (an Anthropic profile, Google Cloud credentials).
+  if (!opts.client && !opts.name && !opts.baseUrl && !hasApiKey(env)) throw Object.assign(new Error(NO_API_KEY), { code: "NO_API_KEY" });
   if (name === "openai-compatible") {
     const baseURL = opts.baseUrl ?? env.OPENAI_COMPATIBLE_BASE_URL;
     const model = opts.model ?? env.OPENAI_COMPATIBLE_MODEL;

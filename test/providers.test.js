@@ -32,6 +32,14 @@ test("provider is picked from the API key that is set", () => {
   assert.throws(() => resolveProviderName("llama", {}), /Unknown provider/);
 });
 
+test("createProvider explains what to set when no key is found and no provider is named", async () => {
+  await assert.rejects(createProvider({}, {}), /No AI provider key found.*--scripted --no-ai/);
+  await assert.rejects(createProvider({ model: "claude-haiku-5-5" }, { SOME_OTHER_KEY: "x" }), /No AI provider key found/);
+  // A named provider is left to its SDK, which may find credentials elsewhere.
+  assert.ok(await createProvider({ name: "anthropic" }, {}));
+  assert.ok(await createProvider({}, { ANTHROPIC_AUTH_TOKEN: "x" }));
+});
+
 test("OpenAI: the agent loop runs through function calls and tool messages", async () => {
   let i = 0;
   const requests = [];

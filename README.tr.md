@@ -112,6 +112,8 @@ ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --
 
 Ya da kurmadan çalıştırın: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
+Tüm komutları ve seçenekleri (`--providers`, `--scripted`, `--no-ai` gibi) görmek için `ai-tag-debugger --help` çalıştırın.
+
 ### Demo mağazayı deneyin (kaynak koddan)
 
 Depoda, bilerek bırakılmış üç ölçümleme hatası olan bir demo mağaza var:
