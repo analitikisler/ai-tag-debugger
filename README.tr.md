@@ -362,8 +362,11 @@ Tünele gerek kalmayan, hazır bir adresle barındırılan sunucu, [Analitik İ�
 ## Geliştirme
 
 ```bash
-npm test   # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
+npm run setup   # checks Node, installs the dependencies and Chromium, says whether an AI provider key is set
+npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
 ```
+
+Depoda bir dev container (`.devcontainer/devcontainer.json`) da var. Depoyu VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açtığınızda `npm run setup` sizin için çalışır ve Chromium'un sistem kütüphanelerini de kurar. Orada bir yapay zekâ modeli kullanmak için anahtarınızı Codespaces secret olarak ekleyin ya da container'ın terminalinde export edin.
 
 Uçtan uca testler sahte model istemcileri kullanır, bu yüzden API anahtarı olmadan çalışır.
 
