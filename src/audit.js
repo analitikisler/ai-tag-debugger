@@ -8,7 +8,7 @@ import { checkRun, groupFindings, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { createProvider } from "./providers.js";
-import { filterFindings, planRun } from "./journeys.js";
+import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
 import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
 
@@ -75,7 +75,7 @@ export async function runAudit(opts) {
   if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
   const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
   if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
-  if (!journeys.length) throw new Error("No journeys to run. Pick one with --journey (e.g. purchase) or describe one with --goal.");
+  if (!journeys.length) throw new Error(`No journeys to run. A run needs one of:\n  --journey <name>   one of: ${Object.keys(JOURNEY_PRESETS).join(", ")} (or a journey id from your config)\n  --goal "<text>"    describe what to do in your own words\n  --config <file>    a config file with "journeys"\nNot sure what to test? "aitd plan --site ${config.site}" drafts a measurement plan.`);
   if (opts.scripted) {
     const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
     if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}.`);

@@ -46,10 +46,6 @@ export const JOURNEY_PRESETS = {
       { platform: "meta", name: "Search" },
     ],
   },
-  browse: {
-    goal: "Accept cookies, then browse the main pages of the site like a visitor: scroll the home page, open the pages linked from the main menu one by one (up to five), and open one item, article or service page if the site has them. Don't submit forms or buy anything. Stop when you have seen the main pages.",
-    events: [],
-  },
   decline_cookies: {
     goal: "Reject all cookies on the cookie banner (the reject-all or decline button, never accept) and set rejects_consent to true on that click. Then browse the site like a visitor who said no: scroll the home page, open a product or article page, and open a second page. Stop there.",
     events: [],
@@ -112,16 +108,7 @@ export function planRun({ config = {}, plan, picks = [], goals = [], events = []
     runPlan = expectEvents(runPlan, id, events);
   });
 
-  if (!picks.length && !goals.length) {
-    journeys.push(...configJourneys);
-    if (!journeys.length) {
-      // The plan's own journeys when it names known ones, else a general browse of the main pages.
-      const named = [...new Set((runPlan.events ?? []).flatMap((e) => e.journeys ?? []))];
-      const presets = named.map(presetFor).filter(Boolean);
-      for (const preset of presets) if (!journeys.some((j) => j.id === preset.id)) journeys.push({ id: preset.id, goal: preset.goal });
-      if (!journeys.length) journeys.push({ id: "browse", goal: JOURNEY_PRESETS.browse.goal });
-    }
-  }
+  if (!picks.length && !goals.length) journeys.push(...configJourneys);
 
   return { journeys, plan: onlyEvents(runPlan, events) };
 }

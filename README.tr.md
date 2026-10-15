@@ -167,7 +167,7 @@ Hedefi Türkçe de yazabilirsiniz, örneğin `--goal "Sayfanın altındaki bült
 
 `--journey`, ayar dosyanızdaki senaryoları da id'leriyle seçer. Ayar dosyasıyla birlikte kullanıldığında hazır senaryolar kendi event'lerini planınıza ekler.
 
-`run --site <adres>` ile `--journey` ya da `--goal` vermezseniz, ayar dosyasındaki senaryolar çalışır. Yoksa plandaki senaryolar çalışır (ayar dosyasındaki `plan` ya da `./measurement-plan.json`). O da yoksa, ana sayfaları gezen ve hiçbir form göndermeyen `browse` senaryosu çalışır. Yeni taslak bir planla, gezinme sırasında görülmeyen event'ler bulgu olarak çıkar.
+Bir çalıştırmanın her zaman test edecek bir şeye ihtiyacı vardır: `--journey`, `--goal` ya da ayar dosyanızdaki senaryolar. Hiçbiri yoksa `run`, tarayıcıyı açmadan durur; böylece başıboş gezip API kullanımı harcayamaz. Neyi test edeceğinizden emin değil misiniz? `aitd plan --site https://sitenizin-adresi` bir ölçüm planı taslağı çıkarır.
 
 ### API kullanımını düşük tutmak
 

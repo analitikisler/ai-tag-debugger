@@ -55,16 +55,11 @@ test("an unknown viewport stops the audit before the browser or model starts", a
   assert.deepEqual(logged, [], "no model was set up and no journey started");
 });
 
-test("with no journeys picked, a bare run browses the main pages", () => {
-  const { journeys } = planRun({});
-  assert.deepEqual(journeys.map((j) => j.id), ["browse"]);
+test("with nothing picked and no config journeys, a run has no journeys (and no hidden default)", () => {
+  assert.deepEqual(planRun({}).journeys, []);
+  assert.deepEqual(planRun({ plan: { events: [{ platform: "ga4", name: "generate_lead", journeys: ["lead"] }] } }).journeys, []);
 });
 
-test("with no journeys picked, a plan's own known journeys run instead of browse", () => {
-  const plan = { events: [{ platform: "ga4", name: "generate_lead", journeys: ["lead"] }] };
-  assert.deepEqual(planRun({ plan }).journeys.map((j) => j.id), ["lead"]);
-});
-
-test("config journeys still win over the browse default", () => {
+test("config journeys run when nothing is picked", () => {
   assert.deepEqual(planRun({ config: { journeys: [{ id: "mine", goal: "x" }] } }).journeys.map((j) => j.id), ["mine"]);
 });

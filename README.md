@@ -165,7 +165,7 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 
 `--journey` also picks journeys from your config by id. With a config, ready-made journeys add their events to your plan.
 
-`run --site <url>` with no `--journey` or `--goal` runs the config's journeys. Otherwise it runs the journeys the plan names (the config's `plan`, or `./measurement-plan.json`). Otherwise it runs a `browse` journey that visits the main pages and submits nothing. With a freshly drafted plan, events not seen while browsing show up as findings.
+A run always needs something to test: `--journey`, `--goal`, or journeys in your config file. Without one, `run` stops before opening the browser, so it can't wander and spend API usage. Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan.
 
 ### Keeping API usage down
 
