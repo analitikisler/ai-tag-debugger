@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `aitd run ... --save-steps <file>` writes the steps each journey took into `journeys[].steps` of that config file (creating it if needed, and adding the run's plan when the config has none). A later `aitd run --config <file> --scripted --no-ai` repeats them with no AI model or API key. A journey run on several viewports keeps the steps of its first viewport.
+
 ## 0.8.2 (2026-10-15)
 
 - A journey that fails with an error, such as the AI provider's API refusing a request or the browser crashing, no longer ends the whole audit. That journey is marked unfinished with the error as its note, what it captured until then is kept, the other journeys still run, and the report is written. This applies to the CLI and to `run_audit` over MCP.

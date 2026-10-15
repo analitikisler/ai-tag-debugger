@@ -170,7 +170,7 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Cap the steps.** `--max-steps 15` stops a journey that wanders.
 - **Expect bigger pages to cost more.** Each step sends the page view (up to 250 elements and 3,000 characters of text) to the model, so busy pages use more tokens per step than simple ones.
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
-- **Replay without AI.** After one AI run, copy the steps into `journeys[].steps` and use `--scripted` (with `--no-ai` for zero model calls) on every deploy.
+- **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
 
 ### Check a new version against saved sites
@@ -185,6 +185,17 @@ npx @analitikisler/ai-tag-debugger replay saved/*
 ```
 
 The first run's findings become the expected ones. When a change is right, for example a false alarm that is fixed, `replay --update` makes the new findings the expected ones. Use it to check a new version of the tool against sites you know, or a site change against its last good run. A saved site is usually a few MB. It leaves out tracking requests, images and video, HttpOnly and login cookies and the cookies the browser sent, authorization headers, form data, and requests with an email or other user data in their address. It still holds the site's pages and scripts, so keep sites you don't own out of public repositories.
+
+### Save the steps and replay them without AI
+
+`--save-steps <file>` writes the steps each journey took into `journeys[].steps` of a config file. It creates the file if it's missing, and it also saves the run's plan when the config has none. The same config then repeats the journey with no AI model and no API key:
+
+```bash
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-steps ai-tag-debugger.config.json
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
+```
+
+When a journey ran on both viewports, only the first viewport's steps are kept. Keep the config in your repository and run the second command on every deploy to check the same journey without any model calls.
 
 ## Configure your site
 
@@ -248,7 +259,7 @@ ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<
                 [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
                 [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
                 [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
-                [--save-site <dir>]
+                [--save-site <dir>] [--save-steps <file>]
 ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]

@@ -14,3 +14,7 @@ test("--version and -v print the package version", () => {
 test("the help lists --version", () => {
   assert.match(cli("--help"), /-v, --version\s+Print the version\./);
 });
+
+test("the help lists --save-steps", () => {
+  assert.match(cli("--help"), /--save-steps <file>/);
+});
