@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
@@ -7,6 +8,8 @@ import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
 import { replaySavedSite } from "./replay.js";
+
+const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 const USAGE = `ai-tag-debugger: an open-source AI agent that QA-tests your analytics and ad tracking.
 
@@ -61,6 +64,7 @@ MCP options:
   --public-url <url>   The HTTPS address your tunnel or host gives this server, so audits can link to their reports.
 
   -h, --help           Show this help.
+  -v, --version        Print the version.
 
 Short alias: aitd (aitd run ... is the same as ai-tag-debugger run ...).
 
@@ -101,9 +105,14 @@ async function main() {
       "save-site": { type: "string" },
       update: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
+      version: { type: "boolean", short: "v", default: false },
     },
   });
   const command = positionals[0];
+  if (values.version) {
+    console.log(VERSION);
+    return;
+  }
 
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
