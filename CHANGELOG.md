@@ -3,6 +3,7 @@
 ## Unreleased
 
 - New short command `aitd`, an alias for `ai-tag-debugger` installed alongside it.
+- For contributors: `npm run setup` checks the Node version, installs the dependencies and Chromium, and says whether an AI provider key is set. A dev container (`.devcontainer/devcontainer.json`) runs it, so VS Code and Codespaces open the repository ready to run.
 
 ## 0.8.1 (2026-10-15)
 

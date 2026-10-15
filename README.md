@@ -362,8 +362,11 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 ## Development
 
 ```bash
-npm test   # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
+npm run setup   # checks Node, installs the dependencies and Chromium, says whether an AI provider key is set
+npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
 ```
+
+The repository also has a dev container (`.devcontainer/devcontainer.json`). Open it in VS Code with the Dev Containers extension, or in GitHub Codespaces, and it runs `npm run setup` for you, Chromium's system libraries included. To use an AI model there, add your key as a Codespaces secret or export it in the container's terminal.
 
 The end-to-end tests use fake model clients, so they run without an API key.
 

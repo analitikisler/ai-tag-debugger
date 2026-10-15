@@ -1,0 +1,10 @@
+{
+  "name": "ai-tag-debugger",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  // Installs the dependencies, Chromium and its system libraries.
+  "postCreateCommand": "npm run setup -- --with-deps",
+  // The demo shop (npm run demo:serve).
+  "forwardPorts": [4321]
+  // AI provider keys are not set here. In Codespaces, add one as a Codespaces secret; locally,
+  // export it in the container terminal.
+}
