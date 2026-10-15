@@ -256,6 +256,12 @@ Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun ad�
 
 `platform` değeri `ga4`, `google_ads`, `meta` ya da `tiktok` olabilir. `journeys`, bir event'in hangi senaryolarda beklendiğini sınırlar (varsayılan: her senaryo). Tek bir işlemde birden fazla kez gönderilmesi normal olan event'ler için `allow_multiple: true` kullanın.
 
+### Çalıştırmadan plan taslağı çıkarma
+
+Bir kez denetim çalıştırın, ardından `aitd plan --from reports/<dizin>` başlangıç niteliğinde bir `measurement-plan.json` yazar. Çalıştırmada gerçekten gönderilen event'leri ve taşıdıkları parametreleri listeler. `--out <dosya>` farklı bir yol seçer, `--force` ise var olan dosyanın üzerine yazar. `--force` verilmezse var olan dosya asla üzerine yazılmaz.
+
+GA4'ün otomatik sayfa parametreleri (`page_location`, `page_title`, `page_referrer`) ve Hotjar çağrıları dışarıda bırakılır. Ayar dosyanızdaki `plan` alanını bu dosyaya yönlendirmeden önce sonucu gözden geçirin, çünkü taslak yalnızca sitenizin zaten gönderdiklerini listeler.
+
 ## CLI
 
 ```

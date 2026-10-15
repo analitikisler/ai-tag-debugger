@@ -256,6 +256,12 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 
 Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
 
+### Draft a plan from a run
+
+Run an audit once, then `aitd plan --from reports/<dir>` writes a starting `measurement-plan.json`. It lists the events the run actually sent, with the parameters they carried. `--out <file>` picks another path, and `--force` replaces an existing file. Without `--force`, an existing file is never overwritten.
+
+GA4's automatic page parameters (`page_location`, `page_title`, `page_referrer`) and Hotjar calls are left out. Review the result before you point `plan` in your config at it, because the draft only lists what your site already sends.
+
 ## CLI
 
 ```
