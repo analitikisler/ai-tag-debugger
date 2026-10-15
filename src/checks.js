@@ -5,6 +5,11 @@ import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
+const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
+
+/** Whether a happened before b: an earlier step, or the same step and an earlier time when both have one. */
+const sentBefore = (a, b) => a.step < b.step || (a.step === b.step && a.t != null && b.t != null && a.t < b.t);
+
 const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 // Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
 const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
@@ -222,12 +227,13 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
 
   // Consent.
   const granted = consentGrantedStep(run);
-  const firstHitStep = run.hits.length ? Math.min(...run.hits.map((h) => h.step)) : null;
+  // Consent Mode only governs Google tags. Within one step, the push and hit times decide which came first.
+  const firstGoogleHit = run.hits.filter((h) => GOOGLE_PLATFORMS.has(h.platform)).reduce((a, h) => (!a || sentBefore(h, a) ? h : a), null);
   if (plan.consent_mode) {
     const defaultEntry = run.dataLayerLog.find((e) => isConsentCommand(e, "default"));
     if (!defaultEntry) {
       findings.push({ ...base, severity: "risk", check: "consent_default_missing", detail: d.consentDefaultMissing() });
-    } else if (firstHitStep !== null && defaultEntry.step > firstHitStep) {
+    } else if (firstGoogleHit && sentBefore(firstGoogleHit, defaultEntry)) {
       findings.push({ ...base, severity: "risk", check: "consent_default_late", detail: d.consentDefaultLate() });
     }
   }
