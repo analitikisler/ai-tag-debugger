@@ -22,3 +22,7 @@ test("the help lists --save-steps", () => {
 test("the help lists the plan command", () => {
   assert.match(cli("--help"), /plan --from <capture\.json>/);
 });
+
+test("plan --site refuses to replace an existing file before exploring", () => {
+  assert.throws(() => execFileSync(process.execPath, ["src/cli.js", "plan", "--site", "https://x.test", "--out", "package.json"], { encoding: "utf8", stdio: "pipe" }), /package\.json already exists/);
+});

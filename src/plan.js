@@ -52,9 +52,13 @@ export function draftPlan(capture) {
   return { consent_mode: consentMode, events: list };
 }
 
-/** Writes the drafted plan, refusing to replace an existing file unless force is set. */
-export async function writePlanFromRun(from, out = "measurement-plan.json", { force = false } = {}) {
-  const plan = draftPlan(await readCapture(from));
+/** Drafts a plan from a run's capture.json and writes it. */
+export async function writePlanFromRun(from, out, opts) {
+  return writePlan(draftPlan(await readCapture(from)), out, opts);
+}
+
+/** Writes a plan to out, refusing to replace an existing file unless force is set. */
+export async function writePlan(plan, out = "measurement-plan.json", { force = false } = {}) {
   if (!force && (await stat(out).catch(() => null))) throw new Error(`${out} already exists. Choose another file with --out, or add --force to replace it.`);
   await writeFile(out, `${JSON.stringify(plan, null, 2)}\n`);
   return { plan, out };
