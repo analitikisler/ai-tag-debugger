@@ -172,7 +172,7 @@ Her gezinme adımı bir model çağrısıdır. Yani kullanım **senaryo × ekran
 - **Adım sayısını sınırlayın.** `--max-steps 15`, yolunu kaybeden bir senaryoyu durdurur.
 - **Büyük sayfaların daha pahalı olduğunu unutmayın.** Her adım modele sayfanın görünümünü (en fazla 250 öğe ve 3.000 karakter metin) gönderir. Bu yüzden kalabalık sayfalar adım başına daha fazla token kullanır.
 - **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmadığı için kullanımı pek değiştirmez.
-- **Yapay zekâ olmadan tekrar oynatın.** Bir yapay zekâ çalıştırmasından sonra adımları `journeys[].steps` içine kopyalayın ve her deploy'da `--scripted` (hiç model çağrısı olmaması için `--no-ai` ile birlikte) kullanın.
+- **Yapay zekâ olmadan tekrar oynatın.** Bir yapay zekâ çalıştırmasından sonra `--save-steps <dosya>` ile adımları kaydedin, ardından her deploy'da o ayar dosyasıyla `--scripted --no-ai` kullanın. Ayrıntılar için [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın) bölümüne bakın.
 - **Bir yapay zekâ asistanı kullanın.** MCP üzerinden gezinmeyi asistanın kendi modeli yapar, hiç API anahtarı kullanılmaz.
 
 ### Yeni bir sürümü kaydedilmiş sitelerle karşılaştırın
@@ -187,6 +187,17 @@ npx @analitikisler/ai-tag-debugger replay saved/*
 ```
 
 İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. İzleme isteklerini, görselleri ve videoları, HttpOnly ve oturum açma çerezlerini ve tarayıcının gönderdiği çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi olan istekleri içermez. Yine de sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
+
+### Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın
+
+`--save-steps <dosya>`, her senaryonun izlediği adımları bir ayar dosyasındaki `journeys[].steps` alanına yazar. Dosya yoksa oluşturulur; ayar dosyasında plan yoksa çalıştırmanın planı da kaydedilir. Aynı ayar dosyası, hiçbir yapay zekâ modeli ve API anahtarı olmadan senaryoyu tekrar çalıştırır:
+
+```bash
+ai-tag-debugger run --site https://www.magazaniz.com --journey purchase --save-steps ai-tag-debugger.config.json
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
+```
+
+Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun adımları tutulur. Ayar dosyasını depoda saklayın ve ikinci komutu her deploy'da çalıştırarak aynı senaryoyu hiçbir model çağrısı yapmadan kontrol edin.
 
 ## Sitenizi ayarlayın
 
@@ -248,7 +259,7 @@ ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<
                 [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
                 [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
                 [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
-                [--save-site <dir>]
+                [--save-site <dir>] [--save-steps <file>]
 ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]
