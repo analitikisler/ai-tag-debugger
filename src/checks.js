@@ -68,6 +68,17 @@ export function hasParam(hit, name) {
   return [name, ...(PARAM_ALIASES[name] ?? [])].some((n) => hit.params?.[n] !== undefined && hit.params[n] !== "");
 }
 
+/** A hit's parameter under its own name or the first common alias it carries. */
+function paramOf(hit, name) {
+  for (const n of [name, ...(PARAM_ALIASES[name] ?? [])]) {
+    if (hit.params?.[n] !== undefined && hit.params[n] !== "") return hit.params[n];
+  }
+  return undefined;
+}
+
+const isPurchase = (hit) => canonicalEvent(hit.name) === "purchase";
+const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
+
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
 function pageOf(hit) {
   try {
@@ -201,6 +212,62 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       step: stepLabel(hits[0].step),
       detail: d.duplicate(hits[0].name, sends),
     });
+  }
+
+  // Purchase values: a value that is 0, negative or not a number, a currency that isn't an ISO
+  // code, and an empty items list (reported once per platform and event).
+  const purchaseReported = new Set();
+  const reportPurchase = (hit, check, severity, detail) => {
+    const k = `${check}|${key(hit.platform, hit.name)}`;
+    if (purchaseReported.has(k)) return;
+    purchaseReported.add(k);
+    findings.push({ ...base, severity, check, platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail, evidence: JSON.stringify(hit.params) });
+  };
+  const purchases = run.hits.filter(isPurchase);
+  for (const hit of purchases) {
+    const value = paramOf(hit, "value");
+    if (value !== undefined) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || String(value).trim() === "") reportPurchase(hit, "purchase_value_invalid", "broken", d.purchaseValueNaN(hit.platform, hit.name, value));
+      else if (n <= 0) reportPurchase(hit, "purchase_value_invalid", "broken", d.purchaseValueZero(hit.platform, hit.name, value));
+    }
+    const currency = paramOf(hit, "currency");
+    if (currency !== undefined && !/^[A-Z]{3}$/.test(currency)) reportPurchase(hit, "purchase_currency_invalid", "broken", d.purchaseCurrency(hit.platform, hit.name, currency));
+    // GA4 sends items as pr1, pr2...; Meta as contents or content_ids. Items left out of a GA4
+    // purchase count as empty, unless the plan requires them and missing_params already says so.
+    const listed = ["items", "contents", "content_ids"].filter((n) => hit.params?.[n] !== undefined);
+    const requiresItems = planEventFor(hit)?.required_params?.includes("items");
+    const empty = listed.length
+      ? listed.every((n) => EMPTY_LIST.test(hit.params[n]))
+      : hit.platform === "ga4" && !requiresItems && !hasParam(hit, "items");
+    if (empty) reportPurchase(hit, "purchase_items_empty", "warning", d.purchaseItemsEmpty(hit.platform, hit.name));
+  }
+
+  // GA4 and Meta reporting the same order with a different value or currency. Purchases are paired
+  // by order ID; without IDs, a run with one purchase on each platform is taken as one order.
+  const ga4Buys = purchases.filter((h) => h.platform === "ga4");
+  const metaBuys = purchases.filter((h) => h.platform === "meta");
+  const orderId = (h) => paramOf(h, "transaction_id");
+  const pairs = [];
+  for (const g of ga4Buys) {
+    const m = orderId(g) !== undefined && metaBuys.find((h) => orderId(h) === orderId(g));
+    if (m) pairs.push([g, m]);
+  }
+  if (!pairs.length && ga4Buys.length === 1 && metaBuys.length === 1) {
+    const [g, m] = [ga4Buys[0], metaBuys[0]];
+    if (orderId(g) === undefined || orderId(m) === undefined) pairs.push([g, m]);
+  }
+  const mismatchSeen = new Set();
+  for (const [g, m] of pairs) {
+    const [gv, mv] = [paramOf(g, "value"), paramOf(m, "value")];
+    const [gc, mc] = [paramOf(g, "currency"), paramOf(m, "currency")];
+    const diffs = [];
+    if (gv !== undefined && mv !== undefined && Number.isFinite(Number(gv)) && Number.isFinite(Number(mv)) && Math.abs(Number(gv) - Number(mv)) > 0.005) diffs.push(["value", gv, mv]);
+    if (gc !== undefined && mc !== undefined && gc.toUpperCase() !== mc.toUpperCase()) diffs.push(["currency", gc, mc]);
+    const k = `${orderId(g) ?? ""}|${diffs.map((x) => x.join("=")).join(",")}`;
+    if (!diffs.length || mismatchSeen.has(k)) continue;
+    mismatchSeen.add(k);
+    findings.push({ ...base, severity: "warning", check: "purchase_mismatch", platform: "meta", event: m.name, step: stepLabel(m.step), detail: d.purchaseMismatch(orderId(g) ?? orderId(m), diffs), evidence: JSON.stringify({ ga4: g.params, meta: m.params }) });
   }
 
   // Server-side tagging. Only what the browser can see: a GA4 hit to a server container, and requests

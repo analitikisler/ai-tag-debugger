@@ -40,6 +40,10 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 |---|---|
 | Missing events | `purchase` never fired on the checkout journey |
 | Missing parameters | `purchase` sent without `value` and `currency` on mobile |
+| Invalid purchase value | `purchase` sent with `value` `0`, a negative number or text such as `"free"` |
+| Invalid purchase currency | `purchase` sent with currency `usd` or `TL` instead of a 3-letter ISO code such as `USD` or `TRY` |
+| Empty purchase items | `purchase` sent with an empty `items` list |
+| Purchase mismatch | GA4 sends `value` 120 and Meta sends 115 for the same order ID |
 | Duplicates | `add_to_cart` sent twice by one click |
 | Consent | Meta `PageView` fired before the visitor accepted cookies, Consent Mode default missing or set too late, Consent Mode v2 signals (`ad_user_data`, `ad_personalization`) missing, tracking cookies set before consent, tags or cookies still active after the `decline_cookies` journey rejects the banner, a reject button that does nothing |
 | Personal data | An email address sent to an ad platform in plain text |
