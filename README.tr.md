@@ -40,6 +40,10 @@ Tag'leri elle test etmek bunu yakalar, ama zahmetli olduğu için her sürümden
 |---|---|
 | Eksik event'ler | `purchase`, ödeme senaryosunda hiç gönderilmedi |
 | Eksik parametreler | `purchase`, mobilde `value` ve `currency` olmadan gönderildi |
+| Geçersiz satın alma değeri | `purchase`, `value` olarak `0`, negatif bir sayı ya da `"ücretsiz"` gibi bir metinle gönderildi |
+| Geçersiz satın alma para birimi | `purchase`, para birimi `usd` ya da `TL` olarak gönderildi; `USD` ya da `TRY` gibi 3 harfli ISO kodu bekleniyor |
+| Boş satın alma ürünleri | `purchase`, boş bir `items` listesiyle gönderildi |
+| Satın alma uyuşmazlığı | Aynı sipariş numarası için GA4 `value` 120, Meta 115 gönderdi |
 | Tekrar eden event'ler | `add_to_cart` tek tıklamada iki kez gönderildi |
 | Çerez onayı | Meta `PageView`, ziyaretçi çerezleri kabul etmeden gönderildi; Consent Mode varsayılanı yok ya da çok geç ayarlanmış, Consent Mode v2 sinyalleri (`ad_user_data`, `ad_personalization`) eksik, onaydan önce yazılan izleme çerezleri, `decline_cookies` yolculuğu bandı reddettikten sonra hâlâ çalışan etiketler ya da çerezler, işe yaramayan reddet düğmesi |
 | Kişisel veri | Bir e-posta adresi reklam platformuna açık metin olarak gönderildi |
