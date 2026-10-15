@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New short command `aitd`, an alias for `ai-tag-debugger` installed alongside it.
+
 ## 0.8.1 (2026-10-15)
 
 - A run with no AI provider key set now stops at once with a message naming the keys to set and the `--scripted --no-ai` option, instead of starting the browser and failing at the first step with the SDK's "Could not resolve authentication method".

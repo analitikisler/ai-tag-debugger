@@ -62,6 +62,8 @@ MCP options:
 
   -h, --help           Show this help.
 
+Short alias: aitd (aitd run ... is the same as ai-tag-debugger run ...).
+
 API keys: set one of ${Object.values(PROVIDERS).map((p) => p.env).join(", ")}.
 Any OpenAI-compatible API: --provider openai-compatible --base-url <url> --model <id>, with the key in OPENAI_COMPATIBLE_API_KEY.`;
 

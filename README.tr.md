@@ -110,6 +110,8 @@ export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_K
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
 ```
 
+Global kurulum kısa bir takma ad olan `aitd` komutunu da ekler: `aitd run --site … --journey add_to_cart` aynı işi yapar.
+
 Ya da kurmadan çalıştırın: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
 Tüm komutları ve seçenekleri (`--providers`, `--scripted`, `--no-ai` gibi) görmek için `ai-tag-debugger --help` çalıştırın.
@@ -251,6 +253,8 @@ ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]
 ```
+
+`aitd`, `ai-tag-debugger` için kısa bir takma addır ve aynı komut ve seçenekleri alır.
 
 Bulgular `--fail-on` seviyesine (varsayılan `broken`) ulaştığında çıkış kodu `1` olur, böylece bir deploy'u durdurabilir. Her deploy sonrası çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) örneğine bakın.
 

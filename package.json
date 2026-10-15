@@ -5,7 +5,8 @@
   "description": "Open-source AI agent that QA-tests your website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok). Bring your own model (Claude, OpenAI, Gemini) or use it from your chat app over MCP.",
   "type": "module",
   "bin": {
-    "ai-tag-debugger": "src/cli.js"
+    "ai-tag-debugger": "src/cli.js",
+    "aitd": "src/cli.js"
   },
   "files": [
     "src",

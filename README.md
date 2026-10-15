@@ -110,6 +110,8 @@ export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_K
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
 ```
 
+The global install also adds `aitd`, a short alias: `aitd run --site … --journey add_to_cart` does the same.
+
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
 Run `ai-tag-debugger --help` to see every command and option, such as `--providers`, `--scripted` and `--no-ai`.
@@ -251,6 +253,8 @@ ai-tag-debugger replay <dir>... [--update] [--out <dir>]
 ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
                 [--allow-private-network]
 ```
+
+`aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options.
 
 The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
 
