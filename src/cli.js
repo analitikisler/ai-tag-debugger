@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
@@ -8,6 +8,7 @@ import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
+import { writePlan, writePlanFromRun } from "./plan.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -19,6 +20,11 @@ Usage:
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
   ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
                                                   and list findings that changed. Exits with code 1 when any did.
+  ai-tag-debugger plan --site <url> [--out <file>]
+                                                  Let the AI explore one page of each type and propose a measurement
+                                                  plan: events (custom ones too), parameters and user properties.
+  ai-tag-debugger plan --from <capture.json> [--out <file>]
+                                                  Draft a measurement plan from the events and parameters a run saw.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -56,6 +62,14 @@ Run options:
 Replay options:
   --update             Make this replay's findings the expected ones (after checking that the changes are right).
   --out <dir>          Where to write the replay's reports (default: <dir>/last-replay).
+
+Plan options:
+  --site <url>         Explore this site with the AI (no tracking needed) and propose a plan. Also takes
+                       --provider, --model, --base-url, --max-steps (default 25), --allow-host and --headed.
+  --from <file>        A run's capture.json, or the report folder that holds it.
+  --out <file>         Where to write the plan (default: measurement-plan.json). An existing file is kept
+                       unless --force is given.
+  --force              Replace the --out file if it exists.
 
 MCP options:
   --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
@@ -108,6 +122,8 @@ async function main() {
       "save-site": { type: "string" },
       "save-steps": { type: "string" },
       update: { type: "boolean", default: false },
+      from: { type: "string" },
+      force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
     },
@@ -143,6 +159,29 @@ async function main() {
       for (const note of r.foundByText) console.log(`    ~ ${note}`);
     }
     if (changed && !values.update) process.exitCode = 1;
+    return;
+  }
+  if (command === "plan" && !values.help && values.site) {
+    if (values.from) throw new Error("plan takes --site (explore the site) or --from (use a run's capture), not both.");
+    const out = values.out ?? "measurement-plan.json";
+    // Checked before the browser starts, so a taken file name doesn't cost a whole exploration.
+    if (!values.force && existsSync(out)) throw new Error(`${out} already exists. Choose another file with --out, or add --force to replace it.`);
+    const maxSteps = values["max-steps"] ? Number(values["max-steps"]) : undefined;
+    if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
+    const { createProvider } = await import("./providers.js");
+    const { discoverPlan } = await import("./discover.js");
+    const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
+    console.log(`Exploring ${values.site} to draft its measurement plan…`);
+    const { plan } = await discoverPlan({ site: values.site, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
+    await writePlan(plan, out, { force: values.force });
+    const custom = plan.events.filter((e) => e.custom).length;
+    console.log(`✓ Wrote ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties to ${out}. Review it, then use it as "plan" in your config.`);
+    return;
+  }
+  if (command === "plan" && !values.help) {
+    if (!values.from) throw new Error("plan needs --site <url> to explore a site, or --from <capture.json> to use what a run captured.");
+    const { plan, out } = await writePlanFromRun(values.from, values.out, { force: values.force });
+    console.log(`✓ Wrote ${plan.events.length} events to ${out}. Review it, then use it as "plan" in your config.`);
     return;
   }
   if (values.help || command !== "run" || (!values.config && !values.site)) {

@@ -241,6 +241,21 @@ Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun ad�
 | `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini` ya da `openai-compatible`. `--provider` ile aynıdır. |
 | `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
 
+### Yeni bir site için plan çıkarma
+
+Henüz takip yoksa `aitd plan --site https://sitenizin-adresi` yapay zekânın her sayfa türünden bir sayfayı gezmesini sağlar: ana sayfa, bir kategori, bir ürün, sepet, ödeme adımının ilki, arama ve varsa üyelik ya da iletişim formları. Takip kodu gerektirmez. Asla ödeme yapmaz ve kişisel bilgi içeren bir formu göndermez. `--provider`, `--model` ve `--max-steps` (varsayılan 25, yani en fazla yapay zekâ adımı) seçenekleri `run` ile aynı şekilde çalışır.
+
+Plan `measurement-plan.json` dosyasına yazılır (yolu `--out` ile değiştirebilirsiniz). Her event için şunlar yer alır:
+
+- `name` ve `platform`. Beden tablosu ya da mağaza bulucu gibi sitenize özgü event'ler `custom: true` ile işaretlenir.
+- `description` ve `trigger`: sayfa türü ve event'i tetikleyen öğenin görünen etiketi.
+- `parameters`: her biri için açıklama ve örnek değer. Özel parametreler işaretlenir. `required_params` zorunlu olanları listeler.
+- `user_properties`: `customer_type` gibi önerilen kullanıcı özellikleri, her biri için açıklama ve örnekle.
+
+Sitenizin zaten gönderdiği event'ler `"seen": true` ile işaretlenir.
+
+Kullanmadan önce dosyayı gözden geçirin. Örnekler ve öneriler yapay zekânın gördüğü sayfalardan çıkar, bu yüzden her event'in işinize uyup uymadığını kontrol edin. Ek alanları kontroller yok sayar, dolayısıyla dosya düzenlenmeden `plan` olarak kullanılabilir, ama önce gözden geçirin. Ardından ayar dosyanızdaki `plan` alanını bu dosyaya yönlendirin. Zaten takip yapan siteler bunun yerine `aitd plan --from` kullanabilir (aşağıya bakın).
+
 `measurement-plan.json`:
 
 ```json
@@ -255,6 +270,12 @@ Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun ad�
 ```
 
 `platform` değeri `ga4`, `google_ads`, `meta` ya da `tiktok` olabilir. `journeys`, bir event'in hangi senaryolarda beklendiğini sınırlar (varsayılan: her senaryo). Tek bir işlemde birden fazla kez gönderilmesi normal olan event'ler için `allow_multiple: true` kullanın.
+
+### Çalıştırmadan plan taslağı çıkarma
+
+Bir kez denetim çalıştırın, ardından `aitd plan --from reports/<dizin>` başlangıç niteliğinde bir `measurement-plan.json` yazar. Çalıştırmada gerçekten gönderilen event'leri ve taşıdıkları parametreleri listeler. `--out <dosya>` farklı bir yol seçer, `--force` ise var olan dosyanın üzerine yazar. `--force` verilmezse var olan dosya asla üzerine yazılmaz.
+
+GA4'ün otomatik sayfa parametreleri (`page_location`, `page_title`, `page_referrer`) ve Hotjar çağrıları dışarıda bırakılır. Ayar dosyanızdaki `plan` alanını bu dosyaya yönlendirmeden önce sonucu gözden geçirin, çünkü taslak yalnızca sitenizin zaten gönderdiklerini listeler.
 
 ## CLI
 

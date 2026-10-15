@@ -95,7 +95,7 @@ const TIMEOUTS = { model: 180_000, action: 120_000, page: 60_000 };
 
 const LAST_STEP_WAIT_MS = 3000;
 
-class StepTimeout extends Error {}
+export class StepTimeout extends Error {}
 
 /** The promise's value, or a StepTimeout with this message once ms have passed. */
 function withTimeout(promise, ms, message) {

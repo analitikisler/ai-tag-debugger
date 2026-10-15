@@ -239,6 +239,21 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `provider` | Optional: `anthropic`, `openai`, `gemini` or `openai-compatible`. Same as `--provider`. |
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
 
+### Plan a new site
+
+No tracking yet? `aitd plan --site https://yoursite.com` has the AI explore one page of each type: the home page, a category, a product, the cart, the first checkout step, search, and any sign-up or contact forms. It needs no tracking code. It never pays, and it never submits a form with personal details. `--provider`, `--model` and `--max-steps` (default 25, the most AI steps) work as they do for `run`.
+
+The plan is written to `measurement-plan.json` (change the path with `--out`). For each event it lists:
+
+- `name` and `platform`. Events specific to your site, such as a size guide or a store locator, are marked `custom: true`.
+- `description` and `trigger`: the page type and the visible label of the element that fires the event.
+- `parameters`: each with a description and an example value. Custom parameters are marked. `required_params` lists the ones that must be present.
+- `user_properties`: suggested ones such as `customer_type`, each with a description and an example.
+
+Events your site already sends are marked `"seen": true`.
+
+Review the file before you use it. The examples and suggestions come from the pages the AI saw, so check that each event fits your business. The extra fields are ignored by the checks, so the file works as `plan` without editing, but review it first. Then point `plan` in your config at it. Sites that already track can use `aitd plan --from` instead (see below).
+
 `measurement-plan.json`:
 
 ```json
@@ -255,6 +270,12 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 `platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
 
 Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
+
+### Draft a plan from a run
+
+Run an audit once, then `aitd plan --from reports/<dir>` writes a starting `measurement-plan.json`. It lists the events the run actually sent, with the parameters they carried. `--out <file>` picks another path, and `--force` replaces an existing file. Without `--force`, an existing file is never overwritten.
+
+GA4's automatic page parameters (`page_location`, `page_title`, `page_referrer`) and Hotjar calls are left out. Review the result before you point `plan` in your config at it, because the draft only lists what your site already sends.
 
 ## CLI
 
