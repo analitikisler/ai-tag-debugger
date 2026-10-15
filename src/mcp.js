@@ -293,7 +293,16 @@ export function buildServer(opts) {
       async ({ config: configFile, scripted, language, branding, providers }) => {
         const loaded = await loadConfig(configFile);
         const replay = scripted !== false;
-        const result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+        let result;
+        try {
+          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+        } catch (err) {
+          // The CLI wording (--scripted --no-ai) means nothing to a chat app, so say it in this tool's terms.
+          if (err.code !== "NO_API_KEY") throw err;
+          return fail(
+            "No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so scripted false can't browse with a model. Call run_audit again with scripted true (or leave it out) to replay the journeys' fixed steps, or browse the site yourself with start_audit, browser_action and finish_audit. Neither needs a key.",
+          );
+        }
         const m = messages(result.lang);
         const grouped = groupFindings(result.findings).filter((f) => f.severity !== "ok");
         return text(

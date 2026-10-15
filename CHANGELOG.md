@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 (2026-10-15)
+
+- A run with no AI provider key set now stops at once with a message naming the keys to set and the `--scripted --no-ai` option, instead of starting the browser and failing at the first step with the SDK's "Could not resolve authentication method".
+- Over MCP, `run_audit` with `scripted: false` and no key returns an error that tells the chat app what to do next: call it again with `scripted: true`, or browse with `start_audit`. It doesn't mention CLI flags.
+- The README points to `ai-tag-debugger --help` for the full list of commands and options.
+- `npm run demo` replays the demo shop with no AI model (`--no-ai`), so it works without an API key.
+
 ## 0.8.0 (2026-10-14)
 
 - The browser installs itself the first time an audit starts, so connecting the MCP server no longer needs a separate `playwright install` step. Progress goes to stderr.

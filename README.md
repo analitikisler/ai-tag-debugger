@@ -112,6 +112,8 @@ ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --
 
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
+Run `ai-tag-debugger --help` to see every command and option, such as `--providers`, `--scripted` and `--no-ai`.
+
 ### Try the demo shop (from source)
 
 The repository includes a demo shop with three deliberate tracking bugs:

@@ -51,6 +51,21 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   assert.match(await call("get_page", { audit_id: id }).catch((e) => e.message), /No open audit/);
 });
 
+test("run_audit without a key tells the chat app how to go on, in its own terms", async () => {
+  const keys = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  keys.forEach((k) => delete process.env[k]);
+  try {
+    const { client } = await connect({ allowFiles: true, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")) });
+    const result = await client.callTool({ name: "run_audit", arguments: { config: "examples/demo.config.json", scripted: false } });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /No AI provider key.*scripted true.*start_audit/);
+    assert.doesNotMatch(result.content[0].text, /--no-ai/);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+  }
+});
+
 test("over HTTP, files on the server cannot be read and run_audit is not offered", async () => {
   const { client, call } = await connect({ allowFiles: false, reportsDir: tmpdir() });
   assert.ok(!(await client.listTools()).tools.some((t) => t.name === "run_audit"));
