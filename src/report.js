@@ -167,6 +167,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     lines.push(`### ${m.severity[f.severity]}: ${mdText(f.detail)}`, "");
     lines.push(`- ${m.ui.where}: ${mdText(f.where.map((w) => m.ui.whereStep(w.journey, w.viewport, w.step)).join("; "))}`);
     if (f.evidence) lines.push(`- ${m.ui.captured}: \`${mdCode(f.evidence)}\``);
+    if (f.gtm) lines.push(`- ${m.ui.gtmTags}: ${f.gtm.length ? f.gtm.map((t) => `${t.name}${t.paused ? ` (${m.ui.gtmPaused})` : ""}, ${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map((x) => x.name).join(", ")}` : m.ui.gtmNoTrigger}`).join("; ") : m.ui.gtmNoTag}`);
     if (f.explanation) {
       if (f.explanation.impact) lines.push(`- ${m.ui.impact}: ${mdText(f.explanation.impact)}`);
       lines.push(`- ${m.ui.likelyCause}: ${mdText(f.explanation.likely_cause)}`, `- ${m.ui.fix}:`, ...fixSteps(f.explanation).map((t, i) => `   ${i + 1}. ${mdText(t)}`));
@@ -449,6 +450,7 @@ const ICON = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   impact: '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
   cause: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  gtm: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   evidence: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   fix: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   where: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
@@ -566,6 +568,18 @@ function evidenceHtml(evidence) {
   return `<pre>${escapeHtml(evidence)}</pre>`;
 }
 
+/** The tags in the GTM container export that send this finding's event, with their triggers. */
+function gtmHtml(m, tags) {
+  if (!tags) return "";
+  if (!tags.length) return `${sec("gtm", m.ui.gtmTags)}<p class="muted">${m.ui.gtmNoTag}</p>`;
+  const trig = (t) => `${escapeHtml(t.name)}${t.event ? ` <span class="muted">(${escapeHtml(t.event)})</span>` : ""}`;
+  const rows = tags.map((t) => {
+    const notes = [t.paused ? m.ui.gtmPaused : "", t.consent.length ? m.ui.gtmConsent(t.consent.join(", ")) : ""].filter(Boolean);
+    return `<tr><th>${escapeHtml(t.name)}${notes.length ? `<div class="muted xs">${escapeHtml(notes.join(" · "))}</div>` : ""}</th><td>${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map(trig).join(", ")}` : `<span class="missing">${m.ui.gtmNoTrigger}</span>`}${t.blocking.length ? `<div class="muted xs">${m.ui.gtmBlockedBy} ${t.blocking.map(trig).join(", ")}</div>` : ""}</td></tr>`;
+  });
+  return `${sec("gtm", m.ui.gtmTags)}<table class="ptable ev-table gtm-tags"><tbody>${rows.join("")}</tbody></table>`;
+}
+
 function findingCard(m, runs, f, open, aiRan) {
   const e = f.explanation;
   const steps = fixSteps(e);
@@ -588,7 +602,7 @@ function findingCard(m, runs, f, open, aiRan) {
 <span class="fhead"><span class="ftitle">${detailHtml(f.detail)}</span><span class="fmeta">${f.platform ? `<span class="ptag p-${safeKey(f.platform)}">${escapeHtml(platformLabel(f.platform))}</span>` : ""}<span>${escapeHtml(m.ui.spread(journeysN, stepsN))}</span></span></span>
 ${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
-<div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
+<div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}${gtmHtml(m, f.gtm)}</div>
 <div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div></div></div></div></details></li>`;
 }
 

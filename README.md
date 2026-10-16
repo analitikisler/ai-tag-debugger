@@ -370,7 +370,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 |---|---|
 | `site` | Base URL. Use staging when you can. |
 | `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. A run with `--against` uses that plan instead. |
-| `gtm_container` | Optional GTM container export (Admin → Export container), so explanations can name tags and triggers. |
+| `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), even without an AI model. |
 | `viewports` | `desktop` and/or `mobile`. |
 | `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
