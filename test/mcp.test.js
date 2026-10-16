@@ -32,7 +32,7 @@ const refIn = (text, pattern) => Number(text.split("\n").find((l) => /^\[\d+\]/.
 test("a chat app can drive an audit through the MCP tools", async () => {
   const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
   const { client, call } = await connect({ allowFiles: true, reportsDir });
-  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "finish_audit", "make_plan", "run_audit"]);
+  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "finish_audit", "make_plan", "what_changed", "run_audit"]);
 
   let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
   const id = page.match(/audit_id: (\w+)/)[1];
@@ -154,6 +154,24 @@ test("make_plan drafts and saves a plan, limited to a topic, and finish_audit ca
   assert.doesNotMatch(result, /view_item/);
   const id = result.match(/Saved plan (\S+)/)[1];
   assert.ok(existsSync(path.join(dataDir, "localhost", "plans", id, "measurement-plan.json")));
+});
+
+test("what_changed returns only the since-last-run diff, and says so when there is nothing to compare", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  const { call } = await connect({ allowFiles: false, reportsDir: tmpdir(), dataDir });
+  assert.match(await call("what_changed", { site: "https://www.example.com/" }), /No saved run/);
+  const runs = path.join(dataDir, "example.com", "runs");
+  const f = (event) => ({ severity: "broken", check: "missing_event", platform: "ga4", event, detail: `${event} never fired` });
+  for (const [id, findings] of [["2026-10-01_0900", [f("purchase")]], ["2026-10-02_0900", [f("add_to_cart")]]]) {
+    await mkdir(path.join(runs, id), { recursive: true });
+    await writeFile(path.join(runs, id, "capture.json"), JSON.stringify({ findings }));
+  }
+  const out = await call("what_changed", { site: "https://example.com" });
+  assert.match(out, /1 problem fixed, 1 new problem\. Compared with run 2026-10-01_0900.*\(2026-10-02_0900\)/);
+  assert.match(out, /Fixed: GA4 purchase/);
+  assert.match(out, /New: GA4 add_to_cart/);
+  assert.match(await call("what_changed", { site: "https://example.com", language: "tr" }), /1 sorun düzeldi, 1 yeni sorun/);
+  assert.equal((await call("what_changed", { site: "nope" })).includes("not a full URL"), true);
 });
 
 test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {

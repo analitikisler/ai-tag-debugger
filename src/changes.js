@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { messages } from "./i18n.js";
+import { platformLabel } from "./report.js";
 import { listRunIds, runsDir } from "./workspace.js";
 
 const PROBLEMS = new Set(["broken", "risk", "warning"]);
@@ -63,4 +65,32 @@ export function compareRuns(prev, { findings, planCheck = null }) {
     fixed: [...before].filter(([k]) => !now.has(k)).map(([, f]) => f),
     new: [...now].filter(([k]) => !before.has(k)).map(([, f]) => f),
   };
+}
+
+/**
+ * The "since last run" diff for a site's newest saved run, as the report showed it: that run compared
+ * with the one before. Returns { run: null } when nothing is saved, else { run, ...compareRuns() }.
+ * Shared by anything that reports the diff outside the report (MCP, alerts).
+ */
+export async function sinceLastRun(dataDir, site) {
+  const latest = await previousRun(dataDir, site);
+  if (!latest) return { run: null, previous: null };
+  const saved = latest.capture.changes;
+  if (saved) return { run: latest.id, ...saved };
+  const prev = await previousRun(dataDir, site, latest.id);
+  return { run: latest.id, ...compareRuns(prev, { findings: latest.capture.findings ?? [], planCheck: latest.planCheck }) };
+}
+
+/** The diff as plain lines: a headline, then one line per fixed and new problem. */
+export function changesLines(ch, lang = "en") {
+  const m = messages(lang);
+  if (!ch.run) return [m.ui.noSavedRun];
+  if (!ch.previous) return [m.ui.noPreviousRun];
+  const label = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
+  const why = (c, bucket) => (ch.mode === "findings" ? c.detail : m.ui.bucket[bucket]);
+  return [
+    `${m.ui.changesLine(ch)}. ${m.ui.changesLead(ch.previous, ch.mode)} (${ch.run}).`,
+    ...ch.fixed.map((c) => `- ${m.ui.changeFixed}: ${label(c)} (${why(c, c.was)})`),
+    ...ch.new.map((c) => `- ${m.ui.changeNew}: ${label(c)} (${why(c, c.bucket)})`),
+  ];
 }

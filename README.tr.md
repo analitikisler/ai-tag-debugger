@@ -470,6 +470,7 @@ Sunucunun sunduğu araçlar:
 | Araç | Ne yapar |
 |---|---|
 | `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
+| `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
 | `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
 | `get_page` | Geçerli sayfayı gösterir. |

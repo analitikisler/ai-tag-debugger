@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
+
 ## 0.12.0 (2026-10-16)
 
 - The HTML report uses the Analitik İşler design system and the new ai tag debugger logo. The large title is now a compact `Site: example.com` line.

@@ -470,6 +470,7 @@ Tools the server offers:
 | Tool | What it does |
 |---|---|
 | `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
+| `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
 | `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
 | `get_page` | Shows the current page. |
