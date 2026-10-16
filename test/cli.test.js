@@ -13,19 +13,27 @@ test("--version and -v print the package version", () => {
   assert.equal(cli("-v"), `${version}\n`);
 });
 
-test("the help lists --version", () => {
-  assert.match(cli("--help"), /-v, --version\s+Print the version\./);
-});
-
-test("the help lists --save-steps", () => {
-  assert.match(cli("--help"), /--save-steps <file>/);
-});
-
-test("the help lists the plan command and --data-dir", () => {
+test("the top-level help is short and lists the commands and examples", () => {
   const help = cli("--help");
-  assert.match(help, /plan --site <url>/);
-  assert.match(help, /--data-dir <dir>/);
-  assert.doesNotMatch(help, /--from|--force/);
+  assert.ok(help.trim().split("\n").length <= 20, "top-level help is about 20 lines at most");
+  for (const c of ["plan", "run", "replay", "mcp"]) assert.match(help, new RegExp(`^  ${c} {2,}\\S`, "m"));
+  assert.match(help, /aitd run --site https:\/\/example\.com --against latest/);
+  assert.match(help, /-v, --version/);
+  assert.doesNotMatch(help, /--max-steps|--base-url|--providers/);
+});
+
+test("each command has its own help with its essential options", () => {
+  const run = cli("run", "--help");
+  for (const o of ["--against", "--journey", "--goal", "--site", "--config", "--events", "--lang", "--headed", "--fail-on", "--provider", "--model", "--platforms", "--data-dir", "--max-steps", "--scripted", "--no-ai", "--save-site", "--save-steps"]) assert.ok(run.includes(o), `run help has ${o}`);
+  for (const o of ["--base-url", "--allow-host", "--keep-bodies", "--no-branding", "--providers"]) assert.ok(!run.includes(o), `run help leaves out ${o}`);
+  assert.match(run, /ANTHROPIC_API_KEY/);
+  const plan = cli("plan", "--help");
+  for (const o of ["--site", "list", "import", "export", "--headed", "--data-dir"]) assert.ok(plan.includes(o), `plan help has ${o}`);
+  assert.doesNotMatch(plan, /--from|--force|--out/);
+  const replay = cli("replay", "--help");
+  assert.ok(replay.includes("--update") && replay.includes("--out"));
+  const mcp = cli("mcp", "--help");
+  for (const o of ["--http", "--port", "--host", "--token", "--allow-private-network", "--reports", "--public-url"]) assert.ok(mcp.includes(o), `mcp help has ${o}`);
 });
 
 const fails = (args, pattern) => assert.throws(() => execFileSync(process.execPath, ["src/cli.js", ...args], { encoding: "utf8", stdio: "pipe" }), (e) => e.status === 2 && pattern.test(e.stderr));
@@ -48,10 +56,24 @@ test("a run without --journey, --goal or config journeys stops before any browse
   assert.equal(err.stderr.trim(), 'Error: Nothing to test. Add --against latest, --journey <id> or --goal "<text>".');
 });
 
-test("the help says a run needs something to test", () => {
-  assert.match(cli("--help"), /A run needs something to test: --against, --journey, --goal/);
-  assert.match(cli("--help"), /--against <plan>/);
-  assert.match(cli("--help"), /plan list --site <url>/);
+const runFails = (args) => {
+  try {
+    execFileSync(process.execPath, ["src/cli.js", "run", "--site", "https://x.test", ...args], { encoding: "utf8", stdio: "pipe", env: { ...process.env, ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" } });
+  } catch (e) {
+    return e;
+  }
+  assert.fail("expected the run to stop");
+};
+
+test("--providers still works, with a note that it is now --platforms", () => {
+  const e = runFails(["--providers", "ga4"]);
+  assert.match(e.stdout, /--providers is now --platforms\./);
+  assert.match(e.stderr, /Nothing to test/);
+  assert.doesNotMatch(runFails(["--platforms", "ga4"]).stdout, /is now --platforms/);
+});
+
+test("--no-ai alone is accepted: it implies --scripted", () => {
+  assert.doesNotMatch(runFails(["--no-ai"]).stderr, /needs --scripted/);
 });
 
 test("--against says how to draft a plan when the site has none, and lists IDs for an unknown one", () => {

@@ -3,110 +3,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
-import { LANGUAGES, messages } from "./i18n.js";
-import { PROVIDERS } from "./providers.js";
-import { JOURNEY_PRESETS } from "./journeys.js";
-import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
+import { messages } from "./i18n.js";
+import { helpText } from "./help.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
-
-const USAGE = `ai-tag-debugger: an open-source AI agent that QA-tests your analytics and ad tracking.
-
-Usage:
-  ai-tag-debugger run --site <url> --journey purchase [options]   Audit ready-made journeys, no config needed.
-  ai-tag-debugger run --site <url> --goal "<what to do>"          Audit a journey you describe in plain language.
-  ai-tag-debugger run --site <url> --against latest               Audit the site against its latest plan.
-  ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
-  ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
-                                                  and list findings that changed. Exits with code 1 when any did.
-  ai-tag-debugger plan --site <url>
-                                                  Let the AI explore one page of each type and propose a measurement
-                                                  plan: events (custom ones too), parameters and user properties.
-                                                  Prints the page types it found and those the site doesn't have.
-                                                  Saved in aitd/<domain>/plans/<id>/ (measurement-plan.json and a readable plan.html).
-  ai-tag-debugger plan list --site <url>          List the site's plan IDs, oldest first.
-  ai-tag-debugger plan export <plan> --site <url> [--format csv]
-                                                  Write a plan as plan.xlsx (or events.csv and user_properties.csv)
-                                                  in its folder, to edit it in a spreadsheet. <plan>: latest, first,
-                                                  a plan ID, or a path to a plan file or folder.
-  ai-tag-debugger plan import <file> --site <url>
-                                                  Save a .xlsx or .csv plan spreadsheet as a new plan.
-  ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
-
-Run options:
-  --site <url>         The site to audit (overrides "site" in the config).
-  --config <file>      Audit config (JSON). See examples/demo.config.json.
-  --against <plan>     Check the run against a plan: latest (or last), first, a plan ID, or a path to a plan
-                       file or folder (then --site may be left out; the plan's "site" is used). Alone, it walks
-                       up to six journeys built from the plan's trigger pages. With --journey or --goal it walks
-                       only those and checks the plan events expected there; the rest are not checked.
-  --journey <id>       Run this journey (repeatable): a journey id from the config, or a ready-made
-                       journey: ${Object.keys(JOURNEY_PRESETS).join(", ")}.
-                       A run needs something to test: --against, --journey, --goal or journeys in --config.
-                       Without one it stops before opening the browser, so it can't wander and spend
-                       API usage. "aitd plan --site <url>" drafts a plan if you're not sure what to test.
-  --goal "<text>"      Run a journey you describe in plain language (repeatable).
-  --events <names>     Only check these events, comma separated, e.g. purchase,add_to_cart.
-  --max-steps <n>      Most AI steps per journey (default 30). Lower it to cap API usage.
-  --data-dir <dir>     Where plans and runs are kept (default: ./aitd). Each run writes report.html, report.md,
-                       timeline.csv and capture.json to <dir>/<domain>/runs/<id>/, the ID being the local time.
-  --provider <name>    AI provider: ${Object.keys(PROVIDERS).join(", ")} (default: whichever API key is set).
-  --model <id>         Model id (defaults: ${Object.entries(PROVIDERS).filter(([, p]) => p.defaultModel).map(([k, p]) => `${k} ${p.defaultModel}`).join(", ")}).
-  --base-url <url>     API address for --provider openai-compatible (Kimi, GLM, DeepSeek, OpenRouter, Ollama...).
-  --lang <code>        Report language: ${Object.keys(LANGUAGES).join(" or ")} (default: en, or "language" in the config).
-  --providers <list>   Tracking providers to check, comma separated (default: ${DEFAULT_PROVIDERS.join(",")}).
-                       Choose from ${Object.keys(TRACKING_PROVIDERS).join(", ")}. Requests to the
-                       others are still answered locally, but only counted ("providers" in the config).
-  --viewport <name>    Only run this viewport: desktop or mobile (repeatable).
-  --allow-host <host>  Let journeys visit this host too, e.g. a hosted checkout (repeatable). By default the
-                       browser stays on the audited site and its subdomains ("allowed_hosts" in the config).
-  --scripted           Replay each journey's fixed "steps" instead of letting the AI browse.
-  --no-ai              Use no AI model at all (requires --scripted). The report then has no explanations.
-  --fail-on <level>    Exit with code 1 when findings reach this level: broken, risk, warning or never (default: broken).
-  --headed             Show the browser window.
-  --keep-bodies        Store tracking requests as sent. By default, emails, phone numbers and user ids sent
-                       for ad matching are redacted in the report and capture.json ("keep_bodies" in the config).
-  --no-branding        Leave the Analitik İşler logo and credit line out of the reports ("branding": false in the config).
-  --save-site <dir>    Also save the site's responses and the steps taken in this folder, so "replay" can audit
-                       the same pages again offline. Its findings become the expected ones.
-  --save-steps <file>  Write the steps each journey took into "journeys[].steps" of this config file (created
-                       if missing), so "run --config <file> --scripted --no-ai" repeats them with no AI model
-                       or API key. A journey run on several viewports keeps the steps of the first.
-
-Replay options:
-  --update             Make this replay's findings the expected ones (after checking that the changes are right).
-  --out <dir>          Where to write the replay's reports (default: <dir>/last-replay).
-
-Plan options:
-  --site <url>         Explore this site with the AI (no tracking needed) and propose a plan. Also takes
-                       --provider, --model, --base-url, --max-steps (default 25), --allow-host and --headed.
-  --data-dir <dir>     Where plans are kept (default: ./aitd). Each plan gets a new <dir>/<domain>/plans/<id>/ folder.
-  --format <type>      For plan export: xlsx (default) or csv.
-
-Plan spreadsheet: an "events" tab with one row per event parameter and the columns event, platform,
-parameter, required (yes/no), example, trigger and description (an event with no parameters is one row
-with an empty parameter), and a "user_properties" tab with name, description and example. As CSV, these
-are events.csv and user_properties.csv side by side. Import never changes a plan; it saves a new one.
-
-MCP options:
-  --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
-  --port <n>           HTTP port (default 8787).
-  --host <addr>        HTTP host (default 127.0.0.1).
-  --token <secret>     Secret URL path segment, at least 16 characters (default: random, printed at start).
-  --allow-private-network  Over HTTP, let audits open localhost and private network addresses (blocked by default).
-  --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports).
-  --public-url <url>   The HTTPS address your tunnel or host gives this server, so audits can link to their reports.
-
-  -h, --help           Show this help.
-  -v, --version        Print the version.
-
-Short alias: aitd (aitd run ... is the same as ai-tag-debugger run ...).
-
-API keys: set one of ${Object.values(PROVIDERS).map((p) => p.env).join(", ")}.
-Any OpenAI-compatible API: --provider openai-compatible --base-url <url> --model <id>, with the key in OPENAI_COMPATIBLE_API_KEY.`;
 
 async function main() {
   const { values, positionals } = parseArgs({
@@ -120,6 +23,7 @@ async function main() {
       out: { type: "string" },
       journey: { type: "string", multiple: true },
       viewport: { type: "string", multiple: true },
+      platforms: { type: "string", multiple: true },
       providers: { type: "string", multiple: true },
       "allow-host": { type: "string", multiple: true },
       "allow-private-network": { type: "boolean", default: false },
@@ -218,12 +122,12 @@ async function main() {
     return;
   }
   if (values.help || command !== "run" || (!values.config && !values.site && !values.against)) {
-    console.log(USAGE);
+    console.log(helpText(command));
     process.exit(values.help ? 0 : 2);
   }
-  if (values["no-ai"] && !values.scripted) {
-    throw new Error("--no-ai needs --scripted: without an AI model, journeys must have fixed steps.");
-  }
+  if (values["no-ai"]) values.scripted = true; // Without an AI model the journeys can only replay fixed steps.
+  if (values.providers?.length) console.log("--providers is now --platforms.");
+  const platforms = [...(values.platforms ?? []), ...(values.providers ?? [])];
   const levels = ["broken", "risk", "warning"];
   const failOn = values["fail-on"];
   if (failOn !== "never" && !levels.includes(failOn)) throw new Error(`--fail-on must be one of ${levels.join(", ")}, never.`);
@@ -271,7 +175,7 @@ async function main() {
     events: (values.events ?? []).flatMap((e) => e.split(",")).map((e) => e.trim()).filter(Boolean),
     maxSteps,
     viewports: values.viewport,
-    providers: values.providers?.length ? values.providers.flatMap((p) => p.split(",")) : undefined,
+    providers: platforms.length ? platforms.flatMap((p) => p.split(",")) : undefined,
     scripted: values.scripted,
     ai: !values["no-ai"],
     provider: values.provider,
