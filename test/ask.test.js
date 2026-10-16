@@ -5,7 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { TOPICS } from "../src/discover.js";
-import { TOPIC_KEYS, commandText, intentToArgs, isSentence, matchKeywords, normalize, translate } from "../src/ask.js";
+import { INTENT_SCHEMA, TOPIC_KEYS, commandText, intentToArgs, isSentence, matchKeywords, normalize, translate } from "../src/ask.js";
 
 // Sentence -> the command it should run. A bare "aitd run" then asks what to test (latest plan
 // or a goal); every run already reports what changed since the previous one. "report" sentences are not runnable yet.
@@ -86,3 +86,18 @@ test("a run with nothing to test asks for a goal when the site has no plan", () 
 });
 
 test("sentence topics match plan --topic", () => assert.deepEqual(TOPIC_KEYS, Object.keys(TOPICS)));
+
+test("the intent schema uses only forms every provider accepts", () => {
+  const walk = (node, where) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach((n, i) => walk(n, `${where}[${i}]`));
+    assert.ok(!Array.isArray(node.type), `${where}: use anyOf with { type: "null" }, not a type list`);
+    if (node.enum) {
+      assert.equal(typeof node.type, "string", `${where}: an enum needs one declared type`);
+      for (const v of node.enum) assert.equal(typeof v, node.type, `${where}: enum value ${v} is not a ${node.type}`);
+    }
+    for (const [k, v] of Object.entries(node)) if (k !== "enum") walk(v, `${where}.${k}`);
+  };
+  walk(INTENT_SCHEMA, "INTENT_SCHEMA");
+  for (const p of INTENT_SCHEMA.required) assert.ok(INTENT_SCHEMA.properties[p], p);
+});

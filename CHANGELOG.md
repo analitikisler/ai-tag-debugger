@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.2 (2026-10-16)
 
+- Fix sentence requests (`aitd "check my GA tags"`) failing with a 400 "Invalid schema" error from the Anthropic API. The request schema now writes optional values in a form Anthropic, OpenAI and Gemini all accept.
 - When `AI_GATEWAY_URL` is set, the first line of a run says so: `Using anthropic (claude-opus-5-5) via Cloudflare AI Gateway`.
 
 ## 0.11.1 (2026-10-16)
