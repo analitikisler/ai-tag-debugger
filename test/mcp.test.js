@@ -120,6 +120,7 @@ test("against checks a finished audit against a saved plan, and refuses paths ov
 
   id = await walk(call);
   assert.match(await call("finish_audit", { audit_id: id, completed: true, note: "x", against: "2020-01-01_0000" }).catch((e) => e.message), /No plan 2020-01-01_0000 for localhost\. Available: 2026-10-16_0900/);
+  await call("finish_audit", { audit_id: id, completed: true, note: "x" }); // a refused finish leaves the audit open; close its browser
   id = await walk(call);
   assert.match(await call("finish_audit", { audit_id: id, completed: true, note: "x", against: "latest", measurement_plan: "{}" }), /either against or measurement_plan/);
   await call("finish_audit", { audit_id: id, completed: true, note: "x" });
