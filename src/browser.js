@@ -341,6 +341,16 @@ async function cleanRecording(file) {
   await writeFile(file, JSON.stringify(har));
 }
 
+/** Where the step left the browser, without query or fragment, so the route can be compared across runs. */
+function pagePath(href) {
+  try {
+    const u = new URL(href);
+    return /^https?:$/.test(u.protocol) ? u.origin + u.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
@@ -808,6 +818,7 @@ export class AuditSession {
     await this.trackCookies();
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
+    this.steps[this.currentStep].pagePath = pagePath(this.page.url());
     return error;
   }
 

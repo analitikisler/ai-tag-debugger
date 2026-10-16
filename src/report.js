@@ -149,11 +149,13 @@ const formatPush = (value) => (isConsentEntry(value) ? `gtag(${value.map((v) => 
 const mdText = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
+const routeList = (ch) => (ch?.routes ?? []).map((r) => `${r.journeyId} (${r.viewport})`).join(", ");
+
 export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
-  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), `**${m.ui.counts(counts)}**`, ""];
+  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), ...(changes?.routes?.length ? [mdText(m.ui.routeChanged(routeList(changes))), ""] : []), `**${m.ui.counts(counts)}**`, ""];
   if (changes) lines.push(...changesMd(m, changes));
   if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
   const sum = summaryParts(explained?.summary);
@@ -662,6 +664,7 @@ function changesMd(m, ch) {
   lines.push(`**${mdText(m.ui.changesLine(ch))}**`, "");
   const items = changeItems(m, ch);
   if (items.length) lines.push(...items.map((i) => `- ${i.tag}: ${mdText(i.text)}`), "");
+  if (ch.routes?.length) lines.push(...ch.routes.map((r) => `- ${mdText(`${r.journeyId} (${r.viewport}): ${r.before.join(" → ")} ⇒ ${r.after.join(" → ")}`)}`), "");
   return lines;
 }
 
@@ -669,7 +672,7 @@ function changesCard(m, ch) {
   const head = `<div class="card-h"><div class="card-t">${m.ui.changesTitle}</div>${ch.previous ? `<div class="card-d">${escapeHtml(m.ui.changesLead(ch.previous, ch.mode))}</div>` : ""}</div>`;
   if (!ch.previous) return `<div class="card" id="changes">${head}<div class="card-c"><p class="muted">${m.ui.noPreviousRun}</p></div></div>`;
   const items = changeItems(m, ch);
-  return `<div class="card" id="changes">${head}<div class="card-c"><p><strong>${escapeHtml(m.ui.changesLine(ch))}</strong></p>${items.length ? `<ul class="changes">${items.map((i) => `<li>${badge(i.sev, i.tag)} ${escapeHtml(i.text)}</li>`).join("")}</ul>` : ""}</div></div>`;
+  return `<div class="card" id="changes">${head}<div class="card-c"><p><strong>${escapeHtml(m.ui.changesLine(ch))}</strong></p>${items.length ? `<ul class="changes">${items.map((i) => `<li>${badge(i.sev, i.tag)} ${escapeHtml(i.text)}</li>`).join("")}</ul>` : ""}${ch.routes?.length ? `<ul class="changes">${ch.routes.map((r) => `<li>${escapeHtml(`${r.journeyId} (${r.viewport}): ${r.before.join(" → ")} ⇒ ${r.after.join(" → ")}`)}</li>`).join("")}</ul>` : ""}</div></div>`;
 }
 
 function planVsSiteMd(m, pc) {
@@ -1029,7 +1032,7 @@ ${navCss(runs)}</style></head><body>
 <div class="topbar"><div class="wrap"><span class="product-logo">${logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd")}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
-<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}
+<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
