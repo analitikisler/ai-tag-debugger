@@ -24,7 +24,8 @@ Run "aitd <command> --help" for that command's options.   -h, --help   -v, --ver
 const RUN = `Usage: aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>")
 
 Audit what a site actually sends while an AI agent walks its journeys. Needs an AI key
-(${Object.values(PROVIDERS).map((p) => p.env).join(", ")}) unless --no-ai.
+(${Object.values(PROVIDERS).map((p) => p.env).join(", ")}) unless --no-ai. Each run is saved in
+aitd/<domain>/runs/<id>/ and its report says what changed since the site's previous run.
 
 What to test (at least one):
   --against <plan>     Check against a plan: latest, first, a plan ID or a plan file or folder

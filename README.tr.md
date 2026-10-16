@@ -224,6 +224,8 @@ aitd/
 
 Bir kimlik, yerel saat `YYYY-MM-DD_HHMM` biçimindedir. O dakika zaten alınmışsa saniye eklenir (`_HHMMSS`). Hiçbir şey değiştirilmez: her taslak, içe aktarma ve çalıştırma yeni bir klasör alır. `aitd/` klasörünü başka bir yerde tutmak için `--data-dir <dir>` kullanın. `replay` ve `--save-site` klasörleri etkilenmez.
 
+Her rapor, çalıştırmayı sitenin `runs/` içindeki bir önceki çalıştırmasıyla karşılaştıran "Son çalıştırmadan bu yana değişenler" bölümüyle açılır, örneğin `2 olay düzeldi, 1 yeni sorun`, ve her birini listeler. İki çalıştırma da `--against` kullandıysa plan kapsamı karşılaştırılır (Eksik iken Uygulanmış olan bir olay düzelmiş sayılır); aksi halde sağlık bulguları karşılaştırılır. Bir sitenin ilk çalıştırmasında karşılaştırılacak bir şey olmadığı yazar. Ayarlanacak bir bayrak yoktur. Karşılaştırma `capture.json` içinde `changes` altında da kaydedilir.
+
 ## Ne test edileceğini seçin
 
 Başlamak için bir ayar dosyasına ihtiyacınız yok. Hazır yolculukları seçin, kendi yolculuğunuzu sade bir dille tarif edin, bir plana karşı kontrol edin ve kontrolü yalnızca ilgilendiğiniz event'lerle sınırlayın:

@@ -224,6 +224,8 @@ aitd/
 
 An ID is the local time, `YYYY-MM-DD_HHMM`. When that minute is already taken, seconds are added (`_HHMMSS`). Nothing is ever replaced: each draft, import and run gets a new folder. Use `--data-dir <dir>` to keep the `aitd/` folder somewhere else. `replay` and `--save-site` folders are not affected.
 
+Each report opens with a "Changed since last run" section that compares the run with the site's previous one in `runs/`, for example `2 events fixed, 1 new problem`, and lists each one. When both runs used `--against`, it compares plan coverage (an event that went from Missing to Implemented is fixed); otherwise it compares the health findings. The first run for a site says there is nothing to compare yet. There is no flag to set. The comparison is also saved under `changes` in `capture.json`.
+
 ## Choose what to test
 
 You don't need a config file to start. Pick ready-made journeys, describe your own in plain language, check against a plan, and narrow the check to the events you care about:
