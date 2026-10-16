@@ -54,3 +54,12 @@ test("an unknown viewport stops the audit before the browser or model starts", a
   await assert.rejects(runAudit({ ...base, config: { ...config, viewports: "mobile" } }), /"viewports" must be a list/);
   assert.deepEqual(logged, [], "no model was set up and no journey started");
 });
+
+test("with nothing picked and no config journeys, a run has no journeys (and no hidden default)", () => {
+  assert.deepEqual(planRun({}).journeys, []);
+  assert.deepEqual(planRun({ plan: { events: [{ platform: "ga4", name: "generate_lead", journeys: ["lead"] }] } }).journeys, []);
+});
+
+test("config journeys run when nothing is picked", () => {
+  assert.deepEqual(planRun({ config: { journeys: [{ id: "mine", goal: "x" }] } }).journeys.map((j) => j.id), ["mine"]);
+});

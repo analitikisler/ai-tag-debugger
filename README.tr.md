@@ -167,6 +167,8 @@ Hedefi Türkçe de yazabilirsiniz, örneğin `--goal "Sayfanın altındaki bült
 
 `--journey`, ayar dosyanızdaki senaryoları da id'leriyle seçer. Ayar dosyasıyla birlikte kullanıldığında hazır senaryolar kendi event'lerini planınıza ekler.
 
+Bir çalıştırmanın her zaman test edecek bir şeye ihtiyacı vardır: `--journey`, `--goal` ya da ayar dosyanızdaki senaryolar. Hiçbiri yoksa `run`, tarayıcıyı açmadan durur; böylece başıboş gezip API kullanımı harcayamaz. Neyi test edeceğinizden emin değil misiniz? `aitd plan --site https://sitenizin-adresi` bir ölçüm planı taslağı çıkarır.
+
 ### API kullanımını düşük tutmak
 
 Her gezinme adımı bir model çağrısıdır. Yani kullanım **senaryo × ekran boyutu × adım** ile artar, buna sonda bulguları açıklayan bir çağrı eklenir. Kontroller hiçbir zaman modeli çağırmaz.
@@ -244,6 +246,8 @@ Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun ad�
 ### Yeni bir site için plan çıkarma
 
 Henüz takip yoksa `aitd plan --site https://sitenizin-adresi` yapay zekânın her sayfa türünden bir sayfayı gezmesini sağlar: ana sayfa, bir kategori, bir ürün, sepet, ödeme adımının ilki, arama ve varsa üyelik ya da iletişim formları. Takip kodu gerektirmez. Asla ödeme yapmaz ve kişisel bilgi içeren bir formu göndermez. `--provider`, `--model` ve `--max-steps` (varsayılan 25, yani en fazla yapay zekâ adımı) seçenekleri `run` ile aynı şekilde çalışır.
+
+Çıktı "Page types found" (bulunan sayfa türleri) ve "Not present on this site" (sitede bulunmayan türler) satırlarını yazar. Yalnızca 2 sayfası olan küçük bir site de sorunsuz çalışır.
 
 Plan `measurement-plan.json` dosyasına yazılır (yolu `--out` ile değiştirebilirsiniz). Her event için şunlar yer alır:
 

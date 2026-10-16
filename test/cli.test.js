@@ -26,3 +26,18 @@ test("the help lists the plan command", () => {
 test("plan --site refuses to replace an existing file before exploring", () => {
   assert.throws(() => execFileSync(process.execPath, ["src/cli.js", "plan", "--site", "https://x.test", "--out", "package.json"], { encoding: "utf8", stdio: "pipe" }), /package\.json already exists/);
 });
+
+test("a run without --journey, --goal or config journeys stops before any browser or model starts", () => {
+  let err;
+  try {
+    execFileSync(process.execPath, ["src/cli.js", "run", "--site", "https://x.test"], { encoding: "utf8", stdio: "pipe", env: { ...process.env, ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" } });
+  } catch (e) {
+    err = e;
+  }
+  assert.equal(err?.status, 2);
+  assert.match(err.stderr, /No journeys to run[\s\S]*--journey <name>[\s\S]*--goal "<text>"[\s\S]*--config <file>[\s\S]*aitd plan --site https:\/\/x\.test/);
+});
+
+test("the help says a run needs a journey", () => {
+  assert.match(cli("--help"), /A run needs a journey to test/);
+});

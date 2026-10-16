@@ -165,6 +165,8 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 
 `--journey` also picks journeys from your config by id. With a config, ready-made journeys add their events to your plan.
 
+A run always needs something to test: `--journey`, `--goal`, or journeys in your config file. Without one, `run` stops before opening the browser, so it can't wander and spend API usage. Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan.
+
 ### Keeping API usage down
 
 Each browsing step is one model call, so usage grows with **journeys × viewports × steps**, plus one call at the end to explain the findings. The checks themselves never call the model.
@@ -242,6 +244,8 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 ### Plan a new site
 
 No tracking yet? `aitd plan --site https://yoursite.com` has the AI explore one page of each type: the home page, a category, a product, the cart, the first checkout step, search, and any sign-up or contact forms. It needs no tracking code. It never pays, and it never submits a form with personal details. `--provider`, `--model` and `--max-steps` (default 25, the most AI steps) work as they do for `run`.
+
+The output prints "Page types found" and "Not present on this site", so you can see which page types the AI reached and which it didn't find. A small site, with only 2 pages, is fine.
 
 The plan is written to `measurement-plan.json` (change the path with `--out`). For each event it lists:
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `aitd plan --site` now prints the page types it found (home, listing, detail, search, cart, checkout, signup, login, contact, newsletter) and the ones the site doesn't have. A small site with few of them is normal, not an error.
+- `aitd run` without `--journey`, `--goal` or journeys in the `--config` file now stops before the browser or the model starts, and lists those options (and `aitd plan --site` for drafting a plan), so a run can't wander and spend API usage. Its error message and `--help` say so.
 - `aitd plan --site <url>` proposes a measurement plan for a site that may track nothing yet. The AI browses one page of each type (home, a category, a product, cart, first checkout step, search, sign-up and contact forms) without paying or submitting personal details, then suggests GA4 events, custom ones included, each with a description, the page and element that trigger it, its parameters (custom ones marked) with example values, and suggested user properties. Events the site already sends are marked `seen`. The file works as `"plan"` in a config as is.
 - `aitd plan --from <capture.json>` drafts a measurement plan from a run: each event seen once per platform, the parameters it sent every time as `required_params`, the journeys it appeared on (when not all of them), and `consent_mode` when a Consent Mode default was pushed. `--from` also takes the report folder; the plan goes to `measurement-plan.json` or `--out <file>`, and an existing file is kept unless `--force` is given.
 

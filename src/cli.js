@@ -23,6 +23,7 @@ Usage:
   ai-tag-debugger plan --site <url> [--out <file>]
                                                   Let the AI explore one page of each type and propose a measurement
                                                   plan: events (custom ones too), parameters and user properties.
+                                                  Prints the page types it found and those the site doesn't have.
   ai-tag-debugger plan --from <capture.json> [--out <file>]
                                                   Draft a measurement plan from the events and parameters a run saw.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
@@ -32,6 +33,9 @@ Run options:
   --config <file>      Audit config (JSON). See examples/demo.config.json.
   --journey <id>       Run this journey (repeatable): a journey id from the config, or a ready-made
                        journey: ${Object.keys(JOURNEY_PRESETS).join(", ")}.
+                       A run needs a journey to test: --journey, --goal or journeys in the --config file.
+                       Without one it stops before opening the browser, so it can't wander and spend
+                       API usage. "aitd plan --site <url>" drafts a plan if you're not sure what to test.
   --goal "<text>"      Run a journey you describe in plain language (repeatable).
   --events <names>     Only check these events, comma separated, e.g. purchase,add_to_cart.
   --max-steps <n>      Most AI steps per journey (default 30). Lower it to cap API usage.
