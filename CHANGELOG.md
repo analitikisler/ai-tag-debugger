@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.0 (2026-10-16)
+
+- The HTML report uses the Analitik İşler design system and the new ai tag debugger logo. The large title is now a compact `Site: example.com` line.
+- Overview has a "This run" card: platforms checked, AI provider and model (or off), plan, journeys, viewports, language and version.
+- Platforms show their icons instead of colored squares, in findings, events, steps and tables.
+- Each journey opens with a Consent card: the Consent Mode default and every update, one tile per signal, granted or denied.
+- Fix: no "not in the measurement plan" finding when no plan is attached.
+- Fix: the server-side note only mentions Meta and TikTok when they were checked.
+- Fix: no "Run without --no-ai" text on AI runs or on info findings.
+- Fix: switching tabs no longer shifts the page sideways.
+
 ## 0.11.3 (2026-10-16)
 
 - `aitd` and `aitd --help` end with the AI a run would use: `AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)`, or `AI: no key set`. The first line of a run names the other keys too.

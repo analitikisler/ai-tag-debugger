@@ -442,9 +442,9 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 Çıktı:
 
 - `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.
-  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, kontrol edilen platformlar ve `--against` ile [Plan ve site](#plan-ve-site) kapsamı.
+  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) ve `--against` ile [Plan ve site](#plan-ve-site) kapsamı.
   - **Bulgular**: önem düzeyine göre gruplu ve filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları ve olayın yaşandığı adımlar bulunur.
-  - **Yolculuklar**: her seferinde bir yolculuk; solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın üç sekmesi vardır:
+  - **Yolculuklar**: her seferinde bir yolculuk. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın üç sekmesi vardır:
     - **Event'ler**: her takip isteği, parametreleri, çerez onayı durumu, arkasındaki dataLayer gönderimi ve isteği ve bir bulgu buraya işaret ediyorsa bir not.
     - **dataLayer**: adımdaki her gönderim.
     - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede bir `?` ipucuyla bir parametre tablosuna çözülmüş. Toplu bir GA4 isteği, içindeki her event'i gösterir.
