@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Every saved run is compared with the site's previous run. The report opens with a "Changed since last run" section (`2 events fixed, 1 new problem`) that lists what was fixed and what is new, by plan coverage when both runs used `--against` and by health findings otherwise. The first run says there is nothing to compare yet. No new flag; the result is also in `capture.json` under `changes`.
+
 ## 0.10.0 (2026-10-16)
 
 - Plan, then audit. `aitd plan --site <url>` drafts a measurement plan in its own folder, `aitd/<domain>/plans/<id>/`: the events a site should send, with a description, the page and element that trigger each one, its parameters (custom ones marked) with example values, and suggested user properties. Events the site already sends are marked `seen`. It browses one page of each type (home, a category, a product, cart, first checkout step, search, sign-up and contact forms) without paying or submitting personal details, and prints the page types it found and the ones the site doesn't have.
