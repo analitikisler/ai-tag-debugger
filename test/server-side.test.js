@@ -50,3 +50,16 @@ test("reports server-side vs browser events and a missing event ID next to a ser
   assert.ok(!checks(run([hit("meta", "Purchase", { eventId: "a" })], [{ provider: "stape" }])).some((c) => c.startsWith("dedup_id_missing")));
   assert.ok(checks(run([hit("meta", "Purchase")], [{ provider: "stape" }])).includes("dedup_id_missing:meta:Purchase"));
 });
+
+test("with no plan, events are not reported as missing from it", () => {
+  assert.ok(!checks(run([hit("ga4", "page_view")])).some((c) => c.startsWith("unplanned_events")));
+});
+
+test("the server-side note only names Meta and TikTok when they were checked", () => {
+  const r = { ...run([hit("ga4", "page_view", { delivery: "server" })]), providers: ["ga4"] };
+  const f = checkRun(plan, r).find((x) => x.check === "server_side");
+  assert.ok(!/Meta|TikTok/.test(f.detail), f.detail);
+  const all = checkRun(plan, { ...r, providers: ["ga4", "meta"] }).find((x) => x.check === "server_side");
+  assert.match(all.detail, /Meta events/);
+  assert.doesNotMatch(all.detail, /TikTok/);
+});
