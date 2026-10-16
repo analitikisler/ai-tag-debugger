@@ -101,6 +101,9 @@ async function readPlan(plan, allowFiles) {
   return readJson(trimmed);
 }
 
+/** finish_audit refuses a bad plan without closing the audit, so the captured run is not lost. */
+const STILL_OPEN = "The audit is still open: call finish_audit again with a corrected plan (or none).";
+
 const AGAINST_DOC = "A saved plan to check against: latest (or last), first, a plan ID such as 2026-10-16_0627, or on a local server a path to a plan file or folder. Plans are the ones saved by `aitd plan --site <url>`.";
 
 /** Finds the saved plan named by `against`. Over HTTP only latest, first and plan IDs are allowed, never paths. */
@@ -248,7 +251,7 @@ export function buildServer(opts) {
     },
     async ({ audit_id, completed, note, measurement_plan, against, events = [], language, branding }) => {
       const audit = getAudit(audit_id);
-      if (against && measurement_plan) return fail("Use either against or measurement_plan, not both.");
+      if (against && measurement_plan) return fail(`Use either against or measurement_plan, not both. ${STILL_OPEN}`);
       let plan;
       let againstPlan = null;
       try {
@@ -259,7 +262,7 @@ export function buildServer(opts) {
         } else plan = await readPlan(measurement_plan, opts.allowFiles);
         if (!Array.isArray(plan.events)) throw new Error('The plan needs an "events" list.');
       } catch (err) {
-        return fail(`Could not read the plan: ${err.message}`);
+        return fail(`Could not read the plan: ${err.message} ${STILL_OPEN}`);
       }
       if (audit.preset) plan = withPresetEvents(plan, audit.journey, audit.preset);
       else plan = expectEvents(plan, audit.journey, events);
