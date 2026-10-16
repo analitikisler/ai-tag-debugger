@@ -370,6 +370,7 @@ export class AuditSession {
     this.dataLayerLog = [];
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
+    this.landing = null; // the first page: { step, requested, chain, final }
     this.skipped = {}; // step index -> { vendor label: requests }
     this.loadedIn = new Map(); // page address -> the last step whose main-frame navigation reached it
     this.leaving = null; // the page address being navigated away from, until the next page commits
@@ -413,6 +414,8 @@ export class AuditSession {
       if (frame !== this.page.mainFrame()) return;
       this.loadedIn.set(pageKey(frame.url()), this.currentStep);
       this.leaving = null;
+      // Script redirects on the first page move where it ends up.
+      if (this.landing && this.landing.step === this.currentStep) this.landing.final = frame.url();
     });
     // From the moment the main frame starts loading another document, the open page is leaving.
     this.page.on("request", (request) => {
@@ -822,7 +825,13 @@ export class AuditSession {
           step.replay = { action: "goto", url: target };
           const refused = await this.checkUrl(target);
           if (refused) return refused;
-          await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
+          const response = await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
+          if (!this.landing) {
+            // The first page: the address asked for, each redirect on the way, and where it ended up.
+            const chain = [];
+            for (let r = response?.request(); r; r = r.redirectedFrom()) chain.unshift(r.url());
+            this.landing = { step: this.currentStep, requested: target, chain, final: this.page.url() };
+          }
           break;
         }
         case "click":

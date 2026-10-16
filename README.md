@@ -378,6 +378,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`. Same as `--platforms`. |
+| `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
