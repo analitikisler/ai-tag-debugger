@@ -41,7 +41,7 @@ Options:
   --headed             Show the browser window
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
 
-AI:  --provider <name>   --model <id>   (default: whichever API key is set)
+AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
 Advanced:
   --max-steps <n>   --platforms <list>   --viewport <name>   --data-dir <dir>
@@ -67,7 +67,7 @@ Options:
   --topic <name>       Only plan one kind of event: custom-events, ecommerce, forms or consent
   --headed             Show the browser window
 
-AI:  --provider <name>   --model <id>   (default: whichever API key is set)
+AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
 Advanced:
   --max-steps <n>   --data-dir <dir>   --format <xlsx|csv>   (see the README)`;
