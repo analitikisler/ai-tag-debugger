@@ -1,11 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 (2026-10-16)
 
-- `aitd plan --site` now prints the page types it found (home, listing, detail, search, cart, checkout, signup, login, contact, newsletter) and the ones the site doesn't have. A small site with few of them is normal, not an error.
-- `aitd run` without `--journey`, `--goal` or journeys in the `--config` file now stops before the browser or the model starts, and lists those options (and `aitd plan --site` for drafting a plan), so a run can't wander and spend API usage. Its error message and `--help` say so.
-- `aitd plan --site <url>` proposes a measurement plan for a site that may track nothing yet. The AI browses one page of each type (home, a category, a product, cart, first checkout step, search, sign-up and contact forms) without paying or submitting personal details, then suggests GA4 events, custom ones included, each with a description, the page and element that trigger it, its parameters (custom ones marked) with example values, and suggested user properties. Events the site already sends are marked `seen`. The file works as `"plan"` in a config as is.
-- `aitd plan --from <capture.json>` drafts a measurement plan from a run: each event seen once per platform, the parameters it sent every time as `required_params`, the journeys it appeared on (when not all of them), and `consent_mode` when a Consent Mode default was pushed. `--from` also takes the report folder; the plan goes to `measurement-plan.json` or `--out <file>`, and an existing file is kept unless `--force` is given.
+- Plan, then audit. `aitd plan --site <url>` drafts a measurement plan in its own folder, `aitd/<domain>/plans/<id>/`: the events a site should send, with a description, the page and element that trigger each one, its parameters (custom ones marked) with example values, and suggested user properties. Events the site already sends are marked `seen`. It browses one page of each type (home, a category, a product, cart, first checkout step, search, sign-up and contact forms) without paying or submitting personal details, and prints the page types it found and the ones the site doesn't have.
+- `aitd run --against <plan>` checks a run against a plan. `<plan>` is `latest`, `first`, a plan ID or a path to a plan file or folder; with `--against` alone the journeys are derived from the plan's trigger pages (at most six), and with `--journey` or `--goal` only the events expected on that flow are checked. The run records the plan ID in its report. The same option works on the `run_audit` and `finish_audit` MCP tools.
+- The report has a "Plan vs. site" section for runs with `--against`, at the top of `report.html` and `report.md`, with a coverage score (`Coverage 7 of 11 (64%), 2 events not checked`). Each planned event is marked Implemented, Missing, Missing params, Wrong values, or Not checked, and unplanned events are listed. The same results are written to `plan-check.json`. Without a plan the report is unchanged.
+- Each plan folder has a `plan.html` page showing its events, parameters, user properties and the consent-mode flag.
+- `aitd plan list --site <url>` lists the plan IDs for a site. `aitd plan export <plan> --site <url>` writes a plan to `plan.xlsx` (or `events.csv` and `user_properties.csv` with `--format csv`), and `aitd plan import <file> --site <url>` saves an edited spreadsheet as a new plan. Import never changes an existing plan; errors name the tab, row and fix.
+- Runs are saved in `aitd/<domain>/runs/<id>/` (report, timeline, capture and plan check) with IDs in local time. `--data-dir <dir>` moves the `aitd/` folder; it replaces `run --out`, which still works as a hidden alias for one minor version.
+- The help is redesigned: a short `aitd --help` with the commands and three examples, and one help text per command that lists the essential options first. `--no-ai` now implies `--scripted`, and the missing-key error names the environment variables to set.
+- `aitd plan --site` prints the page types it found, and `aitd run` without `--journey`, `--goal`, `--against` or journeys in the `--config` file stops before the browser or the model starts, so a run can't wander and spend API usage.
+- Fixed: `npm test` no longer keeps running for about 15 minutes after the MCP tests. A refused `finish_audit` now says the audit is still open and to call it again.
+
+**Breaking changes**
+
+- The default output folder is now `./aitd`. Runs and plans are no longer written to `reports/`.
+- `aitd plan --from` is removed. Draft a plan with `aitd plan --site <url>` instead.
+- `plan --out` and `plan --force` are removed. Each plan is saved in a new folder, so nothing is replaced.
+- `run --out` is replaced by `--data-dir <dir>`.
+- `--providers` is renamed `--platforms`. The old name still works for one minor version and prints a note.
 
 ## 0.9.0 (2026-10-15)
 
