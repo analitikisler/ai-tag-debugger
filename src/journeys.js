@@ -64,11 +64,13 @@ export function presetFor(name) {
  * Adds a journey's preset events to a plan (a copy): events the plan already
  * has are expected on this journey too; missing ones are added for this journey.
  */
-export function withPresetEvents(plan, journeyId, preset) {
+export function withPresetEvents(plan, journeyId, preset, { addMissing = true } = {}) {
   const events = plan.events.map((e) => ({ ...e }));
   for (const pe of preset.events) {
-    const existing = events.find((e) => e.platform === pe.platform && e.name === pe.name);
-    if (!existing) events.push({ ...pe, journeys: [journeyId] });
+    const existing = events.find((e) => String(e.platform).toLowerCase() === pe.platform && e.name === pe.name);
+    if (!existing) {
+      if (addMissing) events.push({ ...pe, journeys: [journeyId] });
+    }
     else if (existing.journeys && !existing.journeys.includes(journeyId)) existing.journeys = [...existing.journeys, journeyId];
   }
   return { ...plan, events };
@@ -80,10 +82,20 @@ export function withPresetEvents(plan, journeyId, preset) {
  *   picks: journey ids from the config or preset names. goals: journeys described in plain language.
  *   events: only check these event names.
  */
-export function planRun({ config = {}, plan, picks = [], goals = [], events = [] }) {
-  // Copied, because the loops below add journeys to events.
-  let runPlan = { ...(plan ?? { events: [] }), events: (plan?.events ?? []).map((e) => ({ ...e })) };
+export function planRun({ config = {}, plan, picks = [], goals = [], events = [], against = false }) {
   const configJourneys = config.journeys ?? [];
+  // --against alone: the plan says what to walk.
+  if (against && !picks.length && !goals.length && !configJourneys.length) {
+    const derived = journeysFromPlan(plan);
+    return { journeys: derived.journeys, plan: onlyEvents(derived.plan, events) };
+  }
+  // --against with --journey or --goal: only plan events expected on those flows are checked;
+  // the rest are expected nowhere, so they are not checked rather than reported missing.
+  const scoped = against && (picks.length || goals.length);
+  let runPlan = {
+    ...(plan ?? { events: [] }),
+    events: (plan?.events ?? []).map((e) => (scoped ? { ...e, journeys: (e.journeys ?? []).filter((j) => picks.includes(j)) } : { ...e })),
+  };
   const journeys = [];
 
   for (const pick of picks) {
@@ -99,13 +111,13 @@ export function planRun({ config = {}, plan, picks = [], goals = [], events = []
     }
     if (journeys.some((j) => j.id === preset.id)) continue;
     journeys.push({ id: preset.id, goal: preset.goal });
-    runPlan = withPresetEvents(runPlan, preset.id, preset);
+    runPlan = withPresetEvents(runPlan, preset.id, preset, { addMissing: !scoped });
   }
 
   goals.forEach((goal, i) => {
     const id = goals.length > 1 ? `custom-${i + 1}` : "custom";
     journeys.push({ id, goal });
-    runPlan = expectEvents(runPlan, id, events);
+    runPlan = expectEvents(runPlan, id, scoped ? [...events, ...eventsNamedIn(goal, runPlan)] : events);
   });
 
   if (!picks.length && !goals.length) journeys.push(...configJourneys);
@@ -139,4 +151,71 @@ export function filterFindings(findings, events = []) {
   if (!events.length) return findings;
   const wanted = new Set(events.map((e) => e.toLowerCase()));
   return findings.filter((f) => (f.event ? wanted.has(f.event.toLowerCase()) : f.check !== "unplanned_events"));
+}
+
+const words = (text) => String(text ?? "").toLowerCase().replace(/[_-]+/g, " ");
+
+/** Plan events a plain-language goal mentions, by event name ("add to cart" finds add_to_cart) or "<trigger page> page". */
+export function eventsNamedIn(goal, plan) {
+  const text = words(goal);
+  return plan.events
+    .filter((e) => text.includes(words(e.name)) || (e.trigger?.page && text.includes(`${words(e.trigger.page)} page`)))
+    .map((e) => e.name);
+}
+
+/** Which ready-made journey covers a group of plan events, from the standard GA4 shop and lead events in it. */
+const PRESET_BY_EVENT = [
+  ["purchase", ["purchase", "add_payment_info", "add_shipping_info", "begin_checkout"]],
+  ["add_to_cart", ["add_to_cart", "view_cart"]],
+  ["sign_up", ["sign_up"]],
+  ["lead", ["generate_lead"]],
+  ["search", ["search", "view_search_results"]],
+];
+
+export const MAX_PLAN_JOURNEYS = 6;
+
+const slug = (text) => words(text).trim().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "page";
+
+function goalFor(page, events) {
+  const actions = [...new Set(events.map((e) => e.trigger?.element).filter(Boolean))];
+  const where = page ? `go to a ${page} page` : "browse the site";
+  const doing = actions.length ? ` and use ${actions.map((a) => `"${a}"`).join(", ")}` : "";
+  return `Accept cookies, ${where}${doing}. Never enter real payment details.`;
+}
+
+/**
+ * Journeys for `run --against` used alone: the plan's events grouped by the page they are triggered on
+ * (trigger.page), at most six, each with one goal built from the plan's trigger text (standard shop events
+ * reuse the ready-made journeys) and the group's events expected on it. Returns the journeys and the plan
+ * with each event's "journeys" set.
+ */
+export function journeysFromPlan(plan, max = MAX_PLAN_JOURNEYS) {
+  const groups = new Map();
+  for (const e of plan?.events ?? []) {
+    const page = e.trigger?.page ? String(e.trigger.page).trim() : "";
+    if (!groups.has(page)) groups.set(page, []);
+    groups.get(page).push(e);
+  }
+  // The biggest groups get their own journey; the rest share the last one.
+  let list = [...groups].map(([page, evs]) => ({ page, events: evs })).sort((a, b) => b.events.length - a.events.length);
+  if (list.length > max) {
+    const rest = list.slice(max - 1);
+    list = [...list.slice(0, max - 1), { page: rest.map((g) => g.page).filter(Boolean).join(", "), events: rest.flatMap((g) => g.events), merged: rest }];
+  }
+  const journeys = [];
+  const ids = new Map();
+  for (const group of list) {
+    const names = new Set(group.events.map((e) => e.name));
+    const presetId = PRESET_BY_EVENT.find(([, evs]) => evs.some((n) => names.has(n)))?.[0];
+    const base = presetId && !journeys.some((j) => j.id === presetId) ? presetId : slug(group.page);
+    let id = base;
+    for (let n = 2; journeys.some((j) => j.id === id); n++) id = `${base}_${n}`;
+    const goal = presetId === id ? JOURNEY_PRESETS[presetId].goal : group.merged ? group.merged.map((g) => goalFor(g.page, g.events)).join(" Then ") : goalFor(group.page, group.events);
+    journeys.push({ id, goal, planEvents: group.events.map((e) => e.name) });
+    for (const e of group.events) ids.set(e, id);
+  }
+  return {
+    journeys,
+    plan: { ...plan, events: (plan?.events ?? []).map((e) => ({ ...e, journeys: [ids.get(e)] })) },
+  };
 }

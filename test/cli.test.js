@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const cli = (...args) => execFileSync(process.execPath, ["src/cli.js", ...args], { encoding: "utf8" });
@@ -43,9 +45,27 @@ test("a run without --journey, --goal or config journeys stops before any browse
     err = e;
   }
   assert.equal(err?.status, 2);
-  assert.match(err.stderr, /No journeys to run[\s\S]*--journey <name>[\s\S]*--goal "<text>"[\s\S]*--config <file>[\s\S]*aitd plan --site https:\/\/x\.test/);
+  assert.equal(err.stderr.trim(), 'Error: Nothing to test. Add --against latest, --journey <id> or --goal "<text>".');
 });
 
-test("the help says a run needs a journey", () => {
-  assert.match(cli("--help"), /A run needs a journey to test/);
+test("the help says a run needs something to test", () => {
+  assert.match(cli("--help"), /A run needs something to test: --against, --journey, --goal/);
+  assert.match(cli("--help"), /--against <plan>/);
+  assert.match(cli("--help"), /plan list --site <url>/);
+});
+
+test("--against says how to draft a plan when the site has none, and lists IDs for an unknown one", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-"));
+  fails(["run", "--site", "https://www.example.com", "--against", "latest", "--data-dir", dir], /No plan yet for example\.com\. Draft one with: aitd plan --site https:\/\/www\.example\.com/);
+  mkdirSync(path.join(dir, "example.com", "plans", "2026-10-16_0900"), { recursive: true });
+  writeFileSync(path.join(dir, "example.com", "plans", "2026-10-16_0900", "measurement-plan.json"), "{}");
+  fails(["run", "--site", "https://www.example.com", "--against", "2026-01-01_0000", "--data-dir", dir], /No plan 2026-01-01_0000 for example\.com\. Available: 2026-10-16_0900/);
+  fails(["run", "--against", path.join(dir, "missing")], /No plan found at/);
+});
+
+test("plan list prints the site's plan IDs, oldest first", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-"));
+  fails(["plan", "list", "--site", "https://example.com", "--data-dir", dir], /No plan yet for example\.com/);
+  for (const id of ["2026-10-16_0900", "2026-10-15_1200"]) mkdirSync(path.join(dir, "example.com", "plans", id), { recursive: true });
+  assert.equal(cli("plan", "list", "--site", "https://www.example.com", "--data-dir", dir), "2026-10-15_1200\n2026-10-16_0900\n");
 });

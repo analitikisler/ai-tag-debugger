@@ -149,11 +149,11 @@ const formatPush = (value) => (isConsentEntry(value) ? `gtag(${value.map((v) => 
 const mdText = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
-export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true }) {
+export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
-  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", `**${m.ui.counts(counts)}**`, ""];
+  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), `**${m.ui.counts(counts)}**`, ""];
   const sum = summaryParts(explained?.summary);
   if (sum) {
     lines.push(`## ${m.ui.summary}`, "", sum.text ? mdText(sum.text) : `**${mdText(sum.headline)}**`, "");
@@ -916,7 +916,7 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true }) {
+export function renderHtml({ title, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -938,7 +938,7 @@ ${navCss(runs)}</style></head><body>
 <header class="wrap title">
 <div class="eyebrow">${m.ui.eyebrow}</div>
 <h1>${escapeHtml(title)}</h1>
-<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>
+<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>

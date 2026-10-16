@@ -190,3 +190,12 @@ test("AI text renders bold numbers and code names only; everything else stays es
   assert.match(html, /\[link\]\(https:\/\/evil\.example\)/);
   assert.doesNotMatch(html, /<script|<img src=x|<b>late/);
 });
+
+test("a run against a plan names the plan in the report header, in English and Turkish", async () => {
+  const { renderMarkdown } = await import("../src/report.js");
+  const base = { title: "t", generatedAt: "now", findings: [], explained: null, runs: [] };
+  assert.match(renderMarkdown({ ...base, against: "2026-10-16_0900" }), /Checked against plan 2026-10-16_0900/);
+  assert.match(renderHtml({ ...base, against: "<x>" }), /Checked against plan &lt;x&gt;/);
+  assert.match(renderMarkdown({ ...base, lang: "tr", against: "2026-10-16_0900" }), /2026-10-16_0900 planına göre kontrol edildi/);
+  assert.doesNotMatch(renderMarkdown(base), /Checked against/);
+});
