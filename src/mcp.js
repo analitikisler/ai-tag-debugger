@@ -20,6 +20,7 @@ import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
+import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -33,7 +34,7 @@ const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracki
 
 Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}); pass their choice as providers.
 
-To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit with the measurement plan to get the findings and a full HTML report. Explain the findings to the user in plain language.
+To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language.
 
 While browsing:
 ${SYSTEM_PROMPT.split("How to work:\n")[1]}`;
@@ -100,10 +101,24 @@ async function readPlan(plan, allowFiles) {
   return readJson(trimmed);
 }
 
+const AGAINST_DOC = "A saved plan to check against: latest (or last), first, a plan ID such as 2026-10-16_0627, or on a local server a path to a plan file or folder. Plans are the ones saved by `aitd plan --site <url>`.";
+
+/** Finds the saved plan named by `against`. Over HTTP only latest, first and plan IDs are allowed, never paths. */
+async function loadAgainst(ref, site, opts) {
+  if (!opts.allowFiles && !/^(latest|last|first|\d{4}-\d{2}-\d{2}_\d{4}(\d{2})?)$/.test(ref.trim())) {
+    throw new Error("Over HTTP, against takes latest, first or a plan ID, not a path.");
+  }
+  const found = await resolvePlan(ref, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site });
+  const plan = await readJson(found.file);
+  if (!Array.isArray(plan?.events)) throw new Error(`${found.file} is not a plan: it needs an "events" list.`);
+  return { found, plan };
+}
+
 /**
- * @param {{ allowFiles: boolean, blockPrivate?: boolean, reportsDir: string, reportsUrl?: string }} opts
+ * @param {{ allowFiles: boolean, blockPrivate?: boolean, reportsDir: string, reportsUrl?: string, dataDir?: string }} opts
  *   allowFiles: local (stdio) servers may read config and plan files; HTTP servers may not.
  *   blockPrivate: the browser refuses loopback, private and link-local addresses (HTTP servers, by default).
+ *   dataDir: where saved plans live (default ./aitd), used by `against`.
  *   reportsUrl: where an HTTP server serves finished reports, if it knows its public URL.
  */
 export function buildServer(opts) {
@@ -214,7 +229,7 @@ export function buildServer(opts) {
     {
       title: "Finish and check the audit",
       description:
-        "Closes the browser, checks every captured hit against the measurement plan (missing events, missing parameters, duplicates, hits before consent, Consent Mode defaults, emails sent in plain text, unplanned events) and writes a full HTML report with the event timeline. Returns the findings.",
+        "Closes the browser, checks every captured hit against the plan (missing events, missing parameters, duplicates, hits before consent, Consent Mode defaults, emails sent in plain text, unplanned events) and writes the report with the event timeline. Returns the findings. The plan is what should be tracked: pass a saved one with against, or write one inline with measurement_plan.",
       inputSchema: {
         audit_id: z.string(),
         completed: z.boolean().describe("Whether the journey reached its goal."),
@@ -223,21 +238,28 @@ export function buildServer(opts) {
           .string()
           .optional()
           .describe(
-            'The measurement plan as JSON text, e.g. {"consent_mode": true, "events": [{"platform": "ga4", "name": "purchase", "required_params": ["transaction_id", "value", "currency"]}]}. On a local server this can also be a file path. Without a plan, a ready-made journey checks its own events; otherwise only consent, duplicate and personal data checks run.',
+            'The plan (what should be tracked) as JSON text, e.g. {"consent_mode": true, "events": [{"platform": "ga4", "name": "purchase", "required_params": ["transaction_id", "value", "currency"]}]}. On a local server this can also be a file path. Without a plan, a ready-made journey checks its own events; otherwise only consent, duplicate and personal data checks run.',
           ),
+        against: z.string().optional().describe(`${AGAINST_DOC} The site comes from this audit. Use either against or measurement_plan, not both.`),
         events: z.array(z.string()).optional().describe("Only check these events, e.g. [\"purchase\", \"add_to_cart\"]. On your own journey, these events are also expected to fire."),
         language: z.enum(Object.keys(LANGUAGES)).optional().describe("Report language. Default en."),
         branding: z.boolean().optional().describe("Set false to leave the Analitik İşler logo and credit line out of the report."),
       },
     },
-    async ({ audit_id, completed, note, measurement_plan, events = [], language, branding }) => {
+    async ({ audit_id, completed, note, measurement_plan, against, events = [], language, branding }) => {
       const audit = getAudit(audit_id);
+      if (against && measurement_plan) return fail("Use either against or measurement_plan, not both.");
       let plan;
+      let againstPlan = null;
       try {
-        plan = await readPlan(measurement_plan, opts.allowFiles);
+        if (against) {
+          const loaded = await loadAgainst(against, audit.site, opts);
+          plan = loaded.plan;
+          againstPlan = { ...loaded.found, label: loaded.found.id ?? path.relative(process.cwd(), loaded.found.file) };
+        } else plan = await readPlan(measurement_plan, opts.allowFiles);
         if (!Array.isArray(plan.events)) throw new Error('The plan needs an "events" list.');
       } catch (err) {
-        return fail(`Could not read the measurement plan: ${err.message}`);
+        return fail(`Could not read the plan: ${err.message}`);
       }
       if (audit.preset) plan = withPresetEvents(plan, audit.journey, audit.preset);
       else plan = expectEvents(plan, audit.journey, events);
@@ -251,10 +273,11 @@ export function buildServer(opts) {
       const grouped = groupFindings(findings);
       const counts = summarize(grouped);
       const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
-      const reportPath = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, branding: branding !== false });
+      const reportPath = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
       const m = messages(lang);
       const lines = [
         m.ui.counts(counts),
+        ...(againstPlan ? [m.ui.checkedAgainst(againstPlan.label)] : []),
         "",
         ...grouped.filter((f) => f.severity !== "ok").map((f) => `- ${m.severity[f.severity]}: ${f.detail}${f.evidence ? ` (captured: ${f.evidence})` : ""} [${f.where.map((w) => m.ui.whereStep(w.journey, w.viewport, w.step)).join("; ")}]`),
         "",
@@ -278,9 +301,10 @@ export function buildServer(opts) {
       {
         title: "Run a configured audit",
         description:
-          "Runs every journey in a ai-tag-debugger config file. With scripted true, it replays each journey's fixed steps and needs no API key. Otherwise the journeys are browsed by the AI provider configured on this computer (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY). Writes the reports and returns the findings.",
+          "Runs every journey in a ai-tag-debugger config file and writes the report. With against, the run is checked against a saved plan and, if the config has no journeys, walks the journeys derived from that plan. With scripted true, it replays each journey's fixed steps and needs no API key. Otherwise the journeys are browsed by the AI provider configured on this computer (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY). Returns the findings.",
         inputSchema: {
           config: z.string().describe("Path to the config file, e.g. ai-tag-debugger.config.json"),
+          against: z.string().optional().describe(`${AGAINST_DOC} The site comes from the config.`),
           scripted: z.boolean().optional().describe("Replay fixed steps instead of browsing with an AI model. Default true."),
           language: z.enum(Object.keys(LANGUAGES)).optional(),
           branding: z.boolean().optional().describe("Set false to leave the Analitik İşler logo and credit line out of the report."),
@@ -290,12 +314,26 @@ export function buildServer(opts) {
             .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")}. Requests to the others are still answered locally, but they are only counted, not shown or checked.`),
         },
       },
-      async ({ config: configFile, scripted, language, branding, providers }) => {
+      async ({ config: configFile, against, scripted, language, branding, providers }) => {
         const loaded = await loadConfig(configFile);
+        let againstPlan = null;
+        if (against) {
+          try {
+            const found = await loadAgainst(against, loaded.config.site, opts);
+            if (!loaded.config.site) {
+              if (!found.plan.site) throw new Error(`${found.found.file} has no "site" and the config has none either.`);
+              loaded.config = { ...loaded.config, site: found.plan.site };
+            }
+            loaded.plan = found.plan;
+            againstPlan = found.found;
+          } catch (err) {
+            return fail(`Could not read the plan: ${err.message}`);
+          }
+        }
         const replay = scripted !== false;
         let result;
         try {
-          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, against: againstPlan, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
         } catch (err) {
           // The CLI wording (--scripted --no-ai) means nothing to a chat app, so say it in this tool's terms.
           if (err.code !== "NO_API_KEY") throw err;
