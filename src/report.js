@@ -468,6 +468,37 @@ function whereTarget(runs, w, f) {
   return { ri, step };
 }
 
+/** The push a hit came from: the latest matching push at or before the hit, else the first match. */
+function sourcePush(run, hit) {
+  const pushes = pushesForHit(run, hit);
+  return pushes.filter((e) => e.t <= hit.t).at(-1) ?? pushes[0] ?? null;
+}
+
+/** The step in order: each dataLayer push, the GTM event it raised, then the platform hits it caused. Hits with no push come last. */
+function timelinePanel(m, findings, run, step, pushes, hits) {
+  const bySource = new Map();
+  const orphans = [];
+  for (const h of [...hits].sort((a, b) => a.t - b.t)) {
+    const src = sourcePush(run, h);
+    if (src && src.step === step.index) {
+      if (!bySource.has(src)) bySource.set(src, []);
+      bySource.get(src).push(h);
+    } else orphans.push(h);
+  }
+  const hitList = (list) => (list.length ? `<ul class="evlist tl-hits">${list.map((h) => eventRow(m, findings, run, step, h)).join("")}</ul>` : `<p class="muted xs tl-none">${m.ui.timelineNoHits}</p>`);
+  const nodes = [...pushes].sort((a, b) => a.t - b.t).map((e) => {
+    const name = pushEvent(e.value);
+    const gtm = isConsentEntry(e.value)
+      ? `<span class="tl-k">${m.ui.timelineConsent}</span><code>${escapeHtml(`consent ${e.value[1] ?? ""}`.trim())}</code>`
+      : typeof name === "string" && name
+        ? `<span class="tl-k">${m.ui.timelineGtmEvent}</span><code>${escapeHtml(name)}</code>`
+        : `<span class="tl-k muted">${m.ui.timelineNoEvent}</span>`;
+    return `<li class="tl-node"><div class="tl-lbl">dataLayer</div><ul class="evlist">${pushRow(m, run, e)}</ul><div class="tl-gtm">${gtm}</div>${hitList(bySource.get(e) ?? [])}</li>`;
+  });
+  if (orphans.length) nodes.push(`<li class="tl-node tl-orphan"><div class="tl-lbl">${m.ui.timelineOther}</div>${hitList(orphans)}</li>`);
+  return nodes.length ? `<ol class="timeline">${nodes.join("")}</ol>` : `<p class="empty">${m.ui.noHits}</p>`;
+}
+
 function stepDetail(m, lang, findings, run, ri, step, isDefault) {
   const hits = run.hits.filter((h) => h.step === step.index);
   const id = `s${ri}-${step.index}`;
@@ -480,7 +511,8 @@ function stepDetail(m, lang, findings, run, ri, step, isDefault) {
   const tab = (n, label, count) => `<input type="radio" name="${id}" id="${id}-${n}"${n === 1 ? " checked" : ""}><label for="${id}-${n}">${label} <span class="n">${count}</span></label>`;
   return `<section class="sdetail${isDefault ? " default" : ""}" id="${stepAnchor(ri, step.index)}" aria-label="${escapeHtml(step.label)}">
 <header class="shead"><span class="sidx">${step.index}</span><div><h3>${escapeHtml(step.label)}</h3><div class="muted xs">${escapeHtml(m.ui.stepMeta(seconds(run, step.t), hits.length, pushes.length, skippedN))}${step.forced ? ` · ${m.ui.clickedThrough}` : ""}</div></div></header>
-<div class="tabs seg">${tab(1, m.ui.tabEvents, eventRows.length)}${tab(2, "dataLayer", pushes.length)}${tab(3, m.ui.tabNetwork, reqRows.length)}
+<div class="tabs seg">${tab(1, m.ui.tabTimeline, pushes.length + hits.length)}${tab(2, m.ui.tabEvents, eventRows.length)}${tab(3, "dataLayer", pushes.length)}${tab(4, m.ui.tabNetwork, reqRows.length)}
+<div class="panel">${timelinePanel(m, findings, run, step, pushes, hits)}</div>
 <div class="panel">${eventRows.length ? filtered(m, `${id}e`, eventRows, eventRows.map((r) => r.html).join("")) : `<p class="empty">${m.ui.noHits}</p>`}</div>
 <div class="panel">${pushes.length ? `<ul class="evlist">${pushes.map((e) => pushRow(m, run, e)).join("")}</ul>` : `<p class="empty">${m.ui.noPushes}</p>`}</div>
 <div class="panel">${reqRows.length ? filtered(m, `${id}n`, reqRows, reqRows.map((r) => r.html).join("")) : `<p class="empty">${m.ui.noRequests}</p>`}${skippedN ? `<p class="muted xs scope-note">${escapeHtml(m.ui.skippedInStep(skipped.map(([v, n]) => `${v} ${n}`).join(", "), skippedN))}</p>` : ""}</div>
@@ -915,15 +947,23 @@ body>main{flex:1 0 auto;width:100%}
 .shead h3{overflow-wrap:anywhere}
 .shead .sidx{background:var(--accent);border-color:var(--accent);color:#fff;width:26px;height:26px;flex:none}
 .empty{color:var(--muted);padding:8px 0}
-.tabs.seg{display:grid;grid-template-columns:repeat(3,auto) 1fr;padding:0 16px 16px}
+.tabs.seg{display:grid;grid-template-columns:repeat(4,auto) 1fr;padding:0 16px 16px}
 .tabs.seg>input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .tabs.seg>label{padding:6px 12px;font-weight:500;color:var(--muted);cursor:pointer;background:var(--muted-bg);white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 .tabs.seg>label:nth-of-type(1){border-radius:var(--radius) 0 0 var(--radius)}
-.tabs.seg>label:nth-of-type(3){border-radius:0 var(--radius) var(--radius) 0}
+.tabs.seg>label:nth-of-type(4){border-radius:0 var(--radius) var(--radius) 0}
 .tabs.seg>input:checked+label{background:var(--bg);color:var(--fg);box-shadow:inset 0 0 0 1px var(--border)}
 .tabs.seg>input:focus-visible+label{outline:2px solid var(--accent)}
 .tabs.seg>.panel{display:none;grid-column:1/-1;padding-top:12px;min-width:0}
-.tabs.seg>input:nth-of-type(1):checked~.panel:nth-of-type(1),.tabs.seg>input:nth-of-type(2):checked~.panel:nth-of-type(2),.tabs.seg>input:nth-of-type(3):checked~.panel:nth-of-type(3){display:block}
+.tabs.seg>input:nth-of-type(1):checked~.panel:nth-of-type(1),.tabs.seg>input:nth-of-type(2):checked~.panel:nth-of-type(2),.tabs.seg>input:nth-of-type(3):checked~.panel:nth-of-type(3),.tabs.seg>input:nth-of-type(4):checked~.panel:nth-of-type(4){display:block}
+.timeline{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--border);display:grid;gap:14px}
+.tl-node{position:relative;display:grid;gap:6px;min-width:0}
+.tl-node::before{content:"";position:absolute;left:-24px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+.tl-orphan::before{border-color:var(--muted)}
+.tl-lbl{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tl-gtm{display:flex;gap:8px;align-items:center;font-size:13px;padding-left:12px}
+.tl-k{color:var(--muted)}
+.tl-hits,.tl-none{margin-left:12px}
 .filter{display:flex;flex-wrap:wrap;gap:6px;position:relative}
 .filter>input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .filter>label{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--input);border-radius:var(--radius);font-size:12px;cursor:pointer;color:var(--muted);background:var(--bg)}
