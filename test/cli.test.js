@@ -28,7 +28,7 @@ test("each command has its own help with its essential options", () => {
   for (const o of ["--base-url", "--allow-host", "--keep-bodies", "--no-branding", "--providers"]) assert.ok(!run.includes(o), `run help leaves out ${o}`);
   assert.match(run, /ANTHROPIC_API_KEY/);
   const plan = cli("plan", "--help");
-  for (const o of ["--site", "list", "import", "export", "--headed", "--data-dir"]) assert.ok(plan.includes(o), `plan help has ${o}`);
+  for (const o of ["--site", "list", "import", "export", "--headed", "--data-dir", "--topic", "custom-events", "ecommerce", "forms", "consent"]) assert.ok(plan.includes(o), `plan help has ${o}`);
   assert.doesNotMatch(plan, /--from|--force|--out/);
   const replay = cli("replay", "--help");
   assert.ok(replay.includes("--update") && replay.includes("--out"));
@@ -43,6 +43,7 @@ test("removed plan flags say what to run instead", () => {
   fails(["plan", "--site", "https://x.test", "--out", "p.json"], /--out was removed[\s\S]*--data-dir/);
   fails(["plan", "--site", "https://x.test", "--force"], /--force was removed/);
   fails(["plan"], /plan needs --site <url>/);
+  fails(["plan", "--site", "https://x.test", "--topic", "video"], /Unknown --topic "video"\. Use one of: custom-events, ecommerce, forms, consent/);
 });
 
 test("a run without --journey, --goal or config journeys stops before any browser or model starts", () => {

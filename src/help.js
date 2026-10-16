@@ -63,6 +63,7 @@ Commands:
 
 Options:
   --site <url>         The site (required)
+  --topic <name>       Only plan one kind of event: custom-events, ecommerce, forms or consent
   --headed             Show the browser window
 
 AI:  --provider <name>   --model <id>   (default: whichever API key is set)
