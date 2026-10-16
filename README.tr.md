@@ -74,8 +74,9 @@ Kendi API anahtarınızı getirirsiniz. `ai-tag-debugger` her sağlayıcının r
 | Anthropic (Claude) | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-pro-latest` |
+| Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` ve `CLOUDFLARE_ACCOUNT_ID` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
-Sağlayıcı, ayarlı olan anahtardan seçilir (birden fazla varsa önce Anthropic). `--provider anthropic|openai|gemini` ya da ayar dosyasındaki `"provider"` ile açıkça seçebilirsiniz; başka bir model için `--model` kullanın. Gezinme, çalışmaları ucuz tutmak için düşük akıl yürütme çabası ister; açıklamalar yüksek çaba ve yapılandırılmış JSON çıktısı ister.
+`--provider` verilmezse bulunan ilk ayar belirler, şu sırayla: `OPENAI_COMPATIBLE_BASE_URL`, Vercel AI Gateway (`AI_GATEWAY_API_KEY`), Cloudflare Workers AI, Anthropic, OpenAI, Gemini. `--provider anthropic|openai|gemini|vercel|cloudflare` ya da ayar dosyasındaki `"provider"` ile açıkça seçebilirsiniz; başka bir model için `--model` kullanın. `--model cheap`, rutin CI çalıştırmaları için her sağlayıcının küçük ve ucuz modelini seçer: `claude-haiku-5-5`, `gpt-5.5-mini`, `gemini-flash-latest` ya da Vercel'de `anthropic/claude-haiku-5.5`. Cloudflare'da bu listede tek bir model var, bu yüzden orada `cheap` ile varsayılan aynıdır. Gezinme, çalışmaları ucuz tutmak için düşük akıl yürütme çabası ister; açıklamalar yüksek çaba ve yapılandırılmış JSON çıktısı ister.
 
 ### OpenAI uyumlu herhangi bir API: Kimi, GLM, DeepSeek, OpenRouter, Ollama ve daha fazlası
 
@@ -119,9 +120,21 @@ export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<hesap kimliği>/defa
 export AI_GATEWAY_TOKEN=...   # yalnızca gateway'de kimlik doğrulama açıksa
 ```
 
-`anthropic`, `openai` ve `gemini` ile çalışır. Her çalıştırmanın canlı sitenizi görmesi için gateway'de önbelleği kapalı bırakın. Cloudflare Workers AI modelleri de OpenAI uyumlu sağlayıcıyla `--base-url https://api.cloudflare.com/client/v4/accounts/<hesap kimliği>/ai/v1` kullanılarak çalışır.
+`anthropic`, `openai` ve `gemini` ile çalışır. Her çalıştırmanın canlı sitenizi görmesi için gateway'de önbelleği kapalı bırakın. Cloudflare'ın kendi modelleri için bkz. [Cloudflare Workers AI](#cloudflare-workers-ai).
 
 **Model seçimi hakkında bir not.** Yapay zekâ, 5 ila 30 adım boyunca araç çağırarak, her seferinde bir adım gezinir. Modeller bunu ne kadar güvenilir yaptıklarında büyük farklılık gösterir: daha küçük ve yerel modeller yanlış yere tıklayabilir, döngüye girebilir ya da erken durabilir. Kontroller model ne yaparsa yapsın doğrudur, çünkü yakalanan isteklerden gelirler; ama bitmeyen bir yolculuk, sonraki event'lerini gösteremez. Bir model zorlanıyorsa daha büyük bir model, kısa hedefli hazır bir yolculuk ya da `--max-steps` deneyin. Anthropic, OpenAI ve Gemini varsayılanları test edilmiş olanlardır.
+
+### Cloudflare Workers AI
+
+Cloudflare'ın ağında açık modeller; kullanım başına Cloudflare tarafından faturalandırılır. Workers AI yetkisi olan bir API token oluşturun ve hesap kimliğinizi Cloudflare panelinde bulun:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+aitd run --site https://yourshop.com --journey purchase
+```
+
+`--model` verilmezse `@cf/meta/llama-3.3-70b-instruct-fp8-fast` kullanılır. İki değişken de ayarlıysa Cloudflare, Anthropic, OpenAI ve Gemini'den önce seçilir; bunlardan birini kullanmak için `--provider` verin.
 
 Yerel bir sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içinde iki fonksiyon yazmanız gerekir: araç çağıran bir konuşma ve yapılandırılmış bir JSON çağrısı.
 
@@ -319,6 +332,7 @@ Gezinmenin her adımı bir model çağrısıdır; bu yüzden kullanım **yolculu
 - **Tek bir görünüm çalıştırın.** `--viewport mobile`, masaüstü ve mobil birlikte çalıştırmaya göre çağrı sayısını yarıya indirir.
 - **Adım sayısını sınırlayın.** `--max-steps 15`, dolaşan bir yolculuğu durdurur.
 - **Büyük sayfaların daha pahalı olmasını bekleyin.** Her adım, sayfa görünümünü (en fazla 250 öğe ve 3.000 karakter metin) modele gönderir; bu yüzden yoğun sayfalar basit sayfalardan adım başına daha fazla token kullanır.
+- **Tekrar çalıştırmalar son yolu baştan kullanır.** Bir yolculuk sitede bir kez tamamlandıktan sonra, bir sonraki çalıştırma yapay zekâya o çalıştırmanın geçtiği sayfaları sırasıyla verir; böylece keşfetmek yerine doğrudan hedefe gider. Yalnızca aynı hedef için kullanılır, yalnızca 0.14.0 ve sonrasıyla kaydedilen çalıştırmalardan alınır ve yalnızca yapay zekâlı çalıştırmalarda kullanılır. `--out` ya da `replay` ile kullanılmaz. Site değiştiyse ve yol artık uymuyorsa yapay zekâ başka bir yol izler.
 - **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmaz, bu yüzden kullanımı pek değiştirmez.
 - **Yapay zekâsız tekrar oynatın.** Bir yapay zekâlı çalıştırmadan sonra adımları kaydetmek için `--save-steps <dosya>` ekleyin; sonra o ayar dosyasını her dağıtımda `--scripted --no-ai` ile çalıştırın. Bkz. [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın).
 - **Bir sohbet uygulaması kullanın.** MCP üzerinden gezinmeyi sohbet uygulamasının kendi modeli yapar, bu yüzden hiç API anahtarı kullanılmaz.
@@ -382,8 +396,27 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 | `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
 | `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
 | `branding` | Varsayılan `true`. Analitik İşler logosunu ve "Generated by AI Tag Debugger · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ile aynıdır, ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false`. |
-| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini` ya da `openai-compatible`. `--provider` ile aynıdır. |
+| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` ya da `openai-compatible`. `--provider` ile aynıdır. |
 | `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
+| `notify` | İsteğe bağlı uyarılar, kayıtlı her çalıştırmadan sonra: `slack` (bir webhook adresi ya da `SLACK_WEBHOOK_URL` değişkenini okumak için `true`) ve `email` (bir adres ya da liste). Bkz. [Uyarılar](#uyarılar). |
+
+### Uyarılar
+
+Kayıtlı her çalıştırmadan sonra `notify`, "Son çalıştırmadan bu yana değişenler" farkını ekibinize gönderir; böylece sitedeki bir değişiklik raporu açmadan size ulaşır:
+
+```json
+"notify": {
+  "slack": "https://hooks.slack.com/services/...",
+  "email": ["team@example.com"]
+}
+```
+
+- **Slack** webhook adresini alır. `"slack": true` ise adresi bunun yerine `SLACK_WEBHOOK_URL` ortam değişkeninden okur; böylece adres dosyada durmaz.
+- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. Düz `smtp://` adresi giriş bilgisini ve postayı şifresiz gönderir, STARTTLS desteklenmez.
+
+Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Mesaj düzelen ve yeni sorunları listeler; konu satırı sayıları verir. Bir kanal başarısız olursa çalıştırma nedenini yazar ve devam eder. Çıkış kodu yine `--fail-on` ile belirlenir.
+
+## CLI
 
 ## CLI
 
