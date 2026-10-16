@@ -40,13 +40,14 @@ export async function loadConfig(configFile) {
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
  * the "Changed since last run" section.
  */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, against = null, branding = config.branding !== false, previous = undefined }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined }) {
   await mkdir(outDir, { recursive: true });
-  const title = messages(lang).ui.title(new URL(config.site).hostname);
+  const site = new URL(config.site).hostname;
+  const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
   const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check });
-  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes };
+  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
@@ -139,7 +140,7 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, against, branding: opts.branding ?? config.branding !== false, previous });
+  const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous });
   const counts = summarize(groupFindings(findings));
   return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
 }

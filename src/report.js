@@ -488,6 +488,19 @@ function stepDetail(m, lang, findings, run, ri, step, isDefault) {
 }
 
 /** One journey: a sticky step list on the left and the selected step on the right. It opens on the first step with a problem. */
+/** Every Consent Mode command of a journey (default, then updates), one tile per signal. */
+function consentCard(m, run) {
+  const cmds = run.dataLayerLog.filter((e) => isConsentEntry(e.value) && (e.value[1] === "default" || e.value[1] === "update"));
+  const head = `<div class="card-h"><div class="card-t">${m.ui.consent}</div><div class="card-d">${cmds.length ? m.ui.consentLead : m.ui.consentNone}</div></div>`;
+  if (!cmds.length) return `<div class="card jconsent">${head}<div class="card-c"></div></div>`;
+  const items = cmds.map((e) => {
+    const step = run.steps.find((s) => s.index === e.step);
+    const sigs = Object.entries(e.value[2] ?? {}).filter(([, v]) => typeof v === "string");
+    return `<li><div class="ch"><b>${e.value[1] === "default" ? m.ui.consentDefault : m.ui.consentUpdate}</b><span class="muted xs">${step ? `${step.index} · ${escapeHtml(step.label)}` : ""}</span></div><div class="sigs">${sigs.map(([k, v]) => `<span class="sig"><span>${escapeHtml(k)}</span><span class="${v === "granted" ? "granted" : "denied"}">${escapeHtml(v)}</span></span>`).join("")}</div></li>`;
+  });
+  return `<div class="card jconsent">${head}<div class="card-c"><ol class="ctl">${items.join("")}</ol></div></div>`;
+}
+
 function journeyPanel(m, lang, findings, run, ri, flagged) {
   const steps = run.steps.filter((s) => s.index > 0);
   const def = steps.find((s) => flagged.has(stepAnchor(ri, s.index))) ?? steps[0];
@@ -503,7 +516,7 @@ function journeyPanel(m, lang, findings, run, ri, flagged) {
     ? `<div class="jgrid2"><nav class="stepnav" aria-label="${m.ui.stepsNav}"><ol>${nav}</ol></nav><div class="sdetails">${steps.map((s) => stepDetail(m, lang, findings, run, ri, s, s === def)).join("\n")}</div></div>`
     : `<p class="empty">${m.ui.noSteps}</p>`;
   return `<article class="jpanel" id="j${ri}"><header class="jhead"><div><h2>${escapeHtml(run.journeyId)} <span class="muted">· ${escapeHtml(run.viewport)}</span></h2>${run.note ? `<p class="muted xs">${escapeHtml(run.note)}</p>` : ""}</div>${run.completed ? badge("ok", m.ui.completed) : badge("warning", m.ui.notCompleted)}</header>
-${body}</article>`;
+${consentCard(m, run)}${body}</article>`;
 }
 
 function journeysTab(m, lang, findings, runs, flagged) {
@@ -592,7 +605,23 @@ function skippedTotals(runs) {
 
 const callProvider = (c) => safeKey(c.provider ?? providerOf(c.url)?.key ?? c.vendor);
 
-function overviewTab(m, findings, rows, counts, explained, runs) {
+/** The run's settings: platforms checked, AI model, plan, journeys, viewports, language and version. */
+function runCard(m, runs, provs, { ai, plan, lang }) {
+  const uniq = (xs) => [...new Set(xs)];
+  const ptags = provs.map((k) => `<span class="ptag p-${safeKey(k)}">${escapeHtml(platformLabel(k))}</span>`).join("");
+  const rows = [
+    [m.ui.runPlatforms, ptags || '<span class="muted">–</span>'],
+    [m.ui.runAi, escapeHtml(ai ? m.ui.runAiOn(ai.name, ai.model) : m.ui.runAiOff)],
+    [m.ui.runPlan, escapeHtml(plan?.events?.length ? m.ui.runPlanEvents(plan.events.length) : m.ui.runNoPlan)],
+    [m.ui.runJourneys, escapeHtml(uniq(runs.map((r) => r.journeyId)).join(", ") || "–")],
+    [m.ui.runViewports, escapeHtml(uniq(runs.map((r) => r.viewport)).join(", ") || "–")],
+    [m.ui.runLanguage, escapeHtml(messages(lang).name)],
+    [m.ui.runVersion, `<code>${escapeHtml(VERSION)}</code>`],
+  ];
+  return `<div class="card"><div class="card-h"><div class="card-t">${m.ui.runCard}</div></div><div class="card-c"><dl class="run">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl></div></div>`;
+}
+
+function overviewTab(m, findings, rows, counts, explained, runs, info) {
   const problems = rows.filter((f) => f.severity !== "ok").length;
   const metric = (sev) => `<div class="card metric ${sev}"><div class="k">${m.severity[sev]}</div><div class="v">${counts[sev]}</div></div>`;
   const journeyRows = runs.map((r, ri) => {
@@ -607,7 +636,7 @@ function overviewTab(m, findings, rows, counts, explained, runs) {
 <div class="ov-grid">${summaryCard(m, explained, problems)}
 <div class="stack">
 ${runs.length ? `<div class="card"><div class="card-h"><div class="card-t">${m.ui.tabJourneys}</div></div><div class="card-c tight"><div class="tscroll"><table class="dt"><thead><tr><th>${m.ui.journey}</th><th>${m.ui.stepsCol}</th><th>${m.ui.problemsCol}</th></tr></thead><tbody>${journeyRows.join("")}</tbody></table></div></div></div>` : ""}
-${provs.length ? `<div class="card"><div class="card-h"><div class="card-t">${m.ui.scopeCard}</div></div><div class="card-c"><div class="scope">${provs.map((k) => `<span class="ptag p-${safeKey(k)}">${escapeHtml(platformLabel(k))}</span>`).join("")}</div>${skippedN ? `<p class="muted xs scope-skipped">${escapeHtml(m.ui.skippedLine(skipped.map(([v]) => v).join(", "), skippedN))}</p>` : ""}</div></div>` : ""}
+${runCard(m, runs, provs, info)}${skippedN ? `<p class="muted xs scope-skipped">${escapeHtml(m.ui.skippedLine(skipped.map(([v]) => v).join(", "), skippedN))}</p>` : ""}
 </div></div></div>`;
 }
 
@@ -729,14 +758,14 @@ function navCss(runs) {
 
 export const CSS = `
 :root{
---bg:#FFFFFF;--page:#F7F9FC;--fg:#0A0E1A;--muted:#5A6480;--muted-bg:#F1F4F9;--border:#E3E7EF;--input:#E3E7EF;
---accent:#4F8EF7;--accent-fg:#2F6FDB;--accent-bg:#EBF1FE;--orange:#FF6D33;
---danger:#C5221F;--danger-bg:#FCE8E6;--warn:#A16207;--warn-bg:#FEF9C3;--warn-dot:#EAB308;--risk:#C2410C;--risk-bg:#FFEDD5;--danger-dot:#DC2626;--ok:#137333;--ok-bg:#E6F4EA;
---shadow-sm:0 1px 2px rgba(10,14,26,.06);--radius:6px;
+--bg:#FFFFFF;--page:#F7F9FC;--fg:#0A0E1A;--muted:#5A6480;--muted-bg:#EEF2F8;--border:#DCE2EE;--input:#848EA6;
+--accent:#2E6CDB;--accent-fg:#2459C0;--accent-bg:#EBF1FE;--orange:#D9531E;
+--danger:#C8323A;--danger-bg:#FCE9EA;--warn:#8C6106;--warn-bg:#FBF1DC;--warn-dot:#C99A2E;--risk:#B8441A;--risk-bg:#FFF0E8;--danger-dot:#C8323A;--ok:#17805A;--ok-bg:#E3F3EC;
+--shadow-sm:none;--radius:6px;
 --font-sans:'Google Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--font-mono:'Google Sans Code',ui-monospace,SFMono-Regular,Menlo,monospace}
 @media (prefers-color-scheme:dark){:root{
---bg:#141927;--page:#0A0E1A;--fg:#F0F4FF;--muted:#8892AA;--muted-bg:#182035;--border:#1E2640;--input:#26304D;
---accent-fg:#7EAAF9;--accent-bg:#1A2F5C;--danger:#F28B82;--danger-bg:#3A1F1D;--warn:#FACC15;--warn-bg:#332B0A;--warn-dot:#FACC15;--risk:#FB923C;--risk-bg:#3A2312;--danger-dot:#F87171;--ok:#81C995;--ok-bg:#16301F;--shadow-sm:none}}
+--bg:#141927;--page:#0A0E1A;--fg:#F0F4FF;--muted:#8892AA;--muted-bg:#182035;--border:#1E2640;--input:#5F6B93;--accent:#4F8EF7;--orange:#FF6D33;
+--accent-fg:#8CBBFF;--accent-bg:#1A2F5C;--danger:#F2545B;--danger-bg:#3A1F22;--warn:#E8B44A;--warn-bg:#33290F;--warn-dot:#E8B44A;--risk:#FF6D33;--risk-bg:#2A1A0F;--danger-dot:#F2545B;--ok:#3FB98A;--ok-bg:#12302A;--shadow-sm:none}}
 *{box-sizing:border-box}
 html{scroll-padding-top:64px;scrollbar-gutter:stable;overflow-y:scroll}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--page);color:var(--fg);font:400 14px/1.6 var(--font-sans);-webkit-font-smoothing:antialiased}
@@ -755,7 +784,21 @@ code{font-size:12px;background:var(--muted-bg);padding:1px 5px;border-radius:4px
 .product-logo img{display:block;height:26px;width:auto}
 .byline{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}.byline:hover{opacity:.85}
 .logo-h img{display:block;height:18px;width:auto}
-.title{margin-top:28px}
+.title{margin-top:20px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+.site{display:flex;align-items:center;gap:10px;min-width:0}
+.site .k{font:500 11px/1.4 var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--muted-bg);border:1px solid var(--border);border-radius:2px;padding:2px 6px}
+.site .v{font-size:20px;font-weight:700;letter-spacing:-.01em;color:var(--fg);overflow-wrap:anywhere}
+.run{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 16px;font-size:13px}
+.run dt{color:var(--muted)}.run dd{margin:0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;min-width:0;overflow-wrap:anywhere}
+.ptag.off{opacity:.55;text-decoration:line-through}
+.ctl{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.ctl>li{border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--page)}
+.ctl .ch{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:13px;margin-bottom:8px}
+.ctl .ch b{font-weight:600}
+.sigs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
+.sig{display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid var(--border);border-radius:4px;padding:5px 10px;font:12px var(--font-mono);background:var(--bg)}
+.sig .granted{color:var(--ok)}.sig .denied{color:var(--danger)}
+.jconsent{margin-bottom:16px}
 .eyebrow{font:500 12px var(--font-mono);color:var(--accent-fg);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .title .meta{margin-top:4px;font-size:12px;color:var(--muted)}
 .toptabs{position:sticky;top:0;z-index:10;background:var(--page);border-bottom:1px solid var(--border);margin-top:16px}
@@ -828,7 +871,7 @@ table.dt a{color:var(--fg)}table.dt a:hover{color:var(--accent-fg)}
 .missing{display:inline-block;padding:0 6px;border-radius:4px;background:var(--danger-bg);color:var(--danger)}
 .fix-steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:fx}
 .fix-steps li{display:grid;grid-template-columns:22px 1fr;gap:10px;counter-increment:fx}
-.fix-steps li::before{content:counter(fx);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent-bg);color:var(--accent-fg);font:500 12px var(--font-mono)}
+.fix-steps li::before{content:counter(fx);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:4px;background:var(--accent-bg);color:var(--accent-fg);font:500 12px var(--font-mono)}
 .where{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--border);border-radius:var(--radius);color:var(--fg);font-size:12px;background:var(--bg)}
 span.chip{padding-left:10px}
@@ -889,8 +932,8 @@ body>main{flex:1 0 auto;width:100%}
 .filter>input:checked+label .n{background:transparent;color:inherit}
 .filter>input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
 .filter>label:last-of-type{margin-bottom:4px}
-.dot{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--muted)}
-.dot.p-ga4,.ptag.p-ga4::before{background:var(--orange)}.dot.p-meta,.ptag.p-meta::before{background:var(--accent)}.dot.p-google_ads,.ptag.p-google_ads::before{background:var(--ok)}.dot.p-tiktok,.ptag.p-tiktok::before{background:var(--fg)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--muted);vertical-align:-2px}
+.dot.p-ga4,.ptag.p-ga4::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMTUiIHk9IjIiIHdpZHRoPSI2IiBoZWlnaHQ9IjIwIiByeD0iMyIgZmlsbD0iI0Y5QUIwMCIvPjxyZWN0IHg9IjkiIHk9IjkiIHdpZHRoPSI2IiBoZWlnaHQ9IjEzIiByeD0iMyIgZmlsbD0iI0UzNzQwMCIvPjxjaXJjbGUgY3g9IjYiIGN5PSIxOSIgcj0iMyIgZmlsbD0iI0UzNzQwMCIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-google_ads,.ptag.p-google_ads::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iOS41IiB5PSIxLjUiIHdpZHRoPSI2IiBoZWlnaHQ9IjIxIiByeD0iMyIgdHJhbnNmb3JtPSJyb3RhdGUoMzAgMTIuNSAxMikiIGZpbGw9IiNGQkJDMDQiLz48cmVjdCB4PSI4LjUiIHk9IjEuNSIgd2lkdGg9IjYiIGhlaWdodD0iMjEiIHJ4PSIzIiB0cmFuc2Zvcm09InJvdGF0ZSgtMzAgMTEuNSAxMikiIGZpbGw9IiM0Mjg1RjQiLz48Y2lyY2xlIGN4PSI1LjUiIGN5PSIxOC41IiByPSIzIiBmaWxsPSIjMzRBODUzIi8+PC9zdmc+") center/contain no-repeat}.dot.p-meta,.ptag.p-meta::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTIuNSAxNS41YzAtNC40IDIuMy05IDUtOSAzLjQgMCA2IDExIDkuNSAxMSAyLjIgMCA0LjUtMi42IDQuNS02LjVTMTkuOCA2LjUgMTcuNSA2LjVjLTMuNCAwLTYgMTEtOS44IDExLTIuOSAwLTUuMi0uNy01LjItMnoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzA4NjZGRiIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=") center/contain no-repeat}.dot.p-tiktok,.ptag.p-tiktok::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iIzI1RjRFRSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEgLTEpIi8+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iI0ZFMkM1NSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMSAxKSIvPjxwYXRoIGQ9Ik0xMyAzdjExLjVhMy41IDMuNSAwIDEgMS0zLTMuNDZNMTMgM2MuNSAyLjUgMi41IDQgNSA0IiBzdHJva2U9IiMxMTEiLz48L2c+PC9zdmc+") center/contain no-repeat}
 .evlist{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:var(--radius);flex-basis:100%;min-width:0}
 .evlist>li+li{border-top:1px solid var(--border)}
 summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}
@@ -905,7 +948,7 @@ summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-of
 .event .meta{font-size:12px;color:var(--muted)}
 .event .time,.time{font-size:12px;color:var(--muted);margin-left:auto}
 .ptag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-.ptag::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--muted)}
+.ptag::before{content:"";width:14px;height:14px;flex:none;border-radius:2px;background:var(--muted)}
 .event-body{padding:4px 12px 16px}
 .flagnote{margin:4px 0 12px;padding:8px 12px;border-radius:var(--radius);background:var(--warn-bg);color:var(--warn)}
 .flagnote.broken{background:var(--danger-bg);color:var(--danger)}.flagnote.risk{background:var(--risk-bg);color:var(--risk)}
@@ -965,7 +1008,7 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null }) {
+export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -985,14 +1028,13 @@ export function renderHtml({ title, generatedAt, findings, explained, runs, plan
 ${navCss(runs)}</style></head><body>
 <div class="topbar"><div class="wrap"><span class="product-logo">${logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd")}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
-<div class="eyebrow">${m.ui.eyebrow}</div>
-<h1>${escapeHtml(title)}</h1>
+<h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
 <div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
 <main class="wrap">
-<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs)}</section>
+<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs, { ai, plan, lang })}</section>
 <section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows, Boolean(explained))}</section>
 <section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
 <section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>

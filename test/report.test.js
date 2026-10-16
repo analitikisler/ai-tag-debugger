@@ -107,7 +107,7 @@ test("GA4 batches show every event, items are decoded, and out-of-scope provider
   assert.match(html, /<b>Shoe<\/b><span class="mono muted">42<\/span><span class="item-price mono">10 × 2<\/span>/);
   assert.match(html, /Custom item parameters<\/h6><dl class="grid4"><div><dt>size<\/dt><dd>XL<\/dd>/);
   // The scope card, the providers table and the step's skipped count.
-  assert.match(html, /<div class="scope"><span class="ptag p-ga4">GA4<\/span><span class="ptag p-meta">Meta<\/span><\/div>/);
+  assert.match(html, /<dt>Platforms<\/dt><dd><span class="ptag p-ga4">GA4<\/span><span class="ptag p-meta">Meta<\/span><\/dd>/);
   assert.match(html, /4 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick\./);
   assert.match(html, /<tr><td>GA4<\/td><td><span class="badge ok">Checked<\/span><\/td><td class="num">1<\/td><\/tr>/);
   assert.match(html, /<tr><td>Microsoft Clarity<\/td><td><span class="badge muted">Out of scope<\/span><\/td><td class="num">3<\/td><\/tr>/);
