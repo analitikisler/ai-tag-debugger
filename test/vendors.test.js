@@ -51,3 +51,42 @@ test("without chosen platforms, other known platforms are detected on first sigh
   assert.equal(chosen.checks("criteo"), false);
   assert.deepEqual(chosen.providers, ["ga4"]);
 });
+
+test("Adobe Analytics: page views and links by report suite, on Adobe or first-party hosts", () => {
+  const [view] = parseTrackingRequest("https://metrics.shop.test/b/ss/shopprod,shopglobal/1/JS-2.22.0/s123?pageName=Home&events=event1&g=https%3A%2F%2Fshop.test%2F");
+  assert.deepEqual({ ...view, url: undefined }, { platform: "adobe", name: "pageView", id: "shopprod,shopglobal", params: { page_title: "Home", events: "event1", page_location: "https://shop.test/" }, url: undefined });
+  const [buy] = parseTrackingRequest("https://shop.sc.omtrdc.net/b/ss/shopprod/1/JS-2.22.0/s9?events=purchase&purchaseID=T1&products=%3Bsku1%3B1%3B10&cc=EUR");
+  assert.deepEqual(buy.params, { events: "purchase", items: ";sku1;1;10", transaction_id: "T1", currency: "EUR" });
+  assert.equal(parseTrackingRequest("https://shop.sc.omtrdc.net/b/ss/shopprod/1/s9?pe=lnk_o&pev2=Signup")[0].name, "link:Signup");
+  assert.equal(parseTrackingRequest("https://shop.test/b/other"), null);
+  assert.equal(providerOf("https://metrics.shop.test/b/ss/x/1/s1").key, "adobe");
+  assert.equal(providerOf("https://shop.sc.omtrdc.net/id?d_visid_ver=1").key, "adobe");
+});
+
+test("Matomo and Piwik PRO: events, goals, orders and batches by site id", () => {
+  const [ev] = parseTrackingRequest("https://stats.shop.test/matomo.php?idsite=3&rec=1&e_c=Video&e_a=Play&e_n=intro&uid=a%40b.co");
+  assert.equal(ev.platform, "matomo");
+  assert.equal(ev.name, "Video:Play");
+  assert.equal(ev.id, "3");
+  assert.deepEqual(ev.userFields, { uid: "a@b.co" });
+  assert.equal(parseTrackingRequest("https://stats.shop.test/piwik.php?idsite=3&idgoal=2&revenue=5")[0].name, "goal:2");
+  const [order] = parseTrackingRequest("https://stats.shop.test/matomo.php?idsite=3&idgoal=0&ec_id=T1&revenue=20");
+  assert.deepEqual({ name: order.name, params: order.params }, { name: "ecommerce_order", params: { value: "20", transaction_id: "T1" } });
+  assert.equal(parseTrackingRequest("https://stats.shop.test/matomo.php?rec=1"), null);
+  const batch = parseTrackingRequest("https://stats.shop.test/matomo.php?idsite=3", JSON.stringify({ requests: ["?idsite=3&action_name=Home", "?idsite=3&search=shoes"] }));
+  assert.deepEqual(batch.map((h) => h.name), ["pageview", "site_search"]);
+  const [ppms] = parseTrackingRequest("https://shop.containers.piwik.pro/ppms.php?idsite=0a1b2c&e_c=cta&e_a=click");
+  assert.equal(ppms.platform, "piwik_pro");
+  assert.equal(ppms.name, "cta:click");
+  assert.equal(providerOf("https://shop.containers.piwik.pro/ppms.php?idsite=1").key, "piwik_pro");
+  assert.equal(providerOf("https://shop.containers.piwik.pro/shop/consent.js").key, "consent");
+  assert.ok(isCollectionEndpoint("https://stats.shop.test/matomo.php?idsite=3"));
+});
+
+test("Clarity and Hotjar: tag loads name the project or site", () => {
+  assert.deepEqual(parseTrackingRequest("https://www.clarity.ms/tag/abc123xyz")[0].id, "abc123xyz");
+  assert.equal(parseTrackingRequest("https://k.clarity.ms/collect")[0].name, "collect");
+  assert.equal(parseTrackingRequest("https://www.clarity.ms/s/0.8/clarity.js"), null);
+  const [load] = parseTrackingRequest("https://static.hotjar.com/c/hotjar-12345.js?sv=6");
+  assert.deepEqual({ name: load.name, id: load.id }, { name: "script_load", id: "12345" });
+});
