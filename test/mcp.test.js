@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -92,4 +92,40 @@ test("a ready-made journey brings its goal and expected events", async () => {
 test("start_audit only opens http and https URLs", async () => {
   const { call } = await connect({ allowFiles: true, reportsDir: tmpdir() });
   assert.match(await call("start_audit", { site: "file:///etc/passwd" }), /http or https/);
+});
+
+test("against checks a finished audit against a saved plan, and refuses paths over HTTP", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  const plansDir = path.join(dataDir, "localhost", "plans", "2026-10-16_0900");
+  await mkdir(plansDir, { recursive: true });
+  const plan = { site: `http://localhost:${PORT}/`, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }, { platform: "ga4", name: "purchase", required_params: ["value"] }] };
+  await writeFile(path.join(plansDir, "measurement-plan.json"), JSON.stringify(plan));
+
+  const walk = async (call) => {
+    let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
+    const id = page.match(/audit_id: (\w+)/)[1];
+    page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Accept all/), reason: "Accept cookies", accepts_consent: true });
+    page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /product\.html/), reason: "Open a product" });
+    await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Add to cart/), reason: "Add to cart" });
+    return id;
+  };
+
+  const { call } = await connect({ allowFiles: true, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")), dataDir });
+  let id = await walk(call);
+  const result = await call("finish_audit", { audit_id: id, completed: true, note: "Added.", against: "latest" });
+  assert.match(result, /Checked against plan 2026-10-16_0900/);
+  assert.match(result, /purchase/);
+  const capture = JSON.parse(await readFile(path.join(path.dirname(result.match(/timeline: (.+report\.html)/)[1]), "capture.json"), "utf8"));
+  assert.equal(capture.against.plan_id, "2026-10-16_0900");
+
+  id = await walk(call);
+  assert.match(await call("finish_audit", { audit_id: id, completed: true, note: "x", against: "2020-01-01_0000" }).catch((e) => e.message), /No plan 2020-01-01_0000 for localhost\. Available: 2026-10-16_0900/);
+  id = await walk(call);
+  assert.match(await call("finish_audit", { audit_id: id, completed: true, note: "x", against: "latest", measurement_plan: "{}" }), /either against or measurement_plan/);
+  await call("finish_audit", { audit_id: id, completed: true, note: "x" });
+
+  const http = await connect({ allowFiles: false, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")), dataDir });
+  id = await walk(http.call);
+  assert.match(await http.call("finish_audit", { audit_id: id, completed: true, note: "x", against: plansDir }), /not a path/);
+  assert.match(await http.call("finish_audit", { audit_id: id, completed: true, note: "x", against: "first" }), /Checked against plan 2026-10-16_0900/);
 });
