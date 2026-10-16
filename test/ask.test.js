@@ -1,25 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { commandText, intentToArgs, isSentence, matchKeywords, normalize, translate } from "../src/ask.js";
 
-// Sentence -> the command it should run. Topic sentences ("custom events", "ecommerce") plan
+// Sentence -> the command it should run. A bare "aitd run" then asks what to test (latest plan
+// or a goal); every run already reports what changed since the previous one. Topic sentences ("custom events", "ecommerce") plan
 // without a topic until plan --topic lands. "report" sentences are not runnable yet.
 const EXAMPLES = [
   ["Check my google analytics tags", "aitd run --platforms ga4"],
-  ["What changed on my site since the last run", "aitd run --against latest"],
-  ["Compare my site against the plan", "aitd run --against plan"],
+  ["What changed on my site since the last run", "aitd run"],
+  ["Compare my site against the plan", "aitd run --against latest"],
   ["What custom events does my site need", "aitd plan"],
   ["Is my Meta pixel firing on checkout?", 'aitd run --platforms meta --goal "reach checkout"'],
   ["Test signing up for the newsletter", 'aitd run --goal "sign up for the newsletter"'],
   ["Does my purchase event send the right revenue?", "aitd run --journey purchase"],
   ["Make a tracking plan for example.com", "aitd plan --site https://example.com"],
   ["Which tags fire before I accept cookies?", 'aitd run --goal "browse without accepting cookies"'],
-  ["Did anything break after yesterday's deploy?", "aitd run --against latest"],
+  ["Did anything break after yesterday's deploy?", "aitd run"],
   ["Show me only the errors from the last report", null],
   ["What ecommerce events should an online shop track?", "aitd plan"],
   ["Check TikTok and Google Ads on the contact form", 'aitd run --platforms google_ads,tiktok --goal "submit the contact form"'],
-  ["Is my site tracking everything in the plan?", "aitd run --against plan"],
+  ["Is my site tracking everything in the plan?", "aitd run --against latest"],
 ];
 
 const commandFor = (intent) => {
@@ -70,4 +74,12 @@ test("the CLI shows the command and stops when the answer is no", () => {
   const out = execFileSync(process.execPath, ["src/cli.js", "make a tracking plan for example.com"], { encoding: "utf8", input: "n\n", env });
   assert.match(out, /aitd plan --site https:\/\/example\.com/);
   assert.match(out, /Run this\? \(Y\/n\)/);
+});
+
+test("a run with nothing to test asks for a goal when the site has no plan", () => {
+  const env = { ...process.env, ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "", GEMINI_API_KEY: "", GOOGLE_API_KEY: "", ANTHROPIC_AUTH_TOKEN: "", OPENAI_COMPATIBLE_BASE_URL: "" };
+  const dataDir = mkdtempSync(path.join(tmpdir(), "aitd-ask-"));
+  const out = execFileSync(process.execPath, ["src/cli.js", "check my GA tags on example.com", "--data-dir", dataDir], { encoding: "utf8", input: "the contact form\nn\n", env });
+  assert.match(out, /What should I check/);
+  assert.match(out, /aitd run --site https:\/\/example\.com --platforms ga4 --goal "the contact form"/);
 });

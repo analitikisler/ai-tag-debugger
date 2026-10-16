@@ -86,12 +86,19 @@ export function intentToArgs(intent) {
   const args = [intent.action];
   if (intent.site) args.push("--site", siteUrl(intent.site));
   if (intent.action === "run") {
-    if (intent.against) args.push("--against", intent.against);
+    // --against takes a saved plan. Every run already reports what changed since the previous
+    // run, so "since the last run" needs no option of its own.
+    if (intent.against === "plan") args.push("--against", "latest");
     if (intent.platforms.length) args.push("--platforms", intent.platforms.join(","));
     if (intent.journey) args.push("--journey", intent.journey);
     if (intent.goal) args.push("--goal", intent.goal);
   }
   return { args };
+}
+
+/** True when a run has nothing to test yet: no plan to check against, no journey, no goal. */
+export function needsWhatToTest(args) {
+  return args[0] === "run" && !["--against", "--journey", "--goal"].some((o) => args.includes(o));
 }
 
 /** The command as the user would type it. */

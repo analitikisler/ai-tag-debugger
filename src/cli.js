@@ -8,7 +8,7 @@ import { helpText } from "./help.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
-import { commandText, intentToArgs, isSentence, translate } from "./ask.js";
+import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -244,6 +244,7 @@ async function fromSentence(sentence, values, extra) {
     r = intentToArgs({ ...intent, site });
     args = r.args;
   }
+  if (needsWhatToTest(args)) args = await whatToTest(args, values);
   // Options typed next to the sentence (--site, --provider, --headed…) carry over.
   args = [...args, ...extra.filter((a) => a !== sentence && a !== "-y" && a !== "--yes")];
   console.log(commandText(args));
@@ -252,6 +253,22 @@ async function fromSentence(sentence, values, extra) {
     if (answer && !["y", "yes"].includes(answer)) return null;
   }
   return args;
+}
+
+// A run needs something to test: suggest the site's latest plan, else ask for a goal.
+async function whatToTest(args, values) {
+  const site = values.site ?? args[args.indexOf("--site") + 1];
+  const { listPlanIds } = await import("./workspace.js");
+  const hasPlan = (await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, site).catch(() => [])).length > 0;
+  if (hasPlan) {
+    const answer = values.yes ? "" : (await ask("Check against the latest plan? (Y/n) ")).toLowerCase();
+    if (!answer || ["y", "yes"].includes(answer)) return [...args, "--against", "latest"];
+  } else if (values.yes) {
+    throw new Error('Nothing to test yet. Say what to check, e.g. aitd "check my GA tags on the contact form", or draft a plan first.');
+  }
+  const goal = await ask("What should I check, e.g. the contact form? ");
+  if (!goal) throw new Error('Nothing to test. Say what to check, e.g. aitd "check my GA tags on the contact form".');
+  return [...args, "--goal", goal];
 }
 
 async function ask(question) {
