@@ -32,7 +32,7 @@ const refIn = (text, pattern) => Number(text.split("\n").find((l) => /^\[\d+\]/.
 test("a chat app can drive an audit through the MCP tools", async () => {
   const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
   const { client, call } = await connect({ allowFiles: true, reportsDir });
-  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "finish_audit", "run_audit"]);
+  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "finish_audit", "make_plan", "run_audit"]);
 
   let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
   const id = page.match(/audit_id: (\w+)/)[1];
@@ -129,4 +129,53 @@ test("against checks a finished audit against a saved plan, and refuses paths ov
   id = await walk(http.call);
   assert.match(await http.call("finish_audit", { audit_id: id, completed: true, note: "x", against: plansDir }), /not a path/);
   assert.match(await http.call("finish_audit", { audit_id: id, completed: true, note: "x", against: "first" }), /Checked against plan 2026-10-16_0900/);
+});
+
+test("make_plan drafts and saves a plan, limited to a topic, and finish_audit can check against it", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  const answer = {
+    pages: [{ type: "home", url: `http://localhost:${PORT}/` }],
+    events: [
+      { name: "view_item", custom: false, description: "Visitor views a product", trigger_page: "product", trigger_element: "page load", parameters: [] },
+      { name: "size_guide_open", custom: true, description: "Opens the size guide", trigger_page: "product", trigger_element: "button", parameters: [] },
+    ],
+    user_properties: [],
+  };
+  let system;
+  const provider = {
+    conversation: () => ({ next: async () => ({ toolCalls: [{ id: "c0", name: "finish", input: { success: true, note: "Done." } }], stop: "tool_use" }), addToolResults() {}, addUserText() {} }),
+    json: async (req) => ((system = req.system), { value: answer }),
+  };
+  const { call } = await connect({ allowFiles: true, reportsDir: tmpdir(), dataDir, provider });
+  const result = await call("make_plan", { site: `http://localhost:${PORT}/`, topic: "custom-events" });
+  assert.match(system, /covers only custom-events/);
+  assert.match(result, /Saved plan \S+ \(custom-events only\): 1 events \(1 custom\)/);
+  assert.match(result, /ga4 size_guide_open \(custom\)/);
+  assert.doesNotMatch(result, /view_item/);
+  const id = result.match(/Saved plan (\S+)/)[1];
+  assert.ok(existsSync(path.join(dataDir, "localhost", "plans", id, "measurement-plan.json")));
+});
+
+test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {
+  const { client, call } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  const refused = await client.callTool({ name: "make_plan", arguments: { site: "http://127.0.0.1:1/" } });
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /limited to public websites/);
+  const badTopic = await client.callTool({ name: "make_plan", arguments: { site: "https://example.com", topic: "nope" } });
+  assert.equal(badTopic.isError, true);
+});
+
+test("make_plan without a key tells the chat app how to go on, in its own terms", async () => {
+  const keys = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  keys.forEach((k) => delete process.env[k]);
+  try {
+    const { client } = await connect({ allowFiles: true, reportsDir: tmpdir(), dataDir: await mkdtemp(path.join(tmpdir(), "atd-")) });
+    const result = await client.callTool({ name: "make_plan", arguments: { site: `http://localhost:${PORT}/` } });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /No AI provider key.*measurement_plan/);
+    assert.doesNotMatch(result.content[0].text, /--no-ai/);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+  }
 });
