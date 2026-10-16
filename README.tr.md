@@ -141,6 +141,33 @@ Henüz bir API anahtarınız yok mu? Sabit adımları hiçbir yapay zekâ modeli
 node src/cli.js run --config examples/demo.config.json --scripted --no-ai --data-dir reports/demo
 ```
 
+## Sadece sorun
+
+Önce tüm seçenekleri öğrenmeniz gerekmez. Tırnak içinde düz bir cümle yazın; aitd bunu eşleşen komuta çevirir, komutu gösterir ve çalıştırmadan önce `Run this? (Y/n)` diye sorar:
+
+```bash
+aitd "check my google analytics tags"
+# aitd run --platforms ga4
+# Run this? (Y/n)
+```
+
+| Yazdığınız | aitd çalıştırır |
+|---|---|
+| `"Check my google analytics tags"` | `aitd run --platforms ga4` |
+| `"What changed on my site since the last run"` | `aitd run` (her çalıştırma neyin değiştiğini zaten raporlar) |
+| `"Compare my site against the plan"` | `aitd run --against latest` |
+| `"What custom events does my site need"` | `aitd plan --topic custom-events` |
+| `"Is my Meta pixel firing on checkout?"` | `aitd run --platforms meta --goal "reach checkout"` |
+| `"Test signing up for the newsletter"` | `aitd run --goal "sign up for the newsletter"` |
+| `"Does my purchase event send the right revenue?"` | `aitd run --journey purchase` |
+| `"Make a tracking plan for example.com"` | `aitd plan --site https://example.com` |
+| `"What ecommerce events should an online shop track?"` | `aitd plan --topic ecommerce` |
+| `"Check TikTok and Google Ads on the contact form"` | `aitd run --platforms google_ads,tiktok --goal "submit the contact form"` |
+
+Soruyu atlamak için `-y` ekleyin: `aitd -y "check my google analytics tags"`.
+
+Bir cümlede bir şey eksikse aitd tahmin yürütmek yerine tek bir kısa soru sorar: plan mı çalıştırma mı, hangi site, ya da neyin test edileceği. Rapor filtreleme henüz cümleyle yapılamaz (`"Show me only the errors from the last report"` bunu söyler). Yapay zekâ anahtarı yoksa, yaygın ifadeleri küçük bir anahtar sözcük eşleştirici karşılar. Anahtar varsa yapay zekâ her ifadeyi anlar, ama yalnızca var olan seçenekleri seçebilir; bu yüzden var olmayan bir bayrak uydurmaz. Örnek cümleler İngilizcedir, çünkü anahtar sözcük eşleştirici İngilizce ifadeleri tanır.
+
 ## Planla, sonra denetle
 
 Bir çalıştırma, sitenin gönderdiklerini bir **plan** ile karşılaştırır: beklediğiniz event'ler, parametreler ve kullanıcı özellikleri. Üç adım:
@@ -158,6 +185,12 @@ aitd run --site https://yoursite.com --against latest
 ```
 
 **Plan taslağı çıkarmak** takip kodu gerektirmez. Yapay zekâ her sayfa türünden birer sayfayı inceler: ana sayfa, bir kategori, bir ürün, sepet, ilk ödeme adımı, arama ve varsa üyelik ya da iletişim formları. Asla ödeme yapmaz ve kişisel bilgilerle bir formu göndermez. `--provider`, `--model` ve `--max-steps` (varsayılan 25, yapay zekâ için en fazla adım) `run` için olduğu gibi çalışır. Çıktı "Bulunan sayfa türleri" ve "Bu sitede yok" satırlarını yazdırır, böylece yapay zekânın hangi sayfa türlerine ulaştığını görürsünüz. Yalnızca 2 sayfası olan küçük bir site de sorun değildir.
+
+Yalnızca bir tür event için plan çıkarmak istiyorsanız `--topic` ekleyin: `custom-events`, `ecommerce`, `forms` ya da `consent`. Plan yalnızca bu event'leri kapsar, plan biçimi değişmez:
+
+```bash
+aitd plan --site https://yoursite.com --topic ecommerce
+```
 
 Plan, yeni bir klasöre, `aitd/<alan adı>/plans/<id>/` içine `measurement-plan.json` ve okunabilir bir `plan.html` olarak kaydedilir. Her event için şunları listeler:
 
@@ -333,7 +366,8 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 ## CLI
 
 ```
-aitd plan --site <url> [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+aitd "<cümle>" [-y]
+aitd plan --site <url> [--topic <ad>] [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <dosya> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -413,13 +447,14 @@ Sunucunun sunduğu araçlar:
 
 | Araç | Ne yapar |
 |---|---|
+| `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
 | `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
 | `get_page` | Geçerli sayfayı gösterir. |
 | `finish_audit` | Her şeyi ölçümleme planınıza (JSON) ya da `against` olarak verilen kayıtlı bir plana (`latest`, `first`, bir plan kimliği ya da yerel bir sunucuda bir yol) ya da hazır yolculuğun event'lerine karşı kontrol eder; isterseniz yalnızca adını verdiğiniz `events` için, ve zaman akışıyla birlikte tam HTML raporunu yazar. Site denetimden alınır. |
 | `run_audit` | Bir ayar dosyasını baştan sona çalıştırır. `against` ile çalıştırmayı kayıtlı bir plana karşı kontrol eder; ayar dosyasında yolculuk yoksa, plandan türetilen yolculukları gezer. Dosya yolları yalnızca yerelde çalışır. |
 
-`against`, CLI'deki `--against` ile aynı değerleri alır. HTTP üzerinden yalnızca `latest`, `first` ya da bir plan kimliği kabul edilir, asla bir yol değil. Planlar, `aitd plan --site <url>` ile kaydedilmiş olanlardır.
+`against`, CLI'deki `--against` ile aynı değerleri alır. HTTP üzerinden yalnızca `latest`, `first` ya da bir plan kimliği kabul edilir, asla bir yol değil. Planlar, `aitd plan --site <url>` ya da `make_plan` ile kaydedilmiş olanlardır. Neyin takip edileceğini öğrenmek için plan, sitenin ne gönderdiğini öğrenmek için denetim isteyin.
 
 Tarayıcı, sunucunun çalıştığı bilgisayarda çalışır; bu yüzden staging ve `localhost` sitelerinize erişebilir. Takip istekleri her zamanki gibi yerelde yanıtlanır.
 

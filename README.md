@@ -141,6 +141,33 @@ No API key yet? Replay the fixed steps without any AI model:
 node src/cli.js run --config examples/demo.config.json --scripted --no-ai --data-dir reports/demo
 ```
 
+## Just ask
+
+You don't have to learn the options first. Put a plain sentence in quotes and aitd turns it into the matching command, prints that command and asks `Run this? (Y/n)` before it runs anything:
+
+```bash
+aitd "check my google analytics tags"
+# aitd run --platforms ga4
+# Run this? (Y/n)
+```
+
+| You type | aitd runs |
+|---|---|
+| `"Check my google analytics tags"` | `aitd run --platforms ga4` |
+| `"What changed on my site since the last run"` | `aitd run` (every run already reports what changed) |
+| `"Compare my site against the plan"` | `aitd run --against latest` |
+| `"What custom events does my site need"` | `aitd plan --topic custom-events` |
+| `"Is my Meta pixel firing on checkout?"` | `aitd run --platforms meta --goal "reach checkout"` |
+| `"Test signing up for the newsletter"` | `aitd run --goal "sign up for the newsletter"` |
+| `"Does my purchase event send the right revenue?"` | `aitd run --journey purchase` |
+| `"Make a tracking plan for example.com"` | `aitd plan --site https://example.com` |
+| `"What ecommerce events should an online shop track?"` | `aitd plan --topic ecommerce` |
+| `"Check TikTok and Google Ads on the contact form"` | `aitd run --platforms google_ads,tiktok --goal "submit the contact form"` |
+
+Add `-y` to skip the question: `aitd -y "check my google analytics tags"`.
+
+If a sentence leaves something out, aitd asks one short question instead of guessing: plan or run, which site, or what to test. Reports can't be filtered from a sentence yet (`"Show me only the errors from the last report"` says so). Without an AI key, a small keyword matcher handles the common phrases. With one, the AI reads any wording, but it can only pick options that exist, so it never invents a flag.
+
 ## Plan, then audit
 
 A run checks what a site sends against a **plan**: the events, parameters and user properties you expect. Three steps:
@@ -158,6 +185,12 @@ aitd run --site https://yoursite.com --against latest
 ```
 
 **Drafting a plan** needs no tracking code. The AI explores one page of each type: the home page, a category, a product, the cart, the first checkout step, search, and any sign-up or contact forms. It never pays, and it never submits a form with personal details. `--provider`, `--model` and `--max-steps` (default 25, the most AI steps) work as they do for `run`. The output prints "Page types found" and "Not present on this site", so you can see which page types the AI reached. A small site, with only 2 pages, is fine.
+
+To draft a plan for one kind of event only, add `--topic`: `custom-events`, `ecommerce`, `forms` or `consent`. The plan then covers just those events, and the rest of the plan format is unchanged:
+
+```bash
+aitd plan --site https://yoursite.com --topic ecommerce
+```
 
 The plan is saved in a new folder, `aitd/<domain>/plans/<id>/`, as `measurement-plan.json` and a readable `plan.html`. For each event it lists:
 
@@ -333,7 +366,8 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 ## CLI
 
 ```
-aitd plan --site <url> [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+aitd "<sentence>" [-y]
+aitd plan --site <url> [--topic <name>] [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -413,13 +447,14 @@ Tools the server offers:
 
 | Tool | What it does |
 |---|---|
+| `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
 | `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
 | `get_page` | Shows the current page. |
 | `finish_audit` | Checks everything against your measurement plan (JSON), a saved one given as `against` (`latest`, `first`, a plan ID, or on a local server a path), or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. The site comes from the audit. |
 | `run_audit` | Runs a config file end to end. With `against`, it checks the run against a saved plan and, when the config has no journeys, walks the journeys derived from that plan. Local only for file paths. |
 
-`against` takes the same values as the CLI's `--against`. Over HTTP it takes only `latest`, `first` or a plan ID, never a path. Plans are the ones saved by `aitd plan --site <url>`.
+`against` takes the same values as the CLI's `--against`. Over HTTP it takes only `latest`, `first` or a plan ID, never a path. Plans are the ones saved by `aitd plan --site <url>` or by `make_plan`. Ask for a plan when you want to know what to track, and for an audit when you want to know what the site sends.
 
 The browser runs on the computer where the server runs, so it can reach your staging and `localhost` sites. Tracking requests are answered locally as usual.
 
