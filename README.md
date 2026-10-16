@@ -25,7 +25,7 @@ Built by [Analitik İşler](https://analitikisler.com). MIT licensed.
   ✓ All scripted steps completed. · 20 tracking hits captured
 
 2 broken · 1 risk · 1 warning · 4 ok
-Report: reports/demo/report.html
+Report: reports/demo/localhost/runs/2026-10-16_0800/report.html
 ```
 
 ## Why
@@ -48,14 +48,15 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Consent | Meta `PageView` fired before the visitor accepted cookies, Consent Mode default missing or set too late, Consent Mode v2 signals (`ad_user_data`, `ad_personalization`) missing, tracking cookies set before consent, tags or cookies still active after the `decline_cookies` journey rejects the banner, a reject button that does nothing |
 | Personal data | An email address sent to an ad platform in plain text |
 | Unplanned events | Events firing that aren't in your measurement plan |
+| Plan coverage | Each planned event sorted into implemented, missing, missing parameters, wrong values or not checked (see [Plan vs. site](#plan-vs-site)) |
 
 Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
 
-### Choose the providers to check
+### Choose the platforms to check
 
-By default an audit checks GA4, Google Ads, Meta and TikTok. Pick others with `--providers ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok and X; the others show their network requests.
+By default an audit checks GA4, Google Ads, Meta and TikTok. Pick others with `--platforms ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok and X; the others show their network requests. `--providers` still works as the old name of `--platforms` for one more minor version and prints a note.
 
-Requests to providers you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--providers`, any provider your measurement plan names is added to the default list. Planned events for providers you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
+Requests to platforms you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--platforms`, any platform your measurement plan names is added to the default list. Planned events for platforms you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
 
 ## How it works
 
@@ -118,7 +119,7 @@ The global install also adds `aitd`, a short alias: `aitd run --site … --journ
 
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Run `ai-tag-debugger --help` to see every command and option, such as `--providers`, `--scripted` and `--no-ai`.
+Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options.
 
 ### Try the demo shop (from source)
 
@@ -130,21 +131,107 @@ cd ai-tag-debugger
 npm install
 npx playwright install chromium   # run again after upgrading, so the browser matches Playwright
 npm run demo:serve                # in one terminal: http://localhost:4321
-node src/cli.js run --config examples/demo.config.json --out reports/demo
-open reports/demo/report.html
+node src/cli.js run --config examples/demo.config.json --data-dir reports/demo
+open reports/demo/localhost/runs/*/report.html
 ```
 
 No API key yet? Replay the fixed steps without any AI model:
 
 ```bash
-node src/cli.js run --config examples/demo.config.json --scripted --no-ai --out reports/demo
+node src/cli.js run --config examples/demo.config.json --scripted --no-ai --data-dir reports/demo
 ```
+
+## Plan, then audit
+
+A run checks what a site sends against a **plan**: the events, parameters and user properties you expect. Three steps:
+
+```bash
+# 1. Draft a plan. The AI explores the site and proposes what should be tracked.
+aitd plan --site https://yoursite.com
+
+# 2. Optional: edit it in a spreadsheet, then save the edited copy as a new plan.
+aitd plan export latest --site https://yoursite.com     # writes plan.xlsx next to the plan
+aitd plan import plan.xlsx --site https://yoursite.com  # saves a new plan; the old one is untouched
+
+# 3. Audit the site against the plan.
+aitd run --site https://yoursite.com --against latest
+```
+
+**Drafting a plan** needs no tracking code. The AI explores one page of each type: the home page, a category, a product, the cart, the first checkout step, search, and any sign-up or contact forms. It never pays, and it never submits a form with personal details. `--provider`, `--model` and `--max-steps` (default 25, the most AI steps) work as they do for `run`. The output prints "Page types found" and "Not present on this site", so you can see which page types the AI reached. A small site, with only 2 pages, is fine.
+
+The plan is saved in a new folder, `aitd/<domain>/plans/<id>/`, as `measurement-plan.json` and a readable `plan.html`. For each event it lists:
+
+- `name` and `platform`. Events specific to your site, such as a size guide or a store locator, are marked `custom: true`.
+- `description` and `trigger`: the page type and the visible label of the element that fires the event.
+- `parameters`: each with a description and an example value. Custom parameters are marked. `required_params` lists the ones that must be present.
+- `user_properties`: suggested ones such as `customer_type`, each with a description and an example.
+
+Events your site already sends are marked `"seen": true`.
+
+Review the plan before you use it. The examples and suggestions come from the pages the AI saw, so check that each event fits your business. The extra fields are ignored by the checks.
+
+**Spreadsheet import and export.** `aitd plan export <plan> --site <url>` writes `plan.xlsx` next to the plan, with one row per event parameter on an `events` tab (`event, platform, parameter, required, example, trigger, description`) and one row per user property on a `user_properties` tab. Add `--format csv` to get `events.csv` and `user_properties.csv` instead; CSV needs no extra package. `.xlsx` uses one small library, `fflate`, which is installed with the tool as an optional dependency. `aitd plan import <file> --site <url>` reads the spreadsheet back and saves it as a new plan folder. Import never edits an existing plan. Unknown columns are ignored with a warning, and an error names the tab, row and fix, for example `events, row 7: "required" must be yes or no (found "maybe").`
+
+`measurement-plan.json` looks like this:
+
+```json
+{
+  "consent_mode": true,
+  "events": [
+    { "platform": "ga4", "name": "add_to_cart", "required_params": ["currency", "value", "items"] },
+    { "platform": "ga4", "name": "purchase", "journeys": ["checkout"], "required_params": ["transaction_id", "currency", "value", "items"] },
+    { "platform": "meta", "name": "Purchase", "journeys": ["checkout"], "required_params": ["value", "currency"] }
+  ]
+}
+```
+
+`platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
+
+Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
+
+**Auditing against a plan.** `run --against <plan>` takes `latest` (or `last`), `first`, a plan ID, or a path to a plan file or its folder. When `--site` is not given, the site comes from the plan. Give the run a journey as well and it walks only that flow, checking only the plan events expected there; the rest of the plan is reported as not checked, never as missing. Used alone, `--against` derives up to six journeys from the plan: it groups the planned events by the page they are triggered on and makes one journey per page, at most six (the smallest groups share the last journey), with no extra AI call. The chosen journeys are printed before the browser starts. Every report header then says `Checked against plan <id>`.
+
+`run` needs something to test: `--against`, `--journey`, `--goal`, or journeys in your config file. Without one, it stops before opening the browser with `Nothing to test. Add --against latest, --journey <id> or --goal "<text>".`, so it can't wander and spend API usage. If a site has no plan yet, `run --against` says `No plan yet for example.com. Draft one with: aitd plan --site https://example.com`.
+
+`aitd plan list --site <url>` lists the site's plan IDs, oldest first.
+
+### Plan vs. site
+
+When a run uses `--against`, the report starts with a **Plan vs. site** section, in `report.html` and `report.md`. Each planned event lands in one bucket:
+
+| Bucket | Meaning |
+|---|---|
+| Implemented | Planned, fired, all required parameters present, no value problems |
+| Missing | Planned for a journey the run walked, but never fired |
+| Missing params | Fired, but a required parameter is absent |
+| Wrong values | Fired with a value problem, from the same checks as purchase value, currency and items |
+| Unplanned | Fired, but isn't in the plan |
+| Not checked | Planned, but its journey or platform wasn't part of this run |
+
+The coverage score is implemented divided by the planned events that were checkable (all except not checked), shown overall and per platform, for example `Coverage 7 of 11 (64%), 2 events not checked`. The same entries are in `plan-check.json`, one per planned event with its bucket. Exit codes don't change: `--fail-on` still looks at finding severity. Without `--against`, the report is exactly as before.
+
+### Folder layout and plan IDs
+
+Plans and runs are kept in `aitd/` in the folder you run the tool from:
+
+```
+aitd/
+  example.com/                      the site's host, without www.
+    plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (after an export)
+    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json
+                                    and plan-check.json (with --against)
+```
+
+An ID is the local time, `YYYY-MM-DD_HHMM`. When that minute is already taken, seconds are added (`_HHMMSS`). Nothing is ever replaced: each draft, import and run gets a new folder. Use `--data-dir <dir>` to keep the `aitd/` folder somewhere else. `replay` and `--save-site` folders are not affected.
 
 ## Choose what to test
 
-You don't need a config file to start. Pick ready-made journeys, describe your own in plain language, and narrow the check to the events you care about:
+You don't need a config file to start. Pick ready-made journeys, describe your own in plain language, check against a plan, and narrow the check to the events you care about:
 
 ```bash
+# Check the site against its latest saved plan.
+aitd run --site https://staging.yourshop.com --against latest
+
 # Ready-made journeys come with a goal and the GA4 and Meta events to expect.
 ai-tag-debugger run --site https://staging.yourshop.com --journey purchase --journey sign_up
 
@@ -165,7 +252,7 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 
 `--journey` also picks journeys from your config by id. With a config, ready-made journeys add their events to your plan.
 
-A run always needs something to test: `--journey`, `--goal`, or journeys in your config file. Without one, `run` stops before opening the browser, so it can't wander and spend API usage. Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan.
+Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan, and `--against latest` checks the site against it.
 
 ### Keeping API usage down
 
@@ -225,15 +312,15 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | Field | Meaning |
 |---|---|
 | `site` | Base URL. Use staging when you can. |
-| `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. |
+| `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. A run with `--against` uses that plan instead. |
 | `gtm_container` | Optional GTM container export (Admin → Export container), so explanations can name tags and triggers. |
 | `viewports` | `desktop` and/or `mobile`. |
-| `journeys` | Optional when you pick ready-made journeys with `--journey` or describe one with `--goal`. |
+| `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
 | `journeys[].start` | Optional start path (default `/`). |
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
-| `providers` | Tracking providers to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`. Same as `--providers`. |
+| `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`. Same as `--platforms`. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
@@ -241,78 +328,76 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `provider` | Optional: `anthropic`, `openai`, `gemini` or `openai-compatible`. Same as `--provider`. |
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
 
-### Plan a new site
-
-No tracking yet? `aitd plan --site https://yoursite.com` has the AI explore one page of each type: the home page, a category, a product, the cart, the first checkout step, search, and any sign-up or contact forms. It needs no tracking code. It never pays, and it never submits a form with personal details. `--provider`, `--model` and `--max-steps` (default 25, the most AI steps) work as they do for `run`.
-
-The output prints "Page types found" and "Not present on this site", so you can see which page types the AI reached and which it didn't find. A small site, with only 2 pages, is fine.
-
-The plan is written to `measurement-plan.json` (change the path with `--out`). For each event it lists:
-
-- `name` and `platform`. Events specific to your site, such as a size guide or a store locator, are marked `custom: true`.
-- `description` and `trigger`: the page type and the visible label of the element that fires the event.
-- `parameters`: each with a description and an example value. Custom parameters are marked. `required_params` lists the ones that must be present.
-- `user_properties`: suggested ones such as `customer_type`, each with a description and an example.
-
-Events your site already sends are marked `"seen": true`.
-
-Review the file before you use it. The examples and suggestions come from the pages the AI saw, so check that each event fits your business. The extra fields are ignored by the checks, so the file works as `plan` without editing, but review it first. Then point `plan` in your config at it. Sites that already track can use `aitd plan --from` instead (see below).
-
-`measurement-plan.json`:
-
-```json
-{
-  "consent_mode": true,
-  "events": [
-    { "platform": "ga4", "name": "add_to_cart", "required_params": ["currency", "value", "items"] },
-    { "platform": "ga4", "name": "purchase", "journeys": ["checkout"], "required_params": ["transaction_id", "currency", "value", "items"] },
-    { "platform": "meta", "name": "Purchase", "journeys": ["checkout"], "required_params": ["value", "currency"] }
-  ]
-}
-```
-
-`platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
-
-Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
-
-### Draft a plan from a run
-
-Run an audit once, then `aitd plan --from reports/<dir>` writes a starting `measurement-plan.json`. It lists the events the run actually sent, with the parameters they carried. `--out <file>` picks another path, and `--force` replaces an existing file. Without `--force`, an existing file is never overwritten.
-
-GA4's automatic page parameters (`page_location`, `page_title`, `page_referrer`) and Hotjar calls are left out. Review the result before you point `plan` in your config at it, because the draft only lists what your site already sends.
-
 ## CLI
 
 ```
-ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<text>"] [--events <names>]
-                [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
-                [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
-                [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
-                [--save-site <dir>] [--save-steps <file>]
-ai-tag-debugger replay <dir>... [--update] [--out <dir>]
-ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
-                [--allow-private-network]
+aitd plan --site <url> [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+aitd plan list --site <url> [--data-dir <dir>]
+aitd plan import <file> --site <url> [--data-dir <dir>]
+aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
+aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--config <file>] [--events <names>]
+         [--max-steps <n>] [--viewport desktop|mobile] [--platforms <list>] [--data-dir <dir>]
+         [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
+         [--fail-on broken|risk|warning|never] [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>]
+aitd replay <dir>... [--update] [--out <dir>]
+aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
+         [--allow-private-network]
 ```
 
-`aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options.
+`aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options. Run `aitd <command> --help` for the essential options of each command.
+
+### All options
+
+| Option | Commands | Meaning |
+|---|---|---|
+| `--site <url>` | plan, run | The site. Required for `plan`; for `run`, needed unless `--against` or the config gives it. |
+| `--against <plan>` | run | Check against a plan: `latest` (or `last`), `first`, a plan ID, or a path to a plan file or folder. |
+| `--journey <id>` | run | A ready-made journey (repeatable). |
+| `--goal "<text>"` | run | A journey in plain language (repeatable). |
+| `--config <file>` | run | Take the site, journeys and plan from a config file. |
+| `--events <names>` | run | Only check these events, e.g. `purchase,add_to_cart`. |
+| `--viewport <name>` | run | `desktop` or `mobile` (repeatable). |
+| `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. Replaces `--providers`, which still works for one more minor version. |
+| `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
+| `--lang <code>` | run | Report language: `en` or `tr`. |
+| `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
+| `--headed` | plan, run | Show the browser window. |
+| `--provider <name>`, `--model <id>` | plan, run | The AI provider and model. Default: whichever API key is set. |
+| `--scripted` | run | Replay each journey's fixed steps, with no AI navigation. |
+| `--no-ai` | run | No AI model at all. Implies `--scripted`. |
+| `--save-site <dir>` | run | Save the site's responses for `replay`. |
+| `--save-steps <file>` | run | Write the steps each journey took into a config file. |
+| `--data-dir <dir>` | plan, run | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
+| `--update` | replay | Make this replay's findings the expected ones. |
+| `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
+| `--base-url <url>` | run | The API address for an OpenAI-compatible provider. |
+| `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
+| `--keep-bodies` | run | Store tracking requests as sent, without redacting user data. |
+| `--no-branding` | plan, run | Leave the logo and credit line out of the reports and `plan.html`. |
+| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network` | mcp | See the MCP section below. |
+
+Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a plan always saves a new folder, and a removed flag prints what to run instead.
 
 The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
 
 Output:
 
 - `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
-  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, and the providers checked.
+  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, the providers checked, and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage.
   - **Findings**: grouped by severity and filterable. Each one has its impact, likely cause, evidence, numbered fix steps and the steps where it happened.
   - **Journeys**: one journey at a time, with its steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
     - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
     - **dataLayer**: every push in the step.
-    - **Network requests**: every request to the chosen providers, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
-  - **Scope and plan**: whether each planned event was sent on each journey, and the providers checked or left out, with request counts.
+    - **Network requests**: every request to the chosen platforms, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
+  - **Scope and plan**: whether each planned event was sent on each journey, and the platforms checked or left out, with request counts.
 
   Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
 - `report.md`: the report in Markdown, e.g. for a pull request comment.
 - `capture.json`: everything captured, for your own analysis.
+- `plan-check.json`: with `--against`, one entry per planned event with its bucket.
+- `plan.html` (in the plan's folder): a readable page of the plan's events, parameters and user properties.
 
 Reports end with a credit line, "Generated by AI Tag Debugger · analitikisler.com", where the domain is a plain link (no images, no tracking, and no referrer, so report URLs aren't leaked). `--no-branding` removes it along with the logo.
 
@@ -320,17 +405,19 @@ Use `--lang tr` for a Turkish report. Finding texts, headings, and the model's e
 
 ## Use it from your AI chat app (MCP)
 
-`ai-tag-debugger mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server. Your chat app's model then runs the audit itself: you ask "check the tracking on the checkout of staging.myshop.com" and it opens the browser, clicks through, and explains the findings in the chat. No API key is needed, because the app's own model does the thinking.
+`aitd mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server. Your chat app's model then runs the audit itself: you ask "check the tracking on the checkout of staging.myshop.com" and it opens the browser, clicks through, and explains the findings in the chat. No API key is needed, because the app's own model does the thinking.
 
 Tools the server offers:
 
 | Tool | What it does |
 |---|---|
-| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose what to check. The assistant asks you which platforms to check first. |
+| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
 | `get_page` | Shows the current page. |
-| `finish_audit` | Checks everything against your measurement plan (JSON) or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. |
-| `run_audit` | Runs a config file end to end (local only). |
+| `finish_audit` | Checks everything against your measurement plan (JSON), a saved one given as `against` (`latest`, `first`, a plan ID, or on a local server a path), or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. The site comes from the audit. |
+| `run_audit` | Runs a config file end to end. With `against`, it checks the run against a saved plan and, when the config has no journeys, walks the journeys derived from that plan. Local only for file paths. |
+
+`against` takes the same values as the CLI's `--against`. Over HTTP it takes only `latest`, `first` or a plan ID, never a path. Plans are the ones saved by `aitd plan --site <url>`.
 
 The browser runs on the computer where the server runs, so it can reach your staging and `localhost` sites. Tracking requests are answered locally as usual.
 
@@ -375,7 +462,7 @@ The server prints a URL with a random secret path, like `https://<your-tunnel-ad
 
 In HTTP mode, the server is more locked down than locally:
 
-- It doesn't read measurement plans or configs from your disk (pass the plan as JSON text in the chat), and `run_audit` isn't offered. It only serves the reports it wrote itself.
+- It doesn't read measurement plans or configs from your disk (pass the plan as JSON text in the chat, or name a saved plan with `against: latest`, `first` or its ID), and `run_audit` isn't offered. It only serves the reports it wrote itself.
 - The browser opens only `http` and `https` pages, and refuses `localhost` and private network addresses (such as `192.168.x.x` or `169.254.169.254`), so the URL can't be used to look into your network. All browser traffic, WebSockets included, goes through a small built-in proxy that resolves each host once and connects only to the address it checked, so a DNS answer that changes mid-audit can't get around the check. To audit a local staging site this way anyway, start the server with `--allow-private-network`.
 - Audits left open for 15 minutes are closed, and request bodies are limited to 1 MB.
 

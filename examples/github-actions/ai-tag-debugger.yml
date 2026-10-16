@@ -22,7 +22,7 @@ jobs:
       # Installed in its own folder, so the browser matches the Playwright version the tool uses.
       - run: npm install --prefix "$RUNNER_TEMP/atd" "@analitikisler/ai-tag-debugger@$ATD_VERSION"
       - run: '"$RUNNER_TEMP/atd/node_modules/.bin/playwright" install --with-deps chromium'
-      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --out tracking-report'
+      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --data-dir tracking-report'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       - uses: actions/upload-artifact@v6
