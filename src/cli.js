@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
@@ -8,7 +8,8 @@ import { PROVIDERS } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 import { PROVIDERS as TRACKING_PROVIDERS, DEFAULT_PROVIDERS } from "./parsers.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
-import { writePlan, writePlanFromRun } from "./plan.js";
+import { savePlan } from "./plan.js";
+import { DEFAULT_DATA_DIR } from "./workspace.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
@@ -20,12 +21,11 @@ Usage:
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
   ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
                                                   and list findings that changed. Exits with code 1 when any did.
-  ai-tag-debugger plan --site <url> [--out <file>]
+  ai-tag-debugger plan --site <url>
                                                   Let the AI explore one page of each type and propose a measurement
                                                   plan: events (custom ones too), parameters and user properties.
                                                   Prints the page types it found and those the site doesn't have.
-  ai-tag-debugger plan --from <capture.json> [--out <file>]
-                                                  Draft a measurement plan from the events and parameters a run saw.
+                                                  Saved in aitd/<domain>/plans/<id>/measurement-plan.json.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -39,7 +39,8 @@ Run options:
   --goal "<text>"      Run a journey you describe in plain language (repeatable).
   --events <names>     Only check these events, comma separated, e.g. purchase,add_to_cart.
   --max-steps <n>      Most AI steps per journey (default 30). Lower it to cap API usage.
-  --out <dir>          Where to write report.html, report.md, timeline.csv and capture.json (default: reports/<timestamp>).
+  --data-dir <dir>     Where plans and runs are kept (default: ./aitd). Each run writes report.html, report.md,
+                       timeline.csv and capture.json to <dir>/<domain>/runs/<id>/, the ID being the local time.
   --provider <name>    AI provider: ${Object.keys(PROVIDERS).join(", ")} (default: whichever API key is set).
   --model <id>         Model id (defaults: ${Object.entries(PROVIDERS).filter(([, p]) => p.defaultModel).map(([k, p]) => `${k} ${p.defaultModel}`).join(", ")}).
   --base-url <url>     API address for --provider openai-compatible (Kimi, GLM, DeepSeek, OpenRouter, Ollama...).
@@ -70,10 +71,7 @@ Replay options:
 Plan options:
   --site <url>         Explore this site with the AI (no tracking needed) and propose a plan. Also takes
                        --provider, --model, --base-url, --max-steps (default 25), --allow-host and --headed.
-  --from <file>        A run's capture.json, or the report folder that holds it.
-  --out <file>         Where to write the plan (default: measurement-plan.json). An existing file is kept
-                       unless --force is given.
-  --force              Replace the --out file if it exists.
+  --data-dir <dir>     Where plans are kept (default: ./aitd). Each plan gets a new <dir>/<domain>/plans/<id>/ folder.
 
 MCP options:
   --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
@@ -126,6 +124,7 @@ async function main() {
       "save-site": { type: "string" },
       "save-steps": { type: "string" },
       update: { type: "boolean", default: false },
+      "data-dir": { type: "string" },
       from: { type: "string" },
       force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -165,11 +164,14 @@ async function main() {
     if (changed && !values.update) process.exitCode = 1;
     return;
   }
-  if (command === "plan" && !values.help && values.site) {
-    if (values.from) throw new Error("plan takes --site (explore the site) or --from (use a run's capture), not both.");
-    const out = values.out ?? "measurement-plan.json";
-    // Checked before the browser starts, so a taken file name doesn't cost a whole exploration.
-    if (!values.force && existsSync(out)) throw new Error(`${out} already exists. Choose another file with --out, or add --force to replace it.`);
+  if (command === "plan" && !values.help) {
+    if (values.from) throw new Error("--from was removed. Draft a plan with: aitd plan --site <url>");
+    if (values.out) throw new Error("plan --out was removed. Plans are saved in aitd/<domain>/plans/<id>/; use --data-dir <dir> to keep them elsewhere.");
+    if (values.force) throw new Error("--force was removed. Each plan is saved in a new folder, so nothing is replaced.");
+    if (!values.site) throw new Error("plan needs --site <url>: aitd plan --site https://www.example.com");
+    const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
+    const { domainOf } = await import("./workspace.js");
+    domainOf(values.site); // Checked before the browser starts.
     const maxSteps = values["max-steps"] ? Number(values["max-steps"]) : undefined;
     if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
     const { createProvider } = await import("./providers.js");
@@ -177,15 +179,10 @@ async function main() {
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
     const { plan } = await discoverPlan({ site: values.site, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
-    await writePlan(plan, out, { force: values.force });
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site });
     const custom = plan.events.filter((e) => e.custom).length;
-    console.log(`✓ Wrote ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties to ${out}. Review it, then use it as "plan" in your config.`);
-    return;
-  }
-  if (command === "plan" && !values.help) {
-    if (!values.from) throw new Error("plan needs --site <url> to explore a site, or --from <capture.json> to use what a run captured.");
-    const { plan, out } = await writePlanFromRun(values.from, values.out, { force: values.force });
-    console.log(`✓ Wrote ${plan.events.length} events to ${out}. Review it, then use it as "plan" in your config.`);
+    const rel = path.relative(process.cwd(), dir);
+    console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
     return;
   }
   if (values.help || command !== "run" || (!values.config && !values.site)) {
@@ -210,6 +207,8 @@ async function main() {
   }
   const maxSteps = values["max-steps"] ? Number(values["max-steps"]) : undefined;
   if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
+  // run --out is a hidden alias kept for one minor version; --data-dir replaces it.
+  if (values.out) console.log("Note: run --out will be removed in a later version. Runs are saved in aitd/<domain>/runs/<id>/; use --data-dir <dir> to keep them elsewhere.");
   const result = await runAudit({
     ...loaded,
     journeys: values.journey,
@@ -227,6 +226,7 @@ async function main() {
     headed: values.headed,
     branding: values["no-branding"] ? false : undefined,
     outDir: values.out,
+    dataDir: values["data-dir"],
     saveSite: values["save-site"],
     log: (msg) => console.log(msg),
   });

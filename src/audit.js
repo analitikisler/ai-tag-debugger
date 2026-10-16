@@ -1,5 +1,6 @@
 // A full audit from a config file: run every journey, check, explain, write the reports.
 // Shared by the CLI and the MCP server's run_audit tool.
+import { newRunDir } from "./workspace.js";
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
@@ -32,7 +33,6 @@ export async function loadConfig(configFile) {
   return { config, plan, gtmContainer };
 }
 
-export const defaultOutDir = () => path.resolve("reports", new Date().toISOString().replace(/[:.]/g, "-"));
 
 /** Writes report.md, report.html, timeline.csv and capture.json. */
 export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, branding = config.branding !== false }) {
@@ -50,7 +50,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
 /**
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
- *   outDir?: string, branding?: boolean, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
+ *   outDir?: string, dataDir?: string, branding?: boolean, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok).
@@ -116,7 +116,7 @@ export async function runAudit(opts) {
     explained = await explainFindings({ findings, plan, runs, gtmContainer, provider, lang, log });
   }
 
-  const outDir = path.resolve(opts.outDir ?? defaultOutDir());
+  const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
   const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, branding: opts.branding ?? config.branding !== false });
   const counts = summarize(groupFindings(findings));
   return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(saveError ? { saveError } : {}) };

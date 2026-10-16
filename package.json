@@ -18,7 +18,7 @@
     "setup": "node scripts/setup.js",
     "test": "node --test test/*.test.js",
     "demo:serve": "node examples/serve.js",
-    "demo": "node src/cli.js run --config examples/demo.config.json --scripted --no-ai --out reports/demo"
+    "demo": "node src/cli.js run --config examples/demo.config.json --scripted --no-ai"
   },
   "engines": {
     "node": ">=20"
