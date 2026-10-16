@@ -21,6 +21,9 @@ import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
+import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
+import { createProvider } from "./providers.js";
+import { savePlan } from "./plan.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -31,6 +34,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const MIN_TOKEN_LENGTH = 16;
 
 const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracking (GA4, Google Ads, Meta Pixel, TikTok Pixel, Consent Mode).
+
+Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")}). If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
 
 Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}); pass their choice as providers.
 
@@ -123,6 +128,7 @@ async function loadAgainst(ref, site, opts) {
  *   blockPrivate: the browser refuses loopback, private and link-local addresses (HTTP servers, by default).
  *   dataDir: where saved plans live (default ./aitd), used by `against`.
  *   reportsUrl: where an HTTP server serves finished reports, if it knows its public URL.
+ *   provider: an AI provider for make_plan (default: the one configured on this computer; tests pass a fake).
  */
 export function buildServer(opts) {
   const server = new McpServer({ name: "ai-tag-debugger", version: VERSION }, { instructions: INSTRUCTIONS });
@@ -295,6 +301,53 @@ export function buildServer(opts) {
         "Explain each problem to the user with its likely cause and fix.",
       ];
       return text(lines.filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n"));
+    },
+  );
+
+  server.registerTool(
+    "make_plan",
+    {
+      title: "Draft a tracking plan",
+      description:
+        "Explores a website and drafts its measurement plan: the events, parameters and user properties it should track. Same as `aitd plan --site`. The plan is saved (use its ID as against in finish_audit to check an audit against it) and the events are returned. Uses the AI provider configured on the computer running this server (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) and takes a few minutes. To see what the site sends today, run an audit instead.",
+      inputSchema: {
+        site: z.string().describe("The site to plan, e.g. https://www.example.com/"),
+        topic: z.enum(Object.keys(TOPICS)).optional().describe(`Limit the plan to one kind of event: ${Object.keys(TOPICS).join(", ")}. Default: the whole plan.`),
+      },
+    },
+    async ({ site, topic }) => {
+      let url;
+      try {
+        url = new URL(site);
+        if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+      } catch {
+        return fail("site must be an http or https URL.");
+      }
+      if (opts.blockPrivate) {
+        const refused = await navigationError(url.href, { isPrivate: privateHostChecker() });
+        if (refused) return fail(`${refused} Over HTTP, plans are limited to public websites.`);
+      }
+      try {
+        checkTopic(topic);
+        const provider = opts.provider ?? (await createProvider());
+        const { plan } = await discoverPlan({ site: url.href, topic, provider, blockPrivate: opts.blockPrivate });
+        const { id, dir } = await savePlan(plan, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site: url.href });
+        const custom = plan.events.filter((e) => e.custom).length;
+        return text(
+          [
+            `Saved plan ${id}${topic ? ` (${topic} only)` : ""}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties${opts.allowFiles ? ` in ${dir}` : ""}.`,
+            "",
+            ...plan.events.map((e) => `- ${e.platform} ${e.name}${e.custom ? " (custom)" : ""}${e.trigger?.page ? `, on ${e.trigger.page}` : ""}${e.required_params?.length ? `, params: ${e.required_params.join(", ")}` : ""}${e.description ? `: ${e.description}` : ""}`),
+            ...(plan.user_properties.length ? ["", `User properties: ${plan.user_properties.map((p) => p.name).join(", ")}`] : []),
+            "",
+            `Check a site against it with an audit: finish_audit with against "${id}".`,
+          ].join("\n"),
+        );
+      } catch (err) {
+        // The CLI wording (--no-ai) means nothing to a chat app, so say it in this tool's terms.
+        if (err.code === "NO_API_KEY") return fail("No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so it can't draft a plan. Set one and restart the server, or write the plan yourself from what an audit shows and pass it to finish_audit as measurement_plan.");
+        return fail(`Could not draft the plan: ${err.message}`);
+      }
     },
   );
 

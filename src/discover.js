@@ -140,13 +140,13 @@ export function toPlan(site, answer, hits = []) {
 /**
  * Lets the AI explore the site (one page per type), then asks it for a measurement plan.
  * With `topic`, exploring and the plan are limited to that kind of event (see TOPICS).
- * @param {{ site: string, topic?: string, provider: any, maxSteps?: number, headed?: boolean, allowedHosts?: string[], viewport?: string, log?: (msg: string) => void }} opts
+ * @param {{ site: string, topic?: string, provider: any, maxSteps?: number, headed?: boolean, allowedHosts?: string[], viewport?: string, blockPrivate?: boolean, log?: (msg: string) => void }} opts
  */
 export async function discoverPlan(opts) {
   const log = opts.log ?? (() => {});
   const topic = TOPICS[checkTopic(opts.topic)];
   const goal = topic ? `${DISCOVER_GOAL}\nThis plan covers only ${opts.topic}: visit just ${topic.explore}, and skip other kinds of page.` : DISCOVER_GOAL;
-  const session = new AuditSession({ viewport: opts.viewport ?? "desktop", site: opts.site, allowedHosts: opts.allowedHosts, headless: !opts.headed });
+  const session = new AuditSession({ viewport: opts.viewport ?? "desktop", site: opts.site, allowedHosts: opts.allowedHosts, headless: !opts.headed, blockPrivate: opts.blockPrivate });
   const snapshots = [];
   let outcome;
   try {
