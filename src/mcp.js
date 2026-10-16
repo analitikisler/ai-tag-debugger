@@ -282,7 +282,7 @@ export function buildServer(opts) {
       const grouped = groupFindings(findings);
       const counts = summarize(grouped);
       const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
-      const reportPath = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
+      const { reportPath } = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
       const m = messages(lang);
       const lines = [
         m.ui.counts(counts),

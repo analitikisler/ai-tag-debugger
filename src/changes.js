@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { listRunIds, runsDir } from "./workspace.js";
+import { messages } from "./i18n.js";
+import { PROVIDERS } from "./parsers.js";
 
 const PROBLEMS = new Set(["broken", "risk", "warning"]);
 const PLAN_PROBLEMS = new Set(["missing", "missing_params", "wrong_values"]);
@@ -63,4 +65,26 @@ export function compareRuns(prev, { findings, planCheck = null }) {
     fixed: [...before].filter(([k]) => !now.has(k)).map(([, f]) => f),
     new: [...now].filter(([k]) => !before.has(k)).map(([, f]) => f),
   };
+}
+
+const changeLabel = (c) => `${c.platform ? PROVIDERS[c.platform] ?? String(c.platform).replace(/[_-]+/g, " ").replace(/\b\w/g, (x) => x.toUpperCase()) : ""} ${c.event ?? ""}`.trim() || c.check;
+
+/** One line per change, for the report, alerts and the MCP server: { kind: "fixed" | "new", tag, text }. */
+export function changeItems(ch, lang = "en") {
+  const m = messages(lang);
+  const why = (c, bucket) => (ch.mode === "findings" ? c.detail : m.ui.bucket[bucket]);
+  return [
+    ...ch.fixed.map((c) => ({ kind: "fixed", tag: m.ui.changeFixed, text: `${changeLabel(c)} (${why(c, c.was)})` })),
+    ...ch.new.map((c) => ({ kind: "new", tag: m.ui.changeNew, text: `${changeLabel(c)} (${why(c, c.bucket)})` })),
+  ];
+}
+
+/** True when there is an earlier run and something was fixed or broke since. */
+export const hasChanges = (ch) => Boolean(ch?.previous && (ch.fixed.length || ch.new.length));
+
+/** The diff as plain text: a headline, then one "- Tag: text" line per change. */
+export function changesText(ch, lang = "en") {
+  const m = messages(lang);
+  if (!ch?.previous) return m.ui.noPreviousRun;
+  return [m.ui.changesLine(ch), ...changeItems(ch, lang).map((i) => `- ${i.tag}: ${i.text}`)].join("\n");
 }

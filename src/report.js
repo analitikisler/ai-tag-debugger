@@ -4,6 +4,7 @@ import { messages } from "./i18n.js";
 import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
 import { LOGOS } from "./brand.js";
+import { changeItems } from "./changes.js";
 import { readFileSync } from "node:fs";
 
 export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -154,7 +155,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
   const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), `**${m.ui.counts(counts)}**`, ""];
-  if (changes) lines.push(...changesMd(m, changes));
+  if (changes) lines.push(...changesMd(m, changes, lang));
   if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
   const sum = summaryParts(explained?.summary);
   if (sum) {
@@ -650,25 +651,21 @@ const pcSort = (pc) => [...pc.events].sort((a, b) => BUCKET_ORDER.indexOf(a.buck
 const BUCKET_ORDER = ["missing", "missing_params", "wrong_values", "implemented", "unplanned", "not_checked"];
 
 /** "Changed since last run": one headline, then what was fixed and what is new. */
-const changeLabel = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
-const changeItems = (m, ch) => [
-  ...ch.fixed.map((c) => ({ sev: "ok", tag: m.ui.changeFixed, text: `${changeLabel(c)} (${ch.mode === "findings" ? c.detail : m.ui.bucket[c.was]})` })),
-  ...ch.new.map((c) => ({ sev: "broken", tag: m.ui.changeNew, text: `${changeLabel(c)} (${ch.mode === "findings" ? c.detail : m.ui.bucket[c.bucket]})` })),
-];
+const changeItemsHtml = (m, ch, lang) => changeItems(ch, lang).map((i) => ({ ...i, sev: i.kind === "fixed" ? "ok" : "broken" }));
 
-function changesMd(m, ch) {
+function changesMd(m, ch, lang) {
   const lines = [`## ${m.ui.changesTitle}`, ""];
   if (!ch.previous) return [...lines, m.ui.noPreviousRun, ""];
   lines.push(`**${mdText(m.ui.changesLine(ch))}**`, "");
-  const items = changeItems(m, ch);
+  const items = changeItemsHtml(m, ch, lang);
   if (items.length) lines.push(...items.map((i) => `- ${i.tag}: ${mdText(i.text)}`), "");
   return lines;
 }
 
-function changesCard(m, ch) {
+function changesCard(m, ch, lang) {
   const head = `<div class="card-h"><div class="card-t">${m.ui.changesTitle}</div>${ch.previous ? `<div class="card-d">${escapeHtml(m.ui.changesLead(ch.previous, ch.mode))}</div>` : ""}</div>`;
   if (!ch.previous) return `<div class="card" id="changes">${head}<div class="card-c"><p class="muted">${m.ui.noPreviousRun}</p></div></div>`;
-  const items = changeItems(m, ch);
+  const items = changeItemsHtml(m, ch, lang);
   return `<div class="card" id="changes">${head}<div class="card-c"><p><strong>${escapeHtml(m.ui.changesLine(ch))}</strong></p>${items.length ? `<ul class="changes">${items.map((i) => `<li>${badge(i.sev, i.tag)} ${escapeHtml(i.text)}</li>`).join("")}</ul>` : ""}</div></div>`;
 }
 
@@ -1034,7 +1031,7 @@ ${navCss(runs)}</style></head><body>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
 <main class="wrap">
-<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs, { ai, plan, lang })}</section>
+<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes, lang) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs, { ai, plan, lang })}</section>
 <section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows, Boolean(explained))}</section>
 <section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
 <section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>
