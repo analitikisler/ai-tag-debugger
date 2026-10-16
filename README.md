@@ -99,6 +99,17 @@ ai-tag-debugger run --site https://yourshop.com --journey add_to_cart \
 
 Use the model id from your provider's documentation. You can also set `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_MODEL` instead of the flags, or `"provider"`, `"base_url"` and `"model"` in the config. When the API can't return strict JSON schemas, the explanations fall back to plain JSON mode.
 
+### Cloudflare AI Gateway
+
+To see logs, costs and rate limits for every AI call, send them through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/). Your provider key stays the same:
+
+```bash
+export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<account id>/default
+export AI_GATEWAY_TOKEN=...   # only if the gateway has authentication on
+```
+
+This works with `anthropic`, `openai` and `gemini`. Leave caching off in the gateway so each run sees your live site. Cloudflare Workers AI models also work through the OpenAI-compatible provider, with `--base-url https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1`.
+
 **A word on model choice.** The AI browses by calling tools, one step at a time, for 5 to 30 steps. Models differ a lot in how reliably they do that: smaller and local models may click the wrong thing, loop, or stop early. The checks stay correct whatever the model does, because they come from the captured hits, but a journey that doesn't finish can't show its later events. If a model struggles, try a larger one, a ready-made journey with a short goal, or `--max-steps`. The Anthropic, OpenAI and Gemini defaults are the tested ones.
 
 Adding a native provider means implementing two functions in [`src/providers.js`](src/providers.js): a tool-calling conversation and a structured JSON call.

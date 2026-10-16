@@ -57,11 +57,29 @@ export async function createProvider(opts = {}, env = process.env) {
     return openaiProvider(client, model, { compatible: true, label: new URL(baseURL).host });
   }
   const model = opts.model ?? PROVIDERS[name].defaultModel;
-  if (name === "anthropic") return anthropicProvider(opts.client ?? new (await import("@anthropic-ai/sdk")).default(), model);
-  if (name === "openai") return openaiProvider(opts.client ?? new (await import("openai")).default(), model);
+  const gateway = gatewayOptions(name, env);
+  if (name === "anthropic") return anthropicProvider(opts.client ?? new (await import("@anthropic-ai/sdk")).default(gateway), model);
+  if (name === "openai") return openaiProvider(opts.client ?? new (await import("openai")).default(gateway), model);
   const { GoogleGenAI } = await import("@google/genai");
   const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  return geminiProvider(opts.client ?? new GoogleGenAI(apiKey ? { apiKey } : {}), model);
+  const httpOptions = gateway.baseURL ? { httpOptions: { baseUrl: gateway.baseURL, headers: gateway.defaultHeaders } } : {};
+  return geminiProvider(opts.client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model);
+}
+
+// Cloudflare AI Gateway path for each provider, appended to AI_GATEWAY_URL.
+const GATEWAY_PATHS = { anthropic: "anthropic", openai: "openai", gemini: "google-ai-studio" };
+
+/**
+ * SDK client options that send a provider's calls through Cloudflare AI Gateway, for logs,
+ * cost tracking and optional caching. AI_GATEWAY_URL is https://gateway.ai.cloudflare.com/v1/<account>/<gateway>;
+ * AI_GATEWAY_TOKEN is only needed when the gateway has authentication on. Empty when unset.
+ */
+export function gatewayOptions(name, env = process.env) {
+  const base = env.AI_GATEWAY_URL?.trim().replace(/\/+$/, "");
+  if (!base || !GATEWAY_PATHS[name]) return {};
+  const options = { baseURL: `${base}/${GATEWAY_PATHS[name]}` };
+  if (env.AI_GATEWAY_TOKEN) options.defaultHeaders = { "cf-aig-authorization": `Bearer ${env.AI_GATEWAY_TOKEN}` };
+  return options;
 }
 
 // --- Anthropic ---------------------------------------------------------------

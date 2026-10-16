@@ -3,7 +3,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { runJourney } from "../src/agent.js";
-import { createProvider, resolveProviderName } from "../src/providers.js";
+import { createProvider, resolveProviderName, gatewayOptions } from "../src/providers.js";
 
 const PORT = 4398;
 let server;
@@ -146,4 +146,14 @@ test("openai-compatible: the real OpenAI SDK talks to a custom base URL, and JSO
   } finally {
     api.close();
   }
+});
+
+test("AI_GATEWAY_URL routes each provider through Cloudflare AI Gateway", () => {
+  const env = { AI_GATEWAY_URL: "https://gateway.ai.cloudflare.com/v1/acc/default/" };
+  assert.deepEqual(gatewayOptions("anthropic", env), { baseURL: "https://gateway.ai.cloudflare.com/v1/acc/default/anthropic" });
+  assert.equal(gatewayOptions("openai", env).baseURL, "https://gateway.ai.cloudflare.com/v1/acc/default/openai");
+  assert.equal(gatewayOptions("gemini", env).baseURL, "https://gateway.ai.cloudflare.com/v1/acc/default/google-ai-studio");
+  assert.deepEqual(gatewayOptions("gemini", { ...env, AI_GATEWAY_TOKEN: "t" }).defaultHeaders, { "cf-aig-authorization": "Bearer t" });
+  assert.deepEqual(gatewayOptions("openai-compatible", env), {});
+  assert.deepEqual(gatewayOptions("anthropic", {}), {});
 });

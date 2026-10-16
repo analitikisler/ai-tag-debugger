@@ -99,6 +99,17 @@ ai-tag-debugger run --site https://yourshop.com --journey add_to_cart \
 
 Model kimliğini sağlayıcınızın dokümantasyonundan alın. Bayrakların yerine `OPENAI_COMPATIBLE_BASE_URL` ve `OPENAI_COMPATIBLE_MODEL` değişkenlerini ya da ayar dosyasında `"provider"`, `"base_url"` ve `"model"` alanlarını da kullanabilirsiniz. API katı JSON şemalarını döndüremezse açıklamalar düz JSON moduna geçer.
 
+### Cloudflare AI Gateway
+
+Her AI çağrısının kayıtlarını, maliyetini ve limitlerini görmek için çağrıları [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) üzerinden gönderin. Sağlayıcı anahtarınız aynı kalır:
+
+```bash
+export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<hesap kimliği>/default
+export AI_GATEWAY_TOKEN=...   # yalnızca gateway'de kimlik doğrulama açıksa
+```
+
+`anthropic`, `openai` ve `gemini` ile çalışır. Her çalıştırmanın canlı sitenizi görmesi için gateway'de önbelleği kapalı bırakın. Cloudflare Workers AI modelleri de OpenAI uyumlu sağlayıcıyla `--base-url https://api.cloudflare.com/client/v4/accounts/<hesap kimliği>/ai/v1` kullanılarak çalışır.
+
 **Model seçimi hakkında bir not.** Yapay zekâ, 5 ila 30 adım boyunca araç çağırarak, her seferinde bir adım gezinir. Modeller bunu ne kadar güvenilir yaptıklarında büyük farklılık gösterir: daha küçük ve yerel modeller yanlış yere tıklayabilir, döngüye girebilir ya da erken durabilir. Kontroller model ne yaparsa yapsın doğrudur, çünkü yakalanan isteklerden gelirler; ama bitmeyen bir yolculuk, sonraki event'lerini gösteremez. Bir model zorlanıyorsa daha büyük bir model, kısa hedefli hazır bir yolculuk ya da `--max-steps` deneyin. Anthropic, OpenAI ve Gemini varsayılanları test edilmiş olanlardır.
 
 Yerel bir sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içinde iki fonksiyon yazmanız gerekir: araç çağıran bir konuşma ve yapılandırılmış bir JSON çağrısı.
