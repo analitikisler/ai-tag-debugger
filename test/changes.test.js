@@ -44,3 +44,28 @@ test("compares plan coverage when both runs used a plan", () => {
   assert.deepEqual(ch.new.map((c) => c.event).sort(), ["lead", "sign_up"]);
   assert.match(renderMarkdown({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch, lang: "tr" }), /1 olay düzeldi, 2 yeni sorun/);
 });
+
+test("compares a plan with the version before it", async () => {
+  const { comparePlans, previousPlanChanges } = await import("../src/changes.js");
+  const ev = (name, extra = {}) => ({ name, required_params: ["currency"], parameters: { currency: {} }, ...extra });
+  const prev = { events: [ev("purchase"), ev("search"), ev("login")] };
+  const next = { events: [ev("purchase", { required_params: ["currency", "value"] }), ev("search"), ev("size_guide_open")] };
+  const pc = comparePlans(prev, next, "2026-10-01_0900");
+  assert.deepEqual(pc.added.map((c) => c.event), ["size_guide_open"]);
+  assert.deepEqual(pc.removed.map((c) => c.event), ["login"]);
+  assert.deepEqual(pc.changed.map((c) => [c.event, c.what]), [["purchase", ["required parameters"]]]);
+  assert.equal(comparePlans(prev, prev, "x").same, true);
+  assert.equal(comparePlans(null, next), null);
+
+  const dir = await mkdtemp(path.join(tmpdir(), "aitd-"));
+  for (const [id, plan] of [["2026-10-01_0900", prev], ["2026-10-02_0900", next]]) {
+    await mkdir(path.join(dir, "example.com", "plans", id), { recursive: true });
+    await writeFile(path.join(dir, "example.com", "plans", id, "measurement-plan.json"), JSON.stringify(plan));
+  }
+  assert.equal(await previousPlanChanges(dir, "https://example.com", "2026-10-01_0900", prev), null);
+  assert.equal((await previousPlanChanges(dir, "https://example.com", "2026-10-02_0900", next)).previous, "2026-10-01_0900");
+
+  const args = { title: "t", generatedAt: "g", findings: [], explained: null, runs: [], against: "2026-10-02_0900", planChanges: pc };
+  assert.match(renderHtml(args), /Plan changed since 2026-10-01_0900: 1 added, 1 removed, 1 changed/);
+  assert.match(renderMarkdown(args), /- ~ .*purchase: required parameters/);
+});
