@@ -19,12 +19,20 @@ test("the help lists --save-steps", () => {
   assert.match(cli("--help"), /--save-steps <file>/);
 });
 
-test("the help lists the plan command", () => {
-  assert.match(cli("--help"), /plan --from <capture\.json>/);
+test("the help lists the plan command and --data-dir", () => {
+  const help = cli("--help");
+  assert.match(help, /plan --site <url>/);
+  assert.match(help, /--data-dir <dir>/);
+  assert.doesNotMatch(help, /--from|--force/);
 });
 
-test("plan --site refuses to replace an existing file before exploring", () => {
-  assert.throws(() => execFileSync(process.execPath, ["src/cli.js", "plan", "--site", "https://x.test", "--out", "package.json"], { encoding: "utf8", stdio: "pipe" }), /package\.json already exists/);
+const fails = (args, pattern) => assert.throws(() => execFileSync(process.execPath, ["src/cli.js", ...args], { encoding: "utf8", stdio: "pipe" }), (e) => e.status === 2 && pattern.test(e.stderr));
+
+test("removed plan flags say what to run instead", () => {
+  fails(["plan", "--from", "x.json"], /--from was removed\. Draft a plan with: aitd plan --site <url>/);
+  fails(["plan", "--site", "https://x.test", "--out", "p.json"], /--out was removed[\s\S]*--data-dir/);
+  fails(["plan", "--site", "https://x.test", "--force"], /--force was removed/);
+  fails(["plan"], /plan needs --site <url>/);
 });
 
 test("a run without --journey, --goal or config journeys stops before any browser or model starts", () => {
