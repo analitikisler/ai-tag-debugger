@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1 (2026-10-16)
+
+- Set `AI_GATEWAY_URL` (and `AI_GATEWAY_TOKEN` if the gateway has authentication on) to send Anthropic, OpenAI and Gemini calls through Cloudflare AI Gateway, for logs and cost tracking. Unset, nothing changes.
+
 ## 0.11.0 (2026-10-16)
 
 - Every saved run is compared with the site's previous run. The report opens with a "Changed since last run" section (`2 events fixed, 1 new problem`) that lists what was fixed and what is new, by plan coverage when both runs used `--against` and by health findings otherwise. The first run says there is nothing to compare yet. No new flag; the result is also in `capture.json` under `changes`.
