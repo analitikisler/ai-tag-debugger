@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Campaign checks (`campaign_checks`, on by default): each run opens the first page like an ad click, with UTM parameters, `gclid` or `fbclid` (or the ones already in the start address), and reports when a redirect drops them or the hits show a page address without them. Set `campaign_checks` to `false` to open the plain address.
+- Server-side checks: one event ID reused on two different events is flagged, and so is a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container forwards. A server container is noted as an info finding.
+- GTM container awareness: with `gtm_container`, each broken event names the tag that sends it and the trigger it fires on, without an AI model.
+- White label: the `report` setting takes a `name`, `logo`, `color` and `pdf` for the HTML report, and `pdf: true` also writes `report.pdf`.
+
 ## 0.12.0 (2026-10-16)
 
 - The HTML report uses the Analitik İşler design system and the new ai tag debugger logo. The large title is now a compact `Site: example.com` line.
