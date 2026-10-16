@@ -444,3 +444,58 @@ export function groupFindings(findings) {
   }
   return [...groups.values()].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
+
+const WRONG_VALUE_CHECKS = new Set(["purchase_value_invalid", "purchase_currency_invalid", "purchase_items_empty", "purchase_mismatch"]);
+export const PLAN_BUCKETS = ["implemented", "missing", "missing_params", "wrong_values", "unplanned", "not_checked"];
+
+/**
+ * Sorts every planned event into one bucket from the runs and the findings checkRun gave them:
+ * implemented, missing, missing_params, wrong_values or not_checked, plus one unplanned entry per
+ * event that fired but is not in the plan. Coverage = implemented / planned events that were checkable.
+ * @param {Plan} plan
+ * @param {any[]} runs
+ * @param {Finding[]} findings
+ */
+export function planCheck(plan, runs, findings) {
+  const events = (plan?.events ?? []).map((e) => ({ ...e, platform: String(e.platform ?? "").toLowerCase() }));
+  const entries = [];
+  for (const ev of events) {
+    const walked = runs.filter((r) => expectedIn(ev, r.journeyId) && (!r.providers || r.providers.includes(ev.platform)));
+    const entry = { platform: ev.platform, event: ev.name, bucket: "not_checked", journeys: [...new Set(walked.map((r) => r.journeyId))] };
+    if (walked.length) {
+      const own = findings.filter((f) => f.event && walked.some((r) => r.journeyId === f.journey && r.viewport === f.viewport) && hitMatchesEvent(ev, { platform: f.platform, name: f.event }));
+      const params = own.filter((f) => f.check === "missing_params");
+      const values = own.filter((f) => WRONG_VALUE_CHECKS.has(f.check));
+      const fired = walked.some((r) => r.hits.some((h) => hitMatchesEvent(ev, h)));
+      if (params.length) entry.bucket = "missing_params";
+      else if (values.length) entry.bucket = "wrong_values";
+      else entry.bucket = fired ? "implemented" : "missing";
+      const details = [...new Set([...params, ...values].map((f) => f.detail))];
+      if (details.length) entry.details = details;
+    }
+    entries.push(entry);
+  }
+  // Unplanned events, from the runs whose unplanned_events finding survived the --event filter.
+  const seen = new Set();
+  for (const r of runs) {
+    if (!findings.some((f) => f.check === "unplanned_events" && f.journey === r.journeyId && f.viewport === r.viewport)) continue;
+    for (const h of r.hits) {
+      if (events.some((e) => hitMatchesEvent(e, h)) || seen.has(key(h.platform, h.name))) continue;
+      seen.add(key(h.platform, h.name));
+      entries.push({ platform: h.platform, event: h.name, bucket: "unplanned", journeys: [r.journeyId] });
+    }
+  }
+  const score = (list) => {
+    const planned = list.filter((e) => e.bucket !== "unplanned");
+    const checkable = planned.filter((e) => e.bucket !== "not_checked").length;
+    const implemented = planned.filter((e) => e.bucket === "implemented").length;
+    return { implemented, checkable, not_checked: planned.length - checkable, percent: checkable ? Math.round((implemented / checkable) * 100) : null };
+  };
+  const platforms = [...new Set(entries.filter((e) => e.bucket !== "unplanned").map((e) => e.platform))];
+  const counts = Object.fromEntries(PLAN_BUCKETS.map((b) => [b, entries.filter((e) => e.bucket === b).length]));
+  return {
+    coverage: { ...score(entries), platforms: Object.fromEntries(platforms.map((p) => [p, score(entries.filter((e) => e.platform === p))])) },
+    counts,
+    events: entries,
+  };
+}
