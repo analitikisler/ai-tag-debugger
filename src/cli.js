@@ -18,6 +18,7 @@ const USAGE = `ai-tag-debugger: an open-source AI agent that QA-tests your analy
 Usage:
   ai-tag-debugger run --site <url> --journey purchase [options]   Audit ready-made journeys, no config needed.
   ai-tag-debugger run --site <url> --goal "<what to do>"          Audit a journey you describe in plain language.
+  ai-tag-debugger run --site <url> --against latest               Audit the site against its latest plan.
   ai-tag-debugger run --config <file> [options]                   Run an audit from a config file.
   ai-tag-debugger replay <dir>... [--update]      Audit sites saved with --save-site again, offline and without AI,
                                                   and list findings that changed. Exits with code 1 when any did.
@@ -26,14 +27,19 @@ Usage:
                                                   plan: events (custom ones too), parameters and user properties.
                                                   Prints the page types it found and those the site doesn't have.
                                                   Saved in aitd/<domain>/plans/<id>/ (measurement-plan.json and a readable plan.html).
+  ai-tag-debugger plan list --site <url>          List the site's plan IDs, oldest first.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
   --site <url>         The site to audit (overrides "site" in the config).
   --config <file>      Audit config (JSON). See examples/demo.config.json.
+  --against <plan>     Check the run against a plan: latest (or last), first, a plan ID, or a path to a plan
+                       file or folder (then --site may be left out; the plan's "site" is used). Alone, it walks
+                       up to six journeys built from the plan's trigger pages. With --journey or --goal it walks
+                       only those and checks the plan events expected there; the rest are not checked.
   --journey <id>       Run this journey (repeatable): a journey id from the config, or a ready-made
                        journey: ${Object.keys(JOURNEY_PRESETS).join(", ")}.
-                       A run needs a journey to test: --journey, --goal or journeys in the --config file.
+                       A run needs something to test: --against, --journey, --goal or journeys in --config.
                        Without one it stops before opening the browser, so it can't wander and spend
                        API usage. "aitd plan --site <url>" drafts a plan if you're not sure what to test.
   --goal "<text>"      Run a journey you describe in plain language (repeatable).
@@ -125,6 +131,7 @@ async function main() {
       "save-steps": { type: "string" },
       update: { type: "boolean", default: false },
       "data-dir": { type: "string" },
+      against: { type: "string" },
       from: { type: "string" },
       force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -164,6 +171,14 @@ async function main() {
     if (changed && !values.update) process.exitCode = 1;
     return;
   }
+  if (command === "plan" && positionals[1] === "list" && !values.help) {
+    if (!values.site) throw new Error("plan list needs --site <url>: aitd plan list --site https://www.example.com");
+    const { domainOf, listPlanIds } = await import("./workspace.js");
+    const ids = await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site);
+    if (!ids.length) throw new Error(`No plan yet for ${domainOf(values.site)}. Draft one with: aitd plan --site ${values.site}`);
+    for (const id of ids) console.log(id);
+    return;
+  }
   if (command === "plan" && !values.help) {
     if (values.from) throw new Error("--from was removed. Draft a plan with: aitd plan --site <url>");
     if (values.out) throw new Error("plan --out was removed. Plans are saved in aitd/<domain>/plans/<id>/; use --data-dir <dir> to keep them elsewhere.");
@@ -185,7 +200,7 @@ async function main() {
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
     return;
   }
-  if (values.help || command !== "run" || (!values.config && !values.site)) {
+  if (values.help || command !== "run" || (!values.config && !values.site && !values.against)) {
     console.log(USAGE);
     process.exit(values.help ? 0 : 2);
   }
@@ -198,6 +213,29 @@ async function main() {
 
   const loaded = values.config ? await loadConfig(values.config) : { config: {}, plan: null, gtmContainer: null };
   if (values.site) loaded.config = { ...loaded.config, site: values.site };
+  if (!values.against && !values.journey?.length && !values.goal?.length && !loaded.config.journeys?.length) {
+    throw new Error('Nothing to test. Add --against latest, --journey <id> or --goal "<text>".');
+  }
+  let against = null;
+  if (values.against) {
+    const { readJson } = await import("./audit.js");
+    const { resolvePlan } = await import("./workspace.js");
+    if (loaded.config.site) {
+      try {
+        new URL(loaded.config.site);
+      } catch {
+        throw new Error(`"${loaded.config.site}" is not a full URL. Use e.g. https://www.example.com`);
+      }
+    }
+    against = await resolvePlan(values.against, { dataDir: values["data-dir"] ?? DEFAULT_DATA_DIR, site: loaded.config.site });
+    const plan = await readJson(against.file);
+    if (!Array.isArray(plan?.events)) throw new Error(`${against.file} is not a plan: it needs an "events" list.`);
+    if (!loaded.config.site) {
+      if (!plan.site) throw new Error(`${against.file} has no "site". Add --site <url>.`);
+      loaded.config = { ...loaded.config, site: plan.site };
+    }
+    loaded.plan = plan;
+  }
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
   try {
@@ -228,6 +266,7 @@ async function main() {
     outDir: values.out,
     dataDir: values["data-dir"],
     saveSite: values["save-site"],
+    against,
     log: (msg) => console.log(msg),
   });
 
