@@ -58,12 +58,19 @@ export async function createProvider(opts = {}, env = process.env) {
   }
   const model = opts.model ?? PROVIDERS[name].defaultModel;
   const gateway = gatewayOptions(name, env);
-  if (name === "anthropic") return anthropicProvider(opts.client ?? new (await import("@anthropic-ai/sdk")).default(gateway), model);
-  if (name === "openai") return openaiProvider(opts.client ?? new (await import("openai")).default(gateway), model);
+  const provider = await builtInProvider(name, model, gateway, opts.client, env);
+  // Shown in the "Using ..." line so a run says whether its calls went through the gateway.
+  if (gateway.baseURL && !opts.client) provider.via = "Cloudflare AI Gateway";
+  return provider;
+}
+
+async function builtInProvider(name, model, gateway, client, env) {
+  if (name === "anthropic") return anthropicProvider(client ?? new (await import("@anthropic-ai/sdk")).default(gateway), model);
+  if (name === "openai") return openaiProvider(client ?? new (await import("openai")).default(gateway), model);
   const { GoogleGenAI } = await import("@google/genai");
   const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
   const httpOptions = gateway.baseURL ? { httpOptions: { baseUrl: gateway.baseURL, headers: gateway.defaultHeaders } } : {};
-  return geminiProvider(opts.client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model);
+  return geminiProvider(client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model);
 }
 
 // Cloudflare AI Gateway path for each provider, appended to AI_GATEWAY_URL.

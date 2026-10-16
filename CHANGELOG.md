@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- When `AI_GATEWAY_URL` is set, the first line of a run says so: `Using anthropic (claude-opus-5-5) via Cloudflare AI Gateway`.
+
 ## 0.11.1 (2026-10-16)
 
 - Set `AI_GATEWAY_URL` (and `AI_GATEWAY_TOKEN` if the gateway has authentication on) to send Anthropic, OpenAI and Gemini calls through Cloudflare AI Gateway, for logs and cost tracking. Unset, nothing changes.

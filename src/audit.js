@@ -102,7 +102,7 @@ export async function runAudit(opts) {
   }
 
   const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url }) : null;
-  if (provider) log(`Using ${provider.name} (${provider.model})`);
+  if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   const runs = [];

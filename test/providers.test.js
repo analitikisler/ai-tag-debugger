@@ -157,3 +157,9 @@ test("AI_GATEWAY_URL routes each provider through Cloudflare AI Gateway", () => 
   assert.deepEqual(gatewayOptions("openai-compatible", env), {});
   assert.deepEqual(gatewayOptions("anthropic", {}), {});
 });
+
+test("a provider built with AI_GATEWAY_URL says it goes through the gateway", async () => {
+  const env = { ANTHROPIC_API_KEY: "k", AI_GATEWAY_URL: "https://gateway.ai.cloudflare.com/v1/acc/default" };
+  assert.equal((await createProvider({}, env)).via, "Cloudflare AI Gateway");
+  assert.equal((await createProvider({}, { ANTHROPIC_API_KEY: "k" })).via, undefined);
+});
