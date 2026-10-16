@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `aitd` and `aitd --help` end with the AI a run would use: `AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)`, or `AI: no key set`. The first line of a run names the other keys too.
-- Vercel AI Gateway: set `AI_GATEWAY_API_KEY` and pick any model it offers with `--model <provider>/<model>`, e.g. `google/gemini-flash-latest`. The default is `anthropic/claude-opus-5.5`.
+- Vercel AI Gateway: set `AI_GATEWAY_API_KEY` and pick any model it offers with `--model <provider>/<model>`, e.g. `google/gemini-3.6-flash`. The default is `anthropic/claude-opus-5.5`.
 
 ## 0.11.2 (2026-10-16)
 

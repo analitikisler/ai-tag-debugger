@@ -105,7 +105,7 @@ Tek anahtarla birçok model. Vercel panelinizden `AI_GATEWAY_API_KEY` alın ve m
 
 ```bash
 export AI_GATEWAY_API_KEY=...
-aitd run --site https://yourshop.com --journey purchase --model google/gemini-flash-latest
+aitd run --site https://yourshop.com --journey purchase --model google/gemini-3.6-flash
 ```
 
 `--model` verilmezse `anthropic/claude-opus-5.5` kullanılır. Kullanım ve maliyet Vercel'in AI Gateway panelinde görünür ve Vercel tarafından faturalandırılır. Hangi yapay zekânın kullanılacağını görmek için `aitd` çalıştırın: son satır örneğin `AI: vercel (anthropic/claude-opus-5.5) · also set: anthropic (pick with --provider)` der.

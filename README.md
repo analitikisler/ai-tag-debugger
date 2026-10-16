@@ -105,7 +105,7 @@ One key for many models. Set `AI_GATEWAY_API_KEY` from your Vercel dashboard and
 
 ```bash
 export AI_GATEWAY_API_KEY=...
-aitd run --site https://yourshop.com --journey purchase --model google/gemini-flash-latest
+aitd run --site https://yourshop.com --journey purchase --model google/gemini-3.6-flash
 ```
 
 Without `--model` it uses `anthropic/claude-opus-5.5`. Usage and costs show in Vercel's AI Gateway dashboard and are billed by Vercel. To see which AI a run will use, run `aitd`: the last line says, for example, `AI: vercel (anthropic/claude-opus-5.5) · also set: anthropic (pick with --provider)`.
