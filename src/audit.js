@@ -5,7 +5,7 @@ import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
 import { VIEWPORTS } from "./browser.js";
-import { checkRun, groupFindings, summarize } from "./checks.js";
+import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { createProvider } from "./providers.js";
@@ -34,15 +34,17 @@ export async function loadConfig(configFile) {
 }
 
 
-/** Writes report.md, report.html, timeline.csv and capture.json. */
+/** Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against. */
 export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, against = null, branding = config.branding !== false }) {
   await mkdir(outDir, { recursive: true });
   const title = messages(lang).ui.title(new URL(config.site).hostname);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null };
+  const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
+  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
+  if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
   await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained }, null, 2));
   return path.join(outDir, "report.html");
 }

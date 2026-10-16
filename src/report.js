@@ -149,11 +149,12 @@ const formatPush = (value) => (isConsentEntry(value) ? `gtag(${value.map((v) => 
 const mdText = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
-export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null }) {
+export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
   const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), `**${m.ui.counts(counts)}**`, ""];
+  if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
   const sum = summaryParts(explained?.summary);
   if (sum) {
     lines.push(`## ${m.ui.summary}`, "", sum.text ? mdText(sum.text) : `**${mdText(sum.headline)}**`, "");
@@ -610,6 +611,29 @@ ${provs.length ? `<div class="card"><div class="card-h"><div class="card-t">${m.
 }
 
 /** Each planned event × each journey: sent, not sent, or not expected there (or its provider not checked). */
+const BUCKET_SEV = { implemented: "ok", missing: "broken", missing_params: "broken", wrong_values: "warning", unplanned: "info", not_checked: "muted" };
+const coverageLines = (m, pc) => [
+  m.ui.coverageLine(pc.coverage),
+  ...sortPlatforms(Object.keys(pc.coverage.platforms)).map((p) => `${platformLabel(p)}: ${m.ui.coverageLine(pc.coverage.platforms[p])}`),
+];
+const pcSort = (pc) => [...pc.events].sort((a, b) => BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || platformRank(a.platform) - platformRank(b.platform));
+const BUCKET_ORDER = ["missing", "missing_params", "wrong_values", "implemented", "unplanned", "not_checked"];
+
+function planVsSiteMd(m, pc) {
+  const [overall, ...perPlatform] = coverageLines(m, pc);
+  const lines = [`## ${m.ui.planVsSite}`, "", `**${mdText(overall)}**`, "", ...perPlatform.map((l) => `- ${mdText(l)}`), ...(perPlatform.length ? [""] : [])];
+  lines.push(`| ${m.ui.event} | ${m.ui.bucketCol} | |`, "|---|---|---|");
+  for (const e of pcSort(pc)) lines.push(`| ${mdText(platformLabel(e.platform))} \`${mdCode(e.event)}\` | ${m.ui.bucket[e.bucket]} | ${mdText((e.details ?? []).join(" ")).replace(/\|/g, "\\|")} |`);
+  lines.push("");
+  return lines;
+}
+
+function planVsSiteCard(m, pc) {
+  const [overall, ...perPlatform] = coverageLines(m, pc);
+  const rows = pcSort(pc).map((e) => `<tr><td><span class="ptag p-${safeKey(e.platform)}">${escapeHtml(platformLabel(e.platform))}</span> <code>${escapeHtml(e.event)}</code></td><td>${badge(BUCKET_SEV[e.bucket], m.ui.bucket[e.bucket])}</td><td class="muted xs">${(e.details ?? []).map(detailHtml).join("<br>")}</td></tr>`).join("");
+  return `<div class="card" id="plan-vs-site"><div class="card-h"><div class="card-t">${m.ui.planVsSite}</div><div class="card-d">${m.ui.planVsSiteLead}</div></div><div class="card-c"><p><strong>${escapeHtml(overall)}</strong></p>${perPlatform.length ? `<p class="muted xs">${perPlatform.map(escapeHtml).join("<br>")}</p>` : ""}<div class="tscroll"><table class="dt"><thead><tr><th>${m.ui.event}</th><th>${m.ui.bucketCol}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+}
+
 function coverageCard(m, plan, runs) {
   const head = `<div class="card-h"><div class="card-t">${m.ui.planCoverage}</div><div class="card-d">${m.ui.planCoverageLead}</div></div>`;
   if (!plan?.events?.length || !runs.length) return `<div class="card">${head}<div class="card-c"><p class="muted">${m.ui.noPlan}</p></div></div>`;
@@ -916,7 +940,7 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null }) {
+export function renderHtml({ title, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -943,7 +967,7 @@ ${navCss(runs)}</style></head><body>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
 <main class="wrap">
-<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${overviewTab(m, findings, rows, counts, explained, runs)}</section>
+<section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs)}</section>
 <section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows)}</section>
 <section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
 <section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>
