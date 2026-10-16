@@ -11,6 +11,8 @@ export const PROVIDERS = {
   anthropic: { label: "Anthropic (Claude)", env: "ANTHROPIC_API_KEY", defaultModel: "claude-opus-5-5" },
   openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-5.5" },
   gemini: { label: "Google Gemini", env: "GEMINI_API_KEY", defaultModel: "gemini-pro-latest" },
+  // Vercel AI Gateway: one key, any model as "<provider>/<model>". OpenAI-compatible API.
+  vercel: { label: "Vercel AI Gateway", env: "AI_GATEWAY_API_KEY", defaultModel: "anthropic/claude-opus-5.5" },
   // Any API that speaks the OpenAI chat completions protocol. Needs a base URL and a model.
   "openai-compatible": { label: "OpenAI-compatible API", env: "OPENAI_COMPATIBLE_API_KEY", defaultModel: null },
 };
@@ -22,16 +24,17 @@ export function resolveProviderName(name, env = process.env) {
     return name;
   }
   if (env.OPENAI_COMPATIBLE_BASE_URL) return "openai-compatible";
+  if (env.AI_GATEWAY_API_KEY) return "vercel";
   if (env.ANTHROPIC_API_KEY) return "anthropic";
   if (env.OPENAI_API_KEY) return "openai";
   if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY) return "gemini";
   return "anthropic";
 }
 
-const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
+const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY or AI_GATEWAY_API_KEY for Vercel AI Gateway (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
 
 function hasApiKey(env) {
-  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
+  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.AI_GATEWAY_API_KEY || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
 }
 
 /**
@@ -42,6 +45,12 @@ function hasApiKey(env) {
 export async function createProvider(opts = {}, env = process.env) {
   // A bare client (tests, embedding) is an Anthropic client unless named otherwise.
   const name = opts.client && !opts.name ? "anthropic" : opts.baseUrl && !opts.name ? "openai-compatible" : resolveProviderName(opts.name, env);
+  const provider = await buildProvider(name, opts, env);
+  provider.key = name; // The PROVIDERS key, for status lines.
+  return provider;
+}
+
+async function buildProvider(name, opts, env) {
   // With no provider named and no key set, the SDK would only fail at the first step with an
   // unclear auth error, after the browser has started. A named provider skips this check, since
   // its SDK may find credentials elsewhere (an Anthropic profile, Google Cloud credentials).
@@ -55,6 +64,10 @@ export async function createProvider(opts = {}, env = process.env) {
     const apiKey = env.OPENAI_COMPATIBLE_API_KEY || "not-needed";
     const client = opts.client ?? new (await import("openai")).default({ baseURL, apiKey });
     return openaiProvider(client, model, { compatible: true, label: new URL(baseURL).host });
+  }
+  if (name === "vercel") {
+    const client = opts.client ?? new (await import("openai")).default({ baseURL: VERCEL_GATEWAY, apiKey: env.AI_GATEWAY_API_KEY });
+    return { ...openaiProvider(client, opts.model ?? PROVIDERS.vercel.defaultModel, { compatible: true }), name: "vercel" };
   }
   const model = opts.model ?? PROVIDERS[name].defaultModel;
   const gateway = gatewayOptions(name, env);
@@ -71,6 +84,34 @@ async function builtInProvider(name, model, gateway, client, env) {
   const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
   const httpOptions = gateway.baseURL ? { httpOptions: { baseUrl: gateway.baseURL, headers: gateway.defaultHeaders } } : {};
   return geminiProvider(client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model);
+}
+
+const VERCEL_GATEWAY = "https://ai-gateway.vercel.sh/v1";
+
+const KEY_PROVIDERS = [
+  ["vercel", (env) => env.AI_GATEWAY_API_KEY],
+  ["anthropic", (env) => env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN],
+  ["openai", (env) => env.OPENAI_API_KEY],
+  ["gemini", (env) => env.GEMINI_API_KEY || env.GOOGLE_API_KEY],
+  ["openai-compatible", (env) => env.OPENAI_COMPATIBLE_BASE_URL],
+];
+
+/**
+ * One line saying which AI aitd would use and why, e.g.
+ * "AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)".
+ */
+export function aiStatus(opts = {}, env = process.env) {
+  if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return "AI: no key set (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY or AI_GATEWAY_API_KEY)";
+  const name = resolveProviderName(opts.name, env);
+  const model = opts.model ?? (name === "openai-compatible" ? env.OPENAI_COMPATIBLE_MODEL : PROVIDERS[name].defaultModel) ?? "no model set";
+  const via = name !== "vercel" && gatewayOptions(name, env).baseURL ? " via Cloudflare AI Gateway" : "";
+  return `AI: ${name} (${model})${via}${alsoSet(name, env)}`;
+}
+
+/** " · also set: gemini (pick with --provider)" when keys for other providers are set too. */
+export function alsoSet(name, env = process.env) {
+  const others = KEY_PROVIDERS.filter(([n, has]) => n !== name && has(env)).map(([n]) => n);
+  return others.length ? ` · also set: ${others.join(", ")} (pick with --provider)` : "";
 }
 
 // Cloudflare AI Gateway path for each provider, appended to AI_GATEWAY_URL.

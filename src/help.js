@@ -1,5 +1,5 @@
 import { LANGUAGES } from "./i18n.js";
-import { PROVIDERS } from "./providers.js";
+import { PROVIDERS, aiStatus } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 
 const journeys = Object.keys(JOURNEY_PRESETS).join(", ");
@@ -103,5 +103,6 @@ const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP };
 
 /** Help text for a command, or the top-level help when the command is unknown or missing. */
 export function helpText(command) {
-  return HELP[command] ?? MAIN;
+  // The main help ends with which AI a run would use, so a mix of exported keys is never a surprise.
+  return HELP[command] ?? `${MAIN}\n\n${aiStatus()}`;
 }
