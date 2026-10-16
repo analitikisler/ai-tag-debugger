@@ -442,9 +442,9 @@ The exit code is `1` when findings reach `--fail-on` (default `broken`), so it c
 Output:
 
 - `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
-  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, the providers checked, and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage.
+  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, a **This run** card (platforms, AI provider and model, plan, journeys, viewports, language, version), and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage.
   - **Findings**: grouped by severity and filterable. Each one has its impact, likely cause, evidence, numbered fix steps and the steps where it happened.
-  - **Journeys**: one journey at a time, with its steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
+  - **Journeys**: one journey at a time. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
     - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
     - **dataLayer**: every push in the step.
     - **Network requests**: every request to the chosen platforms, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
