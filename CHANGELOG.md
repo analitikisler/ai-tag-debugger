@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (2026-10-16)
 
 - Every saved run is compared with the site's previous run. The report opens with a "Changed since last run" section (`2 events fixed, 1 new problem`) that lists what was fixed and what is new, by plan coverage when both runs used `--against` and by health findings otherwise. The first run says there is nothing to compare yet. No new flag; the result is also in `capture.json` under `changes`.
+- A plain sentence can be a request: `aitd "check my GA tags"`. The sentence becomes a fixed command through the AI provider, or a keyword matcher when no key is set. aitd prints the command and asks before running it; `-y` skips the question. An unclear sentence gets one short question back. A sentence that names no journey, goal or plan asks what to test, and suggests the site's latest plan when it has one.
+- `aitd plan --topic <name>` limits a plan to one kind of event: `custom-events`, `ecommerce`, `forms` or `consent`. Sentences such as "what custom events does my site need" use it.
+- The MCP server has a `make_plan` tool that drafts a tracking plan for a site, with an optional topic. Chat apps use it when a user asks what a site should track, and `run_audit` or `finish_audit` checks the audit against the plan.
 
 ## 0.10.0 (2026-10-16)
 
