@@ -3,6 +3,7 @@ import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
+import { buildInventory } from "./inventory.js";
 import { LOGOS } from "./brand.js";
 import { readFileSync } from "node:fs";
 
@@ -156,6 +157,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), `**${m.ui.counts(counts)}**`, ""];
   if (changes) lines.push(...changesMd(m, changes));
   if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
+  lines.push(...inventoryMd(m, runs));
   const sum = summaryParts(explained?.summary);
   if (sum) {
     lines.push(`## ${m.ui.summary}`, "", sum.text ? mdText(sum.text) : `**${mdText(sum.headline)}**`, "");
@@ -706,6 +708,30 @@ function coverageCard(m, plan, runs) {
   return `<div class="card">${head}<div class="card-c"><div class="tscroll"><table class="dt cov"><thead><tr><th>${m.ui.event}</th>${runs.map((r) => `<th>${escapeHtml(r.journeyId)} · ${escapeHtml(r.viewport)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div><p class="muted xs legend">${m.ui.coverageLegend}</p></div></div>`;
 }
 
+const PAGES_SHOWN = 5;
+
+function inventoryMd(m, runs) {
+  const inv = buildInventory(runs);
+  const lines = [`## ${m.ui.inventoryTitle}`, ""];
+  if (!inv.vendors.length) return [...lines, m.ui.noInventory, ""];
+  lines.push(`| ${m.ui.vendorCol} | ${m.ui.partyCol} | ${m.ui.pagesCol} | ${m.ui.cookiesCol} |`, "|---|---|---|---|");
+  for (const v of inv.vendors) lines.push(`| ${mdText(v.vendor)} | ${m.ui.party[v.party]} | ${v.pages.length} | ${mdText(v.cookies.join(", "))} |`);
+  if (inv.otherCookies.length) lines.push("", `${m.ui.otherCookies}: ${mdText(inv.otherCookies.map((c) => c.name).join(", "))}`);
+  lines.push("");
+  return lines;
+}
+
+function inventoryCard(m, runs) {
+  const inv = buildInventory(runs);
+  const head = `<div class="card-h"><div class="card-t">${m.ui.inventoryTitle}</div><div class="card-d">${m.ui.inventoryLead}</div></div>`;
+  if (!inv.vendors.length) return `<div class="card" id="inventory">${head}<div class="card-c"><p class="muted">${m.ui.noInventory}</p></div></div>`;
+  const names = (xs) => xs.map((x) => `<code>${escapeHtml(x)}</code>`).join(" ");
+  const pages = (v) => `${names(v.pages.slice(0, PAGES_SHOWN))}${v.pages.length > PAGES_SHOWN ? ` <span class="muted">${m.ui.morePages(v.pages.length - PAGES_SHOWN)}</span>` : ""}`;
+  const rows = inv.vendors.map((v) => `<tr><td>${escapeHtml(v.vendor)}</td><td>${escapeHtml(m.ui.party[v.party])}</td><td class="xs">${pages(v)}</td><td class="xs">${v.cookies.length ? names(v.cookies) : '<span class="muted">–</span>'}</td></tr>`).join("");
+  const other = inv.otherCookies.length ? `<p class="muted xs legend">${m.ui.otherCookies}: ${inv.otherCookies.map((c) => `${escapeHtml(c.name)} (${escapeHtml(m.ui.party[c.party])})`).join(", ")}</p>` : "";
+  return `<div class="card" id="inventory">${head}<div class="card-c tight"><div class="tscroll"><table class="dt"><thead><tr><th>${m.ui.vendorCol}</th><th>${m.ui.partyCol}</th><th>${m.ui.pagesCol}</th><th>${m.ui.cookiesCol}</th></tr></thead><tbody>${rows}</tbody></table></div></div>${other ? `<div class="card-c">${other}</div>` : ""}</div>`;
+}
+
 function providersCard(m, runs) {
   const provs = checkedProviders(runs);
   const skipped = skippedTotals(runs);
@@ -1038,7 +1064,7 @@ ${navCss(runs)}</style></head><body>
 <section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs, { ai, plan, lang })}</section>
 <section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows, Boolean(explained))}</section>
 <section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
-<section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>
+<section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${inventoryCard(m, runs)}${providersCard(m, runs)}</div></section>
 </main>
 <footer class="footer">${footer}</footer>
 </body></html>`;

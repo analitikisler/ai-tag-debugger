@@ -22,7 +22,7 @@ const SHARED_SECOND_LEVELS = new Set(["com", "co", "org", "net", "gov", "edu", "
 const SHARED_SUFFIXES = ["myshopify.com", "github.io", "vercel.app", "pages.dev", "netlify.app", "herokuapp.com", "web.app", "firebaseapp.com", "appspot.com", "wixsite.com", "blogspot.com", "azurewebsites.net", "cloudfront.net", "workers.dev"];
 
 /** "www.shop.example.com.tr" -> "example.com.tr", "a.shop.myshopify.com" -> "shop.myshopify.com": the part one owner controls. */
-function siteOf(host) {
+export function siteOf(host) {
   const labels = String(host).toLowerCase().replace(/\.$/, "").split(".");
   const name = labels.join(".");
   const shared = SHARED_SUFFIXES.find((s) => name === s || name.endsWith(`.${s}`));
