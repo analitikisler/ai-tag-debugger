@@ -1,3 +1,4 @@
+import { OWNERS, ownerOf, verifyLinks } from "./verify.js";
 import { createProvider } from "./providers.js";
 import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
@@ -166,6 +167,9 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   for (const f of rows.filter((r) => r.severity !== "ok")) {
     lines.push(`### ${m.severity[f.severity]}: ${mdText(f.detail)}`, "");
     lines.push(`- ${m.ui.where}: ${mdText(f.where.map((w) => m.ui.whereStep(w.journey, w.viewport, w.step)).join("; "))}`);
+    lines.push(`- ${m.ui.owners[ownerOf(f)]}`);
+    const vl = verifyLinks(f);
+    if (vl.length) lines.push(`- ${m.ui.verify}: ${vl.map((l) => `[${l.name}](${l.url})`).join(", ")}`);
     if (f.evidence) lines.push(`- ${m.ui.captured}: \`${mdCode(f.evidence)}\``);
     if (f.explanation) {
       if (f.explanation.impact) lines.push(`- ${m.ui.impact}: ${mdText(f.explanation.impact)}`);
@@ -534,6 +538,12 @@ function evidenceHtml(evidence) {
   return `<pre>${escapeHtml(evidence)}</pre>`;
 }
 
+function verifyHtml(m, f) {
+  const links = verifyLinks(f);
+  if (!links.length) return "";
+  return `${sec("cause", m.ui.verify)}<ul class="verify">${links.map((l) => `<li><a href="${l.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.name)}</a></li>`).join("")}</ul>`;
+}
+
 function findingCard(m, runs, f, open, aiRan) {
   const e = f.explanation;
   const steps = fixSteps(e);
@@ -557,7 +567,7 @@ function findingCard(m, runs, f, open, aiRan) {
 ${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
 <div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
-<div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div></div></div></div></details></li>`;
+<div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div>${verifyHtml(m, f)}</div></div></div></details></li>`;
 }
 
 const FINDING_SEVERITIES = ["broken", "risk", "warning", "info"];
@@ -572,11 +582,21 @@ function findingsTab(m, runs, rows, aiRan) {
   const bar = present.map((s) => `<span style="flex:${n[s]};background:${SEV_COLOR[s]}"></span>`).join("");
   const legend = present.map((s) => `<span><i style="background:${SEV_COLOR[s]}"></i>${m.severity[s]} <strong>${n[s]}</strong></span>`).join("");
   const labels = [`<label for="fs-all">${m.ui.all} <span class="n">${problems.length}</span></label>`, ...present.map((s) => `<label for="fs-${s}">${m.severity[s]} <span class="n">${n[s]}</span></label>`)].join("");
-  const sorted = FINDING_SEVERITIES.flatMap((s) => problems.filter((f) => f.severity === s));
+  let first = true;
+  const groups = OWNERS.map((o) => {
+    const mine = FINDING_SEVERITIES.flatMap((s) => problems.filter((f) => f.severity === s && ownerOf(f) === o));
+    if (!mine.length) return "";
+    const cards = mine.map((f) => {
+      const open = first && f.severity !== "info";
+      if (open) first = false;
+      return findingCard(m, runs, f, open, aiRan);
+    }).join("");
+    return `<section class="ogroup" data-owner="${o}"><h3 class="ogroup-h">${m.ui.owners[o]} <span class="n">${mine.length}</span><span class="muted xs">${m.ui.ownerHint[o]}</span></h3><ul class="flist">${cards}</ul></section>`;
+  }).join("");
   return `<div class="filter-host">${radios}
 <div class="sevbar" aria-hidden="true">${bar}</div><div class="sevlegend">${legend}</div>
 <div class="toolbar"><div class="sevfilter" role="group" aria-label="${m.ui.filterBy}">${labels}</div><span class="muted xs">${m.ui.findingHint}</span></div>
-<ul class="flist">${sorted.map((f, i) => findingCard(m, runs, f, i === 0 && f.severity !== "info", aiRan)).join("")}</ul></div>`;
+${groups}</div>`;
 }
 
 function summaryCard(m, explained, problems) {
@@ -752,7 +772,8 @@ function navCss(runs) {
   const sev = ["all", ...FINDING_SEVERITIES];
   out.push(`${sev.map((s) => `#fs-${s}:checked~.toolbar label[for=fs-${s}]`).join(",")}{background:var(--bg);color:var(--fg);box-shadow:var(--shadow-sm)}`);
   out.push(`${sev.map((s) => `#fs-${s}:focus-visible~.toolbar label[for=fs-${s}]`).join(",")}{outline:2px solid var(--accent)}`);
-  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.flist>li:not([data-sev=${s}])`).join(",")}{display:none}`);
+  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.ogroup>.flist>li:not([data-sev=${s}])`).join(",")}{display:none}`);
+  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.ogroup:not(:has(li[data-sev=${s}]))`).join(",")}{display:none}`);
   return out.join("\n");
 }
 
@@ -872,6 +893,8 @@ table.dt a{color:var(--fg)}table.dt a:hover{color:var(--accent-fg)}
 .fix-steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:fx}
 .fix-steps li{display:grid;grid-template-columns:22px 1fr;gap:10px;counter-increment:fx}
 .fix-steps li::before{content:counter(fx);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:4px;background:var(--accent-bg);color:var(--accent-fg);font:500 12px var(--font-mono)}
+.ogroup{margin-top:20px}.ogroup-h{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:0 0 10px}.ogroup-h .n{font-size:12px;color:var(--muted)}
+.verify{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none;font-size:13px}.verify a{color:var(--accent-fg)}
 .where{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--border);border-radius:var(--radius);color:var(--fg);font-size:12px;background:var(--bg)}
 span.chip{padding-left:10px}

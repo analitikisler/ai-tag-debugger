@@ -199,3 +199,21 @@ test("a run against a plan names the plan in the report header, in English and T
   assert.match(renderMarkdown({ ...base, lang: "tr", against: "2026-10-16_0900" }), /2026-10-16_0900 planına göre kontrol edildi/);
   assert.doesNotMatch(renderMarkdown(base), /Checked against/);
 });
+
+test("findings are grouped by owner and carry verify links for their platform", async () => {
+  const { renderMarkdown } = await import("../src/report.js");
+  const f = [
+    findings[0],
+    { ...findings[0], severity: "risk", check: "after_reject", platform: "meta", event: "AddToCart", detail: "Meta fired after reject." },
+    { ...findings[0], severity: "info", check: "unplanned_events", platform: undefined, event: undefined, detail: "Unplanned: x." },
+  ];
+  const html = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "en" });
+  const order = ["developer", "gtm", "marketing"].map((o) => html.indexOf(`data-owner="${o}"`));
+  assert.ok(order.every((i) => i > 0) && order[0] < order[1] && order[1] < order[2]);
+  assert.match(html, /How to verify<\/span><\/div><ul class="verify"><li><a href="https:\/\/tagassistant\.google\.com\/"/);
+  assert.match(html, /Meta Test Events/);
+  const tr = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "tr" });
+  assert.match(tr, /Nasıl doğrulanır/);
+  const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "en" });
+  assert.match(md, /- How to verify: \[Tag Assistant\]\(https:\/\/tagassistant\.google\.com\/\), \[GA4 DebugView\]/);
+});
