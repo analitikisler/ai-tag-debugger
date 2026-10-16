@@ -61,9 +61,9 @@ async function buildProvider(name, opts, env) {
   if (!opts.client && !opts.name && !opts.baseUrl && !hasApiKey(env)) throw Object.assign(new Error(NO_API_KEY), { code: "NO_API_KEY" });
   if (name === "openai-compatible") {
     const baseURL = opts.baseUrl ?? env.OPENAI_COMPATIBLE_BASE_URL;
-    const model = opts.model ?? env.OPENAI_COMPATIBLE_MODEL;
+    const model = compatibleModel(opts.model, env);
     if (!baseURL) throw new Error("openai-compatible needs the API address: --base-url or OPENAI_COMPATIBLE_BASE_URL, e.g. https://api.deepseek.com");
-    if (!model) throw new Error("openai-compatible needs a model id: --model or OPENAI_COMPATIBLE_MODEL.");
+    if (!model) throw new Error("openai-compatible needs a model id: --model or OPENAI_COMPATIBLE_MODEL (\"cheap\" has no meaning here, since the API's models are unknown).");
     // Local servers such as Ollama need no key, but the SDK wants a non-empty one.
     const apiKey = env.OPENAI_COMPATIBLE_API_KEY || "not-needed";
     const client = opts.client ?? new (await import("openai")).default({ baseURL, apiKey });
@@ -99,6 +99,11 @@ async function builtInProvider(name, model, gateway, client, env) {
 const VERCEL_GATEWAY = "https://ai-gateway.vercel.sh/v1";
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4/accounts";
 
+/** An openai-compatible API has no known cheap model, so `cheap` falls back to OPENAI_COMPATIBLE_MODEL. */
+function compatibleModel(model, env) {
+  return (model === "cheap" ? undefined : model) ?? env.OPENAI_COMPATIBLE_MODEL;
+}
+
 /** The model to use: an explicit id, `cheap` for the provider's small CI model, else the default. */
 export function pickModel(name, model) {
   if (model === "cheap") return PROVIDERS[name]?.cheapModel ?? PROVIDERS[name]?.defaultModel ?? model;
@@ -121,7 +126,7 @@ const KEY_PROVIDERS = [
 export function aiStatus(opts = {}, env = process.env) {
   if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return "AI: no key set (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)";
   const name = resolveProviderName(opts.name, env);
-  const model = (name === "openai-compatible" ? opts.model ?? env.OPENAI_COMPATIBLE_MODEL : pickModel(name, opts.model)) ?? "no model set";
+  const model = (name === "openai-compatible" ? compatibleModel(opts.model, env) : pickModel(name, opts.model)) ?? "no model set";
   const via = name !== "vercel" && gatewayOptions(name, env).baseURL ? " via Cloudflare AI Gateway" : "";
   return `AI: ${name} (${model})${via}${alsoSet(name, env)}`;
 }

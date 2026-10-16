@@ -199,3 +199,10 @@ test("Cloudflare Workers AI is picked from its token and account id", async () =
   assert.equal(resolveProviderName(undefined, { CLOUDFLARE_API_TOKEN: "t" }), "anthropic");
   await assert.rejects(createProvider({ name: "cloudflare" }, { CLOUDFLARE_API_TOKEN: "t" }), /CLOUDFLARE_ACCOUNT_ID/);
 });
+
+test("--model cheap with an openai-compatible API uses the configured model, never the word cheap", async () => {
+  const env = { OPENAI_COMPATIBLE_BASE_URL: "http://localhost:11434/v1", OPENAI_COMPATIBLE_MODEL: "llama3" };
+  assert.equal((await createProvider({ model: "cheap" }, env)).model, "llama3");
+  assert.equal(aiStatus({ model: "cheap" }, env), "AI: openai-compatible (llama3)");
+  await assert.rejects(createProvider({ model: "cheap" }, { OPENAI_COMPATIBLE_BASE_URL: "http://x/v1" }), /needs a model id/);
+});
