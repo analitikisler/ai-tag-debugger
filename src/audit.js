@@ -35,15 +35,15 @@ export async function loadConfig(configFile) {
 
 
 /** Writes report.md, report.html, timeline.csv and capture.json. */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, branding = config.branding !== false }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, against = null, branding = config.branding !== false }) {
   await mkdir(outDir, { recursive: true });
   const title = messages(lang).ui.title(new URL(config.site).hostname);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding };
+  const report = { title, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
-  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, runs, findings, explained }, null, 2));
+  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained }, null, 2));
   return path.join(outDir, "report.html");
 }
 
@@ -56,6 +56,8 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok).
  *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
+ *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
+ *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
@@ -68,7 +70,8 @@ export async function runAudit(opts) {
   const useAi = opts.ai !== false;
   if (!useAi && !opts.scripted) throw new Error("Without an AI model, journeys must be replayed from their fixed steps (scripted).");
 
-  const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events });
+  const against = opts.against ? { ...opts.against, label: opts.against.id ?? path.relative(process.cwd(), opts.against.file) } : null;
+  const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events, against: Boolean(against) });
   config = { ...config, providers: resolveProviders(opts.providers ?? config.providers, plan) };
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
   const allowed = Object.keys(VIEWPORTS).join(", ");
@@ -79,6 +82,15 @@ export async function runAudit(opts) {
   if (opts.scripted) {
     const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
     if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}.`);
+  }
+
+  if (against) {
+    const notChecked = plan.events.filter((e) => Array.isArray(e.journeys) && !e.journeys.some((j) => journeys.some((jj) => jj.id === j))).length;
+    log(`Checking against plan ${against.label}: ${journeys.length} ${journeys.length === 1 ? "journey" : "journeys"}${notChecked ? `, ${notChecked} planned ${notChecked === 1 ? "event" : "events"} not checked in this run` : ""}`);
+    for (const j of journeys) {
+      const expected = plan.events.filter((e) => !e.journeys || e.journeys.includes(j.id)).map((e) => e.name);
+      log(`  - ${j.id}: ${j.goal ?? "fixed steps"}${expected.length ? ` [${[...new Set(expected)].join(", ")}]` : ""}`);
+    }
   }
 
   const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url }) : null;
@@ -117,7 +129,7 @@ export async function runAudit(opts) {
   }
 
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, branding: opts.branding ?? config.branding !== false });
+  const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, against, branding: opts.branding ?? config.branding !== false });
   const counts = summarize(groupFindings(findings));
-  return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(saveError ? { saveError } : {}) };
+  return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
 }
