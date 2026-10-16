@@ -7,19 +7,21 @@ const PLATFORM_KEYS = Object.keys(PLATFORMS);
 // The same values as plan --topic (TOPICS in discover.js, kept in step by a test).
 export const TOPIC_KEYS = ["custom-events", "ecommerce", "forms", "consent"];
 
+// Optional values use anyOf with a null branch, not type: ["string", "null"]: the Anthropic API
+// rejects an enum next to a type list, and anyOf works for OpenAI and Gemini too.
 export const INTENT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["action", "site", "against", "platforms", "goal", "journey", "topic", "question"],
   properties: {
     action: { type: "string", enum: ["plan", "run", "report", "unclear"], description: "plan drafts what a site should track; run audits what the site sends; report re-reads an existing report; unclear when you cannot tell plan from run." },
-    site: { type: ["string", "null"], description: "The site's domain or URL if the sentence names one." },
-    against: { type: ["string", "null"], enum: ["plan", "latest", null], description: "run only: compare with the saved plan, or with the latest run (\"what changed\", \"since the last run\", \"after the deploy\")." },
+    site: { anyOf: [{ type: "string" }, { type: "null" }], description: "The site's domain or URL if the sentence names one." },
+    against: { anyOf: [{ type: "string", enum: ["plan", "latest"] }, { type: "null" }], description: "run only: compare with the saved plan, or with the latest run (\"what changed\", \"since the last run\", \"after the deploy\")." },
     platforms: { type: "array", items: { type: "string", enum: PLATFORM_KEYS }, description: "Only the tracking platforms the sentence names; empty for all." },
-    goal: { type: ["string", "null"], description: "run only: a short user journey to try, in plain words, e.g. \"submit the contact form\"." },
-    journey: { type: ["string", "null"], enum: ["purchase", null], description: "run only: purchase when the sentence is about the purchase event or revenue." },
-    topic: { type: ["string", "null"], enum: [...TOPIC_KEYS, null], description: "plan only: limit the plan to one kind of event when the sentence asks about it." },
-    question: { type: ["string", "null"], description: "One short question to ask back when the sentence is ambiguous; otherwise null." },
+    goal: { anyOf: [{ type: "string" }, { type: "null" }], description: "run only: a short user journey to try, in plain words, e.g. \"submit the contact form\"." },
+    journey: { anyOf: [{ type: "string", enum: ["purchase"] }, { type: "null" }], description: "run only: purchase when the sentence is about the purchase event or revenue." },
+    topic: { anyOf: [{ type: "string", enum: TOPIC_KEYS }, { type: "null" }], description: "plan only: limit the plan to one kind of event when the sentence asks about it." },
+    question: { anyOf: [{ type: "string" }, { type: "null" }], description: "One short question to ask back when the sentence is ambiguous; otherwise null." },
   },
 };
 
