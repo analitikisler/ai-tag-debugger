@@ -63,3 +63,28 @@ test("the server-side note only names Meta and TikTok when they were checked", (
   assert.match(all.detail, /Meta events/);
   assert.doesNotMatch(all.detail, /TikTok/);
 });
+
+test("a server container on the site's domain is named from its loader or GA4 endpoint", () => {
+  const net = [{ provider: "gtm", url: "https://load.shop.com/gtm.js?id=GTM-ABC" }, { provider: "gtm", url: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC" }];
+  const f = checkRun(plan, run([], net)).find((x) => x.check === "server_endpoint");
+  assert.match(f.detail, /load\.shop\.com/);
+  assert.doesNotMatch(f.detail, /googletagmanager/);
+  assert.ok(!checks(run([], [net[1]])).some((c) => c.startsWith("server_endpoint")));
+  assert.ok(checks(run([hit("meta", "Purchase")], net)).includes("dedup_id_missing:meta:Purchase"));
+});
+
+test("one event ID on two different events is reported", () => {
+  const r = checks(run([hit("meta", "AddToCart", { eventId: "p1" }), hit("meta", "Purchase", { eventId: "p1", step: 2 })]));
+  assert.ok(r.includes("event_id_reused:meta:AddToCart, Purchase"));
+  assert.ok(!checks(run([hit("meta", "Purchase", { eventId: "p1" }), hit("meta", "Purchase", { eventId: "p1" })])).some((c) => c.startsWith("event_id_reused")));
+});
+
+test("the GA4 hit to the server container must carry the Meta pixel's event ID", () => {
+  const g = (params) => hit("ga4", "purchase", { delivery: "server", params });
+  const m = hit("meta", "Purchase", { eventId: "e1" });
+  assert.ok(checks(run([m, g({})])).includes("event_id_not_forwarded:meta:Purchase"));
+  assert.ok(checks(run([m, g({ event_id: "e2" })])).includes("event_id_mismatch:meta:Purchase"));
+  const ok = checks(run([m, g({ event_id: "e1" })]));
+  assert.ok(!ok.some((c) => c.startsWith("event_id_mismatch") || c.startsWith("event_id_not_forwarded")));
+  assert.ok(!checks(run([m, hit("ga4", "purchase", { delivery: "browser" })])).some((c) => c.startsWith("event_id_")));
+});

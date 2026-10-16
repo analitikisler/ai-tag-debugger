@@ -23,6 +23,20 @@ const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
  * @typedef {{ severity: "broken"|"risk"|"warning"|"info"|"ok", check: string, journey: string, viewport: string, platform?: string, event?: string, step?: string, detail: string, evidence?: string }} Finding
  */
 
+/** Hosts of server containers seen in the run's network calls, the site's own or Stape's. */
+export function serverEndpoints(run) {
+  const hosts = new Set();
+  for (const c of run.network ?? []) {
+    let u;
+    try { u = new URL(c.url); } catch { continue; }
+    if (/(^|\.)(google-analytics\.com|analytics\.google\.com|googletagmanager\.com|google\.[a-z.]+|doubleclick\.net)$/.test(u.hostname)) continue;
+    const ga4Server = c.provider === "ga4" && u.pathname.endsWith("/g/collect");
+    const loader = (c.provider === "gtm" || c.provider === "ga4") && /\/(gtm\.js|gtag\/js)$/.test(u.pathname);
+    if (ga4Server || loader) hosts.add(u.hostname);
+  }
+  return [...hosts];
+}
+
 const key = (platform, name) => `${platform}:${name}`;
 
 // Sites name events in their own way: Elevar's dl_add_to_cart, UA-style addToCart, Add To Cart.
@@ -286,13 +300,51 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) });
   }
   const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
-  if (serverVendors.length || serverHits.length) {
+  // Server containers the browser talked to: GA4 hits on a non-Google host, and GTM or gtag.js
+  // loaded from one (a custom loader, which only a server container serves).
+  const endpoints = serverEndpoints(run);
+  if (endpoints.length && !serverHits.length) findings.push({ ...base, severity: "info", check: "server_endpoint", detail: d.serverEndpoint(endpoints) });
+  const serverSeen = serverVendors.length || serverHits.length || endpoints.length;
+  if (serverSeen) {
     const noId = new Map();
     for (const hit of run.hits) {
       if ((hit.platform === "meta" || hit.platform === "tiktok") && !hit.eventId && !noId.has(key(hit.platform, hit.name))) noId.set(key(hit.platform, hit.name), hit);
     }
     for (const [, hit] of noId) {
       findings.push({ ...base, severity: "info", check: "dedup_id_missing", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.dedupIdMissing(hit.platform, hit.name) });
+    }
+  }
+
+  // One event ID on two different events: the platform keeps the first and drops the other as its
+  // duplicate, so a real event is lost (usually an ID set once per page instead of once per event).
+  const byId = new Map();
+  for (const hit of run.hits) {
+    if (!hit.eventId) continue;
+    const k = `${hit.platform}|${hit.eventId}`;
+    byId.set(k, [...(byId.get(k) ?? []), hit]);
+  }
+  for (const [, hits] of byId) {
+    const events = [...new Set(hits.map((h) => `${h.step}|${canonicalEvent(h.name)}`))];
+    if (events.length < 2) continue;
+    const names = [...new Set(hits.map((h) => h.name))];
+    findings.push({ ...base, severity: "warning", check: "event_id_reused", platform: hits[0].platform, event: names.join(", "), step: stepLabel(hits[1].step), detail: d.eventIdReused(platformName(hits[0].platform), hits[0].eventId, names, events.length), evidence: hits.map((h) => h.url).join("\n") });
+  }
+
+  // With a server container, the Conversions API copy is usually built from the GA4 hit, so the
+  // GA4 hit has to carry the same event_id as the Meta pixel event for Meta to deduplicate them.
+  if (serverSeen) {
+    const ga4ToServer = run.hits.filter((h) => h.platform === "ga4" && h.delivery === "server");
+    const reported = new Set();
+    for (const m of run.hits.filter((h) => h.platform === "meta" && h.eventId)) {
+      const g = ga4ToServer.find((h) => h.step === m.step && canonicalEvent(h.name) === canonicalEvent(m.name));
+      if (!g) continue;
+      const gid = g.params?.event_id;
+      const k = key("meta", m.name);
+      if (reported.has(k) || (gid !== undefined && String(gid) === m.eventId)) continue;
+      reported.add(k);
+      findings.push(gid === undefined
+        ? { ...base, severity: "info", check: "event_id_not_forwarded", platform: "meta", event: m.name, step: stepLabel(m.step), detail: d.eventIdNotForwarded(m.name, g.name) }
+        : { ...base, severity: "warning", check: "event_id_mismatch", platform: "meta", event: m.name, step: stepLabel(m.step), detail: d.eventIdMismatch(m.name, m.eventId, g.name, gid), evidence: JSON.stringify({ meta: m.eventId, ga4: gid }) });
     }
   }
 
