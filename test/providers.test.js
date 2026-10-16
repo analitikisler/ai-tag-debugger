@@ -33,7 +33,7 @@ test("provider is picked from the API key that is set", () => {
 });
 
 test("createProvider explains what to set when no key is found and no provider is named", async () => {
-  await assert.rejects(createProvider({}, {}), /No AI provider key found.*--scripted --no-ai/);
+  await assert.rejects(createProvider({}, {}), /No AI provider key found.*ANTHROPIC_API_KEY.*--no-ai/);
   await assert.rejects(createProvider({ model: "claude-haiku-5-5" }, { SOME_OTHER_KEY: "x" }), /No AI provider key found/);
   // A named provider is left to its SDK, which may find credentials elsewhere.
   assert.ok(await createProvider({ name: "anthropic" }, {}));

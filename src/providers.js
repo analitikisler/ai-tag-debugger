@@ -28,7 +28,7 @@ export function resolveProviderName(name, env = process.env) {
   return "anthropic";
 }
 
-const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay the fixed steps with --scripted --no-ai.`;
+const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
 
 function hasApiKey(env) {
   return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
