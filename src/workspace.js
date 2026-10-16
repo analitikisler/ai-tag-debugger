@@ -4,6 +4,7 @@ import path from "node:path";
 /** Where plans and runs are kept unless --data-dir says otherwise. */
 export const DEFAULT_DATA_DIR = "aitd";
 export const PLAN_FILE = "measurement-plan.json";
+export const PLAN_HTML_FILE = "plan.html";
 
 const ID = /^\d{4}-\d{2}-\d{2}_\d{4}(\d{2})?$/;
 

@@ -6,7 +6,7 @@ import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
 import { LOGOS } from "./brand.js";
 import { readFileSync } from "node:fs";
 
-const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 const EXPLAIN_SYSTEM = `You are a senior digital analytics consultant reviewing an automated tracking audit. You receive findings from deterministic checks, the measurement plan, the hits captured on each step of each journey, and optionally a Google Tag Manager container export.
 
@@ -120,7 +120,7 @@ export async function explainFindings({ findings, plan, runs, gtmContainer, prov
   }
 }
 
-const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+export const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 function attachExplanations(findings, explained) {
   const byIndex = new Map((explained?.explanations ?? []).map((e) => [e.finding, e]));
@@ -193,7 +193,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
 }
 
 const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x", "pinterest", "snapchat", "klaviyo", "hotjar"];
-const platformLabel = (p) => PROVIDERS[p] ?? String(p).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+export const platformLabel = (p) => PROVIDERS[p] ?? String(p).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const platformRank = (p) => (PLATFORM_ORDER.includes(p) ? PLATFORM_ORDER.indexOf(p) : PLATFORM_ORDER.length);
 
 // Pixel event names and their GA4 / dataLayer counterparts, so a Meta or TikTok hit can be shown next to the push behind it.
@@ -455,7 +455,7 @@ const sevIcon = (sev) => ICON[sev === "broken" ? "broken" : sev === "info" ? "in
 const sec = (name, label) => `<div class="sec-h">${ic(ICON[name], 14)}<span>${label}</span></div>`;
 const badge = (sev, text) => `<span class="badge ${sev}">${escapeHtml(text)}</span>`;
 /** A logo with its light and dark versions, switched by the viewer's color scheme. */
-const logo = (key, alt, height, cls) => `<picture class="${cls}"><source media="(prefers-color-scheme: dark)" srcset="${LOGOS[`${key}-dark`]}"><img src="${LOGOS[`${key}-light`]}" alt="${alt}" height="${height}"></picture>`;
+export const logo = (key, alt, height, cls) => `<picture class="${cls}"><source media="(prefers-color-scheme: dark)" srcset="${LOGOS[`${key}-dark`]}"><img src="${LOGOS[`${key}-light`]}" alt="${alt}" height="${height}"></picture>`;
 
 /** The journey and step a finding's place points at. Steps are named by label; when labels repeat, prefer the step where the finding's event fired. */
 function whereTarget(runs, w, f) {
@@ -679,7 +679,7 @@ function navCss(runs) {
   return out.join("\n");
 }
 
-const CSS = `
+export const CSS = `
 :root{
 --bg:#FFFFFF;--page:#F7F9FC;--fg:#0A0E1A;--muted:#5A6480;--muted-bg:#F1F4F9;--border:#E3E7EF;--input:#E3E7EF;
 --accent:#4F8EF7;--accent-fg:#2F6FDB;--accent-bg:#EBF1FE;--orange:#FF6D33;

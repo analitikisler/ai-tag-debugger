@@ -25,7 +25,7 @@ Usage:
                                                   Let the AI explore one page of each type and propose a measurement
                                                   plan: events (custom ones too), parameters and user properties.
                                                   Prints the page types it found and those the site doesn't have.
-                                                  Saved in aitd/<domain>/plans/<id>/measurement-plan.json.
+                                                  Saved in aitd/<domain>/plans/<id>/ (measurement-plan.json and a readable plan.html).
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -179,7 +179,7 @@ async function main() {
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
     const { plan } = await discoverPlan({ site: values.site, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
-    const { id, dir } = await savePlan(plan, { dataDir, site: values.site });
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
