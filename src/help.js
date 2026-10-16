@@ -18,6 +18,7 @@ Examples:
   aitd plan --site https://example.com
   aitd run --site https://example.com --against latest
   aitd run --site https://example.com --journey purchase
+  aitd "check my GA tags on example.com"    (shows the command first; -y skips the question)
 
 Run "aitd <command> --help" for that command's options.   -h, --help   -v, --version`;
 

@@ -8,11 +8,13 @@ import { helpText } from "./help.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
+import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
-async function main() {
+async function main(args = process.argv.slice(2)) {
   const { values, positionals } = parseArgs({
+    args,
     allowPositionals: true,
     options: {
       config: { type: "string" },
@@ -52,6 +54,7 @@ async function main() {
       topic: { type: "string" },
       format: { type: "string" },
       force: { type: "boolean", default: false },
+      yes: { type: "boolean", short: "y", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
     },
@@ -62,6 +65,11 @@ async function main() {
     return;
   }
 
+  if (isSentence(positionals) && !values.help) {
+    const next = await fromSentence(positionals[0], values, args);
+    if (next) await main(next);
+    return;
+  }
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
     await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"] });
@@ -211,6 +219,67 @@ async function main() {
       console.log(`Could not save the steps in ${values["save-steps"]}: ${err.message}`);
       process.exitCode = 1;
     }
+  }
+}
+
+// aitd "check my GA tags": shows the matching command and runs it once confirmed.
+async function fromSentence(sentence, values, extra) {
+  const { createProvider } = await import("./providers.js");
+  const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] }).catch((err) => {
+    if (err.code === "NO_API_KEY") return null;
+    throw err;
+  });
+  let { intent } = await translate(sentence, { provider });
+  let r = intentToArgs(intent);
+  if (r.question) {
+    const answer = (await ask(`${r.question} `)).toLowerCase();
+    if (!["plan", "run"].includes(answer)) throw new Error('Answer "plan" or "run", or type the command, e.g. aitd run --help.');
+    r = intentToArgs({ ...intent, action: answer });
+    intent = { ...intent, action: answer };
+  }
+  if (r.unsupported) throw new Error(r.unsupported);
+  let args = r.args;
+  const needsSite = !values.site && !args.includes("--site") && (args[0] === "plan" || !args.includes("--against"));
+  if (needsSite) {
+    const site = await ask("Which site? (e.g. https://www.example.com) ");
+    if (!site) throw new Error("A site is needed. Add it to the sentence or pass --site <url>.");
+    r = intentToArgs({ ...intent, site });
+    args = r.args;
+  }
+  if (needsWhatToTest(args)) args = await whatToTest(args, values);
+  // Options typed next to the sentence (--site, --provider, --headed…) carry over.
+  args = [...args, ...extra.filter((a) => a !== sentence && a !== "-y" && a !== "--yes")];
+  console.log(commandText(args));
+  if (!values.yes) {
+    const answer = (await ask("Run this? (Y/n) ")).toLowerCase();
+    if (answer && !["y", "yes"].includes(answer)) return null;
+  }
+  return args;
+}
+
+// A run needs something to test: suggest the site's latest plan, else ask for a goal.
+async function whatToTest(args, values) {
+  const site = values.site ?? args[args.indexOf("--site") + 1];
+  const { listPlanIds } = await import("./workspace.js");
+  const hasPlan = (await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, site).catch(() => [])).length > 0;
+  if (hasPlan) {
+    const answer = values.yes ? "" : (await ask("Check against the latest plan? (Y/n) ")).toLowerCase();
+    if (!answer || ["y", "yes"].includes(answer)) return [...args, "--against", "latest"];
+  } else if (values.yes) {
+    throw new Error('Nothing to test yet. Say what to check, e.g. aitd "check my GA tags on the contact form", or draft a plan first.');
+  }
+  const goal = await ask("What should I check, e.g. the contact form? ");
+  if (!goal) throw new Error('Nothing to test. Say what to check, e.g. aitd "check my GA tags on the contact form".');
+  return [...args, "--goal", goal];
+}
+
+async function ask(question) {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await rl.question(question)).trim();
+  } finally {
+    rl.close();
   }
 }
 
