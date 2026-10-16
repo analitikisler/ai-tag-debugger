@@ -2,71 +2,72 @@
 
 # AI Tag Debugger
 
-**Sitenizdeki analitik ve reklam ölçümlemesini test eden açık kaynak bir yapay zekâ ajanı.**
+**Web sitenizin analitik ve reklam takibini test eden, açık kaynaklı bir yapay zekâ ajanı.**
 
-Bir yapay zekâ modeli, gerçek bir tarayıcıda önemli senaryolarınızı (ürün → sepet → ödeme, form doldurma) gerçek bir ziyaretçi gibi gezer. Gezinirken `ai-tag-debugger`, GA4, Google Ads, Meta Pixel ve TikTok'a giden her isteği ve her dataLayer push'unu kaydeder. Sonra bunları ölçümleme planınıza ve Consent Mode ayarlarınıza göre kontrol eder ve neyin bozulduğunu, nasıl düzeltileceğini anlaşılır bir dille, Türkçe ya da İngilizce bir raporda yazar.
+Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculukları (ürün → sepet → ödeme, form gönderimleri) gerçek bir ziyaretçi gibi gezdirir. Gezerken `ai-tag-debugger` her GA4, Google Ads, Meta Pixel ve TikTok isteğini ve her dataLayer gönderimini kaydeder. Ardından bunları ölçümleme planınız ve Consent Mode kurulumunuzla karşılaştırır ve neyin bozulduğunu ve nasıl düzeltileceğini sade bir dille, Türkçe ya da İngilizce olarak yazılmış bir raporla anlatır.
 
 İki şekilde kullanabilirsiniz:
 
-- **Terminalden ya da CI'dan**, Anthropic (Claude), OpenAI, Google Gemini ya da OpenAI uyumlu herhangi bir API (Kimi, GLM, DeepSeek, OpenRouter, bilgisayarınızdaki Ollama ve daha fazlası) için kendi API anahtarınızla.
-- **Yapay zekâ asistanınızdan** (Claude, ChatGPT, Gemini ve MCP destekleyen diğer uygulamalar). Testi uygulamanın kendi modeli yürütür, yani ayrı bir API anahtarına gerek yoktur.
+- **Terminalinizden ya da CI'nizden**, kendi API anahtarınızla: Anthropic (Claude), OpenAI, Google Gemini veya OpenAI uyumlu herhangi bir API (Kimi, GLM, DeepSeek, OpenRouter, yerel bir Ollama ve daha fazlası).
+- **Yapay zekâ sohbet uygulamanızdan** (Claude, ChatGPT, Gemini ve MCP destekleyen diğer uygulamalar). Denetimi uygulamanın kendi modeli yürütür, bu yüzden ayrı bir API anahtarına ihtiyacınız yoktur.
 
-[Analitik İşler](https://analitikisler.com/tr/) tarafından geliştirildi. MIT lisanslı.
+[Analitik İşler](https://analitikisler.com) tarafından geliştirilmiştir. MIT lisanslıdır.
 
 ```
-▶ checkout (mobile)
-  Accept cookies
-  Open the first product
-  Add to cart
-  Open the cart
-  Go to checkout
+▶ ödeme (mobil)
+  Çerezleri kabul et
+  İlk ürünü aç
+  Sepete ekle
+  Sepeti aç
+  Ödemeye geç
   …
-  Place the order
-  ✓ All scripted steps completed. · 20 tracking hits captured
+  Siparişi ver
+  ✓ Tüm adımlar tamamlandı. · 20 takip isteği yakalandı
 
-2 broken · 1 risk · 1 warning · 4 ok
-Report: reports/demo/report.html
+2 hatalı · 1 risk · 1 uyarı · 4 uygun
+Rapor: reports/demo/localhost/runs/2026-10-16_0800/report.html
 ```
 
 ## Neden
 
-Ölçümleme sessizce bozulur. Yeniden tasarımda bir butonun adı değişir, yeni bir şablon bir alanı unutur, çerez onayı banner'ındaki bir güncelleme pikselleri erken çalıştırır. Kimseye uyarı gelmez. Reklam platformları haftalarca hatalı dönüşümlerle optimizasyon yaptıktan sonra fark edersiniz.
+Takip kodları sessizce bozulur. Bir yeniden tasarımda bir düğmenin adı değişir, yeni bir şablon bir alanı unutur, bir çerez onayı güncellemesi piksellerin çok erken çalışmasına yol açar. Kimse uyarı almaz. Bunu haftalar sonra öğrenirsiniz, reklam platformları da o zamana kadar hatalı dönüşümlere göre optimizasyon yapmış olur.
 
-Tag'leri elle test etmek bunu yakalar, ama zahmetli olduğu için her sürümden sonra pek yapılmaz. `ai-tag-debugger` bunu CI'da çalıştırabileceğiniz tek bir komuta dönüştürür.
+Manuel etiket kontrolü bunu yakalar, ama zahmetlidir; bu yüzden her sürümden sonra nadiren yapılır. `ai-tag-debugger` bunu CI'nizde çalıştırabileceğiniz bir komuta dönüştürür.
 
 ## Neleri kontrol eder
 
 | Kontrol | Örnek bulgu |
 |---|---|
-| Eksik event'ler | `purchase`, ödeme senaryosunda hiç gönderilmedi |
-| Eksik parametreler | `purchase`, mobilde `value` ve `currency` olmadan gönderildi |
-| Geçersiz satın alma değeri | `purchase`, `value` olarak `0`, negatif bir sayı ya da `"ücretsiz"` gibi bir metinle gönderildi |
-| Geçersiz satın alma para birimi | `purchase`, para birimi `usd` ya da `TL` olarak gönderildi; `USD` ya da `TRY` gibi 3 harfli ISO kodu bekleniyor |
-| Boş satın alma ürünleri | `purchase`, boş bir `items` listesiyle gönderildi |
-| Satın alma uyuşmazlığı | Aynı sipariş numarası için GA4 `value` 120, Meta 115 gönderdi |
-| Tekrar eden event'ler | `add_to_cart` tek tıklamada iki kez gönderildi |
-| Çerez onayı | Meta `PageView`, ziyaretçi çerezleri kabul etmeden gönderildi; Consent Mode varsayılanı yok ya da çok geç ayarlanmış, Consent Mode v2 sinyalleri (`ad_user_data`, `ad_personalization`) eksik, onaydan önce yazılan izleme çerezleri, `decline_cookies` yolculuğu bandı reddettikten sonra hâlâ çalışan etiketler ya da çerezler, işe yaramayan reddet düğmesi |
-| Kişisel veri | Bir e-posta adresi reklam platformuna açık metin olarak gönderildi |
-| Planda olmayan event'ler | Ölçümleme planınızda bulunmayan event'ler gönderiliyor |
+| Eksik event'ler | Ödeme yolculuğunda hiç `purchase` gönderilmemiş |
+| Eksik parametreler | Mobilde `value` ve `currency` olmadan gönderilen `purchase` |
+| Geçersiz satın alma değeri | `value` değeri `0`, negatif bir sayı ya da `"ücretsiz"` gibi bir metin olan `purchase` |
+| Geçersiz satın alma para birimi | Para birimi `TRY` yerine `TL` ya da `USD` yerine `usd` olan `purchase` (3 harfli ISO kodu olmalı) |
+| Boş satın alma ürünleri | `items` listesi boş gönderilen `purchase` |
+| Satın alma uyuşmazlığı | Aynı sipariş numarası için GA4'ün 120, Meta'nın 115 gönderdiği durum |
+| Tekrarlar | Tek bir tıklamayla iki kez gönderilen `add_to_cart` |
+| Çerez onayı | Ziyaretçi çerezleri kabul etmeden fire olan Meta `PageView`, eksik ya da çok geç ayarlanmış Consent Mode varsayılanı, eksik Consent Mode v2 sinyalleri (`ad_user_data`, `ad_personalization`), onaydan önce ayarlanan takip çerezleri, `decline_cookies` yolculuğu reddettikten sonra hâlâ aktif olan etiket ya da çerezler, hiçbir şey yapmayan bir reddetme düğmesi |
+| Kişisel veri | Bir reklam platformuna düz metin olarak gönderilen e-posta adresi |
+| Planda olmayan event'ler | Ölçümleme planınızda bulunmayan, yine de fire olan event'ler |
+| Plan kapsamı | Planlanan her event'in uygulandı, eksik, parametresi eksik, değeri hatalı ya da kontrol edilmedi olarak sınıflandırılması (bkz. [Plan ve site](#plan-ve-site)) |
 
-Platformlar: GA4 (server-side GTM adresleri ve sitenin kendi alan adındaki Google tag gateway yolları dahil), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
+Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
 
 ### Kontrol edilecek platformları seçin
 
-Varsayılan olarak bir test GA4, Google Ads, Meta ve TikTok'u kontrol eder. Başka platformları `--providers ga4,meta,x` ile, ayar dosyasındaki `"providers"` ile ya da MCP `start_audit` ve `run_audit` araçlarındaki `providers` ile seçebilirsiniz. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok ve X için event'ler ayrıştırılır; diğerlerinin ağ istekleri gösterilir.
+Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder. Başka platformları `--platforms ga4,meta,x` ile, ayar dosyasındaki `"providers"` ile ya da MCP `start_audit` ve `run_audit` araçlarındaki `providers` ile seçebilirsiniz. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok ve X için event'ler ayrıştırılır; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
 
-Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--providers` vermezseniz, ölçümleme planınızda geçen her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Tag yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
+Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
 
 ## Nasıl çalışır
 
-1. **Gezinme:** yapay zekâ modeline sade bir dille yazılmış bir hedef ("herhangi bir ürünü sepete ekle ve test ödeme yöntemiyle siparişi tamamla") ve sayfanın metin görünümü verilir. Model, Playwright üzerinden adım adım iki araç kullanır: `browser_action` (goto, click, fill, select, scroll, wait) ve `finish`.
-2. **Kayıt:** ölçümleme adreslerine giden her istek ayrıştırılıp standart bir biçime getirilir ve onu oluşturan adımla etiketlenir. Her dataLayer push'u, `gtag('consent', ...)` komutları dahil, bir init script ile kaydedilir. Varsayılan olarak GA4, Google Ads, Meta, TikTok, Microsoft Ads, LinkedIn, Pinterest, Snapchat ve X'in veri toplama istekleri yerelde yanıtlanır, yani **test trafiği bu gerçek hesaplara ulaşmaz**. Diğer sağlayıcıların tag'leri isteklerini göndermeye devam eder; zaman akışının ağ bölümü her çağrıyı ve yerelde yanıtlanıp yanıtlanmadığını gösterir.
-3. **Kontrol:** kurallar, yakalanan istekleri ölçümleme planınızla karşılaştırır. Bu kısım hiçbir API çağrısı yapmaz, bu yüzden sonuçlar tekrarlanabilirdir.
-4. **Açıklama:** model bulguları, her adımdaki istekleri ve (isterseniz) GTM container dışa aktarımınızı okur. Her sorunun olası nedenini ve çözümünü, ilgili tag ve trigger'ları adıyla anarak yazar.
+1. **Gezinme:** Yapay zekâ modeli, sade bir dille yazılmış bir hedef ("sepete herhangi bir ürün ekle ve test ödeme yöntemiyle siparişi tamamla") ve sayfanın metin görünümünü alır. İki araçla çalışır: `browser_action` (goto, click, fill, select, scroll, wait) ve `finish`. Playwright ile her seferinde bir adım atar.
+2. **Yakalama:** Bir takip uç noktasına giden her istek normalleştirilmiş isteklere ayrıştırılır ve isteği tetikleyen adımla etiketlenir. Her dataLayer gönderimi, bir başlatma betiği aracılığıyla kaydedilir; `gtag('consent', ...)` komutları da buna dahildir. Varsayılan olarak GA4, Google Ads, Meta, TikTok, Microsoft Ads, LinkedIn, Pinterest, Snapchat ve X'in toplama istekleri yerelde yanıtlanır, bu yüzden **test trafiği bu gerçek hesaplara ulaşmaz**. Diğer satıcıların etiketleri isteklerini göndermeye devam eder; zaman akışının ağ bölümü her çağrıyı ve yerelde yanıtlanıp yanıtlanmadığını gösterir.
+3. **Kontrol:** Deterministik kurallar, yakalanan istekleri ölçümleme planınızla karşılaştırır. Bu bölüm yapay zekâ çağrısı gerektirmez, bu yüzden sonuçlar tekrarlanabilirdir.
+4. **Açıklama:** Model bulguları, adım başına istekleri ve (isteğe bağlı olarak) GTM konteyner dışa aktarımınızı okur. Her sorun için olası nedeni ve düzeltmeyi yazar, ilgili etiket ve tetikleyicileri adlandırarak.
 
 ## Yapay zekâ sağlayıcıları
 
-Kendi API anahtarınızı kullanırsınız. `ai-tag-debugger` her sağlayıcının resmi SDK'sını kullanır:
+Kendi API anahtarınızı getirirsiniz. `ai-tag-debugger` her sağlayıcının resmî SDK'sını kullanır:
 
 | Sağlayıcı | API anahtarı değişkeni | Varsayılan model |
 |---|---|---|
@@ -74,16 +75,16 @@ Kendi API anahtarınızı kullanırsınız. `ai-tag-debugger` her sağlayıcın�
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-pro-latest` |
 
-Sağlayıcı, hangi anahtar tanımlıysa ona göre seçilir (birden fazlası tanımlıysa önce Anthropic). Açıkça seçmek için `--provider anthropic|openai|gemini` ya da ayar dosyasında `"provider"` kullanın; başka bir model için `--model` verin. Gezinme, maliyeti düşük tutmak için düşük reasoning effort ister; açıklamalar ise yüksek effort ve yapılandırılmış JSON çıktısı ister.
+Sağlayıcı, ayarlı olan anahtardan seçilir (birden fazla varsa önce Anthropic). `--provider anthropic|openai|gemini` ya da ayar dosyasındaki `"provider"` ile açıkça seçebilirsiniz; başka bir model için `--model` kullanın. Gezinme, çalışmaları ucuz tutmak için düşük akıl yürütme çabası ister; açıklamalar yüksek çaba ve yapılandırılmış JSON çıktısı ister.
 
-### OpenAI uyumlu her API: Kimi, GLM, DeepSeek, OpenRouter, Ollama ve daha fazlası
+### OpenAI uyumlu herhangi bir API: Kimi, GLM, DeepSeek, OpenRouter, Ollama ve daha fazlası
 
-Birçok sağlayıcı, OpenAI'ınkine benzer çalışan bir API sunar. `ai-tag-debugger`'ı adresini ve model kimliğini vererek bu API'lere yönlendirebilirsiniz:
+Birçok sağlayıcı OpenAI'ınkine benzer çalışan bir API sunar. `ai-tag-debugger`'ı adresi ve bir model kimliğiyle ona yönlendirin:
 
 ```bash
-export OPENAI_COMPATIBLE_API_KEY=...        # leave unset for a local Ollama
+export OPENAI_COMPATIBLE_API_KEY=...        # yerel bir Ollama için boş bırakın
 ai-tag-debugger run --site https://yourshop.com --journey add_to_cart \
-  --provider openai-compatible --base-url <API address> --model <model id>
+  --provider openai-compatible --base-url <API adresi> --model <model kimliği>
 ```
 
 | Sağlayıcı | `--base-url` |
@@ -96,171 +97,82 @@ ai-tag-debugger run --site https://yourshop.com --journey add_to_cart \
 | OpenRouter (yüzlerce model) | `https://openrouter.ai/api/v1` |
 | Bilgisayarınızdaki Ollama | `http://localhost:11434/v1` |
 
-Model kimliğini sağlayıcınızın dokümantasyonundan alın. Bayrakların yerine `OPENAI_COMPATIBLE_BASE_URL` ve `OPENAI_COMPATIBLE_MODEL` değişkenlerini ya da ayar dosyasında `"provider"`, `"base_url"` ve `"model"` alanlarını da kullanabilirsiniz. API katı JSON şeması döndüremiyorsa, açıklamalar düz JSON moduna geçer.
+Model kimliğini sağlayıcınızın dokümantasyonundan alın. Bayrakların yerine `OPENAI_COMPATIBLE_BASE_URL` ve `OPENAI_COMPATIBLE_MODEL` değişkenlerini ya da ayar dosyasında `"provider"`, `"base_url"` ve `"model"` alanlarını da kullanabilirsiniz. API katı JSON şemalarını döndüremezse açıklamalar düz JSON moduna geçer.
 
-**Model seçimi hakkında.** Yapay zekâ, 5 ile 30 adım arasında, her adımda bir araç çağırarak gezinir. Modeller bunu ne kadar güvenilir yaptıkları konusunda çok farklıdır: küçük ve yerel modeller yanlış yere tıklayabilir, döngüye girebilir ya da erken durabilir. Kontroller modelin ne yaptığından bağımsız olarak doğru kalır, çünkü yakalanan isteklere dayanır. Ama tamamlanmayan bir senaryo, sonraki adımlardaki event'leri gösteremez. Bir model zorlanıyorsa daha büyük bir model, kısa hedefli hazır bir senaryo ya da `--max-steps` deneyin. Test edilmiş olanlar Anthropic, OpenAI ve Gemini varsayılanlarıdır.
+**Model seçimi hakkında bir not.** Yapay zekâ, 5 ila 30 adım boyunca araç çağırarak, her seferinde bir adım gezinir. Modeller bunu ne kadar güvenilir yaptıklarında büyük farklılık gösterir: daha küçük ve yerel modeller yanlış yere tıklayabilir, döngüye girebilir ya da erken durabilir. Kontroller model ne yaparsa yapsın doğrudur, çünkü yakalanan isteklerden gelirler; ama bitmeyen bir yolculuk, sonraki event'lerini gösteremez. Bir model zorlanıyorsa daha büyük bir model, kısa hedefli hazır bir yolculuk ya da `--max-steps` deneyin. Anthropic, OpenAI ve Gemini varsayılanları test edilmiş olanlardır.
 
-Yeni bir yerleşik sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içinde iki fonksiyon yazmanız yeterli: araç çağıran bir konuşma ve yapılandırılmış bir JSON çağrısı.
+Yerel bir sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içinde iki fonksiyon yazmanız gerekir: araç çağıran bir konuşma ve yapılandırılmış bir JSON çağrısı.
 
 ## Hızlı başlangıç
 
-Node 20 ve üstü gerekir.
+Node 20+ gerekir.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger
-npx -y playwright@1.56.1 install chromium   # the browser version this release uses
-export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_KEY
+npx -y playwright@1.56.1 install chromium   # bu sürümün kullandığı tarayıcı sürümü
+export ANTHROPIC_API_KEY=...                # ya da OPENAI_API_KEY, ya da GEMINI_API_KEY
 
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
 ```
 
-Global kurulum kısa bir takma ad olan `aitd` komutunu da ekler: `aitd run --site … --journey add_to_cart` aynı işi yapar.
+Genel kurulum, kısa bir takma ad olan `aitd`'yi de ekler: `aitd run --site … --journey add_to_cart` aynı işi yapar.
 
 Ya da kurmadan çalıştırın: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Tüm komutları ve seçenekleri (`--providers`, `--scripted`, `--no-ai` gibi) görmek için `ai-tag-debugger --help` çalıştırın.
+Komutları görmek için `aitd --help`, her komutun seçenekleri için `aitd run --help` (ya da `plan`, `replay`, `mcp`) çalıştırın.
 
 ### Demo mağazayı deneyin (kaynak koddan)
 
-Depoda, bilerek bırakılmış üç ölçümleme hatası olan bir demo mağaza var:
+Depo, üç bilerek yapılmış takip hatası içeren bir demo mağaza içerir:
 
 ```bash
 git clone https://github.com/analitikisler/ai-tag-debugger.git
 cd ai-tag-debugger
 npm install
-npx playwright install chromium   # run again after upgrading, so the browser matches Playwright
-npm run demo:serve                # in one terminal: http://localhost:4321
-node src/cli.js run --config examples/demo.config.json --out reports/demo
-open reports/demo/report.html
+npx playwright install chromium   # sürümü yükselttikten sonra yeniden çalıştırın, tarayıcı Playwright ile eşleşsin
+npm run demo:serve                # bir terminalde: http://localhost:4321
+node src/cli.js run --config examples/demo.config.json --data-dir reports/demo
+open reports/demo/localhost/runs/*/report.html
 ```
 
-Henüz API anahtarınız yok mu? Kayıtlı adımları hiçbir yapay zekâ modeli kullanmadan tekrar oynatın:
+Henüz bir API anahtarınız yok mu? Sabit adımları hiçbir yapay zekâ modeli olmadan yeniden oynatın:
 
 ```bash
-node src/cli.js run --config examples/demo.config.json --scripted --no-ai --out reports/demo
+node src/cli.js run --config examples/demo.config.json --scripted --no-ai --data-dir reports/demo
 ```
 
-## Neyi test edeceğinizi seçin
+## Planla, sonra denetle
 
-Başlamak için ayar dosyasına gerek yok. Hazır senaryoları seçin, kendi senaryonuzu kendi cümlenizle yazın ve kontrolü önem verdiğiniz event'lerle sınırlayın:
+Bir çalıştırma, sitenin gönderdiklerini bir **plan** ile karşılaştırır: beklediğiniz event'ler, parametreler ve kullanıcı özellikleri. Üç adım:
 
 ```bash
-# Ready-made journeys come with a goal and the GA4 and Meta events to expect.
-ai-tag-debugger run --site https://staging.yourshop.com --journey purchase --journey sign_up
+# 1. Bir plan taslağı çıkarın. Yapay zekâ siteyi gezer ve neyin takip edilmesi gerektiğini önerir.
+aitd plan --site https://yoursite.com
 
-# Describe a journey in your own words. The events you name are expected on it.
-ai-tag-debugger run --site https://yoursite.com --goal "Subscribe to the newsletter in the footer" --events newsletter_signup
+# 2. İsteğe bağlı: bir elektronik tabloda düzenleyin, sonra düzenlenmiş kopyayı yeni bir plan olarak kaydedin.
+aitd plan export latest --site https://yoursite.com     # planın yanına plan.xlsx yazar
+aitd plan import plan.xlsx --site https://yoursite.com  # yeni bir plan kaydeder; eskisi değişmez
 
-# Only check some events.
-ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_to_cart
+# 3. Siteyi plana göre denetleyin.
+aitd run --site https://yoursite.com --against latest
 ```
 
-Hedefi Türkçe de yazabilirsiniz, örneğin `--goal "Sayfanın altındaki bültene abone ol"`.
+**Plan taslağı çıkarmak** takip kodu gerektirmez. Yapay zekâ her sayfa türünden birer sayfayı inceler: ana sayfa, bir kategori, bir ürün, sepet, ilk ödeme adımı, arama ve varsa üyelik ya da iletişim formları. Asla ödeme yapmaz ve kişisel bilgilerle bir formu göndermez. `--provider`, `--model` ve `--max-steps` (varsayılan 25, yapay zekâ için en fazla adım) `run` için olduğu gibi çalışır. Çıktı "Bulunan sayfa türleri" ve "Bu sitede yok" satırlarını yazdırır, böylece yapay zekânın hangi sayfa türlerine ulaştığını görürsünüz. Yalnızca 2 sayfası olan küçük bir site de sorun değildir.
 
-| Hazır senaryo | Yapay zekânın yaptığı | Beklenen event'ler |
-|---|---|---|
-| `purchase` (ya da `checkout`) | Ürün → sepet → ödeme → test ödeme seçeneğiyle sipariş | GA4 `view_item`, `add_to_cart`, `begin_checkout`, `purchase`; Meta `AddToCart`, `InitiateCheckout`, `Purchase` |
-| `add_to_cart` (ya da `cart`) | Bir ürün açar ve sepete ekler | GA4 `view_item`, `add_to_cart`; Meta `AddToCart` |
-| `sign_up` (ya da `signup`, `register`) | Test verileriyle hesap oluşturur | GA4 `sign_up`; Meta `CompleteRegistration` |
-| `lead` (ya da `contact`, `form`) | İletişim, teklif ya da demo formunu doldurup gönderir | GA4 `generate_lead`; Meta `Lead` |
-| `search` | Sitede arama yapar ve bir sonucu açar | `search_term` ile GA4 `search`; Meta `Search` |
+Plan, yeni bir klasöre, `aitd/<alan adı>/plans/<id>/` içine `measurement-plan.json` ve okunabilir bir `plan.html` olarak kaydedilir. Her event için şunları listeler:
 
-`--journey`, ayar dosyanızdaki senaryoları da id'leriyle seçer. Ayar dosyasıyla birlikte kullanıldığında hazır senaryolar kendi event'lerini planınıza ekler.
+- `name` ve `platform`. Sitenize özgü event'ler, örneğin bir beden rehberi ya da mağaza bulucu, `custom: true` ile işaretlenir.
+- `description` ve `trigger`: event'i tetikleyen sayfa türü ve öğenin görünen etiketi.
+- `parameters`: her biri bir açıklama ve örnek değerle. Özel parametreler işaretlenir. `required_params` mutlaka bulunması gerekenleri listeler.
+- `user_properties`: `customer_type` gibi önerilen özellikler, her biri bir açıklama ve örnekle.
 
-Bir çalıştırmanın her zaman test edecek bir şeye ihtiyacı vardır: `--journey`, `--goal` ya da ayar dosyanızdaki senaryolar. Hiçbiri yoksa `run`, tarayıcıyı açmadan durur; böylece başıboş gezip API kullanımı harcayamaz. Neyi test edeceğinizden emin değil misiniz? `aitd plan --site https://sitenizin-adresi` bir ölçüm planı taslağı çıkarır.
+Siteniz zaten gönderdiği event'ler `"seen": true` ile işaretlenir.
 
-### API kullanımını düşük tutmak
+Kullanmadan önce planı gözden geçirin. Örnekler ve öneriler yapay zekânın gördüğü sayfalardan gelir, bu yüzden her event'in işinize uyduğunu kontrol edin. Ek alanları kontroller yok sayar.
 
-Her gezinme adımı bir model çağrısıdır. Yani kullanım **senaryo × ekran boyutu × adım** ile artar, buna sonda bulguları açıklayan bir çağrı eklenir. Kontroller hiçbir zaman modeli çağırmaz.
+**Elektronik tablo ile içe ve dışa aktarma.** `aitd plan export <plan> --site <url>`, planın yanına `plan.xlsx` yazar: `events` sekmesinde her event parametresi için bir satır (`event, platform, parameter, required, example, trigger, description`) ve `user_properties` sekmesinde her kullanıcı özelliği için bir satır. Bunun yerine `events.csv` ve `user_properties.csv` almak için `--format csv` ekleyin; CSV ek bir paket gerektirmez. `.xlsx`, araçla birlikte isteğe bağlı bir bağımlılık olarak gelen küçük bir kütüphane, `fflate` kullanır. `aitd plan import <dosya> --site <url>` elektronik tabloyu okuyup yeni bir plan klasörü olarak kaydeder. İçe aktarma mevcut bir planı asla düzenlemez. Tanınmayan sütunlar bir uyarıyla yok sayılır; bir hata, sekmeyi, satırı ve düzeltmeyi belirtir, örneğin `events, row 7: "required" must be yes or no (found "maybe").`
 
-- **Sadece ihtiyacınız olan senaryoları çalıştırın.** En büyük tasarruf budur: tam `purchase` senaryosu yerine `--journey add_to_cart`, on ya da daha fazla adım yerine birkaç adım sürer.
-- **Tek ekran boyutu kullanın.** `--viewport mobile`, masaüstü ve mobile göre çağrıları yarıya indirir.
-- **Adım sayısını sınırlayın.** `--max-steps 15`, yolunu kaybeden bir senaryoyu durdurur.
-- **Büyük sayfaların daha pahalı olduğunu unutmayın.** Her adım modele sayfanın görünümünü (en fazla 250 öğe ve 3.000 karakter metin) gönderir. Bu yüzden kalabalık sayfalar adım başına daha fazla token kullanır.
-- **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmadığı için kullanımı pek değiştirmez.
-- **Yapay zekâ olmadan tekrar oynatın.** Bir yapay zekâ çalıştırmasından sonra `--save-steps <dosya>` ile adımları kaydedin, ardından her deploy'da o ayar dosyasıyla `--scripted --no-ai` kullanın. Ayrıntılar için [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın) bölümüne bakın.
-- **Bir yapay zekâ asistanı kullanın.** MCP üzerinden gezinmeyi asistanın kendi modeli yapar, hiç API anahtarı kullanılmaz.
-
-### Yeni bir sürümü kaydedilmiş sitelerle karşılaştırın
-
-`--save-site <klasör>`, sitenin gönderdiği her yanıtı ve atılan adımları da kaydeder. `replay` aynı sayfaları ağ ve yapay zekâ modeli olmadan, çevrimdışı olarak yeniden denetler; bu yüzden hiçbir maliyeti yoktur. Kaydedilen çalıştırmaya göre yeni çıkan ya da kaybolan bulguları listeler:
-
-```bash
-npx @analitikisler/ai-tag-debugger run --site https://www.magazaniz.com --journey purchase --save-site saved/magazaniz
-npx @analitikisler/ai-tag-debugger replay saved/*
-✗ https://www.magazaniz.com (saved/magazaniz): 0 new, 1 gone
-    - warning duplicate purchase desktop ga4 page_view
-```
-
-İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa (örneğin düzeltilmiş bir yanlış alarm), `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelerle ya da bir site değişikliğini son sağlıklı çalıştırmayla karşılaştırmak için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. İzleme isteklerini, görselleri ve videoları, HttpOnly ve oturum açma çerezlerini ve tarayıcının gönderdiği çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi olan istekleri içermez. Yine de sitenin sayfalarını ve betiklerini içerdiği için size ait olmayan siteleri herkese açık depolara koymayın.
-
-### Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın
-
-`--save-steps <dosya>`, her senaryonun izlediği adımları bir ayar dosyasındaki `journeys[].steps` alanına yazar. Dosya yoksa oluşturulur; ayar dosyasında plan yoksa çalıştırmanın planı da kaydedilir. Aynı ayar dosyası, hiçbir yapay zekâ modeli ve API anahtarı olmadan senaryoyu tekrar çalıştırır:
-
-```bash
-ai-tag-debugger run --site https://www.magazaniz.com --journey purchase --save-steps ai-tag-debugger.config.json
-ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
-```
-
-Bir senaryo iki ekran boyutunda çalıştıysa yalnızca ilk ekran boyutunun adımları tutulur. Ayar dosyasını depoda saklayın ve ikinci komutu her deploy'da çalıştırarak aynı senaryoyu hiçbir model çağrısı yapmadan kontrol edin.
-
-## Sitenizi ayarlayın
-
-`ai-tag-debugger.config.json`:
-
-```json
-{
-  "site": "https://staging.yourshop.com",
-  "plan": "measurement-plan.json",
-  "gtm_container": "GTM-XXXX_workspace.json",
-  "viewports": ["desktop", "mobile"],
-  "journeys": [
-    {
-      "id": "checkout",
-      "goal": "Accept cookies, add any product to the cart and complete checkout using the test payment method."
-    }
-  ]
-}
-```
-
-| Alan | Anlamı |
-|---|---|
-| `site` | Ana adres. Mümkünse staging kullanın. |
-| `plan` | Ölçümleme planı: bir dosya yolu ya da satır içi bir nesne (aşağıda). Hazır senaryolarla isteğe bağlıdır. |
-| `gtm_container` | İsteğe bağlı GTM container dışa aktarımı (Admin → Export container). Böylece açıklamalarda tag ve trigger'lar adıyla geçer. |
-| `viewports` | `desktop` ve/veya `mobile`. |
-| `journeys` | `--journey` ile hazır senaryo seçtiğinizde ya da `--goal` ile kendi senaryonuzu yazdığınızda isteğe bağlıdır. |
-| `journeys[].goal` | Yapay zekânın yapması gereken, sade bir dille. |
-| `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
-| `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. |
-| `allowed_hosts` | Senaryoların gidebileceği diğer adresler, örneğin harici bir ödeme sayfası için `["checkout.payments-provider.com"]`. Bunun dışında tarayıcı `site` adresinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
-| `providers` | Kontrol edilecek ölçümleme platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`. `--providers` ile aynıdır. |
-| `block_hits` | Varsayılan `true`. İsteklerin gerçek adreslerinize ulaşmasına izin vermek için `false` yapın. |
-| `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
-| `keep_bodies` | Varsayılan `false`. Ölçümleme isteklerini kullanıcı verilerini gizlemeden, gönderildiği haliyle saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
-| `branding` | Varsayılan `true`. Analitik İşler logosunu ve "AI Tag Debugger ile oluşturuldu · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false` ile aynıdır. |
-| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini` ya da `openai-compatible`. `--provider` ile aynıdır. |
-| `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
-
-### Yeni bir site için plan çıkarma
-
-Henüz takip yoksa `aitd plan --site https://sitenizin-adresi` yapay zekânın her sayfa türünden bir sayfayı gezmesini sağlar: ana sayfa, bir kategori, bir ürün, sepet, ödeme adımının ilki, arama ve varsa üyelik ya da iletişim formları. Takip kodu gerektirmez. Asla ödeme yapmaz ve kişisel bilgi içeren bir formu göndermez. `--provider`, `--model` ve `--max-steps` (varsayılan 25, yani en fazla yapay zekâ adımı) seçenekleri `run` ile aynı şekilde çalışır.
-
-Çıktı "Page types found" (bulunan sayfa türleri) ve "Not present on this site" (sitede bulunmayan türler) satırlarını yazar. Yalnızca 2 sayfası olan küçük bir site de sorunsuz çalışır.
-
-Plan `measurement-plan.json` dosyasına yazılır (yolu `--out` ile değiştirebilirsiniz). Her event için şunlar yer alır:
-
-- `name` ve `platform`. Beden tablosu ya da mağaza bulucu gibi sitenize özgü event'ler `custom: true` ile işaretlenir.
-- `description` ve `trigger`: sayfa türü ve event'i tetikleyen öğenin görünen etiketi.
-- `parameters`: her biri için açıklama ve örnek değer. Özel parametreler işaretlenir. `required_params` zorunlu olanları listeler.
-- `user_properties`: `customer_type` gibi önerilen kullanıcı özellikleri, her biri için açıklama ve örnekle.
-
-Sitenizin zaten gönderdiği event'ler `"seen": true` ile işaretlenir.
-
-Kullanmadan önce dosyayı gözden geçirin. Örnekler ve öneriler yapay zekânın gördüğü sayfalardan çıkar, bu yüzden her event'in işinize uyup uymadığını kontrol edin. Ek alanları kontroller yok sayar, dolayısıyla dosya düzenlenmeden `plan` olarak kullanılabilir, ama önce gözden geçirin. Ardından ayar dosyanızdaki `plan` alanını bu dosyaya yönlendirin. Zaten takip yapan siteler bunun yerine `aitd plan --from` kullanabilir (aşağıya bakın).
-
-`measurement-plan.json`:
+`measurement-plan.json` şöyle görünür:
 
 ```json
 {
@@ -273,70 +185,245 @@ Kullanmadan önce dosyayı gözden geçirin. Örnekler ve öneriler yapay zekân
 }
 ```
 
-`platform` değeri `ga4`, `google_ads`, `meta` ya da `tiktok` olabilir. `journeys`, bir event'in hangi senaryolarda beklendiğini sınırlar (varsayılan: her senaryo). Tek bir işlemde birden fazla kez gönderilmesi normal olan event'ler için `allow_multiple: true` kullanın.
+`platform` değeri `ga4`, `google_ads`, `meta` veya `tiktok` olur. `journeys`, bir event'in nerede beklendiğini sınırlar (varsayılan: her yolculuk). Bir eylem başına birden fazla kez fire olabilen event'ler için `allow_multiple: true` ayarlayın.
 
-### Çalıştırmadan plan taslağı çıkarma
+Event adları gevşek eşleştirilir: `dl_add_to_cart` (Elevar), `addToCart` ve `Add To Cart`, `add_to_cart` sayılır; `transaction` ya da `order_completed` ise `purchase` sayılır. Kendi adlarınızı planlanmış bir event'e `"aliases": ["my_event"]` ile ekleyebilirsiniz. Gerekli parametreler de olağan diğer adlarıyla bulunur: `items` için `products`, `value` için `revenue`, `transaction_id` için `order_id`.
 
-Bir kez denetim çalıştırın, ardından `aitd plan --from reports/<dizin>` başlangıç niteliğinde bir `measurement-plan.json` yazar. Çalıştırmada gerçekten gönderilen event'leri ve taşıdıkları parametreleri listeler. `--out <dosya>` farklı bir yol seçer, `--force` ise var olan dosyanın üzerine yazar. `--force` verilmezse var olan dosya asla üzerine yazılmaz.
+**Bir plana karşı denetim.** `run --against <plan>`, `latest` (ya da `last`), `first`, bir plan kimliği ya da bir plan dosyasının ya da klasörünün yolunu alır. `--site` verilmezse site plandan alınır. Çalıştırmaya bir yolculuk da verirseniz, yalnızca o akışı gezer ve orada beklenen plan event'lerini kontrol eder; planın geri kalanı eksik değil, kontrol edilmedi olarak raporlanır. Tek başına kullanıldığında `--against`, plandan en fazla altı yolculuk türetir: planlanmış event'leri tetiklendikleri sayfaya göre gruplar ve sayfa başına bir yolculuk oluşturur, en fazla altı tane (en küçük gruplar son yolculuğu paylaşır); ek bir yapay zekâ çağrısı yapılmaz. Seçilen yolculuklar, tarayıcı açılmadan önce yazdırılır. Her rapor başlığı ardından `Checked against plan <id>` (Plana karşı kontrol edildi: <id>) yazar.
 
-GA4'ün otomatik sayfa parametreleri (`page_location`, `page_title`, `page_referrer`) ve Hotjar çağrıları dışarıda bırakılır. Ayar dosyanızdaki `plan` alanını bu dosyaya yönlendirmeden önce sonucu gözden geçirin, çünkü taslak yalnızca sitenizin zaten gönderdiklerini listeler.
+`run` bir şey test etmek ister: `--against`, `--journey`, `--goal` ya da ayar dosyanızdaki yolculuklar. Biri yoksa tarayıcıyı açmadan `Nothing to test. Add --against latest, --journey <id> or --goal "<text>".` mesajıyla durur; böylece dolaşıp API kullanımını harcamaz. Sitenin henüz planı yoksa `run --against` şunu söyler: `No plan yet for example.com. Draft one with: aitd plan --site https://example.com`.
+
+`aitd plan list --site <url>`, sitenin plan kimliklerini en eskiden en yeniye listeler.
+
+### Plan ve site
+
+Bir çalıştırma `--against` kullandığında rapor, `report.html` ve `report.md` dosyalarında **Plan ve site** bölümüyle başlar. Planlanan her event bir kovaya düşer:
+
+| Kova | Anlamı |
+|---|---|
+| Uygulanmış | Planlandı, fire oldu, gerekli parametrelerin tümü var, değer sorunu yok |
+| Eksik | Çalıştırmanın gezdiği bir yolculuk için planlandı, ama hiç fire olmadı |
+| Parametre eksik | Fire oldu, ama gerekli bir parametre yok |
+| Hatalı değer | Fire oldu, değer sorunu var; satın alma değeri, para birimi ve ürün kontrollerinin aynısından |
+| Planda yok | Fire oldu, ama planda değil |
+| Kontrol edilmedi | Planlandı, ama yolculuğu ya da platformu bu çalıştırmanın parçası değildi |
+
+Kapsam puanı, uygulanmış olanların kontrol edilebilir planlanmış event'lere (kontrol edilmedi hariç hepsi) bölünmesiyle bulunur; genel ve platform başına gösterilir, örneğin `Kapsam 11 olaydan 7 (%64), 2 olay kontrol edilmedi`. Aynı kayıtlar `plan-check.json` dosyasında da bulunur: planlanan her event için kovasıyla birlikte bir kayıt. Çıkış kodları değişmez: `--fail-on` yine bulgu önemine bakar. `--against` olmadan rapor tam olarak eskisi gibidir.
+
+### Klasör yapısı ve plan kimlikleri
+
+Planlar ve çalıştırmalar, aracı çalıştırdığınız klasördeki `aitd/` içinde tutulur:
+
+```
+aitd/
+  example.com/                      sitenin ana makinesi, www. olmadan
+    plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (dışa aktarımdan sonra)
+    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json
+                                    ve plan-check.json (--against ile)
+```
+
+Bir kimlik, yerel saat `YYYY-MM-DD_HHMM` biçimindedir. O dakika zaten alınmışsa saniye eklenir (`_HHMMSS`). Hiçbir şey değiştirilmez: her taslak, içe aktarma ve çalıştırma yeni bir klasör alır. `aitd/` klasörünü başka bir yerde tutmak için `--data-dir <dir>` kullanın. `replay` ve `--save-site` klasörleri etkilenmez.
+
+## Ne test edileceğini seçin
+
+Başlamak için bir ayar dosyasına ihtiyacınız yok. Hazır yolculukları seçin, kendi yolculuğunuzu sade bir dille tarif edin, bir plana karşı kontrol edin ve kontrolü yalnızca ilgilendiğiniz event'lerle sınırlayın:
+
+```bash
+# Siteyi en son kaydedilmiş planına karşı kontrol edin.
+aitd run --site https://staging.yourshop.com --against latest
+
+# Hazır yolculuklar, hedefleri ve beklenen GA4 ve Meta event'leriyle gelir.
+ai-tag-debugger run --site https://staging.yourshop.com --journey purchase --journey sign_up
+
+# Bir yolculuğu kendi sözlerinizle tarif edin. Adını verdiğiniz event'ler bu yolculukta beklenir.
+ai-tag-debugger run --site https://yoursite.com --goal "Alt bilgideki bültene abone ol" --events newsletter_signup
+
+# Yalnızca bazı event'leri kontrol edin.
+ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_to_cart
+```
+
+| Hazır yolculuk | Yapay zekânın yaptığı | Beklediği event'ler |
+|---|---|---|
+| `purchase` (ya da `checkout`) | Ürün → sepet → ödeme → test ödeme yöntemiyle sipariş | GA4 `view_item`, `add_to_cart`, `begin_checkout`, `purchase`; Meta `AddToCart`, `InitiateCheckout`, `Purchase` |
+| `add_to_cart` (ya da `cart`) | Bir ürün açar ve sepete ekler | GA4 `view_item`, `add_to_cart`; Meta `AddToCart` |
+| `sign_up` (ya da `signup`, `register`) | Test verileriyle bir hesap oluşturur | GA4 `sign_up`; Meta `CompleteRegistration` |
+| `lead` (ya da `contact`, `form`) | Bir iletişim, teklif ya da demo formunu doldurup gönderir | GA4 `generate_lead`; Meta `Lead` |
+| `search` | Sitede arama yapar ve bir sonucu açar | GA4 `search` (`search_term` ile); Meta `Search` |
+
+`--journey`, ayar dosyanızdaki yolculukları id'leriyle de seçer. Bir ayar dosyasıyla, hazır yolculuklar kendi event'lerini planınıza ekler.
+
+Ne test edeceğinizden emin değil misiniz? `aitd plan --site https://yoursite.com` bir ölçümleme planı taslağı çıkarır, `--against latest` de siteyi buna göre kontrol eder.
+
+### API kullanımını düşük tutmak
+
+Gezinmenin her adımı bir model çağrısıdır; bu yüzden kullanım **yolculuk × görünüm × adım** ile artar, üstüne bulguları açıklamak için sonda bir çağrı eklenir. Kontroller modeli asla çağırmaz.
+
+- **Yalnızca ihtiyacınız olan yolculukları çalıştırın.** En büyük tasarruf budur: tam `purchase` yolculuğu yerine `--journey add_to_cart`, on adım ya da daha fazla yerine birkaç adım alır.
+- **Tek bir görünüm çalıştırın.** `--viewport mobile`, masaüstü ve mobil birlikte çalıştırmaya göre çağrı sayısını yarıya indirir.
+- **Adım sayısını sınırlayın.** `--max-steps 15`, dolaşan bir yolculuğu durdurur.
+- **Büyük sayfaların daha pahalı olmasını bekleyin.** Her adım, sayfa görünümünü (en fazla 250 öğe ve 3.000 karakter metin) modele gönderir; bu yüzden yoğun sayfalar basit sayfalardan adım başına daha fazla token kullanır.
+- **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmaz, bu yüzden kullanımı pek değiştirmez.
+- **Yapay zekâsız tekrar oynatın.** Bir yapay zekâlı çalıştırmadan sonra adımları kaydetmek için `--save-steps <dosya>` ekleyin; sonra o ayar dosyasını her dağıtımda `--scripted --no-ai` ile çalıştırın. Bkz. [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın).
+- **Bir sohbet uygulaması kullanın.** MCP üzerinden gezinmeyi sohbet uygulamasının kendi modeli yapar, bu yüzden hiç API anahtarı kullanılmaz.
+
+### Yeni bir sürümü kayıtlı sitelere karşı kontrol edin
+
+`--save-site <dir>`, sitenin gönderdiği her yanıtı ve atılan adımları da kaydeder. `replay` daha sonra aynı sayfaları çevrimdışı, ağ bağlantısı ve yapay zekâ modeli olmadan yeniden denetler; bu yüzden maliyeti sıfırdır. Kayıtlı çalıştırmaya göre yeni ya da kalkmış bulguları listeler:
+
+```bash
+npx @analitikisler/ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-site saved/yourshop
+npx @analitikisler/ai-tag-debugger replay saved/*
+✗ https://www.yourshop.com (saved/yourshop): 0 yeni, 1 kalktı
+    - warning duplicate purchase desktop ga4 page_view
+```
+
+İlk çalıştırmanın bulguları beklenen bulgular olur. Bir değişiklik doğruysa, örneğin düzeltilmiş bir yanlış alarm ise, `replay --update` yeni bulguları beklenen bulgular yapar. Aracın yeni bir sürümünü bildiğiniz sitelere karşı ya da bir site değişikliğini son iyi çalıştırmasına karşı kontrol etmek için kullanın. Kaydedilmiş bir site genellikle birkaç MB'tır. Takip isteklerini, görselleri ve videoları, HttpOnly ve oturum çerezlerini, tarayıcının gönderdiği çerezleri, yetkilendirme başlıklarını, form verilerini ve adresinde e-posta ya da başka kullanıcı verisi bulunan istekleri dışarıda bırakır. Yine de sitenin sayfalarını ve betiklerini tutar; bu yüzden sahibi olmadığınız siteleri herkese açık depolarda tutmayın.
+
+### Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın
+
+`--save-steps <dosya>`, her yolculuğun attığı adımları bir ayar dosyasının `journeys[].steps` alanına yazar. Dosya yoksa oluşturur; ayar dosyasında plan yoksa çalıştırmanın planını da kaydeder. Aynı ayar dosyası yolculuğu, yapay zekâ modeli ve API anahtarı olmadan tekrarlar:
+
+```bash
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-steps ai-tag-debugger.config.json
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
+```
+
+Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün adımları tutulur. Ayar dosyasını depoda tutun ve ikinci komutu her dağıtımda çalıştırarak aynı yolculuğu hiçbir model çağrısı yapmadan kontrol edin.
+
+## Sitenizi yapılandırın
+
+`ai-tag-debugger.config.json`:
+
+```json
+{
+  "site": "https://staging.yourshop.com",
+  "plan": "measurement-plan.json",
+  "gtm_container": "GTM-XXXX_workspace.json",
+  "viewports": ["desktop", "mobile"],
+  "journeys": [
+    {
+      "id": "checkout",
+      "goal": "Çerezleri kabul et, sepete herhangi bir ürün ekle ve test ödeme yöntemiyle ödemeyi tamamla."
+    }
+  ]
+}
+```
+
+| Alan | Anlamı |
+|---|---|
+| `site` | Temel URL. Mümkünse staging kullanın. |
+| `plan` | Ölçümleme planı: bir dosya yolu ya da satır içi bir nesne (aşağıya bakın). Hazır yolculuklarla isteğe bağlıdır. `--against` ile çalışan bir çalıştırma bunun yerine o planı kullanır. |
+| `gtm_container` | İsteğe bağlı GTM konteyner dışa aktarımı (Yönetici → Konteyneri dışa aktar); açıklamalar etiket ve tetikleyicileri adlandırabilsin diye. |
+| `viewports` | `desktop` ve/veya `mobile`. |
+| `journeys` | `--journey` ile hazır yolculuk seçtiğinizde, `--goal` ile bir yolculuk tarif ettiğinizde ya da `--against` ile bir plana karşı kontrol ettiğinizde isteğe bağlıdır. |
+| `journeys[].goal` | Yapay zekânın sade bir dille ne yapacağı. |
+| `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
+| `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. |
+| `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
+| `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`. `--platforms` ile aynıdır. |
+| `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
+| `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
+| `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
+| `branding` | Varsayılan `true`. Analitik İşler logosunu ve "Generated by AI Tag Debugger · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ile aynıdır, ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false`. |
+| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini` ya da `openai-compatible`. `--provider` ile aynıdır. |
+| `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
 
 ## CLI
 
 ```
-ai-tag-debugger run [--site <url>] [--config <file>] [--journey <id>] [--goal "<text>"] [--events <names>]
-                [--max-steps <n>] [--out <dir>] [--viewport desktop|mobile] [--providers <list>]
-                [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--base-url <url>]
-                [--lang en|tr] [--allow-host <host>] [--keep-bodies] [--scripted] [--no-ai] [--fail-on broken|risk|warning|never] [--headed]
-                [--save-site <dir>] [--save-steps <file>]
-ai-tag-debugger replay <dir>... [--update] [--out <dir>]
-ai-tag-debugger mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
-                [--allow-private-network]
+aitd plan --site <url> [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+aitd plan list --site <url> [--data-dir <dir>]
+aitd plan import <dosya> --site <url> [--data-dir <dir>]
+aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
+aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--config <dosya>] [--events <adlar>]
+         [--max-steps <n>] [--viewport desktop|mobile] [--platforms <liste>] [--data-dir <dir>]
+         [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
+         [--fail-on broken|risk|warning|never] [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>]
+aitd replay <dir>... [--update] [--out <dir>]
+aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
+         [--allow-private-network]
 ```
 
-`aitd`, `ai-tag-debugger` için kısa bir takma addır ve aynı komut ve seçenekleri alır.
+`aitd`, `ai-tag-debugger`'ın kısa bir takma adıdır ve aynı komutları ve seçenekleri kabul eder. Her komutun temel seçenekleri için `aitd <komut> --help` çalıştırın.
 
-Bulgular `--fail-on` seviyesine (varsayılan `broken`) ulaştığında çıkış kodu `1` olur, böylece bir deploy'u durdurabilir. Her deploy sonrası çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) örneğine bakın.
+### Tüm seçenekler
 
-Çıktılar:
+| Seçenek | Komutlar | Anlamı |
+|---|---|---|
+| `--site <url>` | plan, run | Site. `plan` için zorunludur; `run` için `--against` ya da ayar dosyası siteyi vermiyorsa gereklidir. |
+| `--against <plan>` | run | Bir plana karşı kontrol: `latest` (ya da `last`), `first`, bir plan kimliği ya da bir plan dosyasının ya da klasörünün yolu. |
+| `--journey <id>` | run | Hazır bir yolculuk (tekrarlanabilir). |
+| `--goal "<metin>"` | run | Sade bir dille bir yolculuk (tekrarlanabilir). |
+| `--config <dosya>` | run | Siteyi, yolculukları ve planı bir ayar dosyasından al. |
+| `--events <adlar>` | run | Yalnızca bu event'leri kontrol et, örneğin `purchase,add_to_cart`. |
+| `--viewport <ad>` | run | `desktop` ya da `mobile` (tekrarlanabilir). |
+| `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers`'ın yerine geçer; o da bir minör sürüm daha çalışır. |
+| `--max-steps <n>` | plan, run | Yolculuk başına en fazla yapay zekâ adımı (`plan` için varsayılan 25). |
+| `--lang <kod>` | run | Rapor dili: `en` ya da `tr`. |
+| `--fail-on <düzey>` | run | Bu düzeyde çıkış kodu 1 olur: `broken` (varsayılan), `risk`, `warning` ya da `never`. |
+| `--headed` | plan, run | Tarayıcı penceresini göster. |
+| `--provider <ad>`, `--model <id>` | plan, run | Yapay zekâ sağlayıcısı ve modeli. Varsayılan: ayarlı olan API anahtarı. |
+| `--scripted` | run | Her yolculuğun sabit adımlarını, yapay zekâ gezintisi olmadan tekrar oynat. |
+| `--no-ai` | run | Hiç yapay zekâ modeli yok. `--scripted` anlamına gelir. |
+| `--save-site <dir>` | run | Sitenin yanıtlarını `replay` için kaydet. |
+| `--save-steps <dosya>` | run | Her yolculuğun attığı adımları bir ayar dosyasına yaz. |
+| `--data-dir <dir>` | plan, run | `aitd/` klasörünün (planlar ve çalıştırmalar) tutulduğu yer. Varsayılan: `./aitd`. `run --out` yerine geçer. |
+| `--format xlsx\|csv` | plan export | Elektronik tablo biçimi. Varsayılan: `xlsx`. |
+| `--update` | replay | Bu tekrarın bulgularını beklenen bulgular yap. |
+| `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
+| `--base-url <url>` | run | OpenAI uyumlu bir sağlayıcının API adresi. |
+| `--allow-host <ana makine>` | run | Yolculukların ziyaret edebileceği başka bir ana makine (tekrarlanabilir). `allowed_hosts` ile aynıdır. |
+| `--keep-bodies` | run | Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden sakla. |
+| `--no-branding` | plan, run | Logo ve kredi satırını raporlardan ve `plan.html` dosyasından çıkar. |
+| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network` | mcp | Aşağıdaki MCP bölümüne bakın. |
 
-- `report.html`: dört sekmeli tek bir dosya. Sekmeler arası bağlantılar çalışır (bir bulgudaki "Nerede" etiketi o adımı açar) ve her görünümün kaydedip paylaşabileceğiniz kendi adresi vardır.
-  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun en üstte, ayrıca bulguların kapsamadığı ama kontrol etmeye değer noktalar), sorun sayılarıyla senaryolar ve kontrol edilen platformlar.
-  - **Bulgular**: önem derecesine göre gruplanır ve filtrelenebilir. Her bulgunun etkisi, olası nedeni, kanıtı, numaralı çözüm adımları ve oluştuğu adımlar vardır.
-  - **Yolculuklar**: her seferinde bir senaryo; solda adımları, sağda seçili adım. İlk sorunlu adımda açılır. Her adımın üç sekmesi vardır:
-    - **Olaylar**: parametreleri, çerez onayı durumu, arkasındaki dataLayer push'u ve isteğiyle birlikte her ölçümleme isteği; bir bulgu ona işaret ediyorsa bir not.
-    - **dataLayer**: adımdaki her push.
-    - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede `?` ipucu olan bir parametre tablosuna çözülmüş halde. Toplu gönderilen bir GA4 isteği, içindeki her event'i gösterir.
-  - **Kapsam ve plan**: planlanan her event'in her senaryoda gönderilip gönderilmediği ve istek sayılarıyla kontrol edilen ya da dışarıda bırakılan platformlar.
+0.10.0 sürümünde kaldırıldı: `plan --from`, `plan --out` ve `plan --force`. Plan taslağı her zaman yeni bir klasör kaydeder; kaldırılmış bir bayrak ne çalıştırılacağını yazdırır.
 
-  Event'ler ve istekler kaynağa göre filtrelenebilir. GA4 ürün dizeleri (`pr1`…) ve dataLayer `ecommerce.items` ürün kartları olarak, özel ürün parametreleri ayrı bir grupta gösterilir. Raporda script yoktur: sekmeler ve filtreler düz HTML ve CSS'tir (Chrome 105, Safari 15.4 ya da Firefox 121 ve üstü gerekir) ve yazdırınca tüm sekmeler görünür. Logolar dosyanın içindedir, internetten hiçbir şey yüklenmez. `--no-branding` Analitik İşler logosunu ve imza satırını çıkarır.
-- `timeline.csv`: aynı zaman akışı; her istek, dataLayer push'u ve ağ çağrısı bir satır, Excel ya da Google Sheets için hazır.
-- `report.md`: raporun Markdown hali, örneğin bir pull request yorumu için.
-- `capture.json`: yakalanan tüm veriler, kendi analiziniz için.
+Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
 
-Raporlar bir imza satırıyla biter: "AI Tag Debugger ile oluşturuldu · analitikisler.com". Buradaki alan adı düz bir bağlantıdır (resim yok, takip yok, referrer gönderilmez, böylece rapor adresleri sızmaz). `--no-branding` bu satırı logoyla birlikte kaldırır.
+Çıktı:
 
-Türkçe rapor için `--lang tr` kullanın. Bulgu metinleri, başlıklar, modelin açıklamaları ve çözümleri Türkçe yazılır; ajan da adımlarını Türkçe anlatır.
+- `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.
+  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, kontrol edilen platformlar ve `--against` ile [Plan ve site](#plan-ve-site) kapsamı.
+  - **Bulgular**: önem düzeyine göre gruplu ve filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları ve olayın yaşandığı adımlar bulunur.
+  - **Yolculuklar**: her seferinde bir yolculuk; solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın üç sekmesi vardır:
+    - **Event'ler**: her takip isteği, parametreleri, çerez onayı durumu, arkasındaki dataLayer gönderimi ve isteği ve bir bulgu buraya işaret ediyorsa bir not.
+    - **dataLayer**: adımdaki her gönderim.
+    - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede bir `?` ipucuyla bir parametre tablosuna çözülmüş. Toplu bir GA4 isteği, içindeki her event'i gösterir.
+  - **Kapsam ve plan**: planlanan her event'in her yolculukta gönderilip gönderilmediği ve kontrol edilen ya da dışarıda bırakılan platformlar, istek sayılarıyla.
 
-## Yapay zekâ asistanınızdan kullanın (MCP)
+  Event'ler ve istekler kaynağa göre filtrelenebilir. GA4 ürün dizgileri (`pr1`…) ve dataLayer `ecommerce.items` ürün kartları olarak gösterilir; özel ürün parametreleri kendi grubunda yer alır. Raporda betik yoktur: sekmeler ve filtreler düz HTML ve CSS'tir (Chrome 105, Safari 15.4 ya da Firefox 121 ve sonrası gerekir) ve yazdırırken her sekme görünür. Logolar gömülüdür, bu yüzden internetten hiçbir şey yüklenmez. `--no-branding`, Analitik İşler logosunu ve kredi satırını çıkarır.
+- `timeline.csv`: aynı zaman akışı, her isteğe, dataLayer gönderimine ve ağ çağrısına bir satır olarak; Excel ya da Google Sheets için hazır.
+- `report.md`: raporun Markdown hali, örneğin bir çekme isteği yorumu için.
+- `capture.json`: yakalanan her şey, kendi analiziniz için.
+- `plan-check.json`: `--against` ile, planlanan her event için kovasıyla birlikte bir kayıt.
+- `plan.html` (planın klasöründe): planın event'lerini, parametrelerini ve kullanıcı özelliklerini gösteren okunabilir bir sayfa.
 
-`ai-tag-debugger mcp`, bir [Model Context Protocol](https://modelcontextprotocol.io) sunucusu başlatır. Böylece testi asistanınızın modeli kendisi yürütür: "staging.magazam.com'da ödeme adımlarının ölçümlemesini kontrol et" dersiniz, tarayıcıyı açar, adımları tıklar ve bulguları sohbette açıklar. API anahtarı gerekmez, çünkü düşünme işini uygulamanın kendi modeli yapar.
+Raporlar bir kredi satırıyla biter: "Generated by AI Tag Debugger · analitikisler.com"; alan adı düz bir bağlantıdır (görsel yok, takip yok ve yönlendiren bilgisi yok; böylece rapor adresleri sızdırılmaz). `--no-branding`, bunu logosuyla birlikte kaldırır.
+
+Türkçe rapor için `--lang tr` kullanın. Bulgu metinleri, başlıklar, modelin açıklamaları ve düzeltmeleri Türkçe yazılır; ajan adımlarını da Türkçe anlatır.
+
+## Yapay zekâ sohbet uygulamanızdan kullanın (MCP)
+
+`aitd mcp`, bir [Model Context Protocol](https://modelcontextprotocol.io) sunucusu başlatır. Sohbet uygulamanızın modeli denetimi kendisi yürütür: "staging.myshop.com sitesinin ödeme takibini kontrol et" dersiniz, o da tarayıcıyı açar, tıklar ve bulguları sohbette açıklar. Yapay zekâ düşünmeyi uygulamanın kendi modeli yaptığı için API anahtarı gerekmez.
 
 Sunucunun sunduğu araçlar:
 
 | Araç | Ne yapar |
 |---|---|
-| `start_audit` | Bir adreste yeni bir tarayıcı açar ve tüm ölçümleme isteklerini kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir senaryo (`purchase`, `sign_up`, …), neyin kontrol edileceğini seçmek için `providers` verin. Asistan önce size hangi platformların kontrol edileceğini sorar. |
-| `browser_action` | Tek bir click, fill, select, goto, scroll ya da wait. Sayfayı ve o adımda gönderilen ölçümleme isteklerini döndürür. |
-| `get_page` | Mevcut sayfayı gösterir. |
-| `finish_audit` | Her şeyi ölçümleme planınıza (JSON) ya da hazır senaryonun event'lerine göre, isterseniz sadece adını verdiğiniz `events` için kontrol eder ve zaman akışıyla birlikte tam HTML raporu yazar. |
-| `run_audit` | Bir ayar dosyasını baştan sona çalıştırır (sadece yerelde). |
+| `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. |
+| `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
+| `get_page` | Geçerli sayfayı gösterir. |
+| `finish_audit` | Her şeyi ölçümleme planınıza (JSON) ya da `against` olarak verilen kayıtlı bir plana (`latest`, `first`, bir plan kimliği ya da yerel bir sunucuda bir yol) ya da hazır yolculuğun event'lerine karşı kontrol eder; isterseniz yalnızca adını verdiğiniz `events` için, ve zaman akışıyla birlikte tam HTML raporunu yazar. Site denetimden alınır. |
+| `run_audit` | Bir ayar dosyasını baştan sona çalıştırır. `against` ile çalıştırmayı kayıtlı bir plana karşı kontrol eder; ayar dosyasında yolculuk yoksa, plandan türetilen yolculukları gezer. Dosya yolları yalnızca yerelde çalışır. |
 
-Tarayıcı, sunucunun çalıştığı bilgisayarda çalışır. Bu yüzden staging ve `localhost` sitelerinize erişebilir. Ölçümleme istekleri her zamanki gibi yerelde yanıtlanır.
+`against`, CLI'deki `--against` ile aynı değerleri alır. HTTP üzerinden yalnızca `latest`, `first` ya da bir plan kimliği kabul edilir, asla bir yol değil. Planlar, `aitd plan --site <url>` ile kaydedilmiş olanlardır.
+
+Tarayıcı, sunucunun çalıştığı bilgisayarda çalışır; bu yüzden staging ve `localhost` sitelerinize erişebilir. Takip istekleri her zamanki gibi yerelde yanıtlanır.
 
 ### Yerel sunucu başlatan uygulamalar: Claude Desktop, Gemini CLI, Cursor, VS Code, Claude Code
 
-Sunucuyu uygulamanın MCP ayarlarına ekleyin. Claude Desktop'ta bu Settings → Developer → Edit Config'tir (`claude_desktop_config.json`):
+Sunucuyu uygulamanın MCP yapılandırmasına ekleyin. Claude Desktop için bu, Settings → Developer → Edit Config (`claude_desktop_config.json`) yoludur:
 
 ```json
 {
@@ -349,70 +436,70 @@ Sunucuyu uygulamanın MCP ayarlarına ekleyin. Claude Desktop'ta bu Settings →
 }
 ```
 
-Tarayıcı (Chromium), ilk denetimi çalıştırdığınızda kendiliğinden iner (bir kez, yaklaşık bir dakika). Önceden kurmak için: `npx -y playwright@1.56.1 install chromium`.
+Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini indirir; bu yaklaşık bir dakika sürer ve yalnızca bir kez olur. Önceden indirmek için: `npx -y playwright@1.56.1 install chromium`.
 
-Tek tıkla ve tek satırla kurulum:
+Tek tıkla ya da tek satırla kurulum:
 
 - **Claude Code:** `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`
 - **Cursor:** [Cursor'a ekle](https://cursor.com/en/install-mcp?name=ai-tag-debugger&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhbmFsaXRpa2lzbGVyL2FpLXRhZy1kZWJ1Z2dlciIsIm1jcCJdfQ==)
-- **VS Code:** [VS Code'a kur](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D) veya `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`
-- **Claude Desktop, Gemini CLI ve diğerleri:** yukarıdaki JSON bloğu. Gemini CLI, `~/.gemini/settings.json` içinde aynı `mcpServers` bloğunu kullanır.
+- **VS Code:** [VS Code'a yükle](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D), ya da `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`
+- **Claude Desktop, Gemini CLI ve diğerleri:** yukarıdaki JSON bloğu. Gemini CLI aynı `mcpServers` bloğunu `~/.gemini/settings.json` dosyasında kullanır.
 
-Uygulamayı yeniden başlatın, ai-tag-debugger araçları görünür. Uygulama `npx`'i bulamazsa tam yolunu kullanın (`which npx`; örneğin Homebrew kurulu bir Mac'te `/opt/homebrew/bin/npx`). Raporlar `~/ai-tag-debugger-reports` klasörüne yazılır.
+Uygulamayı yeniden başlatın; ai-tag-debugger araçları görünür. Uygulama `npx`'i bulamıyorsa tam yolunu kullanın (`which npx`; örneğin Homebrew'lu bir Mac'te `/opt/homebrew/bin/npx`). Raporlar `~/ai-tag-debugger-reports` klasörüne yazılır.
 
-Kaynak koddan mı çalıştırıyorsunuz? `"command": "node"` ve `"args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]` kullanın.
+Bunun yerine bir klondan mı çalıştırıyorsunuz? `"command": "node"` ve `"args": ["/path/to/ai-tag-debugger/src/cli.js", "mcp"]` kullanın.
 
 ### Bir adrese bağlanan uygulamalar: ChatGPT, Gemini
 
-Bu uygulamalar MCP sunucularına HTTPS üzerinden bağlanır (ChatGPT'de, planınıza bağlı olarak developer mode connector'ları ile). Sunucuyu HTTP modunda başlatın ve bir tünelle internete açın:
+Bu uygulamalar MCP sunucularına HTTPS üzerinden bağlanır (ChatGPT'de geliştirici modu bağlayıcıları üzerinden, planınıza bağlı olarak). Sunucuyu HTTP modunda başlatın ve bir tünelle dışarı açın:
 
 ```bash
-cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787; note the https address it prints
-npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<your-tunnel-address>
+cloudflared tunnel --url http://localhost:8787     # ya da: ngrok http 8787; yazdığı https adresini not edin
+npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<tünel-adresiniz>
 ```
 
-Sunucu, rastgele gizli bir yol içeren bir adres yazdırır, örneğin `https://<your-tunnel-address>/mcp/<secret>`. Bu adresi uygulamaya connector olarak ekleyin. Adrese sahip olan herkes bilgisayarınızdaki tarayıcıyı kullanabilir; adresi kimseyle paylaşmayın ve işiniz bitince sunucuyu kapatın. Kendi belirlediğiniz bir gizli anahtar (`--token`) en az 16 karakter olmalıdır.
+Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol içeren bir URL yazdırır. Bu URL'yi uygulamada bir bağlayıcı olarak ekleyin. URL'yi bilen herkes bilgisayarınızdaki tarayıcıyı kullanabilir; bu yüzden gizli tutun ve işiniz bitince sunucuyu durdurun. Kendi gizli değeriniz (`--token`) en az 16 karakter olmalıdır.
 
-HTTP modunda sunucu, yereldekinden daha kısıtlıdır:
+HTTP modunda sunucu yerelde olduğundan daha kısıtlıdır:
 
-- Diskinizden ölçümleme planı ya da ayar dosyası okumaz (planı sohbette JSON metni olarak verin) ve `run_audit` sunulmaz. Sadece kendi yazdığı raporları sunar.
-- Tarayıcı sadece `http` ve `https` sayfalarını açar; `localhost` ve özel ağ adreslerini (`192.168.x.x` ya da `169.254.169.254` gibi) reddeder, böylece adres ağınızın içini görmek için kullanılamaz. WebSocket'ler dahil tüm tarayıcı trafiği küçük bir yerleşik proxy'den geçer. Bu proxy her adresi bir kez çözümler ve sadece kontrol ettiği IP'ye bağlanır, böylece test sırasında değişen bir DNS yanıtı bu kontrolü aşamaz. Yerel bir staging sitesini yine de bu şekilde test etmek için sunucuyu `--allow-private-network` ile başlatın.
-- 15 dakika açık kalan testler kapatılır ve istek gövdeleri 1 MB ile sınırlıdır.
+- Ölçümleme planlarını ya da ayar dosyalarını diskinizden okumaz (planı sohbette JSON metni olarak verin ya da `against: latest`, `first` ya da kimliğiyle kayıtlı bir planı adlandırın) ve `run_audit` sunulmaz. Yalnızca kendi yazdığı raporları sunar.
+- Tarayıcı yalnızca `http` ve `https` sayfalarını açar ve `localhost` ile özel ağ adreslerini (`192.168.x.x` ya da `169.254.169.254` gibi) reddeder; böylece URL, ağınızı incelemek için kullanılamaz. WebSocket'ler dahil tüm tarayıcı trafiği, her ana makineyi bir kez çözüp yalnızca kontrol ettiği adrese bağlanan küçük bir yerleşik proxy üzerinden geçer; denetim sırasında değişen bir DNS yanıtı kontrolü atlatamaz. Yerel bir staging sitesini bu şekilde yine de denetlemek için sunucuyu `--allow-private-network` ile başlatın.
+- 15 dakika açık kalan denetimler kapatılır ve istek gövdeleri 1 MB ile sınırlıdır.
 
-Tünele gerek kalmayan, hazır bir adresle barındırılan sunucu, [Analitik İşler](https://analitikisler.com/tr/) Cloud sürümünün bir parçasıdır.
+Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://analitikisler.com) Cloud sürümünün bir parçasıdır.
 
 ## Güvenlik
 
-- Ajana bariz test verileri kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir senaryo gerçek bir ödeme ya da hesap gerektiriyorsa, durur ve bunu raporlar.
-- [Nasıl çalışır](#nasıl-çalışır) bölümünde listelenen platformlara giden ölçümleme istekleri varsayılan olarak yerelde yanıtlanır, böylece bu analitik ve reklam hesaplarına test dönüşümleri gitmez.
-- Tarayıcı test edilen sitede ve alt alan adlarında, ayrıca `allowed_hosts` içindeki adreslerde kalır. Sadece `http` ve `https` sayfalarını açar.
-- Modele, sayfa içeriğinin talimat değil veri olduğu söylenir. Bir prompt kuralı, modelin hiçbir zaman yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini kısıtlar.
-- Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgiler olmadan çalışır.
-- **Reklam eşleştirmesi için gönderilen kullanıcı verileri**, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce **gizlenir**: GA4 ve Google Ads enhanced conversions (`em`, `ph`, `uid`, …), Meta advanced matching (`ud[*]`, `udff[*]`), TikTok `context.user` içindeki e-postalar, telefon numaraları, adlar, adresler ve kullanıcı kimlikleri ile sitenin enhanced conversions için dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanın adı ne olursa olsun gizlenir. Denetlenen sitenin kendi adresi bir `mailto:` bağlantısında ya da bir bağlantı alanında (`link_url`, `link_text`, `gtm.elementUrl`, …) geçiyorsa, örneğin bir GTM tıklama olayındaki iletişim bağlantısında, ziyaretçi verisi olmadığı için bu kuralın dışında kalır. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işarete dönüşür; hash'lenmemiş bir değer kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`) hata ayıklama için istekleri gönderildiği haliyle saklar.
-- Saklanan istek gövdeleri istek başına 32 KB ve senaryo başına 2 MB ile sınırlıdır. Bu sınırın üstünde rapor, gövdenin saklanmadığını belirtir.
-- Sadece size ait ya da test etme yetkiniz olan sitelerde çalıştırın.
-- HTTP sunucusunu başkaları için mi barındırıyorsunuz? Ek bir güvenlik katmanı olarak özel ağ ve bulut metadata adres aralıklarını ağ seviyesinde de engelleyin (bir egress firewall ya da izole bir ağ ile).
+- Ajana kolay test verisi kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir yolculuk gerçek bir ödeme ya da hesap gerektiriyorsa durur ve bunu bildirir.
+- [Nasıl çalışır](#nasıl-çalışır) bölümünde listelenen platformlara giden takip istekleri varsayılan olarak yerelde yanıtlanır; bu yüzden o analitik ve reklam hesaplarına test dönüşümleri ulaşmaz.
+- Tarayıcı, denetlenen sitede ve alt alan adlarında kalır; ayrıca varsa `allowed_hosts` içinde. Yalnızca `http` ve `https` sayfalarını açar.
+- Modele, sayfa içeriğinin veri olduğu ve talimat olmadığı söylenir. Bir istem kuralı, bir modelin asla yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini sınırlar.
+- Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgileriniz olmadan çalışır.
+- **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
+- Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
+- Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.
+- HTTP sunucusunu başkaları için barındırıyor musunuz? Ek bir savunma katmanı olarak özel ve bulut meta veri adres aralıklarını ağ düzeyinde de engelleyin (bir çıkış güvenlik duvarı ya da yalıtılmış bir ağ).
 
 ## Yol haritası
 
-- Consent Check: çerez onayı banner'larının ve Consent Mode v2'nin GDPR/KVKK'ya göre daha derin denetimi.
-- Ölçümleme planı: bir adresten plan ve dataLayer şartnamesi taslağı hazırlama.
-- [analitikisler.com](https://analitikisler.com/tr/) üzerinde zamanlanmış testler, deploy webhook'ları, barındırılan MCP sunucusu ve ajanslar için çoklu site panelleri sunan barındırılan sürüm.
+- Consent Check: çerez onay pencerelerinin ve Consent Mode v2'nin KVKK/GDPR'a karşı daha derin denetimleri.
+- Measurement Plan: bir URL'den ölçümleme planı ve dataLayer şartnamesi taslağı çıkarma.
+- [analitikisler.com](https://analitikisler.com) üzerinde; zamanlanmış çalıştırmalar, dağıtım webhook'ları, barındırılan bir MCP sunucusu ve ajanslar için çok siteli panolar içeren barındırılan sürüm.
 
 ## Geliştirme
 
 ```bash
-npm run setup   # checks Node, installs the dependencies and Chromium, says whether an AI provider key is set
-npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
+npm run setup   # Node'u denetler, bağımlılıkları ve Chromium'u kurar, bir AI sağlayıcı anahtarının ayarlı olup olmadığını söyler
+npm test        # ayrıştırıcılar, kontroller, her AI sağlayıcısı ve MCP sunucusu; demo mağazaya karşı uçtan uca
 ```
 
-Depoda bir dev container (`.devcontainer/devcontainer.json`) da var. Depoyu VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açtığınızda `npm run setup` sizin için çalışır ve Chromium'un sistem kütüphanelerini de kurar. Orada bir yapay zekâ modeli kullanmak için anahtarınızı Codespaces secret olarak ekleyin ya da container'ın terminalinde export edin.
+Depoda ayrıca bir geliştirme konteyneri (`.devcontainer/devcontainer.json`) vardır. VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açın; Chromium'un sistem kütüphaneleri dahil `npm run setup`'ı sizin yerinize çalıştırır. Oradaki bir AI modelini kullanmak için anahtarınızı bir Codespaces sırrı olarak ekleyin ya da konteynerin terminalinde dışa aktarın.
 
-Uçtan uca testler sahte model istemcileri kullanır, bu yüzden API anahtarı olmadan çalışır.
+Uçtan uca testler sahte model istemcileri kullanır, bu yüzden bir API anahtarı olmadan çalışır.
 
 ## Barındırılan sürüm
 
-Barındırılan testler, zamanlama ve ajans panelleri için [analitikisler.com](https://analitikisler.com/tr/) adresine bakın.
+Barındırılan çalıştırmalar, zamanlama ve ajans panoları için [analitikisler.com](https://analitikisler.com) adresine bakın.
 
 ## Lisans
 
