@@ -439,6 +439,8 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 
 Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
 
+**Zamanlanmış çalıştırmalar.** Her dağıtımdan sonra değil de bir zamanlayıcıyla denetlemek için [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) dosyasını kullanın (varsayılan olarak haftalık; cron satırını değiştirebilirsiniz). Geçmişi çalıştırmalar arasında bir önbellekte saklar, böylece "Son çalıştırmadan beri değişenler" yeni bir runner'da da çalışır. Kendi sunucunuzda aynısı için [`examples/cron/`](examples/cron) içinde bir betik ve bir crontab satırı vardır.
+
 Çıktı:
 
 - `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.

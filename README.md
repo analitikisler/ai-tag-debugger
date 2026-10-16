@@ -439,6 +439,8 @@ Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a pl
 
 The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
 
+**Scheduled runs.** To audit on a timer instead of after each deploy, use [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) (weekly by default, with a cron line you can change). It saves the history between runs in a cache, so "Changed since last run" keeps working on a fresh runner. On your own server, [`examples/cron/`](examples/cron) has a script and a crontab line that do the same.
+
 Output:
 
 - `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
