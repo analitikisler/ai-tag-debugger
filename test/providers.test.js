@@ -3,7 +3,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { runJourney } from "../src/agent.js";
-import { createProvider, resolveProviderName, gatewayOptions } from "../src/providers.js";
+import { createProvider, resolveProviderName, gatewayOptions, aiStatus } from "../src/providers.js";
 
 const PORT = 4398;
 let server;
@@ -162,4 +162,22 @@ test("a provider built with AI_GATEWAY_URL says it goes through the gateway", as
   const env = { ANTHROPIC_API_KEY: "k", AI_GATEWAY_URL: "https://gateway.ai.cloudflare.com/v1/acc/default" };
   assert.equal((await createProvider({}, env)).via, "Cloudflare AI Gateway");
   assert.equal((await createProvider({}, { ANTHROPIC_API_KEY: "k" })).via, undefined);
+});
+
+test("AI_GATEWAY_API_KEY picks Vercel AI Gateway with a provider/model id", async () => {
+  const env = { AI_GATEWAY_API_KEY: "v", ANTHROPIC_API_KEY: "k" };
+  assert.equal(resolveProviderName(undefined, env), "vercel");
+  const provider = await createProvider({}, env);
+  assert.equal(provider.name, "vercel");
+  assert.equal(provider.model, "anthropic/claude-opus-5.5");
+});
+
+test("aiStatus says which AI a run would use and which other keys are set", () => {
+  assert.match(aiStatus({}, {}), /^AI: no key set/);
+  assert.equal(aiStatus({}, { ANTHROPIC_API_KEY: "k" }), "AI: anthropic (claude-opus-5-5)");
+  assert.equal(
+    aiStatus({}, { ANTHROPIC_API_KEY: "k", GEMINI_API_KEY: "g", AI_GATEWAY_URL: "https://gateway.ai.cloudflare.com/v1/a/default" }),
+    "AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)",
+  );
+  assert.equal(aiStatus({ name: "gemini" }, { ANTHROPIC_API_KEY: "k", GEMINI_API_KEY: "g" }), "AI: gemini (gemini-pro-latest) · also set: anthropic (pick with --provider)");
 });

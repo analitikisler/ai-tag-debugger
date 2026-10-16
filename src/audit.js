@@ -9,7 +9,7 @@ import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
-import { createProvider } from "./providers.js";
+import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
 import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
@@ -102,7 +102,7 @@ export async function runAudit(opts) {
   }
 
   const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url }) : null;
-  if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}`);
+  if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}${alsoSet(provider.key)}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   const runs = [];

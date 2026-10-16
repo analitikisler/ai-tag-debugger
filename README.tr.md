@@ -99,6 +99,17 @@ ai-tag-debugger run --site https://yourshop.com --journey add_to_cart \
 
 Model kimliğini sağlayıcınızın dokümantasyonundan alın. Bayrakların yerine `OPENAI_COMPATIBLE_BASE_URL` ve `OPENAI_COMPATIBLE_MODEL` değişkenlerini ya da ayar dosyasında `"provider"`, `"base_url"` ve `"model"` alanlarını da kullanabilirsiniz. API katı JSON şemalarını döndüremezse açıklamalar düz JSON moduna geçer.
 
+### Vercel AI Gateway
+
+Tek anahtarla birçok model. Vercel panelinizden `AI_GATEWAY_API_KEY` alın ve modeli `<sağlayıcı>/<model>` olarak seçin:
+
+```bash
+export AI_GATEWAY_API_KEY=...
+aitd run --site https://yourshop.com --journey purchase --model google/gemini-flash-latest
+```
+
+`--model` verilmezse `anthropic/claude-opus-5.5` kullanılır. Kullanım ve maliyet Vercel'in AI Gateway panelinde görünür ve Vercel tarafından faturalandırılır. Hangi yapay zekânın kullanılacağını görmek için `aitd` çalıştırın: son satır örneğin `AI: vercel (anthropic/claude-opus-5.5) · also set: anthropic (pick with --provider)` der.
+
 ### Cloudflare AI Gateway
 
 Her AI çağrısının kayıtlarını, maliyetini ve limitlerini görmek için çağrıları [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) üzerinden gönderin. Sağlayıcı anahtarınız aynı kalır:

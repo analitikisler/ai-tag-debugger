@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Kept in step with hasApiKey() in src/providers.js. This file can't import it, since it runs
 // before the dependencies are installed.
-export const KEY_VARS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"];
+export const KEY_VARS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "AI_GATEWAY_API_KEY", "OPENAI_COMPATIBLE_BASE_URL"];
 
 /** The lowest Node major version allowed by an engines range like ">=20". */
 export function minNodeMajor(range) {
