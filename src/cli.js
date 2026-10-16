@@ -28,6 +28,12 @@ Usage:
                                                   Prints the page types it found and those the site doesn't have.
                                                   Saved in aitd/<domain>/plans/<id>/ (measurement-plan.json and a readable plan.html).
   ai-tag-debugger plan list --site <url>          List the site's plan IDs, oldest first.
+  ai-tag-debugger plan export <plan> --site <url> [--format csv]
+                                                  Write a plan as plan.xlsx (or events.csv and user_properties.csv)
+                                                  in its folder, to edit it in a spreadsheet. <plan>: latest, first,
+                                                  a plan ID, or a path to a plan file or folder.
+  ai-tag-debugger plan import <file> --site <url>
+                                                  Save a .xlsx or .csv plan spreadsheet as a new plan.
   ai-tag-debugger mcp [--http] [--port <n>]       Start the MCP server for Claude, ChatGPT, Gemini and other chat apps.
 
 Run options:
@@ -78,6 +84,12 @@ Plan options:
   --site <url>         Explore this site with the AI (no tracking needed) and propose a plan. Also takes
                        --provider, --model, --base-url, --max-steps (default 25), --allow-host and --headed.
   --data-dir <dir>     Where plans are kept (default: ./aitd). Each plan gets a new <dir>/<domain>/plans/<id>/ folder.
+  --format <type>      For plan export: xlsx (default) or csv.
+
+Plan spreadsheet: an "events" tab with one row per event parameter and the columns event, platform,
+parameter, required (yes/no), example, trigger and description (an event with no parameters is one row
+with an empty parameter), and a "user_properties" tab with name, description and example. As CSV, these
+are events.csv and user_properties.csv side by side. Import never changes a plan; it saves a new one.
 
 MCP options:
   --http               Serve over Streamable HTTP instead of stdio (for apps that connect to a URL).
@@ -133,6 +145,7 @@ async function main() {
       "data-dir": { type: "string" },
       against: { type: "string" },
       from: { type: "string" },
+      format: { type: "string" },
       force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
@@ -177,6 +190,10 @@ async function main() {
     const ids = await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site);
     if (!ids.length) throw new Error(`No plan yet for ${domainOf(values.site)}. Draft one with: aitd plan --site ${values.site}`);
     for (const id of ids) console.log(id);
+    return;
+  }
+  if (command === "plan" && !values.help && ["import", "export"].includes(positionals[1])) {
+    await planSheet(positionals[1], positionals[2], values);
     return;
   }
   if (command === "plan" && !values.help) {
@@ -289,6 +306,34 @@ async function main() {
       process.exitCode = 1;
     }
   }
+}
+
+async function planSheet(action, arg, values) {
+  const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
+  const shown = (p) => {
+    const rel = path.relative(process.cwd(), p);
+    return rel.startsWith("..") ? p : rel;
+  };
+  const { readPlanSheet, writePlanSheet } = await import("./sheet.js");
+  if (action === "import") {
+    if (!arg) throw new Error("plan import needs a file: aitd plan import plan.xlsx --site https://www.example.com");
+    if (!values.site) throw new Error(`plan import needs --site <url>: aitd plan import ${arg} --site https://www.example.com`);
+    const { domainOf } = await import("./workspace.js");
+    domainOf(values.site);
+    const { plan, warnings } = await readPlanSheet(arg, { site: values.site });
+    for (const w of warnings) console.log(`Warning: ${w}`);
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site });
+    console.log(`✓ Imported plan ${id}: ${plan.events.length} events and ${plan.user_properties.length} user properties in ${shown(dir)}`);
+    return;
+  }
+  if (!arg) throw new Error("plan export needs a plan: aitd plan export latest --site https://www.example.com");
+  const format = (values.format ?? "xlsx").toLowerCase();
+  if (!["xlsx", "csv"].includes(format)) throw new Error(`--format must be xlsx or csv (found "${values.format}").`);
+  const { resolvePlan } = await import("./workspace.js");
+  const { file } = await resolvePlan(arg, { dataDir, site: values.site });
+  const plan = JSON.parse(readFileSync(file, "utf8"));
+  const written = await writePlanSheet(plan, path.dirname(file), { format });
+  console.log(`✓ Exported the plan to ${written.map(shown).join(" and ")}. Edit it, then save it as a new plan with: aitd plan import ${shown(written[0])} --site ${values.site ?? plan.site ?? "<url>"}`);
 }
 
 main().catch((err) => {
