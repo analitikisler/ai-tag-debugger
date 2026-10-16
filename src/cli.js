@@ -51,6 +51,7 @@ async function main(args = process.argv.slice(2)) {
       "data-dir": { type: "string" },
       against: { type: "string" },
       from: { type: "string" },
+      topic: { type: "string" },
       format: { type: "string" },
       force: { type: "boolean", default: false },
       yes: { type: "boolean", short: "y", default: false },
@@ -113,6 +114,7 @@ async function main(args = process.argv.slice(2)) {
     if (values.out) throw new Error("plan --out was removed. Plans are saved in aitd/<domain>/plans/<id>/; use --data-dir <dir> to keep them elsewhere.");
     if (values.force) throw new Error("--force was removed. Each plan is saved in a new folder, so nothing is replaced.");
     if (!values.site) throw new Error("plan needs --site <url>: aitd plan --site https://www.example.com");
+    if (values.topic !== undefined) (await import("./discover.js")).checkTopic(values.topic);
     const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
     const { domainOf } = await import("./workspace.js");
     domainOf(values.site); // Checked before the browser starts.
@@ -122,7 +124,7 @@ async function main(args = process.argv.slice(2)) {
     const { discoverPlan } = await import("./discover.js");
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
-    const { plan } = await discoverPlan({ site: values.site, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
+    const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
     const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);

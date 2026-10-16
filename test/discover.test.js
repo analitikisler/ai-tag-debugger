@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { discoverPlan, pageTypeCoverage, pagesSeen, toPlan } from "../src/discover.js";
+import { TOPICS, checkTopic, discoverPlan, pageTypeCoverage, pagesSeen, toPlan } from "../src/discover.js";
 
 const PORT = 4411;
 let server;
@@ -75,4 +75,28 @@ test("pageTypeCoverage lists found and absent page types, so a two-page site is 
   const { found, absent } = pageTypeCoverage([{ type: "Home page", url: "/" }, { type: "product", url: "/r" }]);
   assert.deepEqual(found, ["home", "detail"]);
   assert.ok(absent.includes("cart") && absent.includes("checkout") && !absent.includes("home"));
+});
+
+test("plan --topic limits exploring, the prompt and the written plan to that kind of event", async () => {
+  const provider = fakeProvider([{ name: "finish", input: { success: true, note: "Done." } }]);
+  const { plan } = await discoverPlan({ site: `http://localhost:${PORT}/`, topic: "custom-events", provider, maxSteps: 3 });
+  assert.match(provider.seen.firstMessage, /covers only custom-events/);
+  assert.deepEqual(plan.events.map((e) => e.name), ["size_guide_open"]);
+  assert.deepEqual(plan.user_properties, answer.user_properties, "the plan format is unchanged");
+});
+
+test("each topic keeps only its own events", () => {
+  const ev = (name, custom = false) => ({ name, custom });
+  const all = [ev("view_item"), ev("purchase"), ev("sign_up"), ev("form_submit", true), ev("consent_update", true), ev("size_guide_open", true)];
+  const kept = (t) => all.filter(TOPICS[t].keep).map((e) => e.name);
+  assert.deepEqual(kept("ecommerce"), ["view_item", "purchase"]);
+  assert.deepEqual(kept("forms"), ["sign_up", "form_submit"]);
+  assert.deepEqual(kept("consent"), ["consent_update"]);
+  assert.deepEqual(kept("custom-events"), ["form_submit", "consent_update", "size_guide_open"]);
+});
+
+test("checkTopic accepts the four topics and no topic, and names them for anything else", () => {
+  assert.equal(checkTopic(undefined), undefined);
+  for (const t of ["custom-events", "ecommerce", "forms", "consent"]) assert.equal(checkTopic(t), t);
+  assert.throws(() => checkTopic("toString"), /Unknown --topic/);
 });
