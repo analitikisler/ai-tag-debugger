@@ -4,6 +4,7 @@
 import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 
+const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
 const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
 
@@ -136,6 +137,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Platforms are compared in lower case ("GA4" in a plan is ga4). Planned events for
   // providers the user chose not to check are left out, and listed in one info line.
   plan = { ...plan, events: plan.events.map((e) => ({ ...e, platform: String(e.platform ?? "").toLowerCase() })) };
+  const hasPlan = plan.events.length > 0;
   if (run.providers) {
     const skipped = plan.events.filter((e) => !run.providers.includes(e.platform) && expectedIn(e, run.journeyId));
     plan = { ...plan, events: plan.events.filter((e) => run.providers.includes(e.platform)) };
@@ -279,7 +281,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       const own = run.hits.filter((h) => h.platform === platform);
       return { platform, server: names(own.filter((h) => h.delivery === "server")), browser: names(own.filter((h) => h.delivery !== "server")) };
     }).filter((p) => p.server.length);
-    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser) });
+    // Only name the platforms whose server-side copies this run would have checked.
+    const unseenServer = ["meta", "tiktok"].filter((p) => !run.providers || run.providers.includes(p)).map(platformName);
+    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) });
   }
   const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
   if (serverVendors.length || serverHits.length) {
@@ -408,9 +412,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     findings.push({ ...base, severity: "warning", check: "pii_datalayer", step: stepLabel(plainPush.step), detail: d.piiDataLayer(plainPush.userData.plain) });
   }
 
-  // Events that are not in the plan.
+  // Events that are not in the plan. Without a plan every event would be listed, which says nothing.
   const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h)).map((h) => key(h.platform, h.name)))];
-  if (unplanned.length) {
+  if (hasPlan && unplanned.length) {
     findings.push({ ...base, severity: "info", check: "unplanned_events", detail: d.unplanned(unplanned) });
   }
 

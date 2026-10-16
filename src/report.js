@@ -521,7 +521,7 @@ function evidenceHtml(evidence) {
   return `<pre>${escapeHtml(evidence)}</pre>`;
 }
 
-function findingCard(m, runs, f, open) {
+function findingCard(m, runs, f, open, aiRan) {
   const e = f.explanation;
   const steps = fixSteps(e);
   const journeysN = new Set(f.where.map((w) => `${w.journey}|${w.viewport}`)).size;
@@ -543,14 +543,14 @@ function findingCard(m, runs, f, open) {
 <span class="fhead"><span class="ftitle">${detailHtml(f.detail)}</span><span class="fmeta">${f.platform ? `<span class="ptag p-${safeKey(f.platform)}">${escapeHtml(platformLabel(f.platform))}</span>` : ""}<span>${escapeHtml(m.ui.spread(journeysN, stepsN))}</span></span></span>
 ${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
-<div class="fcols"><div class="fcol">${sec("cause", m.ui.likelyCause)}${e?.likely_cause ? `<p>${fmt(e.likely_cause)}</p>` : `<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
+<div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
 <div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div></div></div></div></details></li>`;
 }
 
 const FINDING_SEVERITIES = ["broken", "risk", "warning", "info"];
 const SEV_COLOR = { broken: "var(--danger-dot)", risk: "var(--risk)", warning: "var(--warn-dot)", info: "var(--accent)" };
 
-function findingsTab(m, runs, rows) {
+function findingsTab(m, runs, rows, aiRan) {
   const problems = rows.filter((f) => f.severity !== "ok");
   if (!problems.length) return `<p class="empty">${m.ui.noProblems}</p>`;
   const n = Object.fromEntries(FINDING_SEVERITIES.map((s) => [s, problems.filter((f) => f.severity === s).length]));
@@ -563,7 +563,7 @@ function findingsTab(m, runs, rows) {
   return `<div class="filter-host">${radios}
 <div class="sevbar" aria-hidden="true">${bar}</div><div class="sevlegend">${legend}</div>
 <div class="toolbar"><div class="sevfilter" role="group" aria-label="${m.ui.filterBy}">${labels}</div><span class="muted xs">${m.ui.findingHint}</span></div>
-<ul class="flist">${sorted.map((f, i) => findingCard(m, runs, f, i === 0 && f.severity !== "info")).join("")}</ul></div>`;
+<ul class="flist">${sorted.map((f, i) => findingCard(m, runs, f, i === 0 && f.severity !== "info", aiRan)).join("")}</ul></div>`;
 }
 
 function summaryCard(m, explained, problems) {
@@ -738,7 +738,7 @@ export const CSS = `
 --bg:#141927;--page:#0A0E1A;--fg:#F0F4FF;--muted:#8892AA;--muted-bg:#182035;--border:#1E2640;--input:#26304D;
 --accent-fg:#7EAAF9;--accent-bg:#1A2F5C;--danger:#F28B82;--danger-bg:#3A1F1D;--warn:#FACC15;--warn-bg:#332B0A;--warn-dot:#FACC15;--risk:#FB923C;--risk-bg:#3A2312;--danger-dot:#F87171;--ok:#81C995;--ok-bg:#16301F;--shadow-sm:none}}
 *{box-sizing:border-box}
-html{scroll-padding-top:64px}
+html{scroll-padding-top:64px;scrollbar-gutter:stable;overflow-y:scroll}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--page);color:var(--fg);font:400 14px/1.6 var(--font-sans);-webkit-font-smoothing:antialiased}
 a{color:var(--accent-fg);text-decoration:none}
 h1,h2,h3,h4,h5,h6{margin:0;font-weight:500;line-height:1.3}
@@ -993,7 +993,7 @@ ${navCss(runs)}</style></head><body>
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
 <main class="wrap">
 <section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs)}</section>
-<section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows)}</section>
+<section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows, Boolean(explained))}</section>
 <section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
 <section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>
 </main>
