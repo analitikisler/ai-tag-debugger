@@ -7,6 +7,7 @@ import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
 import { buildInventory } from "./inventory.js";
 import { LOGOS } from "./brand.js";
+import { brandCss } from "./whitelabel.js";
 import { readFileSync } from "node:fs";
 
 export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -154,7 +155,7 @@ const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
 const routeList = (ch) => (ch?.routes ?? []).map((r) => `${r.journeyId} (${r.viewport})`).join(", ");
 
-export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
+export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null, brand = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -206,7 +207,9 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     }
     lines.push("");
   }
-  if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
+  // A report with its own name or logo carries no Analitik İşler credit; the AI Tag Debugger one stays.
+  if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
+  else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
   return lines.join("\n");
 }
 
@@ -889,6 +892,7 @@ code{font-size:12px;background:var(--muted-bg);padding:1px 5px;border-radius:4px
 .topbar{background:var(--bg);border-bottom:1px solid var(--border)}
 .topbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:56px}
 .product-logo img{display:block;height:26px;width:auto}
+.brand-name{font:600 16px var(--font-sans);color:var(--fg)}
 .byline{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}.byline:hover{opacity:.85}
 .logo-h img{display:block;height:18px;width:auto}
 .title{margin-top:20px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
@@ -1126,25 +1130,32 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
+export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null, brand = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
   const problems = rows.filter((f) => f.severity !== "ok").length;
   const flagged = flaggedSteps(runs, rows);
   const atd = `<a class="f-atd" href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer"><img src="${LOGOS["atd-icon"]}" alt="" height="16">AI Tag Debugger</a>`;
+  // A custom name or logo takes the place of the Analitik İşler branding. The AI Tag Debugger logo and credit stay, smaller, as with branding false.
+  const whiteLabel = Boolean(brand?.logo || brand?.name);
+  if (whiteLabel) branding = false;
+  const brandName = brand?.name ? escapeHtml(brand.name) : "";
+  const brandLogo = brand?.logo ? `<img src="${brand.logo}" alt="${brandName}" height="26">` : "";
+  const productLogo = whiteLabel ? (brandLogo || `<span class="brand-name">${brandName}</span>`) : logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd");
+  const atdByline = whiteLabel ? `<a href="https://github.com/analitikisler/ai-tag-debugger" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "AI Tag Debugger", 18, "logo-atd")}</a>` : "";
   const footer = branding
     ? `<div class="wrap"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("stacked", "Analitik İşler", 56, "logo-s")}</a>
 <div><p>${m.ui.credit(atd)}</p><div class="f-links"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div></div>
 <div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`
-    : `<div class="wrap plain"><div class="f-meta">AI Tag Debugger</div><div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`;
+    : `<div class="wrap plain"><div class="f-meta">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "AI Tag Debugger"}</div><div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`;
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title><link rel="icon" type="image/png" href="${LOGOS.favicon}">
+<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/png"'} href="${brand?.logo ?? LOGOS.favicon}">
 <style>${CSS}${filterCss(runs)}
-${navCss(runs)}</style></head><body>
-<div class="topbar"><div class="wrap"><span class="product-logo">${logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd")}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
+${navCss(runs)}${brandCss(brand?.color)}</style></head><body>
+<div class="topbar"><div class="wrap"><span class="product-logo">${productLogo}</span>${atdByline}${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
 <div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${planChanges ? `\n<div class="meta plan-changes">${escapeHtml(m.ui.planChangesLine(planChanges))}${planChangeItems(planChanges).length ? `<ul>${planChangeItems(planChanges).map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>` : ""}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
