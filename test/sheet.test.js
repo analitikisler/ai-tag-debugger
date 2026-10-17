@@ -46,6 +46,17 @@ test("CSV round trip through files gives the same plan", async () => {
   assert.deepEqual(warnings, []);
 });
 
+test("Google Sheets CSV downloads import with their prefixed sibling and TRUE/FALSE checkboxes", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-sheet-"));
+  writeFileSync(path.join(dir, "Shop plan - events.csv"), "event,platform,parameter,required,example,trigger,description\npurchase,ga4,value,TRUE,9.9,,\npurchase,ga4,currency,FALSE,TRY,,\n");
+  writeFileSync(path.join(dir, "Shop plan - user_properties.csv"), "name,description,example\ncustomer_type,New or returning,new\n");
+  const { plan: back, warnings } = await readPlanSheet(path.join(dir, "Shop plan - events.csv"), { site: "https://shop.test" });
+  assert.deepEqual(back.events[0].required_params, ["value"]);
+  assert.deepEqual(back.user_properties.map((u) => u.name), ["customer_type"]);
+  assert.deepEqual(warnings, []);
+  await assert.rejects(readPlanSheet(path.join(dir, "Shop plan - user_properties.csv")), { message: /Import the events file \(Shop plan - events\.csv\)/ });
+});
+
 test("xlsx round trip gives the same plan", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "aitd-sheet-"));
   const [file] = await writePlanSheet(plan, dir);

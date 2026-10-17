@@ -1,3 +1,4 @@
+import { consentTable } from "./consent.js";
 import { OWNERS, ownerOf, verifyLinks } from "./verify.js";
 import { createProvider } from "./providers.js";
 import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
@@ -152,11 +153,11 @@ const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
 const routeList = (ch) => (ch?.routes ?? []).map((r) => `${r.journeyId} (${r.viewport})`).join(", ");
 
-export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null }) {
+export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
-  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), ...(changes?.routes?.length ? [mdText(m.ui.routeChanged(routeList(changes))), ""] : []), `**${m.ui.counts(counts)}**`, ""];
+  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), ...(planChanges ? [mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : [])] : []), ...(changes?.routes?.length ? [mdText(m.ui.routeChanged(routeList(changes))), ""] : []), `**${m.ui.counts(counts)}**`, ""];
   if (changes) lines.push(...changesMd(m, changes));
   if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
   const sum = summaryParts(explained?.summary);
@@ -164,6 +165,13 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     lines.push(`## ${m.ui.summary}`, "", sum.text ? mdText(sum.text) : `**${mdText(sum.headline)}**`, "");
     if (sum.points.length) lines.push(...sum.points.map((p) => `- **${m.severity[p.severity]}**: ${mdText(p.text)}`), "");
     if (sum.also_check.length) lines.push(`### ${m.ui.alsoCheck}`, "", ...sum.also_check.map((t) => `- ${mdText(t)}`), "");
+  }
+  if (consentScenarios) {
+    const { cols, rows: tagRows } = consentTable(consentScenarios);
+    lines.push(`## ${m.ui.scenarios}`, "", mdText(m.ui.scenariosLead(consentScenarios.cmp)), "");
+    lines.push(`| ${m.ui.scenarioTag} | ${cols.map((c) => m.ui.scenarioCols[c]).join(" | ")} |`, `|${" --- |".repeat(cols.length + 1)}`);
+    for (const r of tagRows) lines.push(`| ${mdText(platformLabel(r.platform))} \`${mdCode(r.event)}\` | ${r.cells.map((c) => (c.count === null ? "–" : c.problem ? `**${c.count}** ⚠` : String(c.count))).join(" | ")} |`);
+    lines.push("");
   }
   lines.push(`## ${m.ui.findings}`, "");
   for (const f of rows.filter((r) => r.severity !== "ok")) {
@@ -558,10 +566,20 @@ function journeyPanel(m, lang, findings, run, ri, flagged) {
 ${consentCard(m, run)}${body}</article>`;
 }
 
-function journeysTab(m, lang, findings, runs, flagged) {
-  if (!runs.length) return `<p class="empty">${m.ui.noSteps}</p>`;
+/** Consent scenarios: one row per tag, one column per consent choice, hit counts after the choice. */
+function scenariosCard(m, scenarios) {
+  if (!scenarios) return "";
+  const { cols, rows } = consentTable(scenarios);
+  const head = `<tr><th>${m.ui.scenarioTag}</th>${cols.map((c) => `<th>${m.ui.scenarioCols[c]}</th>`).join("")}</tr>`;
+  const body = rows.map((r) => `<tr><td><span class="ptag p-${safeKey(r.platform)}">${escapeHtml(platformLabel(r.platform))}</span> <code>${escapeHtml(r.event)}</code></td>${r.cells.map((c) => (c.count === null ? `<td class="muted xs">–</td>` : `<td class="num${c.problem ? " bad" : ""}">${c.count}</td>`)).join("")}</tr>`).join("");
+  const notRun = cols.filter((c) => c !== "before" && !scenarios.states[c]?.via).map((c) => m.ui.scenarioCols[c]);
+  return `<div class="card jconsent scenarios"><div class="card-h"><div class="card-t">${m.ui.scenarios}</div><div class="card-d">${escapeHtml(m.ui.scenariosLead(scenarios.cmp))}${notRun.length ? ` ${escapeHtml(m.ui.scenarioNotRun)}: ${escapeHtml(notRun.join(", "))}.` : ""}</div></div><div class="card-c tight"><table class="dt"><thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
+}
+
+function journeysTab(m, lang, findings, runs, flagged, scenarios = null) {
+  if (!runs.length) return `${scenariosCard(m, scenarios)}<p class="empty">${m.ui.noSteps}</p>`;
   const tabs = runs.map((r, ri) => `<a href="#j${ri}">${escapeHtml(r.journeyId)} <span class="muted">· ${escapeHtml(r.viewport)}</span><span class="n">${problemCount(findings, r)}</span></a>`).join("");
-  return `<nav class="jtabs" aria-label="${m.ui.chooseJourney}">${tabs}</nav>\n${runs.map((r, ri) => journeyPanel(m, lang, findings, r, ri, flagged)).join("\n")}`;
+  return `${scenariosCard(m, scenarios)}<nav class="jtabs" aria-label="${m.ui.chooseJourney}">${tabs}</nav>\n${runs.map((r, ri) => journeyPanel(m, lang, findings, r, ri, flagged)).join("\n")}`;
 }
 
 /** Evidence as a table when it is a JSON object (captured parameters), otherwise as text. */
@@ -703,6 +721,12 @@ const coverageLines = (m, pc) => [
 ];
 const pcSort = (pc) => [...pc.events].sort((a, b) => BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || platformRank(a.platform) - platformRank(b.platform));
 const BUCKET_ORDER = ["missing", "missing_params", "wrong_values", "implemented", "unplanned", "not_checked"];
+
+const planChangeItems = (pc) => [
+  ...pc.added.map((c) => `+ ${changeLabel(c)}`),
+  ...pc.removed.map((c) => `− ${changeLabel(c)}`),
+  ...pc.changed.map((c) => `~ ${changeLabel(c)}: ${c.what.join(", ")}`),
+];
 
 /** "Changed since last run": one headline, then what was fixed and what is new. */
 const changeLabel = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
@@ -858,6 +882,7 @@ code{font-size:12px;background:var(--muted-bg);padding:1px 5px;border-radius:4px
 .jconsent{margin-bottom:16px}
 .eyebrow{font:500 12px var(--font-mono);color:var(--accent-fg);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .title .meta{margin-top:4px;font-size:12px;color:var(--muted)}
+.title .plan-changes ul{margin:4px 0 0;padding-left:18px}
 .toptabs{position:sticky;top:0;z-index:10;background:var(--page);border-bottom:1px solid var(--border);margin-top:16px}
 .toptabs .wrap{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
 .toptabs a{display:inline-flex;align-items:center;gap:6px;padding:12px 10px;color:var(--muted);font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -1075,7 +1100,7 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null }) {
+export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -1096,14 +1121,14 @@ ${navCss(runs)}</style></head><body>
 <div class="topbar"><div class="wrap"><span class="product-logo">${logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd")}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
-<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
+<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${planChanges ? `\n<div class="meta plan-changes">${escapeHtml(m.ui.planChangesLine(planChanges))}${planChangeItems(planChanges).length ? `<ul>${planChangeItems(planChanges).map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>` : ""}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
 <main class="wrap">
 <section class="tabpanel" id="overview" aria-label="${m.ui.tabOverview}">${changes ? changesCard(m, changes) : ""}${planCheck ? planVsSiteCard(m, planCheck) : ""}${overviewTab(m, findings, rows, counts, explained, runs, { ai, plan, lang })}</section>
 <section class="tabpanel" id="findings" aria-label="${m.ui.findings}">${findingsTab(m, runs, rows, Boolean(explained))}</section>
-<section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged)}</section>
+<section class="tabpanel" id="journeys" aria-label="${m.ui.tabJourneys}">${journeysTab(m, lang, findings, runs, flagged, consentScenarios)}</section>
 <section class="tabpanel" id="scope" aria-label="${m.ui.tabScope}"><div class="stack">${coverageCard(m, plan, runs)}${providersCard(m, runs)}</div></section>
 </main>
 <footer class="footer">${footer}</footer>
