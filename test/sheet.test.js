@@ -99,7 +99,7 @@ test("errors name the tab, row and fix", () => {
 });
 
 test("unknown platforms and custom values are rejected", () => {
-  assert.throws(() => rowsToPlan(events(["purchase", "matomo", "", "", "", "", ""])), /^Error: events, row 2: "platform" must be one of ga4, .+ \(found "matomo"\)\.$/);
+  assert.throws(() => rowsToPlan(events(["purchase", "mixpanel", "", "", "", "", ""])), /^Error: events, row 2: "platform" must be one of ga4, .+ \(found "mixpanel"\)\.$/);
   assert.throws(() => rowsToPlan({ events: [[...EVENT_COLUMNS, "custom"], ["purchase", "ga4", "", "", "", "", "", "sometimes"]] }), /events, row 2: "custom" must be yes, no, event or parameter \(found "sometimes"\)\./);
 });
 

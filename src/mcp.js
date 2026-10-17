@@ -24,6 +24,7 @@ import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
 import { savePlan } from "./plan.js";
+import { changesLines, sinceLastRun } from "./changes.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -37,7 +38,7 @@ const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracki
 
 Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")}). If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
 
-Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}); pass their choice as providers.
+Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}, plus any other platform the site turns out to use); pass their choice as providers, or leave it out for the default.
 
 To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language.
 
@@ -153,7 +154,7 @@ export function buildServer(opts) {
         providers: z
           .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
           .optional()
-          .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")}. Requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+          .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
       },
     },
     async ({ site, journey, viewport, allowed_hosts, providers }) => {
@@ -282,7 +283,7 @@ export function buildServer(opts) {
       const grouped = groupFindings(findings);
       const counts = summarize(grouped);
       const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
-      const reportPath = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
+      const { reportPath } = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
       const m = messages(lang);
       const lines = [
         m.ui.counts(counts),
@@ -351,6 +352,28 @@ export function buildServer(opts) {
     },
   );
 
+  server.registerTool(
+    "what_changed",
+    {
+      title: "What changed since the last run",
+      description:
+        "Returns only the \"since last run\" diff for a site: which problems were fixed and which are new in its newest saved run (`aitd run`) compared with the run before it. Compares plan coverage when both runs were checked against a plan, health findings otherwise. Does not browse or use an AI. Use it to answer \"what changed on this site?\" without re-reading a whole report.",
+      inputSchema: {
+        site: z.string().describe("The site, e.g. https://www.example.com/. Its saved runs are the ones in the data folder of the computer running this server."),
+        language: z.enum(Object.keys(LANGUAGES)).optional().describe("Language of the answer. Default en."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ site, language }) => {
+      try {
+        const diff = await sinceLastRun(opts.dataDir ?? DEFAULT_DATA_DIR, site);
+        return text(changesLines(diff, language ?? "en").join("\n"));
+      } catch (err) {
+        return fail(err.message);
+      }
+    },
+  );
+
   if (opts.allowFiles) {
     server.registerTool(
       "run_audit",
@@ -367,7 +390,7 @@ export function buildServer(opts) {
           providers: z
             .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
             .optional()
-            .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")}. Requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+            .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
         },
       },
       async ({ config: configFile, against, scripted, language, branding, providers }) => {
