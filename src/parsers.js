@@ -196,16 +196,162 @@ export function parseKlaviyo(url, postData) {
   }];
 }
 
-/** Hotjar: calls to its in.hotjar.com / .hotjar.io API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
+/**
+ * LinkedIn Insight Tag: px.ads.linkedin.com/collect with the partner id (pid), and conversionId
+ * for a conversion; without one the hit is the page view. eventId pairs it with a Conversions API copy.
+ * @returns {Hit[] | null}
+ */
+export function parseLinkedIn(url) {
+  const u = new URL(url);
+  const q = u.searchParams;
+  if (u.hostname !== "px.ads.linkedin.com" || !/^\/(collect|wa)\/?$/.test(u.pathname) || !q.has("pid")) return null;
+  const params = {};
+  for (const [from, to] of [["value", "value"], ["currency", "currency"], ["url", "page_location"]]) if (q.has(from)) params[to] = q.get(from);
+  const eventId = q.get("eventId") || undefined;
+  if (eventId) params.event_id = eventId;
+  const conversion = q.get("conversionId");
+  return [{ platform: "linkedin", name: conversion ? `conversion:${conversion}` : "pageview", id: q.get("pid"), ...(eventId ? { eventId } : {}), params, url }];
+}
+
+/**
+ * Microsoft Advertising UET: bat.bing.com/action/0 with the tag id (ti) and evt: "pageLoad" for page
+ * views, "custom" for events, named by their action (ea). gv and gc are the revenue and currency.
+ * @returns {Hit[] | null}
+ */
+export function parseBing(url) {
+  const u = new URL(url);
+  const q = u.searchParams;
+  if (u.hostname !== "bat.bing.com" || !/^\/action\/\d+$/.test(u.pathname) || !q.has("ti")) return null;
+  const params = {};
+  for (const [from, to] of [["ec", "event_category"], ["el", "event_label"], ["ev", "event_value"], ["gv", "value"], ["gc", "currency"], ["p", "page_location"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const evt = q.get("evt") || "";
+  const name = evt === "custom" ? q.get("ea") || "custom" : evt || "(unnamed)";
+  return [{ platform: "microsoft_ads", name, id: q.get("ti"), params, url }];
+}
+
+// Criteo OneTag event codes. Setup entries (site type, email, …) ride along in the same request.
+const CRITEO_EVENTS = { vh: "viewHome", vl: "viewList", vp: "viewItem", vb: "viewBasket", vc: "trackTransaction", vs: "viewSearch" };
+
+/**
+ * Criteo OneTag: sslwidget.criteo.com/event with the account (a) and one entry per pushed event
+ * in p0, p1, … (each itself a query string with e = the event code). Hashed emails are user data.
+ * @returns {Hit[] | null}
+ */
+export function parseCriteo(url, postData) {
+  const u = new URL(url);
+  if (!/(^|\.)criteo\.(com|net)$/.test(u.hostname) || !/^\/(event|m\/event)\/?$/.test(u.pathname)) return null;
+  const q = new URLSearchParams(u.search);
+  if (postData && !postData.trim().startsWith("{")) for (const [k, v] of new URLSearchParams(postData)) q.set(k, v);
+  const entries = [...q].filter(([k]) => /^p\d+$/.test(k)).map(([, v]) => new URLSearchParams(v));
+  if (!q.has("a") || !entries.length) return null;
+  const params = {};
+  const user = {};
+  let name = "";
+  for (const e of entries) {
+    const code = e.get("e");
+    if (CRITEO_EVENTS[code] && !name) name = CRITEO_EVENTS[code];
+    for (const [k, v] of e) {
+      if (k === "e") continue;
+      if (/^m(\[\d*\])?$/.test(k) || isUserDataKey(k)) user[`${code}.${k}`] = v;
+      else if (k === "p") params.content_ids = v;
+      else if (k === "id" && code === "vc") params.transaction_id = v;
+      else if (k === "site_type") params.site_type = v;
+      else if (k === "c") params.currency = v;
+      else if (k === "item" || k === "i") params.items = v;
+    }
+  }
+  return [{ platform: "criteo", name: name || "(unnamed)", id: q.get("a"), params, ...(Object.keys(user).length ? { userFields: user } : {}), url }];
+}
+
+/**
+ * Adobe Analytics image request: /b/ss/<report suite>/<version>/<code>/s<random> on omtrdc.net,
+ * 2o7.net or a first-party host. A link (pe: lnk_o, lnk_d, lnk_e) is named by its link name (pev2),
+ * anything else is the page view. events, products, purchase id, currency and the page are kept.
+ * @returns {Hit[] | null}
+ */
+export function parseAdobe(url) {
+  const u = new URL(url);
+  const m = u.pathname.match(/^\/b\/ss\/([^/]+)\/[^/]+\//);
+  if (!m) return null;
+  const q = u.searchParams;
+  const params = {};
+  for (const [from, to] of [["pageName", "page_title"], ["events", "events"], ["products", "items"], ["purchaseID", "transaction_id"], ["xact", "transaction_id"], ["cc", "currency"], ["g", "page_location"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const pe = q.get("pe");
+  return [{ platform: "adobe", name: pe ? `link:${q.get("pev2") || pe}` : "pageView", id: decodeURIComponent(m[1]), params, url }];
+}
+
+// Matomo and Piwik PRO share one tracking protocol: an idsite and either an event (e_c, e_a, e_n),
+// a goal (idgoal) or an ecommerce order (idgoal=0 with ec_id), otherwise a page view.
+function matomoHit(platform, q, url) {
+  const params = {};
+  for (const [from, to] of [["revenue", "value"], ["ec_id", "transaction_id"], ["ec_items", "items"], ["ec_tx", "tax"], ["ec_sh", "shipping"], ["e_v", "event_value"], ["action_name", "page_title"], ["url", "page_location"], ["search", "search_term"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const goal = q.get("idgoal");
+  let name = "pageview";
+  if (q.has("e_c")) name = q.get("e_a") ? `${q.get("e_c")}:${q.get("e_a")}` : q.get("e_c");
+  else if (goal === "0") name = q.has("ec_id") ? "ecommerce_order" : "ecommerce_cart_update";
+  else if (goal) name = `goal:${goal}`;
+  else if (q.has("search")) name = "site_search";
+  else if (q.has("link")) name = "outlink";
+  else if (q.has("download")) name = "download";
+  const user = [...q].filter(([k, v]) => isUserDataKey(k) && v);
+  return { platform, name, id: q.get("idsite") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url };
+}
+
+// Matomo's tracker can batch hits: a JSON POST of { requests: ["?idsite=1&…", …] }.
+function matomoHits(platform, u, postData) {
+  const requests = jsonOr(postData ?? "{}", {})?.requests;
+  const batched = Array.isArray(requests) ? requests.filter((r) => typeof r === "string").map((r) => new URLSearchParams(r.replace(/^\?/, ""))) : [];
+  const queries = batched.length ? batched.map((b) => { for (const [k, v] of u.searchParams) if (!b.has(k)) b.set(k, v); return b; }) : [u.searchParams];
+  return queries.filter((q) => q.has("idsite")).map((q) => matomoHit(platform, q, u.href));
+}
+
+/** Matomo (self-hosted or cloud): /matomo.php or /piwik.php with idsite, on any host. @returns {Hit[] | null} */
+export function parseMatomo(url, postData) {
+  const u = new URL(url);
+  if (!/(^|\/)(matomo|piwik)\.php$/.test(u.pathname)) return null;
+  const hits = matomoHits("matomo", u, postData);
+  return hits.length ? hits : null;
+}
+
+/** Piwik PRO: /ppms.php with idsite (a UUID), on its cloud or a first-party host. @returns {Hit[] | null} */
+export function parsePiwikPro(url, postData) {
+  const u = new URL(url);
+  if (!/(^|\/)ppms\.php$/.test(u.pathname)) return null;
+  const hits = matomoHits("piwik_pro", u, postData);
+  return hits.length ? hits : null;
+}
+
+/**
+ * Microsoft Clarity: the tag load (www.clarity.ms/tag/<project>) names the project; the data
+ * itself goes to <letter>.clarity.ms/collect as a compressed payload, so only the call is shown.
+ * @returns {Hit[] | null}
+ */
+export function parseClarity(url) {
+  const u = new URL(url);
+  if (!/(^|\.)clarity\.ms$/.test(u.hostname)) return null;
+  const tag = u.pathname.match(/^\/tag\/([a-z0-9]+)\/?$/i);
+  if (tag) return [{ platform: "clarity", name: "script_load", id: tag[1], params: {}, url }];
+  if (/^\/collect\/?$/.test(u.pathname)) return [{ platform: "clarity", name: "collect", params: {}, url }];
+  return null;
+}
+
+/** Hotjar: the tag load (static.hotjar.com/c/hotjar-<id>.js) and calls to its API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
 export function parseHotjar(url) {
   const u = new URL(url);
   if (!/(^|\.)hotjar\.(com|io)$/.test(u.hostname)) return null;
+  const script = u.pathname.match(/^\/c\/hotjar-(\d+)\.js$/);
+  if (script) return [{ platform: "hotjar", name: "script_load", id: script[1], params: {}, url }];
   const m = u.pathname.match(/^\/api\/v\d+\/client\/sites\/(\d+)\/([a-z-]+)/i);
   if (!m) return null;
   return [{ platform: "hotjar", name: m[2], id: m[1], params: {}, url }];
 }
 
-const PARSERS = [parseGa4, parseMeta, parseGoogleAds, parseTikTok, parseX, parsePinterest, parseSnapchat, parseKlaviyo, parseHotjar];
 
 /** Returns normalized hits for a request, or null when it is not a tracking request. */
 export function parseTrackingRequest(url, postData) {
@@ -231,7 +377,7 @@ const OTHER_BEACONS = [
   [/./, /\/(ccm|ccm\/s|g\/s)\/collect$/],
   [/^td\.doubleclick\.net$/, /^\/td\//],
   [/(^|\.)facebook\.com$/, /^\/privacy_sandbox\/pixel\//],
-  [/^bat\.bing\.com$/, /^\/action\//],
+  [/^bat\.bing\.com$/, /^\/action\//], // UET requests without a tag id
   [/^px\.ads\.linkedin\.com$/, /^\/(collect|wa)/],
   [/^ct\.pinterest\.com$/, /^\/(v3|user)/],
   [/^tr\.snapchat\.com$/, /^\//],
@@ -249,24 +395,39 @@ export function isCollectionEndpoint(url) {
   return OTHER_BEACONS.some(([host, pathname]) => host.test(u.hostname) && pathname.test(u.pathname));
 }
 
-// Providers the user can choose to check. Requests to the ones not chosen are still
+/**
+ * Every tracking vendor: its key, display name, the hosts its requests go to (path: how its
+ * tracker is told apart on a first-party host) and, when its events are read, a parser. Adding a vendor is one entry here plus its icon in report.js.
+ */
+export const VENDORS = [
+  { key: "ga4", label: "GA4", hosts: /(^|\.)(google-analytics|analytics\.google)\.com$/, parse: parseGa4 },
+  { key: "google_ads", label: "Google Ads", hosts: /(^|\.)googleadservices\.com$/, parse: parseGoogleAds },
+  { key: "meta", label: "Meta", hosts: /(^|\.)(facebook\.com|facebook\.net)$/, parse: parseMeta },
+  { key: "tiktok", label: "TikTok", hosts: /(^|\.)tiktok\.com$/, parse: parseTikTok },
+  { key: "x", label: "X", hosts: /(^|\.)(x\.com|twitter\.com|t\.co|ads-twitter\.com)$/, parse: parseX },
+  { key: "linkedin", label: "LinkedIn", hosts: /(^|\.)(licdn\.com|ads\.linkedin\.com)$/, parse: parseLinkedIn },
+  { key: "microsoft_ads", label: "Microsoft Ads", hosts: /(^|\.)bing\.com$/, parse: parseBing },
+  { key: "pinterest", label: "Pinterest", hosts: /(^|\.)(pinterest\.com|pinimg\.com)$/, parse: parsePinterest },
+  { key: "snapchat", label: "Snapchat", hosts: /(^|\.)(snapchat\.com|sc-static\.net)$/, parse: parseSnapchat },
+  { key: "criteo", label: "Criteo", hosts: /(^|\.)(criteo\.com|criteo\.net)$/, parse: parseCriteo },
+  { key: "klaviyo", label: "Klaviyo", hosts: /(^|\.)klaviyo\.com$/, parse: parseKlaviyo },
+  { key: "adobe", label: "Adobe Analytics", hosts: /(^|\.)(omtrdc|2o7)\.net$/, path: /^\/b\/ss\//, parse: parseAdobe },
+  { key: "matomo", label: "Matomo", hosts: /(^|\.)(matomo\.cloud|innocraft\.cloud)$/, path: /(^|\/)(matomo|piwik)\.php$/, parse: parseMatomo },
+  // No host: piwik.pro also serves consent management, so its tracker is recognized by path.
+  { key: "piwik_pro", label: "Piwik PRO", path: /(^|\/)ppms\.php$/, parse: parsePiwikPro },
+  { key: "clarity", label: "Microsoft Clarity", hosts: /(^|\.)clarity\.ms$/, parse: parseClarity },
+  { key: "hotjar", label: "Hotjar", hosts: /(^|\.)hotjar\.(com|io)$/, parse: parseHotjar },
+  { key: "doubleclick", label: "DoubleClick" },
+  { key: "adsense", label: "Google AdSense", hosts: /(^|\.)googlesyndication\.com$/ },
+];
+
+const PARSERS = VENDORS.filter((v) => v.parse).map((v) => v.parse);
+
+// Providers the user can choose to check. Requests to the ones not checked are still
 // answered locally, but they are left out of the timeline and only counted.
-export const PROVIDERS = {
-  ga4: "GA4",
-  google_ads: "Google Ads",
-  meta: "Meta",
-  tiktok: "TikTok",
-  x: "X",
-  linkedin: "LinkedIn",
-  microsoft_ads: "Microsoft Ads",
-  pinterest: "Pinterest",
-  snapchat: "Snapchat",
-  klaviyo: "Klaviyo",
-  clarity: "Microsoft Clarity",
-  hotjar: "Hotjar",
-  doubleclick: "DoubleClick",
-  adsense: "Google AdSense",
-};
+export const PROVIDERS = Object.fromEntries(VENDORS.map((v) => [v.key, v.label]));
+// Always checked. Any other vendor the site sends to is added on its first request,
+// unless the platforms to check were chosen.
 export const DEFAULT_PROVIDERS = ["ga4", "google_ads", "meta", "tiktok"];
 // Tag managers and consent platforms are always shown: they explain how the tags loaded.
 // Server-side tagging providers are too: their requests show where events are sent from.
@@ -275,19 +436,7 @@ const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform", s
 const HOSTS = [
   [/(^|\.)stape\.(io|jp)$/, "stape"],
   [/(^|\.)getelevar\.com$/, "elevar"],
-  [/(^|\.)(google-analytics|analytics\.google)\.com$/, "ga4"],
-  [/(^|\.)googleadservices\.com$/, "google_ads"],
-  [/(^|\.)googlesyndication\.com$/, "adsense"],
-  [/(^|\.)(facebook\.com|facebook\.net)$/, "meta"],
-  [/(^|\.)tiktok\.com$/, "tiktok"],
-  [/(^|\.)(x\.com|twitter\.com|t\.co|ads-twitter\.com)$/, "x"],
-  [/(^|\.)(licdn\.com|ads\.linkedin\.com)$/, "linkedin"],
-  [/(^|\.)bing\.com$/, "microsoft_ads"],
-  [/(^|\.)clarity\.ms$/, "clarity"],
-  [/(^|\.)hotjar\.(com|io)$/, "hotjar"],
-  [/(^|\.)(pinterest\.com|pinimg\.com)$/, "pinterest"],
-  [/(^|\.)(snapchat\.com|sc-static\.net)$/, "snapchat"],
-  [/(^|\.)klaviyo\.com$/, "klaviyo"],
+  ...VENDORS.filter((v) => v.hosts).map((v) => [v.hosts, v.key]),
   [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.(eu|com)|cookieyes\.com|didomi\.io|privacy-center\.org|trustarc\.com|truste\.com|consensu\.org|quantcast\.com|osano\.com|iubenda\.com|termly\.io|cookiefirst\.com|axeptio\.eu|sourcepoint\.com|sp-prod\.net|consentmanager\.net|cookiescript\.com|cookie-script\.com|cookieinformation\.com|civiccomputing\.com|piwik\.pro|complianz\.io|cdn\.privacy-mgmt\.com)$/, "consent"],
 ];
 
@@ -310,6 +459,8 @@ export function providerOf(url) {
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
   // Before the vendor hosts: a GA4 hit to a Stape or Elevar endpoint is still a GA4 hit.
   if (isGa4Path(u) && !GOOGLE_COMPANION_HOST.test(host)) return of("ga4");
+  // Before the hosts too: trackers on a first-party or consent vendor host are told apart by path.
+  for (const v of VENDORS) if (v.path?.test(u.pathname)) return of(v.key);
   for (const [pattern, key] of HOSTS) if (pattern.test(host)) return of(key);
   if (isGa4Path(u)) return of("ga4");
   if (u.pathname.startsWith("/pagead/") || /\/as\/p\/c\/\d+\/?$/.test(u.pathname)) return of("google_ads");

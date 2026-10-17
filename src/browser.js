@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "playwright";
-import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders } from "./parsers.js";
+import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders, PROVIDERS } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
@@ -341,13 +341,25 @@ async function cleanRecording(file) {
   await writeFile(file, JSON.stringify(har));
 }
 
+/** Where the step left the browser, without query or fragment, so the route can be compared across runs. */
+function pagePath(href) {
+  try {
+    const u = new URL(href);
+    return /^https?:$/.test(u.protocol) ? u.origin + u.pathname : null;
+  } catch {
+    return null;
+  }
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
    *   keepBodies: store tracking URLs and bodies as sent. By default, user data for ad matching
    *     (emails, phone numbers, user ids, hashed or not) is replaced with a marker first.
-   *   providers: which tracking providers to record (default GA4, Google Ads, Meta, TikTok). Requests to the
-   *     others are still answered locally, but only counted, per step, in this.skipped.
+   *   providers: which tracking providers to record. Requests to the others are still answered locally,
+   *     but only counted, per step, in this.skipped.
+   *   detect: also record any other known provider the site sends to, from its first request
+   *     (default: when no providers were chosen). They join this.providers.
    *   site: navigation is limited to this site's host and its subdomains, plus allowedHosts.
    *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
    *     closeTimeoutMs: how long close() waits for the recording to be written (default 30 s) before skipping it.
@@ -371,6 +383,7 @@ export class AuditSession {
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.landing = null; // the first page: { step, requested, chain, final }
+    this.detect = this.opts.detect ?? !this.opts.providers?.length;
     this.skipped = {}; // step index -> { vendor label: requests }
     this.loadedIn = new Map(); // page address -> the last step whose main-frame navigation reached it
     this.leaving = null; // the page address being navigated away from, until the next page commits
@@ -427,7 +440,7 @@ export class AuditSession {
       if (!hits) return;
       const recorded = [];
       for (const hit of hits) {
-        if (!this.providers.includes(hit.platform)) continue;
+        if (!this.checks(hit.platform)) continue;
         const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now() };
         if (this.record("hits", entry)) recorded.push(entry);
       }
@@ -446,7 +459,7 @@ export class AuditSession {
     this.context.on("request", (request) => {
       const provider = providerOf(request.url());
       if (!provider) return;
-      if (!provider.always && !this.providers.includes(provider.key)) {
+      if (!provider.always && !this.checks(provider.key)) {
         const counts = (this.skipped[this.currentStep] ??= {});
         counts[provider.label] = (counts[provider.label] ?? 0) + 1;
         return;
@@ -454,6 +467,7 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
+        pageUrl: this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url,
         t: Date.now(),
         method: request.method(),
         url: this.opts.keepBodies ? request.url() : redactUrl(request.url()).url,
@@ -556,6 +570,14 @@ export class AuditSession {
   }
 
   /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
+  /** Whether requests of this provider are recorded; with detection on, a known provider seen for the first time joins the list. */
+  checks(key) {
+    if (this.providers.includes(key)) return true;
+    if (!this.detect || !(key in PROVIDERS)) return false;
+    this.providers.push(key);
+    return true;
+  }
+
   redactHit({ userFields, ...hit }) {
     const found = { fields: [], plain: [] };
     const site = hostOf(hit.params?.page_location) ?? hostOf(this.page.url());
@@ -811,6 +833,7 @@ export class AuditSession {
     await this.trackCookies();
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
+    this.steps[this.currentStep].pagePath = pagePath(this.page.url());
     return error;
   }
 

@@ -4,7 +4,7 @@
 
 **Web sitenizin analitik ve reklam takibini test eden, açık kaynaklı bir yapay zekâ ajanı.**
 
-Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculukları (ürün → sepet → ödeme, form gönderimleri) gerçek bir ziyaretçi gibi gezdirir. Gezerken `ai-tag-debugger` her GA4, Google Ads, Meta Pixel ve TikTok isteğini ve her dataLayer gönderimini kaydeder. Ardından bunları ölçümleme planınız ve Consent Mode kurulumunuzla karşılaştırır ve neyin bozulduğunu ve nasıl düzeltileceğini sade bir dille, Türkçe ya da İngilizce olarak yazılmış bir raporla anlatır.
+Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculukları (ürün → sepet → ödeme, form gönderimleri) gerçek bir ziyaretçi gibi gezdirir. Gezerken `ai-tag-debugger` her takip isteğini (GA4, Google Ads, Meta Pixel, TikTok ve bir düzine kadar başka platform) ve her dataLayer gönderimini kaydeder. Ardından bunları ölçümleme planınız ve Consent Mode kurulumunuzla karşılaştırır ve neyin bozulduğunu ve nasıl düzeltileceğini sade bir dille, Türkçe ya da İngilizce olarak yazılmış bir raporla anlatır.
 
 İki şekilde kullanabilirsiniz:
 
@@ -50,13 +50,17 @@ Manuel etiket kontrolü bunu yakalar, ama zahmetlidir; bu yüzden her sürümden
 | Planda olmayan event'ler | Ölçümleme planınızda bulunmayan, yine de fire olan event'ler |
 | Plan kapsamı | Planlanan her event'in uygulandı, eksik, parametresi eksik, değeri hatalı ya da kontrol edilmedi olarak sınıflandırılması (bkz. [Plan ve site](#plan-ve-site)) |
 
-Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
+Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel, temel X Pixel event'leri, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag ile Pinterest, Snapchat ve Klaviyo event'leri. Adobe Analytics, Matomo ve Piwik PRO event'leri de okunur (sayfa görüntülemeleri, bağlantılar, hedefler, site içi arama ve e-ticaret siparişleri); Microsoft Clarity ve Hotjar etiket yüklemeleri ise proje ya da site kimliğini gösterir.
 
 ### Kontrol edilecek platformları seçin
 
-Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder. Başka platformları `--platforms ga4,meta,x` ile, ayar dosyasındaki `"providers"` ile ya da MCP `start_audit` ve `run_audit` araçlarındaki `providers` ile seçebilirsiniz. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok ve X için event'ler ayrıştırılır; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
+Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder; ayrıca sitenin kullandığı başka her platformu, ilk isteğinden itibaren kontrol eder. Bunun için bir ayar gerekmez. Platform seçmek bu otomatik algılamayı kapatır. Sabit bir liste için `--platforms ga4,meta,x` kullanın, ayar dosyasında `"providers"` ya da MCP `start_audit` ve `run_audit` araçlarında `providers` verin. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo ve Piwik PRO için event'ler ayrıştırılır. Clarity ve Hotjar etiket yüklemelerini gösterir; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
 
-Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
+Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen ya da sitenin gönderdiği her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
+
+### Onay senaryoları
+
+Her denetim ayrıca başlangıç sayfasını her çerez onay seçimi için bir kez açar; her seçim yeni bir tarayıcıda yapılır: tümünü kabul, tümünü reddet ve yalnızca analitik. Seçim, consent platformunun kendi API'siyle (OneTrust, Cookiebot, Usercentrics ya da Didomi) yapılır; API yoksa bannerın düğmelerine tıklanır. Rapor, her seçimden sonra her etiketin kaç istek gönderdiğini gösterir. Yalnızca analitik seçeneği OneTrust ve Cookiebot ile çalışır; diğer platformlarda o sütun "Burada desteklenmiyor" yazar. Tümünü reddet'ten sonra gönderilen bir etiket işaretlenir; Consent Mode'un çerezsiz ping'leri hariç. Yalnızca analitik'ten sonra gönderilen bir reklam etiketi, reklam depolaması reddedilmiş olarak gönderilmediği sürece işaretlenir. Tablo **Yolculuklar** sekmesinin en üstünde ve `report.md` içinde bulgulardan önce yer alır. Başlangıç sayfasında aracın yanıtlayabileceği bir banner yoksa ya da kayıtlı bir site tekrar oynatılıyorsa atlanır. Yapay zekâ modeli çağrılmaz, ama başlangıç sayfası üç kez daha ziyaret edilir. Kapatmak için ayar dosyasına `"consent_scenarios": false` yazın.
 
 ## Nasıl çalışır
 
@@ -74,8 +78,9 @@ Kendi API anahtarınızı getirirsiniz. `ai-tag-debugger` her sağlayıcının r
 | Anthropic (Claude) | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-pro-latest` |
+| Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` ve `CLOUDFLARE_ACCOUNT_ID` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
-Sağlayıcı, ayarlı olan anahtardan seçilir (birden fazla varsa önce Anthropic). `--provider anthropic|openai|gemini` ya da ayar dosyasındaki `"provider"` ile açıkça seçebilirsiniz; başka bir model için `--model` kullanın. Gezinme, çalışmaları ucuz tutmak için düşük akıl yürütme çabası ister; açıklamalar yüksek çaba ve yapılandırılmış JSON çıktısı ister.
+`--provider` verilmezse bulunan ilk ayar belirler, şu sırayla: `OPENAI_COMPATIBLE_BASE_URL`, Vercel AI Gateway (`AI_GATEWAY_API_KEY`), Cloudflare Workers AI, Anthropic, OpenAI, Gemini. `--provider anthropic|openai|gemini|vercel|cloudflare` ya da ayar dosyasındaki `"provider"` ile açıkça seçebilirsiniz; başka bir model için `--model` kullanın. `--model cheap`, rutin CI çalıştırmaları için her sağlayıcının küçük ve ucuz modelini seçer: `claude-haiku-5-5`, `gpt-5.5-mini`, `gemini-flash-latest` ya da Vercel'de `anthropic/claude-haiku-5.5`. Cloudflare'da bu listede tek bir model var, bu yüzden orada `cheap` ile varsayılan aynıdır. Gezinme, çalışmaları ucuz tutmak için düşük akıl yürütme çabası ister; açıklamalar yüksek çaba ve yapılandırılmış JSON çıktısı ister.
 
 ### OpenAI uyumlu herhangi bir API: Kimi, GLM, DeepSeek, OpenRouter, Ollama ve daha fazlası
 
@@ -119,9 +124,21 @@ export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<hesap kimliği>/defa
 export AI_GATEWAY_TOKEN=...   # yalnızca gateway'de kimlik doğrulama açıksa
 ```
 
-`anthropic`, `openai` ve `gemini` ile çalışır. Her çalıştırmanın canlı sitenizi görmesi için gateway'de önbelleği kapalı bırakın. Cloudflare Workers AI modelleri de OpenAI uyumlu sağlayıcıyla `--base-url https://api.cloudflare.com/client/v4/accounts/<hesap kimliği>/ai/v1` kullanılarak çalışır.
+`anthropic`, `openai` ve `gemini` ile çalışır. Her çalıştırmanın canlı sitenizi görmesi için gateway'de önbelleği kapalı bırakın. Cloudflare'ın kendi modelleri için bkz. [Cloudflare Workers AI](#cloudflare-workers-ai).
 
 **Model seçimi hakkında bir not.** Yapay zekâ, 5 ila 30 adım boyunca araç çağırarak, her seferinde bir adım gezinir. Modeller bunu ne kadar güvenilir yaptıklarında büyük farklılık gösterir: daha küçük ve yerel modeller yanlış yere tıklayabilir, döngüye girebilir ya da erken durabilir. Kontroller model ne yaparsa yapsın doğrudur, çünkü yakalanan isteklerden gelirler; ama bitmeyen bir yolculuk, sonraki event'lerini gösteremez. Bir model zorlanıyorsa daha büyük bir model, kısa hedefli hazır bir yolculuk ya da `--max-steps` deneyin. Anthropic, OpenAI ve Gemini varsayılanları test edilmiş olanlardır.
+
+### Cloudflare Workers AI
+
+Cloudflare'ın ağında açık modeller; kullanım başına Cloudflare tarafından faturalandırılır. Workers AI yetkisi olan bir API token oluşturun ve hesap kimliğinizi Cloudflare panelinde bulun:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+aitd run --site https://yourshop.com --journey purchase
+```
+
+`--model` verilmezse `@cf/meta/llama-3.3-70b-instruct-fp8-fast` kullanılır. İki değişken de ayarlıysa Cloudflare, Anthropic, OpenAI ve Gemini'den önce seçilir; bunlardan birini kullanmak için `--provider` verin.
 
 Yerel bir sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içinde iki fonksiyon yazmanız gerekir: araç çağıran bir konuşma ve yapılandırılmış bir JSON çağrısı.
 
@@ -225,7 +242,7 @@ Siteniz zaten gönderdiği event'ler `"seen": true` ile işaretlenir.
 
 Kullanmadan önce planı gözden geçirin. Örnekler ve öneriler yapay zekânın gördüğü sayfalardan gelir, bu yüzden her event'in işinize uyduğunu kontrol edin. Ek alanları kontroller yok sayar.
 
-**Elektronik tablo ile içe ve dışa aktarma.** `aitd plan export <plan> --site <url>`, planın yanına `plan.xlsx` yazar: `events` sekmesinde her event parametresi için bir satır (`event, platform, parameter, required, example, trigger, description`) ve `user_properties` sekmesinde her kullanıcı özelliği için bir satır. Bunun yerine `events.csv` ve `user_properties.csv` almak için `--format csv` ekleyin; CSV ek bir paket gerektirmez. `.xlsx`, araçla birlikte isteğe bağlı bir bağımlılık olarak gelen küçük bir kütüphane, `fflate` kullanır. `aitd plan import <dosya> --site <url>` elektronik tabloyu okuyup yeni bir plan klasörü olarak kaydeder. İçe aktarma mevcut bir planı asla düzenlemez. Tanınmayan sütunlar bir uyarıyla yok sayılır; bir hata, sekmeyi, satırı ve düzeltmeyi belirtir, örneğin `events, row 7: "required" must be yes or no (found "maybe").`
+**Elektronik tablo ile içe ve dışa aktarma.** `aitd plan export <plan> --site <url>`, planın yanına `plan.xlsx` yazar: `events` sekmesinde her event parametresi için bir satır (`event, platform, parameter, required, example, trigger, description`) ve `user_properties` sekmesinde her kullanıcı özelliği için bir satır. Bunun yerine `events.csv` ve `user_properties.csv` almak için `--format csv` ekleyin; CSV ek bir paket gerektirmez. `.xlsx`, araçla birlikte isteğe bağlı bir bağımlılık olarak gelen küçük bir kütüphane, `fflate` kullanır. `aitd plan import <dosya> --site <url>` elektronik tabloyu okuyup yeni bir plan klasörü olarak kaydeder. Google E-Tablolar'dan indirirken Dosya > İndir > Microsoft Excel (.xlsx) seçin ya da her sekmeyi CSV olarak indirin: `Shop plan - events.csv` dosyası, yanındaki `Shop plan - user_properties.csv` ile birlikte okunur ve onay kutuları evet/hayır olarak tanınır. İçe aktarma mevcut bir planı asla düzenlemez. Tanınmayan sütunlar bir uyarıyla yok sayılır; bir hata, sekmeyi, satırı ve düzeltmeyi belirtir, örneğin `events, row 7: "required" must be yes or no (found "maybe").`
 
 `measurement-plan.json` şöyle görünür:
 
@@ -250,6 +267,15 @@ Event adları gevşek eşleştirilir: `dl_add_to_cart` (Elevar), `addToCart` ve 
 
 `aitd plan list --site <url>`, sitenin plan kimliklerini en eskiden en yeniye listeler.
 
+**Planı ilk çalıştırmadan öğrenin.** Sitenin kayıtlı bir planı yokken, `--against` ya da `--out` olmadan yapılan bir çalıştırma, sitenin zaten gönderdiği event'leri listeler ve bunları sitenin planı olarak kaydedip kaydetmeyeceğinizi sorar:
+
+```
+No plan yet for this site. It already sends 3 events: ga4:page_view, ga4:purchase, meta:PageView
+Save them as the site's plan? (Y/n)
+```
+
+Evet derseniz sonraki çalıştırmalar `--against latest` ile bu plana karşı kontrol yapabilir. Bir event'in her isteğinde bulunan bir parametre, o event'in zorunlu parametrelerinden biri olur. Hiçbir değer kopyalanmaz, bu yüzden bir ziyaretçinin yazdıkları plana girmez. Bir betikte ya da CI işinde `--yes` eklemedikçe hiçbir şey kaydedilmez; çalıştırma bunun yerine daha ayrıntılı bir plan taslağı için `aitd plan --site` komutunu yazdırır.
+
 ### Plan ve site
 
 Bir çalıştırma `--against` kullandığında rapor, `report.html` ve `report.md` dosyalarında **Plan ve site** bölümüyle başlar. Planlanan her event bir kovaya düşer:
@@ -264,6 +290,12 @@ Bir çalıştırma `--against` kullandığında rapor, `report.html` ve `report.
 | Kontrol edilmedi | Planlandı, ama yolculuğu ya da platformu bu çalıştırmanın parçası değildi |
 
 Kapsam puanı, uygulanmış olanların kontrol edilebilir planlanmış event'lere (kontrol edilmedi hariç hepsi) bölünmesiyle bulunur; genel ve platform başına gösterilir, örneğin `Kapsam 11 olaydan 7 (%64), 2 olay kontrol edilmedi`. Aynı kayıtlar `plan-check.json` dosyasında da bulunur: planlanan her event için kovasıyla birlikte bir kayıt. Çıkış kodları değişmez: `--fail-on` yine bulgu önemine bakar. `--against` olmadan rapor tam olarak eskisi gibidir.
+
+Kontrol edilen plan sitenin ilk planı değilse, rapor başlığı onu bir önceki kayıtlı sürümle karşılaştırır: `Plan 2026-10-01_0900 sürümünden bu yana değişti: 1 eklendi, 0 çıkarıldı, 2 değişti` ya da `Plan 2026-10-01_0900 sürümünden bu yana değişmedi`. Başlık her değişikliği `report.html` ve `report.md` içinde listeler: eklenen event için `+`, çıkarılan için `−`, değişen için `~`, ardından neyin değiştiği (zorunlu parametreler, parametreler ya da yolculuklar). İlk sürümün karşılaştırılacak bir şeyi yoktur; `capture.json` aynı karşılaştırmayı `planChanges` altında da saklar.
+
+### Etiket envanteri
+
+Her raporda ayrıca bir **etiket envanteri** bulunur: sitenin istek gönderdiği her sağlayıcı; istekleri sitenin kendi alan adına gittiyse birinci taraf, sağlayıcıya gittiyse üçüncü taraf, ikisine de gittiyse ikisi olarak işaretlenir. Sağlayıcının görüldüğü sayfa sayısını ve ona bağlı çerezleri gösterir. Hiçbir sağlayıcıya ait olmayan çerezler ayrıca birinci ya da üçüncü taraf olarak listelenir. Yalnızca çerez adları kaydedilir, değerleri asla. Envanter `report.html` içindeki **Kapsam ve plan** sekmesinde, `report.md` içinde ise bir tablo olarak yer alır.
 
 ### Klasör yapısı ve plan kimlikleri
 
@@ -319,6 +351,7 @@ Gezinmenin her adımı bir model çağrısıdır; bu yüzden kullanım **yolculu
 - **Tek bir görünüm çalıştırın.** `--viewport mobile`, masaüstü ve mobil birlikte çalıştırmaya göre çağrı sayısını yarıya indirir.
 - **Adım sayısını sınırlayın.** `--max-steps 15`, dolaşan bir yolculuğu durdurur.
 - **Büyük sayfaların daha pahalı olmasını bekleyin.** Her adım, sayfa görünümünü (en fazla 250 öğe ve 3.000 karakter metin) modele gönderir; bu yüzden yoğun sayfalar basit sayfalardan adım başına daha fazla token kullanır.
+- **Tekrar çalıştırmalar son yolu baştan kullanır.** Bir yolculuk sitede bir kez tamamlandıktan sonra, bir sonraki çalıştırma yapay zekâya o çalıştırmanın geçtiği sayfaları sırasıyla verir; böylece keşfetmek yerine doğrudan hedefe gider. Yalnızca aynı hedef için kullanılır, yalnızca 0.14.0 ve sonrasıyla kaydedilen çalıştırmalardan alınır ve yalnızca yapay zekâlı çalıştırmalarda kullanılır. `--out` ya da `replay` ile kullanılmaz. Site değiştiyse ve yol artık uymuyorsa yapay zekâ başka bir yol izler.
 - **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmaz, bu yüzden kullanımı pek değiştirmez.
 - **Yapay zekâsız tekrar oynatın.** Bir yapay zekâlı çalıştırmadan sonra adımları kaydetmek için `--save-steps <dosya>` ekleyin; sonra o ayar dosyasını her dağıtımda `--scripted --no-ai` ile çalıştırın. Bkz. [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın).
 - **Bir sohbet uygulaması kullanın.** MCP üzerinden gezinmeyi sohbet uygulamasının kendi modeli yapar, bu yüzden hiç API anahtarı kullanılmaz.
@@ -377,14 +410,34 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
-| `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`. `--platforms` ile aynıdır. |
+| `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `campaign_checks` | Varsayılan `true`. Her çalıştırma ilk sayfayı bir reklam tıklaması gibi açar (UTM parametreleri, `gclid`, `fbclid` ya da başlangıç adresinde zaten olanlar) ve bunların yönlendirmelerden geçip isteklere ulaştığını denetler. Düz adresi açmak için `false` yapın. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
+| `consent_scenarios` | Varsayılan `true`. [Onay senaryolarını](#onay-senaryoları) atlamak için `false` yapın; her onay seçimi için başlangıç sayfasını bir kez ziyaret ederler. |
 | `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
 | `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
 | `branding` | Varsayılan `true`. Analitik İşler logosunu ve "Generated by AI Tag Debugger · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ile aynıdır, ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false`. |
-| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini` ya da `openai-compatible`. `--provider` ile aynıdır. |
+| `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` ya da `openai-compatible`. `--provider` ile aynıdır. |
 | `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
+| `notify` | İsteğe bağlı uyarılar, kayıtlı her çalıştırmadan sonra: `slack` (bir webhook adresi ya da `SLACK_WEBHOOK_URL` değişkenini okumak için `true`) ve `email` (bir adres ya da liste). Bkz. [Uyarılar](#uyarılar). |
+
+### Uyarılar
+
+Kayıtlı her çalıştırmadan sonra `notify`, "Son çalıştırmadan bu yana değişenler" farkını ekibinize gönderir; böylece sitedeki bir değişiklik raporu açmadan size ulaşır:
+
+```json
+"notify": {
+  "slack": "https://hooks.slack.com/services/...",
+  "email": ["team@example.com"]
+}
+```
+
+- **Slack** webhook adresini alır. `"slack": true` ise adresi bunun yerine `SLACK_WEBHOOK_URL` ortam değişkeninden okur; böylece adres dosyada durmaz.
+- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. Düz `smtp://` adresi giriş bilgisini ve postayı şifresiz gönderir, STARTTLS desteklenmez.
+
+Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Mesaj düzelen ve yeni sorunları listeler; konu satırı sayıları verir. Bir kanal başarısız olursa çalıştırma nedenini yazar ve devam eder. Çıkış kodu yine `--fail-on` ile belirlenir.
+
+## CLI
 
 ## CLI
 
@@ -440,16 +493,19 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 
 Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
 
+**Zamanlanmış çalıştırmalar.** Her dağıtımdan sonra değil de bir zamanlayıcıyla denetlemek için [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) dosyasını kullanın (varsayılan olarak haftalık; cron satırını değiştirebilirsiniz). Geçmişi çalıştırmalar arasında bir önbellekte saklar, böylece "Son çalıştırmadan beri değişenler" yeni bir runner'da da çalışır. Kendi sunucunuzda aynısı için [`examples/cron/`](examples/cron) içinde bir betik ve bir crontab satırı vardır.
+
 Çıktı:
 
 - `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.
-  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) ve `--against` ile [Plan ve site](#plan-ve-site) kapsamı.
-  - **Bulgular**: önem düzeyine göre gruplu ve filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları ve olayın yaşandığı adımlar bulunur.
-  - **Yolculuklar**: her seferinde bir yolculuk. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın üç sekmesi vardır:
+  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) `--against` ile [Plan ve site](#plan-ve-site) kapsamı. Yapay zekâ siteyi son çalıştırmadan farklı bir yoldan gezdiyse, başlıkta yolu değişen yolculukları gösteren bir not ve **Son çalıştırmadan bu yana değişenler** bölümünde değişiklikten önceki ve sonraki sayfalar bulunur.
+  - **Bulgular**: düzeltmesini kimin yapacağına göre gruplu (Yazılımcı, Tag Manager, Pazarlama) ve önem düzeyine göre filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları, olayın yaşandığı adımlar ve **Nasıl doğrulanır** listesi bulunur; bu liste düzeltmeyi kontrol edebileceğiniz araçlara bağlantı verir (Tag Assistant, GA4 DebugView, Meta Test Events, TikTok Pixel Helper).
+  - **Yolculuklar**: her seferinde bir yolculuk. Başlangıç sayfasında bir onay bannerı varsa, yolculukların üstünde [onay senaryoları](#onay-senaryoları) tablosu yer alır. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın dört sekmesi vardır:
+    - **Zaman akışı**: adım sırasıyla. Önce her dataLayer gönderimi, ardından onu tetikleyen GTM event'i (ya da çerez onayı komutu), sonra da yol açtığı platform istekleri gelir. Gönderimi olmayan istekler en sonda listelenir.
     - **Event'ler**: her takip isteği, parametreleri, çerez onayı durumu, arkasındaki dataLayer gönderimi ve isteği ve bir bulgu buraya işaret ediyorsa bir not.
     - **dataLayer**: adımdaki her gönderim.
     - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede bir `?` ipucuyla bir parametre tablosuna çözülmüş. Toplu bir GA4 isteği, içindeki her event'i gösterir.
-  - **Kapsam ve plan**: planlanan her event'in her yolculukta gönderilip gönderilmediği ve kontrol edilen ya da dışarıda bırakılan platformlar, istek sayılarıyla.
+  - **Kapsam ve plan**: planlanan her event'in her yolculukta gönderilip gönderilmediği ve kontrol edilen ya da dışarıda bırakılan platformlar, istek sayılarıyla. Ayrıca [etiket envanteri](#etiket-envanteri): her sağlayıcı, birinci ya da üçüncü taraf, sayfaları ve çerezleri.
 
   Event'ler ve istekler kaynağa göre filtrelenebilir. GA4 ürün dizgileri (`pr1`…) ve dataLayer `ecommerce.items` ürün kartları olarak gösterilir; özel ürün parametreleri kendi grubunda yer alır. Raporda betik yoktur: sekmeler ve filtreler düz HTML ve CSS'tir (Chrome 105, Safari 15.4 ya da Firefox 121 ve sonrası gerekir) ve yazdırırken her sekme görünür. Logolar gömülüdür, bu yüzden internetten hiçbir şey yüklenmez. `--no-branding`, Analitik İşler logosunu ve kredi satırını çıkarır.
 - `timeline.csv`: aynı zaman akışı, her isteğe, dataLayer gönderimine ve ağ çağrısına bir satır olarak; Excel ya da Google Sheets için hazır.
@@ -471,6 +527,7 @@ Sunucunun sunduğu araçlar:
 | Araç | Ne yapar |
 |---|---|
 | `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
+| `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
 | `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
 | `get_page` | Geçerli sayfayı gösterir. |

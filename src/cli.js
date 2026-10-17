@@ -205,6 +205,8 @@ async function main(args = process.argv.slice(2)) {
   const rel = path.relative(process.cwd(), result.reportPath);
   console.log(`Report: ${rel.startsWith("..") ? result.reportPath : rel}`);
 
+  if (!against && !values.out) await offerLearnedPlan(result, loaded.config.site, values);
+
   if (failOn !== "never") {
     const threshold = levels.indexOf(failOn);
     if (levels.slice(0, threshold + 1).some((l) => result.counts[l] > 0)) process.exitCode = 1;
@@ -220,6 +222,26 @@ async function main(args = process.argv.slice(2)) {
       process.exitCode = 1;
     }
   }
+}
+
+// The first run of a site with no plan: offer what it already tracks as its plan.
+async function offerLearnedPlan(result, site, values) {
+  const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
+  const { listPlanIds } = await import("./workspace.js");
+  if ((await listPlanIds(dataDir, site).catch(() => [])).length) return;
+  const { learnPlan } = await import("./learn.js");
+  const plan = learnPlan(site, result.runs);
+  if (!plan) return;
+  console.log(`\nNo plan yet for this site. It already sends ${plan.events.length} ${plan.events.length === 1 ? "event" : "events"}: ${plan.events.map((e) => `${e.platform}:${e.name}`).join(", ")}`);
+  let save = values.yes;
+  if (!save && process.stdin.isTTY) save = ["", "y", "yes"].includes((await ask("Save them as the site's plan? (Y/n) ")).toLowerCase());
+  if (!save) {
+    if (!process.stdin.isTTY && !values.yes) console.log("Add --yes to save them as the plan, or draft a fuller one with: aitd plan --site " + site);
+    return;
+  }
+  const { id, dir } = await savePlan(plan, { dataDir, site, branding: !values["no-branding"] });
+  const rel = path.relative(process.cwd(), dir);
+  console.log(`✓ Saved plan ${id} in ${rel.startsWith("..") ? dir : rel}. Next runs can check against it with --against latest.`);
 }
 
 // aitd "check my GA tags": shows the matching command and runs it once confirmed.
