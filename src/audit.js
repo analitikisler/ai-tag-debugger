@@ -46,7 +46,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
-  const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check });
+  const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
   const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
