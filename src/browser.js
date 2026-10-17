@@ -464,6 +464,7 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
+        pageUrl: this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url,
         t: Date.now(),
         method: request.method(),
         url: this.opts.keepBodies ? request.url() : redactUrl(request.url()).url,
