@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.15.0 (unreleased)
+## 0.15.0 (2026-10-17)
 
 - The first run learns the plan. When a site has no saved plan, `aitd run` lists the events it already sends and asks whether to save them as its plan. Add `--yes` to save without asking; in a script without `--yes`, nothing is saved.
 - With `--against`, the report header says how the plan changed since the version before it: `Plan changed since <id>: 1 added, 0 removed, 2 changed`, or `Plan unchanged since <id>`. Each change is listed. `capture.json` has the same comparison under `planChanges`.
