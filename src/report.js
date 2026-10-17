@@ -191,9 +191,9 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     }
     lines.push("");
   }
-  // A report with its own name or logo carries no Analitik İşler credit.
-  if (brand?.name) lines.push("---", "", `_${brand.name}_`, "");
-  else if (branding && !brand?.logo) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
+  // A report with its own name or logo carries no Analitik İşler credit; the AI Tag Debugger one stays.
+  if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
+  else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
   return lines.join("\n");
 }
 
@@ -1059,27 +1059,28 @@ export function renderHtml({ title, site = null, ai = null, generatedAt, finding
   const problems = rows.filter((f) => f.severity !== "ok").length;
   const flagged = flaggedSteps(runs, rows);
   const atd = `<a class="f-atd" href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer"><img src="${LOGOS["atd-icon"]}" alt="" height="16">AI Tag Debugger</a>`;
-  // A custom name or logo replaces the product and Analitik İşler branding; the accent color applies on its own.
+  // A custom name or logo takes the place of the Analitik İşler branding. The AI Tag Debugger logo and credit stay, smaller, as with branding false.
   const whiteLabel = Boolean(brand?.logo || brand?.name);
   if (whiteLabel) branding = false;
   const brandName = brand?.name ? escapeHtml(brand.name) : "";
   const brandLogo = brand?.logo ? `<img src="${brand.logo}" alt="${brandName}" height="26">` : "";
   const productLogo = whiteLabel ? (brandLogo || `<span class="brand-name">${brandName}</span>`) : logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd");
+  const atdByline = whiteLabel ? `<a href="https://github.com/analitikisler/ai-tag-debugger" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "AI Tag Debugger", 18, "logo-atd")}</a>` : "";
   const footer = branding
     ? `<div class="wrap"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("stacked", "Analitik İşler", 56, "logo-s")}</a>
 <div><p>${m.ui.credit(atd)}</p><div class="f-links"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div></div>
 <div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`
-    : `<div class="wrap plain"><div class="f-meta">${whiteLabel ? brandName : "AI Tag Debugger"}</div><div class="f-meta">${escapeHtml(generatedAt)}${whiteLabel ? "" : ` · v${VERSION}`}</div></div>`;
+    : `<div class="wrap plain"><div class="f-meta">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "AI Tag Debugger"}</div><div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`;
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/png"'} href="${brand?.logo ?? LOGOS.favicon}">
 <style>${CSS}${filterCss(runs)}
 ${navCss(runs)}${brandCss(brand?.color)}</style></head><body>
-<div class="topbar"><div class="wrap"><span class="product-logo">${productLogo}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
+<div class="topbar"><div class="wrap"><span class="product-logo">${productLogo}</span>${atdByline}${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
-<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))}${whiteLabel ? "" : ` · ai-tag-debugger ${VERSION}`}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}
+<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>
