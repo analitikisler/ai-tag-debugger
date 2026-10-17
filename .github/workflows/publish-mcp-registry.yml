@@ -1,0 +1,27 @@
+name: Publish to MCP Registry
+# Run by hand from the Actions tab after a release is on npm. It publishes server.json as it is on main.
+# Signs in with GitHub OIDC (the repo's own identity): no token is stored and no personal login is needed.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: publish-mcp-registry
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that this version is on npm
+        run: |
+          name=$(node -p "require('./server.json').packages[0].identifier")
+          version=$(node -p "require('./server.json').packages[0].version")
+          npm view "$name@$version" version
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
