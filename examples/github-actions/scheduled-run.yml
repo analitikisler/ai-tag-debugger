@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     env:
       # Pin a released version, and update it on purpose.
-      ATD_VERSION: 0.15.0
+      ATD_VERSION: 0.16.0
       # Plans and runs are kept here. The cache steps carry this folder from one run to the next.
       DATA_DIR: tracking-data
     steps:
