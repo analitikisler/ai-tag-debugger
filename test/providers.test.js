@@ -181,3 +181,28 @@ test("aiStatus says which AI a run would use and which other keys are set", () =
   );
   assert.equal(aiStatus({ name: "gemini" }, { ANTHROPIC_API_KEY: "k", GEMINI_API_KEY: "g" }), "AI: gemini (gemini-pro-latest) · also set: anthropic (pick with --provider)");
 });
+
+test("--model cheap picks each provider's small CI model", async () => {
+  const env = { ANTHROPIC_API_KEY: "k" };
+  assert.equal((await createProvider({ model: "cheap" }, env)).model, "claude-haiku-5-5");
+  assert.equal((await createProvider({ name: "vercel", model: "cheap" }, { AI_GATEWAY_API_KEY: "v" })).model, "anthropic/claude-haiku-5.5");
+  assert.equal(aiStatus({ model: "cheap" }, env), "AI: anthropic (claude-haiku-5-5)");
+});
+
+test("Cloudflare Workers AI is picked from its token and account id", async () => {
+  const env = { CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" };
+  assert.equal(resolveProviderName(undefined, env), "cloudflare");
+  const provider = await createProvider({}, env);
+  assert.equal(provider.name, "cloudflare");
+  assert.equal(provider.model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+  assert.equal(aiStatus({}, env), "AI: cloudflare (@cf/meta/llama-3.3-70b-instruct-fp8-fast)");
+  assert.equal(resolveProviderName(undefined, { CLOUDFLARE_API_TOKEN: "t" }), "anthropic");
+  await assert.rejects(createProvider({ name: "cloudflare" }, { CLOUDFLARE_API_TOKEN: "t" }), /CLOUDFLARE_ACCOUNT_ID/);
+});
+
+test("--model cheap with an openai-compatible API uses the configured model, never the word cheap", async () => {
+  const env = { OPENAI_COMPATIBLE_BASE_URL: "http://localhost:11434/v1", OPENAI_COMPATIBLE_MODEL: "llama3" };
+  assert.equal((await createProvider({ model: "cheap" }, env)).model, "llama3");
+  assert.equal(aiStatus({ model: "cheap" }, env), "AI: openai-compatible (llama3)");
+  await assert.rejects(createProvider({ model: "cheap" }, { OPENAI_COMPATIBLE_BASE_URL: "http://x/v1" }), /needs a model id/);
+});
