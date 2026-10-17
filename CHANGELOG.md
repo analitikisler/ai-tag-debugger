@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
+
 ## 0.13.0 (2026-10-17)
 
 - Each journey step has a **Timeline** tab: every dataLayer push, the GTM event it raised (or the consent command), then the platform hits it caused. Hits with no push are listed last.
