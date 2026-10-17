@@ -4,7 +4,7 @@ English | [Türkçe](README.tr.md)
 
 **An open-source AI agent that QA-tests your website's analytics and ad tracking.**
 
-An AI model drives a real browser through your key journeys (product → cart → checkout, lead forms) like a real visitor. While it browses, `ai-tag-debugger` records every GA4, Google Ads, Meta Pixel and TikTok hit and every dataLayer push. It then checks them against your measurement plan and Consent Mode setup and writes a plain-language report of what broke and how to fix it, in English or Turkish.
+An AI model drives a real browser through your key journeys (product → cart → checkout, lead forms) like a real visitor. While it browses, `ai-tag-debugger` records every tracking hit (GA4, Google Ads, Meta Pixel, TikTok and about a dozen more platforms) and every dataLayer push. It then checks them against your measurement plan and Consent Mode setup and writes a plain-language report of what broke and how to fix it, in English or Turkish.
 
 Use it in two ways:
 
@@ -50,13 +50,13 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Unplanned events | Events firing that aren't in your measurement plan |
 | Plan coverage | Each planned event sorted into implemented, missing, missing parameters, wrong values or not checked (see [Plan vs. site](#plan-vs-site)) |
 
-Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, and basic X Pixel events.
+Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, basic X Pixel events, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag, and Pinterest, Snapchat and Klaviyo events. Adobe Analytics, Matomo and Piwik PRO events are read too (page views, links, goals, site search and ecommerce orders), and Microsoft Clarity and Hotjar tag loads name the project or site id.
 
 ### Choose the platforms to check
 
-By default an audit checks GA4, Google Ads, Meta and TikTok. Pick others with `--platforms ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok and X; the others show their network requests. `--providers` still works as the old name of `--platforms` for one more minor version and prints a note.
+By default an audit checks GA4, Google Ads, Meta and TikTok, and also any other platform the site turns out to use. That platform is checked from its first request, with no setting needed. Choosing platforms turns this detection off. Pick a fixed list with `--platforms ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo and Piwik PRO. Clarity and Hotjar show their tag loads, and the others show their network requests. `--providers` still works as the old name of `--platforms` for one more minor version and prints a note.
 
-Requests to platforms you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--platforms`, any platform your measurement plan names is added to the default list. Planned events for platforms you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
+Requests to platforms you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--platforms`, any platform your measurement plan names or the site sends to is added to the default list. Planned events for platforms you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
 
 ### Consent scenarios
 
@@ -78,8 +78,9 @@ Bring your own API key. `ai-tag-debugger` uses the official SDK of each provider
 | Anthropic (Claude) | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-pro-latest` |
+| Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
-The provider is picked from whichever key is set (Anthropic first if several are). Choose explicitly with `--provider anthropic|openai|gemini` or `"provider"` in the config, and pick another model with `--model`. Navigation asks for low reasoning effort to keep runs cheap; explanations ask for high effort and structured JSON output.
+Without `--provider`, the first setting found decides, in this order: `OPENAI_COMPATIBLE_BASE_URL`, Vercel AI Gateway (`AI_GATEWAY_API_KEY`), Cloudflare Workers AI, Anthropic, OpenAI, Gemini. Choose explicitly with `--provider anthropic|openai|gemini|vercel|cloudflare` or `"provider"` in the config, and pick another model with `--model`. `--model cheap` picks each provider's small, inexpensive model for routine runs in CI: `claude-haiku-5-5`, `gpt-5.5-mini`, `gemini-flash-latest`, or `anthropic/claude-haiku-5.5` on Vercel. Cloudflare has one model in its list, so `cheap` and the default are the same there. Navigation asks for low reasoning effort to keep runs cheap; explanations ask for high effort and structured JSON output.
 
 ### Any OpenAI-compatible API: Kimi, GLM, DeepSeek, OpenRouter, Ollama and more
 
@@ -123,9 +124,21 @@ export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<account id>/default
 export AI_GATEWAY_TOKEN=...   # only if the gateway has authentication on
 ```
 
-This works with `anthropic`, `openai` and `gemini`. Leave caching off in the gateway so each run sees your live site. Cloudflare Workers AI models also work through the OpenAI-compatible provider, with `--base-url https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1`.
+This works with `anthropic`, `openai` and `gemini`. Leave caching off in the gateway so each run sees your live site. To run models on Cloudflare itself, see [Cloudflare Workers AI](#cloudflare-workers-ai).
 
 **A word on model choice.** The AI browses by calling tools, one step at a time, for 5 to 30 steps. Models differ a lot in how reliably they do that: smaller and local models may click the wrong thing, loop, or stop early. The checks stay correct whatever the model does, because they come from the captured hits, but a journey that doesn't finish can't show its later events. If a model struggles, try a larger one, a ready-made journey with a short goal, or `--max-steps`. The Anthropic, OpenAI and Gemini defaults are the tested ones.
+
+### Cloudflare Workers AI
+
+Open models on Cloudflare's network, billed per use by Cloudflare. Create an API token with Workers AI permission, and find your account ID in the Cloudflare dashboard:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+aitd run --site https://yourshop.com --journey purchase
+```
+
+Without `--model` it uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. When both variables are set, Cloudflare is picked before Anthropic, OpenAI and Gemini, so pass `--provider` to use one of those instead.
 
 Adding a native provider means implementing two functions in [`src/providers.js`](src/providers.js): a tool-calling conversation and a structured JSON call.
 
@@ -229,7 +242,7 @@ Events your site already sends are marked `"seen": true`.
 
 Review the plan before you use it. The examples and suggestions come from the pages the AI saw, so check that each event fits your business. The extra fields are ignored by the checks.
 
-**Spreadsheet import and export.** `aitd plan export <plan> --site <url>` writes `plan.xlsx` next to the plan, with one row per event parameter on an `events` tab (`event, platform, parameter, required, example, trigger, description`) and one row per user property on a `user_properties` tab. Add `--format csv` to get `events.csv` and `user_properties.csv` instead; CSV needs no extra package. `.xlsx` uses one small library, `fflate`, which is installed with the tool as an optional dependency. `aitd plan import <file> --site <url>` reads the spreadsheet back and saves it as a new plan folder. Import never edits an existing plan. Unknown columns are ignored with a warning, and an error names the tab, row and fix, for example `events, row 7: "required" must be yes or no (found "maybe").`
+**Spreadsheet import and export.** `aitd plan export <plan> --site <url>` writes `plan.xlsx` next to the plan, with one row per event parameter on an `events` tab (`event, platform, parameter, required, example, trigger, description`) and one row per user property on a `user_properties` tab. Add `--format csv` to get `events.csv` and `user_properties.csv` instead; CSV needs no extra package. `.xlsx` uses one small library, `fflate`, which is installed with the tool as an optional dependency. `aitd plan import <file> --site <url>` reads the spreadsheet back (from Google Sheets, use File > Download > Microsoft Excel (.xlsx), or download each tab as CSV: `Shop plan - events.csv` is imported together with `Shop plan - user_properties.csv` beside it, and checkbox cells work as yes/no) and saves it as a new plan folder. Import never edits an existing plan. Unknown columns are ignored with a warning, and an error names the tab, row and fix, for example `events, row 7: "required" must be yes or no (found "maybe").`
 
 `measurement-plan.json` looks like this:
 
@@ -338,6 +351,7 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Run one viewport.** `--viewport mobile` halves the calls compared with desktop and mobile.
 - **Cap the steps.** `--max-steps 15` stops a journey that wanders.
 - **Expect bigger pages to cost more.** Each step sends the page view (up to 250 elements and 3,000 characters of text) to the model, so busy pages use more tokens per step than simple ones.
+- **Repeat runs start from the last route.** Once a journey has completed on a site, the next run gives the AI the pages that run went through, in order, so it goes straight to the goal instead of exploring. The route is reused only for the same goal, from runs made with 0.14.0 or later, and only for AI runs. It isn't used with `--out` or `replay`. If the site changed and the route no longer fits, the AI takes another path.
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
 - **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
@@ -396,14 +410,31 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `journeys[].start` | Optional start path (default `/`). |
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
-| `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`. Same as `--platforms`. |
+| `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
 | `consent_scenarios` | Default `true`. Set to `false` to skip the [consent scenarios](#consent-scenarios), which visit the start page once per consent choice. |
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
 | `branding` | Default `true`. Set to `false` to leave the Analitik İşler logo and the "Generated by AI Tag Debugger · analitikisler.com" line out of the reports. Same as `--no-branding`, or `branding: false` on the MCP `finish_audit` and `run_audit` tools. |
-| `provider` | Optional: `anthropic`, `openai`, `gemini` or `openai-compatible`. Same as `--provider`. |
+| `provider` | Optional: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` or `openai-compatible`. Same as `--provider`. |
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
+| `notify` | Optional alerts after each saved run: `slack` (a webhook URL, or `true` to read `SLACK_WEBHOOK_URL`) and `email` (an address or a list). See [Alerts](#alerts). |
+
+### Alerts
+
+After each saved run, `notify` sends the "Changed since last run" diff to your team, so a change on the site reaches you without opening a report:
+
+```json
+"notify": {
+  "slack": "https://hooks.slack.com/services/...",
+  "email": ["team@example.com"]
+}
+```
+
+- **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
+- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
+
+An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The message lists the problems fixed and the new ones, and its subject line gives the counts. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
 
 ## CLI
 
@@ -459,12 +490,15 @@ Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a pl
 
 The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
 
+**Scheduled runs.** To audit on a timer instead of after each deploy, use [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) (weekly by default, with a cron line you can change). It saves the history between runs in a cache, so "Changed since last run" keeps working on a fresh runner. On your own server, [`examples/cron/`](examples/cron) has a script and a crontab line that do the same.
+
 Output:
 
 - `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
-  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, a **This run** card (platforms, AI provider and model, plan, journeys, viewports, language, version), and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage.
-  - **Findings**: grouped by severity and filterable. Each one has its impact, likely cause, evidence, numbered fix steps and the steps where it happened.
-  - **Journeys**: one journey at a time. Above them, when the start page has a consent banner, the [consent scenarios](#consent-scenarios) table. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
+  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, a **This run** card (platforms, AI provider and model, plan, journeys, viewports, language, version), and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage. When the AI took a different route through the site than in the last run, the header names the journeys whose route changed, and the **Changed since last run** section shows the pages before and after.
+  - **Findings**: grouped by who fixes them (Developer, Tag Manager, Marketing) and filterable by severity. Each one has its impact, likely cause, evidence, numbered fix steps, the steps where it happened, and a **How to verify** list of tools to check the fix in, such as Tag Assistant, GA4 DebugView, Meta Test Events or TikTok Pixel Helper.
+  - **Journeys**: one journey at a time. Above them, when the start page has a consent banner, the [consent scenarios](#consent-scenarios) table. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has four tabs:
+    - **Timeline**: the step in order. Each dataLayer push comes first, then the GTM event it raised (or the consent command), then the platform hits it caused. Hits with no push are listed last.
     - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
     - **dataLayer**: every push in the step.
     - **Network requests**: every request to the chosen platforms, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
@@ -490,6 +524,7 @@ Tools the server offers:
 | Tool | What it does |
 |---|---|
 | `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
+| `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
 | `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
 | `get_page` | Shows the current page. |
