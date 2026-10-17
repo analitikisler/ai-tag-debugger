@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Campaign checks (`campaign_checks`, on by default): each run opens the first page like an ad click, with UTM parameters, `gclid` or `fbclid` (or the ones already in the start address), and reports when a redirect drops them or the hits show a page address without them. Set `campaign_checks` to `false` to open the plain address.
+- Server-side checks: one event ID reused on two different events is flagged, and so is a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container forwards. A server container is noted as an info finding.
+- GTM container awareness: with `gtm_container`, each broken event names the tag that sends it and the trigger it fires on, without an AI model.
+- White label: the `report` setting takes a `name`, `logo`, `color` and `pdf`. A name or logo replaces the Analitik İşler branding in the HTML report, and a small AI Tag Debugger logo and credit stay. `pdf: true` also writes `report.pdf`.
+
 ## 0.15.0 (2026-10-17)
 
 - The first run learns the plan. When a site has no saved plan, `aitd run` lists the events it already sends and asks whether to save them as its plan. Add `--yes` to save without asking; in a script without `--yes`, nothing is saved.

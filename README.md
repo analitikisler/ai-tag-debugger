@@ -49,8 +49,14 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Personal data | An email address sent to an ad platform in plain text |
 | Unplanned events | Events firing that aren't in your measurement plan |
 | Plan coverage | Each planned event sorted into implemented, missing, missing parameters, wrong values or not checked (see [Plan vs. site](#plan-vs-site)) |
+| Campaign parameters | `utm_campaign` or `gclid` on the landing address dropped by a redirect, or missing from the page address the hits report. The visit would be credited to direct traffic |
+| Server-side tracking | One event ID used for two different events, or a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container turns into a Conversions API event |
 
 Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, basic X Pixel events, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag, and Pinterest, Snapchat and Klaviyo events. Adobe Analytics, Matomo and Piwik PRO events are read too (page views, links, goals, site search and ecommerce orders), and Microsoft Clarity and Hotjar tag loads name the project or site id.
+
+When GA4 hits go to a server container on another host, or its loader is served from one, the report adds an info finding: the events it forwards to ad platforms never pass through the browser, so they can't be seen here.
+
+With a `gtm_container` export, each broken event also names the GTM tag that sends it and the trigger it fires on, or says that no tag sends it. This needs no AI model.
 
 ### Choose the platforms to check
 
