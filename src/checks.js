@@ -3,6 +3,7 @@
 
 import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
+import { campaignParamsIn } from "./campaign.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
@@ -293,6 +294,33 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }
     for (const [, hit] of noId) {
       findings.push({ ...base, severity: "info", check: "dedup_id_missing", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.dedupIdMissing(hit.platform, hit.name) });
+    }
+  }
+
+  // Campaign parameters (gclid, fbclid, UTM) on the landing address: they must survive redirects and reach the hits.
+  const landing = run.landing;
+  const sent = landing ? campaignParamsIn(landing.requested) : {};
+  if (landing && Object.keys(sent).length) {
+    const kept = campaignParamsIn(landing.final);
+    const lost = Object.keys(sent).filter((n) => kept[n] !== sent[n]);
+    const hop = landing.chain.length > 1 ? landing.chain : null;
+    if (lost.length) {
+      findings.push({ ...base, severity: "broken", check: "campaign_lost_redirect", step: stepLabel(landing.step), detail: d.campaignLost(lost, landing.final), evidence: hop ? hop.join(" -> ") : undefined });
+    }
+    // Hits the landing page sent whose page address leaves out a parameter the page still had.
+    const missing = new Map();
+    for (const hit of run.hits) {
+      const loc = hit.params?.page_location;
+      if (hit.step !== landing.step || !loc || hit.platform === "google_ads") continue;
+      const here = campaignParamsIn(loc);
+      const gone = Object.keys(kept).filter((n) => kept[n] === sent[n] && here[n] !== sent[n] && hit.params?.[n] !== sent[n]);
+      if (gone.length && !missing.has(hit.platform)) missing.set(hit.platform, { hit, gone });
+    }
+    for (const [platform, { hit, gone }] of missing) {
+      findings.push({ ...base, severity: "broken", check: "campaign_missing_in_hits", platform, event: hit.name, step: stepLabel(hit.step), detail: d.campaignMissingInHits(platform, hit.name, gone), evidence: hit.params.page_location });
+    }
+    if (!lost.length && !missing.size) {
+      findings.push({ ...base, severity: "ok", check: "campaign_params", step: stepLabel(landing.step), detail: d.campaignOk(Object.keys(sent)) });
     }
   }
 
