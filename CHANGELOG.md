@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0 (unreleased)
+## 0.13.0 (2026-10-17)
 
 - Each journey step has a **Timeline** tab: every dataLayer push, the GTM event it raised (or the consent command), then the platform hits it caused. Hits with no push are listed last.
 - Findings are grouped by who fixes them (Developer, Tag Manager, Marketing). Each one has a **How to verify** list linking to the tool that shows the fix: Tag Assistant, GA4 DebugView, Meta Test Events, TikTok Pixel Helper or the Consent Mode guide.
