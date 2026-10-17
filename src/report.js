@@ -1,3 +1,4 @@
+import { OWNERS, ownerOf, verifyLinks } from "./verify.js";
 import { createProvider } from "./providers.js";
 import { groupFindings, hitMatchesEvent, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
@@ -168,6 +169,9 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   for (const f of rows.filter((r) => r.severity !== "ok")) {
     lines.push(`### ${m.severity[f.severity]}: ${mdText(f.detail)}`, "");
     lines.push(`- ${m.ui.where}: ${mdText(f.where.map((w) => m.ui.whereStep(w.journey, w.viewport, w.step)).join("; "))}`);
+    lines.push(`- ${m.ui.owners[ownerOf(f)]}`);
+    const vl = verifyLinks(f);
+    if (vl.length) lines.push(`- ${m.ui.verify}: ${vl.map((l) => `[${l.name}](${l.url})`).join(", ")}`);
     if (f.evidence) lines.push(`- ${m.ui.captured}: \`${mdCode(f.evidence)}\``);
     if (f.explanation) {
       if (f.explanation.impact) lines.push(`- ${m.ui.impact}: ${mdText(f.explanation.impact)}`);
@@ -196,7 +200,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   return lines.join("\n");
 }
 
-const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x", "pinterest", "snapchat", "klaviyo", "hotjar"];
+const PLATFORM_ORDER = ["ga4", "google_ads", "meta", "tiktok", "x", "linkedin", "microsoft_ads", "pinterest", "snapchat", "criteo", "klaviyo", "adobe", "matomo", "piwik_pro", "clarity", "hotjar"];
 export const platformLabel = (p) => PROVIDERS[p] ?? String(p).replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const platformRank = (p) => (PLATFORM_ORDER.includes(p) ? PLATFORM_ORDER.indexOf(p) : PLATFORM_ORDER.length);
 
@@ -205,6 +209,7 @@ const EVENT_ALIASES = {
   pageview: "pageview", viewcontent: "viewitem", addtocart: "addtocart", addtowishlist: "addtowishlist", initiatecheckout: "begincheckout",
   addpaymentinfo: "addpaymentinfo", purchase: "purchase", completepayment: "purchase", placeanorder: "purchase", lead: "generatelead",
   completeregistration: "signup", search: "search", contact: "generatelead", submitform: "generatelead", subscribe: "subscribe", starttrial: "starttrial",
+  viewbasket: "viewcart", tracktransaction: "purchase",
 };
 const normName = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const eventKey = (s) => EVENT_ALIASES[normName(s)] ?? normName(s);
@@ -470,6 +475,37 @@ function whereTarget(runs, w, f) {
   return { ri, step };
 }
 
+/** The push a hit came from: the latest matching push at or before the hit, else the first match. */
+function sourcePush(run, hit) {
+  const pushes = pushesForHit(run, hit);
+  return pushes.filter((e) => e.t <= hit.t).at(-1) ?? pushes[0] ?? null;
+}
+
+/** The step in order: each dataLayer push, the GTM event it raised, then the platform hits it caused. Hits with no push come last. */
+function timelinePanel(m, findings, run, step, pushes, hits) {
+  const bySource = new Map();
+  const orphans = [];
+  for (const h of [...hits].sort((a, b) => a.t - b.t)) {
+    const src = sourcePush(run, h);
+    if (src && src.step === step.index) {
+      if (!bySource.has(src)) bySource.set(src, []);
+      bySource.get(src).push(h);
+    } else orphans.push(h);
+  }
+  const hitList = (list) => (list.length ? `<ul class="evlist tl-hits">${list.map((h) => eventRow(m, findings, run, step, h)).join("")}</ul>` : `<p class="muted xs tl-none">${m.ui.timelineNoHits}</p>`);
+  const nodes = [...pushes].sort((a, b) => a.t - b.t).map((e) => {
+    const name = pushEvent(e.value);
+    const gtm = isConsentEntry(e.value)
+      ? `<span class="tl-k">${m.ui.timelineConsent}</span><code>${escapeHtml(`consent ${e.value[1] ?? ""}`.trim())}</code>`
+      : typeof name === "string" && name
+        ? `<span class="tl-k">${m.ui.timelineGtmEvent}</span><code>${escapeHtml(name)}</code>`
+        : `<span class="tl-k muted">${m.ui.timelineNoEvent}</span>`;
+    return `<li class="tl-node"><div class="tl-lbl">dataLayer</div><ul class="evlist">${pushRow(m, run, e)}</ul><div class="tl-gtm">${gtm}</div>${hitList(bySource.get(e) ?? [])}</li>`;
+  });
+  if (orphans.length) nodes.push(`<li class="tl-node tl-orphan"><div class="tl-lbl">${m.ui.timelineOther}</div>${hitList(orphans)}</li>`);
+  return nodes.length ? `<ol class="timeline">${nodes.join("")}</ol>` : `<p class="empty">${m.ui.noHits}</p>`;
+}
+
 function stepDetail(m, lang, findings, run, ri, step, isDefault) {
   const hits = run.hits.filter((h) => h.step === step.index);
   const id = `s${ri}-${step.index}`;
@@ -482,7 +518,8 @@ function stepDetail(m, lang, findings, run, ri, step, isDefault) {
   const tab = (n, label, count) => `<input type="radio" name="${id}" id="${id}-${n}"${n === 1 ? " checked" : ""}><label for="${id}-${n}">${label} <span class="n">${count}</span></label>`;
   return `<section class="sdetail${isDefault ? " default" : ""}" id="${stepAnchor(ri, step.index)}" aria-label="${escapeHtml(step.label)}">
 <header class="shead"><span class="sidx">${step.index}</span><div><h3>${escapeHtml(step.label)}</h3><div class="muted xs">${escapeHtml(m.ui.stepMeta(seconds(run, step.t), hits.length, pushes.length, skippedN))}${step.forced ? ` · ${m.ui.clickedThrough}` : ""}</div></div></header>
-<div class="tabs seg">${tab(1, m.ui.tabEvents, eventRows.length)}${tab(2, "dataLayer", pushes.length)}${tab(3, m.ui.tabNetwork, reqRows.length)}
+<div class="tabs seg">${tab(1, m.ui.tabTimeline, pushes.length + hits.length)}${tab(2, m.ui.tabEvents, eventRows.length)}${tab(3, "dataLayer", pushes.length)}${tab(4, m.ui.tabNetwork, reqRows.length)}
+<div class="panel">${timelinePanel(m, findings, run, step, pushes, hits)}</div>
 <div class="panel">${eventRows.length ? filtered(m, `${id}e`, eventRows, eventRows.map((r) => r.html).join("")) : `<p class="empty">${m.ui.noHits}</p>`}</div>
 <div class="panel">${pushes.length ? `<ul class="evlist">${pushes.map((e) => pushRow(m, run, e)).join("")}</ul>` : `<p class="empty">${m.ui.noPushes}</p>`}</div>
 <div class="panel">${reqRows.length ? filtered(m, `${id}n`, reqRows, reqRows.map((r) => r.html).join("")) : `<p class="empty">${m.ui.noRequests}</p>`}${skippedN ? `<p class="muted xs scope-note">${escapeHtml(m.ui.skippedInStep(skipped.map(([v, n]) => `${v} ${n}`).join(", "), skippedN))}</p>` : ""}</div>
@@ -536,6 +573,12 @@ function evidenceHtml(evidence) {
   return `<pre>${escapeHtml(evidence)}</pre>`;
 }
 
+function verifyHtml(m, f) {
+  const links = verifyLinks(f);
+  if (!links.length) return "";
+  return `${sec("cause", m.ui.verify)}<ul class="verify">${links.map((l) => `<li><a href="${l.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.name)}</a></li>`).join("")}</ul>`;
+}
+
 function findingCard(m, runs, f, open, aiRan) {
   const e = f.explanation;
   const steps = fixSteps(e);
@@ -559,7 +602,7 @@ function findingCard(m, runs, f, open, aiRan) {
 ${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
 <div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
-<div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div></div></div></div></details></li>`;
+<div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div>${verifyHtml(m, f)}</div></div></div></details></li>`;
 }
 
 const FINDING_SEVERITIES = ["broken", "risk", "warning", "info"];
@@ -574,11 +617,21 @@ function findingsTab(m, runs, rows, aiRan) {
   const bar = present.map((s) => `<span style="flex:${n[s]};background:${SEV_COLOR[s]}"></span>`).join("");
   const legend = present.map((s) => `<span><i style="background:${SEV_COLOR[s]}"></i>${m.severity[s]} <strong>${n[s]}</strong></span>`).join("");
   const labels = [`<label for="fs-all">${m.ui.all} <span class="n">${problems.length}</span></label>`, ...present.map((s) => `<label for="fs-${s}">${m.severity[s]} <span class="n">${n[s]}</span></label>`)].join("");
-  const sorted = FINDING_SEVERITIES.flatMap((s) => problems.filter((f) => f.severity === s));
+  let first = true;
+  const groups = OWNERS.map((o) => {
+    const mine = FINDING_SEVERITIES.flatMap((s) => problems.filter((f) => f.severity === s && ownerOf(f) === o));
+    if (!mine.length) return "";
+    const cards = mine.map((f) => {
+      const open = first && f.severity !== "info";
+      if (open) first = false;
+      return findingCard(m, runs, f, open, aiRan);
+    }).join("");
+    return `<section class="ogroup" data-owner="${o}"><h3 class="ogroup-h">${m.ui.owners[o]} <span class="n">${mine.length}</span><span class="muted xs">${m.ui.ownerHint[o]}</span></h3><ul class="flist">${cards}</ul></section>`;
+  }).join("");
   return `<div class="filter-host">${radios}
 <div class="sevbar" aria-hidden="true">${bar}</div><div class="sevlegend">${legend}</div>
 <div class="toolbar"><div class="sevfilter" role="group" aria-label="${m.ui.filterBy}">${labels}</div><span class="muted xs">${m.ui.findingHint}</span></div>
-<ul class="flist">${sorted.map((f, i) => findingCard(m, runs, f, i === 0 && f.severity !== "info", aiRan)).join("")}</ul></div>`;
+${groups}</div>`;
 }
 
 function summaryCard(m, explained, problems) {
@@ -755,7 +808,8 @@ function navCss(runs) {
   const sev = ["all", ...FINDING_SEVERITIES];
   out.push(`${sev.map((s) => `#fs-${s}:checked~.toolbar label[for=fs-${s}]`).join(",")}{background:var(--bg);color:var(--fg);box-shadow:var(--shadow-sm)}`);
   out.push(`${sev.map((s) => `#fs-${s}:focus-visible~.toolbar label[for=fs-${s}]`).join(",")}{outline:2px solid var(--accent)}`);
-  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.flist>li:not([data-sev=${s}])`).join(",")}{display:none}`);
+  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.ogroup>.flist>li:not([data-sev=${s}])`).join(",")}{display:none}`);
+  out.push(`${FINDING_SEVERITIES.map((s) => `#fs-${s}:checked~.ogroup:not(:has(li[data-sev=${s}]))`).join(",")}{display:none}`);
   return out.join("\n");
 }
 
@@ -875,6 +929,8 @@ table.dt a{color:var(--fg)}table.dt a:hover{color:var(--accent-fg)}
 .fix-steps{list-style:none;margin:0;padding:0;display:grid;gap:10px;counter-reset:fx}
 .fix-steps li{display:grid;grid-template-columns:22px 1fr;gap:10px;counter-increment:fx}
 .fix-steps li::before{content:counter(fx);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:4px;background:var(--accent-bg);color:var(--accent-fg);font:500 12px var(--font-mono)}
+.ogroup{margin-top:20px}.ogroup-h{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:0 0 10px}.ogroup-h .n{font-size:12px;color:var(--muted)}
+.verify{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none;font-size:13px}.verify a{color:var(--accent-fg)}
 .where{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border:1px solid var(--border);border-radius:var(--radius);color:var(--fg);font-size:12px;background:var(--bg)}
 span.chip{padding-left:10px}
@@ -918,15 +974,23 @@ body>main{flex:1 0 auto;width:100%}
 .shead h3{overflow-wrap:anywhere}
 .shead .sidx{background:var(--accent);border-color:var(--accent);color:#fff;width:26px;height:26px;flex:none}
 .empty{color:var(--muted);padding:8px 0}
-.tabs.seg{display:grid;grid-template-columns:repeat(3,auto) 1fr;padding:0 16px 16px}
+.tabs.seg{display:grid;grid-template-columns:repeat(4,auto) 1fr;padding:0 16px 16px}
 .tabs.seg>input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .tabs.seg>label{padding:6px 12px;font-weight:500;color:var(--muted);cursor:pointer;background:var(--muted-bg);white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
 .tabs.seg>label:nth-of-type(1){border-radius:var(--radius) 0 0 var(--radius)}
-.tabs.seg>label:nth-of-type(3){border-radius:0 var(--radius) var(--radius) 0}
+.tabs.seg>label:nth-of-type(4){border-radius:0 var(--radius) var(--radius) 0}
 .tabs.seg>input:checked+label{background:var(--bg);color:var(--fg);box-shadow:inset 0 0 0 1px var(--border)}
 .tabs.seg>input:focus-visible+label{outline:2px solid var(--accent)}
 .tabs.seg>.panel{display:none;grid-column:1/-1;padding-top:12px;min-width:0}
-.tabs.seg>input:nth-of-type(1):checked~.panel:nth-of-type(1),.tabs.seg>input:nth-of-type(2):checked~.panel:nth-of-type(2),.tabs.seg>input:nth-of-type(3):checked~.panel:nth-of-type(3){display:block}
+.tabs.seg>input:nth-of-type(1):checked~.panel:nth-of-type(1),.tabs.seg>input:nth-of-type(2):checked~.panel:nth-of-type(2),.tabs.seg>input:nth-of-type(3):checked~.panel:nth-of-type(3),.tabs.seg>input:nth-of-type(4):checked~.panel:nth-of-type(4){display:block}
+.timeline{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--border);display:grid;gap:14px}
+.tl-node{position:relative;display:grid;gap:6px;min-width:0}
+.tl-node::before{content:"";position:absolute;left:-24px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+.tl-orphan::before{border-color:var(--muted)}
+.tl-lbl{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tl-gtm{display:flex;gap:8px;align-items:center;font-size:13px;padding-left:12px}
+.tl-k{color:var(--muted)}
+.tl-hits,.tl-none{margin-left:12px}
 .filter{display:flex;flex-wrap:wrap;gap:6px;position:relative}
 .filter>input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .filter>label{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--input);border-radius:var(--radius);font-size:12px;cursor:pointer;color:var(--muted);background:var(--bg)}
@@ -936,7 +1000,7 @@ body>main{flex:1 0 auto;width:100%}
 .filter>input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
 .filter>label:last-of-type{margin-bottom:4px}
 .dot{display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--muted);vertical-align:-2px}
-.dot.p-ga4,.ptag.p-ga4::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMTUiIHk9IjIiIHdpZHRoPSI2IiBoZWlnaHQ9IjIwIiByeD0iMyIgZmlsbD0iI0Y5QUIwMCIvPjxyZWN0IHg9IjkiIHk9IjkiIHdpZHRoPSI2IiBoZWlnaHQ9IjEzIiByeD0iMyIgZmlsbD0iI0UzNzQwMCIvPjxjaXJjbGUgY3g9IjYiIGN5PSIxOSIgcj0iMyIgZmlsbD0iI0UzNzQwMCIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-google_ads,.ptag.p-google_ads::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iOS41IiB5PSIxLjUiIHdpZHRoPSI2IiBoZWlnaHQ9IjIxIiByeD0iMyIgdHJhbnNmb3JtPSJyb3RhdGUoMzAgMTIuNSAxMikiIGZpbGw9IiNGQkJDMDQiLz48cmVjdCB4PSI4LjUiIHk9IjEuNSIgd2lkdGg9IjYiIGhlaWdodD0iMjEiIHJ4PSIzIiB0cmFuc2Zvcm09InJvdGF0ZSgtMzAgMTEuNSAxMikiIGZpbGw9IiM0Mjg1RjQiLz48Y2lyY2xlIGN4PSI1LjUiIGN5PSIxOC41IiByPSIzIiBmaWxsPSIjMzRBODUzIi8+PC9zdmc+") center/contain no-repeat}.dot.p-meta,.ptag.p-meta::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTIuNSAxNS41YzAtNC40IDIuMy05IDUtOSAzLjQgMCA2IDExIDkuNSAxMSAyLjIgMCA0LjUtMi42IDQuNS02LjVTMTkuOCA2LjUgMTcuNSA2LjVjLTMuNCAwLTYgMTEtOS44IDExLTIuOSAwLTUuMi0uNy01LjItMnoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzA4NjZGRiIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=") center/contain no-repeat}.dot.p-tiktok,.ptag.p-tiktok::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iIzI1RjRFRSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEgLTEpIi8+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iI0ZFMkM1NSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMSAxKSIvPjxwYXRoIGQ9Ik0xMyAzdjExLjVhMy41IDMuNSAwIDEgMS0zLTMuNDZNMTMgM2MuNSAyLjUgMi41IDQgNSA0IiBzdHJva2U9IiMxMTEiLz48L2c+PC9zdmc+") center/contain no-repeat}
+.dot.p-ga4,.ptag.p-ga4::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMTUiIHk9IjIiIHdpZHRoPSI2IiBoZWlnaHQ9IjIwIiByeD0iMyIgZmlsbD0iI0Y5QUIwMCIvPjxyZWN0IHg9IjkiIHk9IjkiIHdpZHRoPSI2IiBoZWlnaHQ9IjEzIiByeD0iMyIgZmlsbD0iI0UzNzQwMCIvPjxjaXJjbGUgY3g9IjYiIGN5PSIxOSIgcj0iMyIgZmlsbD0iI0UzNzQwMCIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-google_ads,.ptag.p-google_ads::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iOS41IiB5PSIxLjUiIHdpZHRoPSI2IiBoZWlnaHQ9IjIxIiByeD0iMyIgdHJhbnNmb3JtPSJyb3RhdGUoMzAgMTIuNSAxMikiIGZpbGw9IiNGQkJDMDQiLz48cmVjdCB4PSI4LjUiIHk9IjEuNSIgd2lkdGg9IjYiIGhlaWdodD0iMjEiIHJ4PSIzIiB0cmFuc2Zvcm09InJvdGF0ZSgtMzAgMTEuNSAxMikiIGZpbGw9IiM0Mjg1RjQiLz48Y2lyY2xlIGN4PSI1LjUiIGN5PSIxOC41IiByPSIzIiBmaWxsPSIjMzRBODUzIi8+PC9zdmc+") center/contain no-repeat}.dot.p-meta,.ptag.p-meta::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTIuNSAxNS41YzAtNC40IDIuMy05IDUtOSAzLjQgMCA2IDExIDkuNSAxMSAyLjIgMCA0LjUtMi42IDQuNS02LjVTMTkuOCA2LjUgMTcuNSA2LjVjLTMuNCAwLTYgMTEtOS44IDExLTIuOSAwLTUuMi0uNy01LjItMnoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzA4NjZGRiIgc3Ryb2tlLXdpZHRoPSIyLjQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=") center/contain no-repeat}.dot.p-tiktok,.ptag.p-tiktok::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iIzI1RjRFRSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEgLTEpIi8+PHBhdGggZD0iTTEzIDN2MTEuNWEzLjUgMy41IDAgMSAxLTMtMy40Nk0xMyAzYy41IDIuNSAyLjUgNCA1IDQiIHN0cm9rZT0iI0ZFMkM1NSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMSAxKSIvPjxwYXRoIGQ9Ik0xMyAzdjExLjVhMy41IDMuNSAwIDEgMS0zLTMuNDZNMTMgM2MuNSAyLjUgMi41IDQgNSA0IiBzdHJva2U9IiMxMTEiLz48L2c+PC9zdmc+") center/contain no-repeat}.dot.p-x,.ptag.p-x::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTE4LjkwMSAxLjE1M2gzLjY4bC04LjA0IDkuMTlMMjQgMjIuODQ2aC03LjQwNmwtNS44LTcuNTg0LTYuNjM4IDcuNTg0SC40NzRsOC42LTkuODNMMCAxLjE1NGg3LjU5NGw1LjI0MyA2LjkzMlpNMTcuNjEgMjAuNjQ0aDIuMDM5TDYuNDg2IDMuMjRINC4yOThaIiBmaWxsPSIjMDAwIi8+PC9zdmc+") center/contain no-repeat}.dot.p-linkedin,.ptag.p-linkedin::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTIwLjQ0NyAyMC40NTJoLTMuNTU0di01LjU2OWMwLTEuMzI4LS4wMjctMy4wMzctMS44NTItMy4wMzctMS44NTMgMC0yLjEzNiAxLjQ0NS0yLjEzNiAyLjkzOXY1LjY2N0g5LjM1MVY5aDMuNDE0djEuNTYxaC4wNDZjLjQ3Ny0uOSAxLjYzNy0xLjg1IDMuMzctMS44NSAzLjYwMSAwIDQuMjY3IDIuMzcgNC4yNjcgNS40NTV2Ni4yODZ6TTUuMzM3IDcuNDMzYy0xLjE0NCAwLTIuMDYzLS45MjYtMi4wNjMtMi4wNjUgMC0xLjEzOC45Mi0yLjA2MyAyLjA2My0yLjA2MyAxLjE0IDAgMi4wNjQuOTI1IDIuMDY0IDIuMDYzIDAgMS4xMzktLjkyNSAyLjA2NS0yLjA2NCAyLjA2NXptMS43ODIgMTMuMDE5SDMuNTU1VjloMy41NjR2MTEuNDUyek0yMi4yMjUgMEgxLjc3MUMuNzkyIDAgMCAuNzc0IDAgMS43Mjl2MjAuNTQyQzAgMjMuMjI3Ljc5MiAyNCAxLjc3MSAyNGgyMC40NTFDMjMuMiAyNCAyNCAyMy4yMjcgMjQgMjIuMjcxVjEuNzI5QzI0IC43NzQgMjMuMiAwIDIyLjIyMiAwaC4wMDN6IiBmaWxsPSIjMEE2NkMyIi8+PC9zdmc+") center/contain no-repeat}.dot.p-microsoft_ads,.ptag.p-microsoft_ads::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3QgeD0iMSIgeT0iMSIgd2lkdGg9IjEwLjUiIGhlaWdodD0iMTAuNSIgZmlsbD0iI0YyNTAyMiIvPjxyZWN0IHg9IjEyLjUiIHk9IjEiIHdpZHRoPSIxMC41IiBoZWlnaHQ9IjEwLjUiIGZpbGw9IiM3RkJBMDAiLz48cmVjdCB4PSIxIiB5PSIxMi41IiB3aWR0aD0iMTAuNSIgaGVpZ2h0PSIxMC41IiBmaWxsPSIjMDBBNEVGIi8+PHJlY3QgeD0iMTIuNSIgeT0iMTIuNSIgd2lkdGg9IjEwLjUiIGhlaWdodD0iMTAuNSIgZmlsbD0iI0ZGQjkwMCIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-pinterest,.ptag.p-pinterest::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyLjAxNyAwQzUuMzk2IDAgLjAyOSA1LjM2Ny4wMjkgMTEuOTg3YzAgNS4wNzkgMy4xNTggOS40MTcgNy42MTggMTEuMTYyLS4xMDUtLjk0OS0uMTk5LTIuNDAzLjA0MS0zLjQzOS4yMTktLjkzNyAxLjQwNi01Ljk1NyAxLjQwNi01Ljk1N3MtLjM1OS0uNzItLjM1OS0xLjc4MWMwLTEuNjYzLjk2Ny0yLjkxMSAyLjE2OC0yLjkxMSAxLjAyNCAwIDEuNTE4Ljc2OSAxLjUxOCAxLjY4OCAwIDEuMDI5LS42NTMgMi41NjctLjk5MiAzLjk5Mi0uMjg1IDEuMTkzLjYgMi4xNjUgMS43NzUgMi4xNjUgMi4xMjggMCAzLjc2OC0yLjI0NSAzLjc2OC01LjQ4NyAwLTIuODYxLTIuMDYzLTQuODY5LTUuMDA4LTQuODY5LTMuNDEgMC01LjQwOSAyLjU2Mi01LjQwOSA1LjE5OSAwIDEuMDMzLjM5NCAyLjE0My44ODkgMi43NDEuMDk5LjEyLjExMi4yMjUuMDg1LjM0NS0uMDkuMzc1LS4yOTMgMS4xOTktLjMzNCAxLjM2My0uMDUzLjIyNS0uMTcyLjI3MS0uNDAxLjE2NS0xLjQ5NS0uNjktMi40MzMtMi44NzgtMi40MzMtNC42NDYgMC0zLjc3NiAyLjc0OC03LjI1MiA3LjkyLTcuMjUyIDQuMTU4IDAgNy4zOTIgMi45NjcgNy4zOTIgNi45MjMgMCA0LjEzNS0yLjYwNyA3LjQ2Mi02LjIzMyA3LjQ2Mi0xLjIxNCAwLTIuMzU0LS42MjktMi43NTgtMS4zNzlsLS43NDkgMi44NDhjLS4yNjkgMS4wNDUtMS4wMDQgMi4zNTItMS40OTggMy4xNDYgMS4xMjMuMzQ1IDIuMzA2LjUzNSAzLjU1LjUzNSA2LjYwNyAwIDExLjk4NS01LjM2NSAxMS45ODUtMTEuOTg3QzIzLjk3IDUuMzkgMTguNTkyLjAyNiAxMS45ODUuMDI2TDEyLjAxNyAweiIgZmlsbD0iI0JEMDgxQyIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-snapchat,.ptag.p-snapchat::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNSIgZmlsbD0iI0ZGRkMwMCIvPjxwYXRoIGQ9Ik0xMi4yMDYuNzkzYy45OSAwIDQuMzQ3LjI3NiA1LjkzIDMuODIxLjUyOSAxLjE5My40MDMgMy4yMTkuMjk5IDQuODQ3bC0uMDAzLjA2Yy0uMDEyLjE4LS4wMjIuMzQ1LS4wMy41MS4wNzUuMDQ1LjIwMy4wOS40MDEuMDkuMy0uMDE2LjY1OS0uMTIgMS4wMzMtLjMwMS4xNjUtLjA4OC4zNDQtLjEwNC40NjQtLjEwNC4xODIgMCAuMzU5LjAyOS41MDkuMDkuNDUuMTQ5LjczNC40NzkuNzM0LjgzOC4wMTUuNDQ5LS4zOS44MzktMS4yMTMgMS4xNjgtLjA4OS4wMjktLjIwOS4wNzUtLjM0NC4xMTktLjQ1LjEzNS0xLjEzOS4zNi0xLjMzMy44MS0uMDkuMjI0LS4wNjEuNTI0LjEyLjg2OGwuMDE1LjAxNWMuMDYuMTM2IDEuNTI2IDMuNDc1IDQuNzkxIDQuMDE0LjI1NS4wNDQuNDM1LjI3LjQyLjUwOSAwIC4wNzUtLjAxNS4xNDktLjA0NS4yMjUtLjI0LjU2OS0xLjI3My45ODgtMy4xNDYgMS4yNzEtLjA1OS4wOTEtLjEyLjM3NS0uMTY0LjU3LS4wMjkuMTc5LS4wNzQuMzYtLjEzNC41NTMtLjA3Ni4yNzEtLjI3LjQwNS0uNTU1LjQwNWgtLjAzYy0uMTM1IDAtLjMxMy0uMDMxLS41MzgtLjA3NC0uMzYtLjA3NS0uNzY1LS4xMzUtMS4yNzMtLjEzNS0uMyAwLS41OTkuMDE1LS45MTMuMDc0LS42LjEwNC0xLjEyMy40NjQtMS43MjMuODg0LS44NTMuNTk5LTEuODI2IDEuMjg4LTMuMjk0IDEuMjg4LS4wNiAwLS4xMTktLjAxNS0uMTgtLjAxNWgtLjE0OWMtMS40NjggMC0yLjQyNy0uNjc1LTMuMjc5LTEuMjg4LS41OTktLjQyLTEuMTA3LS43NzktMS43MDctLjg4NC0uMzE0LS4wNDUtLjYyOS0uMDc0LS45MjgtLjA3NC0uNTQgMC0uOTU4LjA4OS0xLjI3Mi4xNDktLjIxMS4wNDMtLjM5MS4wNzQtLjU0LjA3NC0uMzc0IDAtLjUyMy0uMjI0LS41ODMtLjQyLS4wNjEtLjE5Mi0uMDktLjM4OS0uMTM1LS41NjctLjA0Ni0uMTgxLS4xMDUtLjQ5NC0uMTY2LS41Ny0xLjkxOC0uMjIyLTIuOTUtLjY0Mi0zLjE4OS0xLjIyNi0uMDMxLS4wNjMtLjA1Mi0uMTUtLjA1NS0uMjI1LS4wMTUtLjI0My4xNjUtLjQ2NS40Mi0uNTA5IDMuMjY0LS41NCA0LjczLTMuODc5IDQuNzkxLTQuMDJsLjAxNi0uMDI5Yy4xOC0uMzQ1LjIyNC0uNjQ1LjExOS0uODY5LS4xOTUtLjQzNC0uODg0LS42NTgtMS4zMzItLjgwOS0uMTIxLS4wMjktLjI0LS4wNzQtLjM0Ni0uMTE5LTEuMTA3LS40MzUtMS4yNTctLjkzLTEuMTk3LTEuMjczLjA5LS40NzkuNjc0LS43OTMgMS4xNjgtLjc5My4xNDYgMCAuMjcuMDI5LjM4My4wNzQuNDIuMTk0Ljc4OS4zIDEuMTA0LjMuMjM0IDAgLjM4NC0uMDYuNDY1LS4xMDVsLS4wNDYtLjU2OWMtLjA5OC0xLjYyNi0uMjI1LTMuNjUxLjMwNy00LjgzN0M3LjM5MiAxLjA3NyAxMC43MzkuODA3IDExLjcyNy44MDdsLjQxOS0uMDE1aC4wNnoiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMgMykgc2NhbGUoLjc1KSIgZmlsbD0iI2ZmZiIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEuMyIvPjwvc3ZnPg==") center/contain no-repeat}.dot.p-criteo,.ptag.p-criteo::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTEiIGZpbGw9IiNGRTUwMDAiLz48cGF0aCBkPSJNMTYuMiA4LjZhNSA1IDAgMSAwIDAgNi44IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMi42IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=") center/contain no-repeat}.dot.p-hotjar,.ptag.p-hotjar::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEwLjExOSA5LjgxNEMxMi44OTkgOC4yNyAxNi43MDQgNi4xNTUgMTYuNzA0IDBoLTQuNjA5YzAgMy40NDQtMS42NzYgNC4zNzUtNC4yMTQgNS43ODZDNS4xIDcuMzMgMS4yOTUgOS40NDQgMS4yOTUgMTUuNmg0LjYxYzAtMy40NDQgMS42NzYtNC4zNzYgNC4yMTQtNS43ODZ6TTE4LjA5NiA4LjRjMCAzLjQ0NC0xLjY3NyA0LjM3Ni00LjIxNSA1Ljc4NS0yLjc3OCAxLjU0NC02LjU4NSAzLjY2LTYuNTg1IDkuODE1aDQuNjA5YzAtMy40NDQgMS42NzYtNC4zNzYgNC4yMTQtNS43ODYgMi43OC0xLjU0NCA2LjU4Ni0zLjY1OCA2LjU4Ni05LjgxNGgtNC42MDl6IiBmaWxsPSIjRkYzQzAwIi8+PC9zdmc+") center/contain no-repeat}.dot.p-adobe,.ptag.p-adobe::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTAgMmg4LjVMMCAyMnpNMjQgMmgtOC41TDI0IDIyek0xMiA5bDUuNSAxM2gtMy42bC0xLjctNC4ySDguOXoiIGZpbGw9IiNFQjEwMDAiLz48L3N2Zz4=") center/contain no-repeat}.dot.p-matomo,.ptag.p-matomo::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTYgMThsNi05IDYgOSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzE1MkEwIiBzdHJva2Utd2lkdGg9IjIiLz48Y2lyY2xlIGN4PSI2IiBjeT0iMTgiIHI9IjMiIGZpbGw9IiM5NUM3NDgiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjkiIHI9IjMiIGZpbGw9IiMzMTUyQTAiLz48Y2lyY2xlIGN4PSIxOCIgY3k9IjE4IiByPSIzIiBmaWxsPSIjMzE1MkEwIi8+PC9zdmc+") center/contain no-repeat}.dot.p-piwik_pro,.ptag.p-piwik_pro::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNSIgZmlsbD0iIzBDMkQ1QiIvPjxwYXRoIGQ9Ik04IDE4VjZoNWEzLjUgMy41IDAgMDEwIDdIOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjIuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+") center/contain no-repeat}.dot.p-clarity,.ptag.p-clarity::before{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiByeD0iNSIgZmlsbD0iIzAwNzhENCIvPjxwYXRoIGQ9Ik0xMiA1YTcgNyAwIDEwMCAxNE0xMiA5YTMgMyAwIDEwMCA2IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMi40IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=") center/contain no-repeat}
 .evlist{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:var(--radius);flex-basis:100%;min-width:0}
 .evlist>li+li{border-top:1px solid var(--border)}
 summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}
