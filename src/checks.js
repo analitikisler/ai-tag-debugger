@@ -524,7 +524,7 @@ export function groupFindings(findings) {
     const k = f.severity === "ok" ? `ok|${f.journey}|${f.viewport}` : [f.severity, f.check, f.platform, f.event, f.detail].join("|");
     const where = { journey: f.journey, viewport: f.viewport, step: f.step };
     if (groups.has(k)) groups.get(k).where.push(where);
-    else groups.set(k, { severity: f.severity, check: f.check, platform: f.platform, event: f.event, detail: f.detail, evidence: f.evidence, where: [where] });
+    else groups.set(k, { severity: f.severity, check: f.check, platform: f.platform, event: f.event, detail: f.detail, evidence: f.evidence, ...(f.gtm ? { gtm: f.gtm } : {}), where: [where] });
   }
   return [...groups.values()].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }

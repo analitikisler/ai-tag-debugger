@@ -14,6 +14,7 @@ import { loadReportBrand, writePdf } from "./whitelabel.js";
 import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
+import { annotateFindings } from "./gtm.js";
 import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
 
@@ -144,7 +145,7 @@ export async function runAudit(opts) {
     ? null
     : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
-  const findings = filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events);
+  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer);
   let saveError = null;
   if (opts.saveSite) {
     try {
