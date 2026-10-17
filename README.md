@@ -58,6 +58,10 @@ By default an audit checks GA4, Google Ads, Meta and TikTok. Pick others with `-
 
 Requests to platforms you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--platforms`, any platform your measurement plan names is added to the default list. Planned events for platforms you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
 
+### Consent scenarios
+
+Each audit also opens the start page once per consent choice, each time in a fresh browser: accept all, reject all and analytics only. The choice goes through the consent platform's own API (OneTrust, Cookiebot, Usercentrics or Didomi) when it has one, or else by clicking the banner's buttons. The report then shows how many hits each tag sent after each choice. Analytics only works with OneTrust and Cookiebot; with other platforms that column says "Not supported here". A tag that sends after reject all is flagged, except cookieless Consent Mode pings. An advertising tag that sends after analytics only is flagged unless it was sent with ad storage denied. The table is at the top of the **Journeys** tab and above the findings in `report.md`. It is skipped when the page shows no banner the tool can answer, and when a saved site is replayed. No AI model is called, but the start page is visited three more times. Set `"consent_scenarios": false` in the config to turn it off.
+
 ## How it works
 
 1. **Browse:** the AI model gets a goal in plain language ("add any product to the cart and complete checkout with the test payment") and a text view of the page. It acts through two tools, `browser_action` (goto, click, fill, select, scroll, wait) and `finish`, one step at a time with Playwright.
@@ -250,6 +254,15 @@ Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `
 
 `aitd plan list --site <url>` lists the site's plan IDs, oldest first.
 
+**Learn the plan from the first run.** When a site has no saved plan, a run without `--against` or `--out` lists the events the site already sends and asks whether to save them as its plan:
+
+```
+No plan yet for this site. It already sends 3 events: ga4:page_view, ga4:purchase, meta:PageView
+Save them as the site's plan? (Y/n)
+```
+
+Say yes, and the next runs can check against it with `--against latest`. A parameter that every hit of an event carries becomes one of its required parameters. No values are copied, so nothing a visitor typed ends up in the plan. In a script or CI job nothing is saved unless you add `--yes`; the run then prints the `aitd plan --site` command for drafting a fuller plan.
+
 ### Plan vs. site
 
 When a run uses `--against`, the report starts with a **Plan vs. site** section, in `report.html` and `report.md`. Each planned event lands in one bucket:
@@ -264,6 +277,12 @@ When a run uses `--against`, the report starts with a **Plan vs. site** section,
 | Not checked | Planned, but its journey or platform wasn't part of this run |
 
 The coverage score is implemented divided by the planned events that were checkable (all except not checked), shown overall and per platform, for example `Coverage 7 of 11 (64%), 2 events not checked`. The same entries are in `plan-check.json`, one per planned event with its bucket. Exit codes don't change: `--fail-on` still looks at finding severity. Without `--against`, the report is exactly as before.
+
+When the plan is not the site's first, the header compares it with the version saved before it: `Plan changed since 2026-10-01_0900: 1 added, 0 removed, 2 changed`, or `Plan unchanged since 2026-10-01_0900`. The header in `report.html` and `report.md` then lists each change: `+` for an added event, `−` for a removed one and `~` for a changed one, followed by what changed (required parameters, parameters or journeys). The first version has nothing to compare with, and `capture.json` keeps the same comparison under `planChanges`.
+
+### Tag inventory
+
+Every report also has a **tag inventory**: each vendor the site sent requests to, marked first party when its requests went to the site's own domain, third party when they went to the vendor, or both. It shows how many pages the vendor was seen on and the cookies tied to it. Cookies that no vendor owns are listed apart, as first or third party. Only cookie names are recorded, never their values. It is in the **Scope and plan** tab of `report.html` and as a table in `report.md`.
 
 ### Folder layout and plan IDs
 
@@ -379,6 +398,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`. Same as `--platforms`. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
+| `consent_scenarios` | Default `true`. Set to `false` to skip the [consent scenarios](#consent-scenarios), which visit the start page once per consent choice. |
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
 | `branding` | Default `true`. Set to `false` to leave the Analitik İşler logo and the "Generated by AI Tag Debugger · analitikisler.com" line out of the reports. Same as `--no-branding`, or `branding: false` on the MCP `finish_audit` and `run_audit` tools. |
@@ -444,11 +464,11 @@ Output:
 - `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
   - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, a **This run** card (platforms, AI provider and model, plan, journeys, viewports, language, version), and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage.
   - **Findings**: grouped by severity and filterable. Each one has its impact, likely cause, evidence, numbered fix steps and the steps where it happened.
-  - **Journeys**: one journey at a time. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
+  - **Journeys**: one journey at a time. Above them, when the start page has a consent banner, the [consent scenarios](#consent-scenarios) table. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has three tabs:
     - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
     - **dataLayer**: every push in the step.
     - **Network requests**: every request to the chosen platforms, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
-  - **Scope and plan**: whether each planned event was sent on each journey, and the platforms checked or left out, with request counts.
+  - **Scope and plan**: whether each planned event was sent on each journey, and the platforms checked or left out, with request counts. The [tag inventory](#tag-inventory) lists each vendor with its party, pages and cookies.
 
   Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
