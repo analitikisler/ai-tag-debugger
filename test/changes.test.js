@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { compareRuns, previousRun } from "../src/changes.js";
+import { compareRuns, previousRun, routeHints } from "../src/changes.js";
 import { renderHtml, renderMarkdown } from "../src/report.js";
 
 const f = (check, event, severity = "broken") => ({ severity, check, platform: "ga4", event, detail: `${check} ${event}`, journey: "j", viewport: "desktop" });
@@ -43,6 +43,37 @@ test("compares plan coverage when both runs used a plan", () => {
   assert.deepEqual(ch.fixed.map((c) => c.event), ["purchase"]);
   assert.deepEqual(ch.new.map((c) => c.event).sort(), ["lead", "sign_up"]);
   assert.match(renderMarkdown({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch, lang: "tr" }), /1 olay düzeldi, 2 yeni sorun/);
+});
+
+test("flags a journey whose route differs from the last run", () => {
+  const run = (...pages) => ({ journeyId: "purchase", viewport: "desktop", steps: pages.map((pagePath) => ({ pagePath })) });
+  const prev = { id: "a", capture: { findings: [], runs: [run("https://x.com/", "https://x.com/cart")] } };
+  const same = compareRuns(prev, { findings: [], runs: [run("https://x.com/", "https://x.com/", "https://x.com/cart")] });
+  assert.equal(same.routes, undefined);
+  const ch = compareRuns(prev, { findings: [], runs: [run("https://x.com/", "https://x.com/shop", "https://x.com/cart")] });
+  assert.equal(ch.routes.length, 1);
+  assert.match(renderMarkdown({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch }), /different route through the site than in the last run: purchase \(desktop\)/);
+  assert.match(renderHtml({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch }), /class="meta"><a href="#changes">The AI took a different route/);
+  assert.equal(compareRuns({ id: "a", capture: { findings: [] } }, { findings: [], runs: [run("https://x.com/")] }).routes, undefined);
+});
+
+test("route hints come from the last completed run of the same goal", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "aitd-"));
+  const site = "https://www.example.com";
+  const save = async (id, runs) => {
+    const { runsDir } = await import("../src/workspace.js");
+    const d = path.join(runsDir(dir, site), id);
+    await mkdir(d, { recursive: true });
+    await writeFile(path.join(d, "capture.json"), JSON.stringify({ runs }));
+  };
+  const run = (completed, goal, ...pages) => ({ journeyId: "custom", viewport: "desktop", completed, goal, steps: pages.map((pagePath) => ({ pagePath })) });
+  await save("2026-01-01_1000", [run(true, "buy", "https://x.com/", "https://x.com/old"), { ...run(true, undefined, "https://x.com/nogoal"), journeyId: "other" }]);
+  await save("2026-01-02_1000", [run(true, "buy", "https://x.com/", "https://x.com/cart")]);
+  await save("2026-01-03_1000", [run(false, "buy", "https://x.com/", "https://x.com/broken")]);
+  const hints = await routeHints(dir, site);
+  assert.deepEqual(hints.get("custom|desktop"), { goal: "buy", pages: ["https://x.com/", "https://x.com/cart"] });
+  assert.equal(hints.has("other|desktop"), false);
+  assert.equal((await routeHints(await mkdtemp(path.join(tmpdir(), "aitd-")), site)).size, 0);
 });
 
 test("compares a plan with the version before it", async () => {

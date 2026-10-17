@@ -8,11 +8,14 @@
 // Tools use one neutral shape: { name, description, schema } where schema is JSON Schema.
 
 export const PROVIDERS = {
-  anthropic: { label: "Anthropic (Claude)", env: "ANTHROPIC_API_KEY", defaultModel: "claude-opus-5-5" },
-  openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-5.5" },
-  gemini: { label: "Google Gemini", env: "GEMINI_API_KEY", defaultModel: "gemini-pro-latest" },
+  // cheapModel is what `--model cheap` picks: a small, inexpensive model for routine CI runs.
+  anthropic: { label: "Anthropic (Claude)", env: "ANTHROPIC_API_KEY", defaultModel: "claude-opus-5-5", cheapModel: "claude-haiku-5-5" },
+  openai: { label: "OpenAI", env: "OPENAI_API_KEY", defaultModel: "gpt-5.5", cheapModel: "gpt-5.5-mini" },
+  gemini: { label: "Google Gemini", env: "GEMINI_API_KEY", defaultModel: "gemini-pro-latest", cheapModel: "gemini-flash-latest" },
   // Vercel AI Gateway: one key, any model as "<provider>/<model>". OpenAI-compatible API.
-  vercel: { label: "Vercel AI Gateway", env: "AI_GATEWAY_API_KEY", defaultModel: "anthropic/claude-opus-5.5" },
+  vercel: { label: "Vercel AI Gateway", env: "AI_GATEWAY_API_KEY", defaultModel: "anthropic/claude-opus-5.5", cheapModel: "anthropic/claude-haiku-5.5" },
+  // Cloudflare Workers AI: open models on Cloudflare's network, billed per use. OpenAI-compatible API.
+  cloudflare: { label: "Cloudflare Workers AI", env: "CLOUDFLARE_API_TOKEN", defaultModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", cheapModel: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
   // Any API that speaks the OpenAI chat completions protocol. Needs a base URL and a model.
   "openai-compatible": { label: "OpenAI-compatible API", env: "OPENAI_COMPATIBLE_API_KEY", defaultModel: null },
 };
@@ -25,16 +28,17 @@ export function resolveProviderName(name, env = process.env) {
   }
   if (env.OPENAI_COMPATIBLE_BASE_URL) return "openai-compatible";
   if (env.AI_GATEWAY_API_KEY) return "vercel";
+  if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) return "cloudflare";
   if (env.ANTHROPIC_API_KEY) return "anthropic";
   if (env.OPENAI_API_KEY) return "openai";
   if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY) return "gemini";
   return "anthropic";
 }
 
-const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY or AI_GATEWAY_API_KEY for Vercel AI Gateway (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
+const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY for Vercel AI Gateway, or CLOUDFLARE_API_TOKEN with CLOUDFLARE_ACCOUNT_ID for Cloudflare Workers AI (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
 
 function hasApiKey(env) {
-  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.AI_GATEWAY_API_KEY || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
+  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.AI_GATEWAY_API_KEY || (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
 }
 
 /**
@@ -57,9 +61,9 @@ async function buildProvider(name, opts, env) {
   if (!opts.client && !opts.name && !opts.baseUrl && !hasApiKey(env)) throw Object.assign(new Error(NO_API_KEY), { code: "NO_API_KEY" });
   if (name === "openai-compatible") {
     const baseURL = opts.baseUrl ?? env.OPENAI_COMPATIBLE_BASE_URL;
-    const model = opts.model ?? env.OPENAI_COMPATIBLE_MODEL;
+    const model = compatibleModel(opts.model, env);
     if (!baseURL) throw new Error("openai-compatible needs the API address: --base-url or OPENAI_COMPATIBLE_BASE_URL, e.g. https://api.deepseek.com");
-    if (!model) throw new Error("openai-compatible needs a model id: --model or OPENAI_COMPATIBLE_MODEL.");
+    if (!model) throw new Error("openai-compatible needs a model id: --model or OPENAI_COMPATIBLE_MODEL (\"cheap\" has no meaning here, since the API's models are unknown).");
     // Local servers such as Ollama need no key, but the SDK wants a non-empty one.
     const apiKey = env.OPENAI_COMPATIBLE_API_KEY || "not-needed";
     const client = opts.client ?? new (await import("openai")).default({ baseURL, apiKey });
@@ -67,9 +71,15 @@ async function buildProvider(name, opts, env) {
   }
   if (name === "vercel") {
     const client = opts.client ?? new (await import("openai")).default({ baseURL: VERCEL_GATEWAY, apiKey: env.AI_GATEWAY_API_KEY });
-    return { ...openaiProvider(client, opts.model ?? PROVIDERS.vercel.defaultModel, { compatible: true }), name: "vercel" };
+    return { ...openaiProvider(client, pickModel("vercel", opts.model), { compatible: true }), name: "vercel" };
   }
-  const model = opts.model ?? PROVIDERS[name].defaultModel;
+  if (name === "cloudflare") {
+    const account = env.CLOUDFLARE_ACCOUNT_ID;
+    if (!opts.client && !(account && env.CLOUDFLARE_API_TOKEN)) throw new Error("Cloudflare Workers AI needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.");
+    const client = opts.client ?? new (await import("openai")).default({ baseURL: `${CLOUDFLARE_API}/${account}/ai/v1`, apiKey: env.CLOUDFLARE_API_TOKEN });
+    return { ...openaiProvider(client, pickModel("cloudflare", opts.model), { compatible: true }), name: "cloudflare" };
+  }
+  const model = pickModel(name, opts.model);
   const gateway = gatewayOptions(name, env);
   const provider = await builtInProvider(name, model, gateway, opts.client, env);
   // Shown in the "Using ..." line so a run says whether its calls went through the gateway.
@@ -87,9 +97,22 @@ async function builtInProvider(name, model, gateway, client, env) {
 }
 
 const VERCEL_GATEWAY = "https://ai-gateway.vercel.sh/v1";
+const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4/accounts";
+
+/** An openai-compatible API has no known cheap model, so `cheap` falls back to OPENAI_COMPATIBLE_MODEL. */
+function compatibleModel(model, env) {
+  return (model === "cheap" ? undefined : model) ?? env.OPENAI_COMPATIBLE_MODEL;
+}
+
+/** The model to use: an explicit id, `cheap` for the provider's small CI model, else the default. */
+export function pickModel(name, model) {
+  if (model === "cheap") return PROVIDERS[name]?.cheapModel ?? PROVIDERS[name]?.defaultModel ?? model;
+  return model ?? PROVIDERS[name].defaultModel;
+}
 
 const KEY_PROVIDERS = [
   ["vercel", (env) => env.AI_GATEWAY_API_KEY],
+  ["cloudflare", (env) => env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID],
   ["anthropic", (env) => env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN],
   ["openai", (env) => env.OPENAI_API_KEY],
   ["gemini", (env) => env.GEMINI_API_KEY || env.GOOGLE_API_KEY],
@@ -101,9 +124,9 @@ const KEY_PROVIDERS = [
  * "AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)".
  */
 export function aiStatus(opts = {}, env = process.env) {
-  if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return "AI: no key set (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY or AI_GATEWAY_API_KEY)";
+  if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return "AI: no key set (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)";
   const name = resolveProviderName(opts.name, env);
-  const model = opts.model ?? (name === "openai-compatible" ? env.OPENAI_COMPATIBLE_MODEL : PROVIDERS[name].defaultModel) ?? "no model set";
+  const model = (name === "openai-compatible" ? compatibleModel(opts.model, env) : pickModel(name, opts.model)) ?? "no model set";
   const via = name !== "vercel" && gatewayOptions(name, env).baseURL ? " via Cloudflare AI Gateway" : "";
   return `AI: ${name} (${model})${via}${alsoSet(name, env)}`;
 }

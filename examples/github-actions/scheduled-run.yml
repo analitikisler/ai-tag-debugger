@@ -1,0 +1,54 @@
+# Runs a tracking audit on a schedule and keeps the history between runs,
+# so each report's "Changed since last run" section compares it with the previous one.
+# Copy to .github/workflows/ai-tag-debugger-schedule.yml and add your AI provider's API key as a repository secret.
+# The example uses ANTHROPIC_API_KEY; for OpenAI or Gemini, pass OPENAI_API_KEY or GEMINI_API_KEY instead.
+# Needs an ai-tag-debugger.config.json in the repository root (site and journeys, or a --against plan).
+name: AI Tag Debugger (scheduled)
+on:
+  schedule:
+    # Every Monday at 06:00 UTC. For a daily check use '0 6 * * *'.
+    # GitHub can start scheduled runs a few minutes late.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ai-tag-debugger-schedule
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Pin a released version, and update it on purpose.
+      ATD_VERSION: 0.14.0
+      # Plans and runs are kept here. The cache steps carry this folder from one run to the next.
+      DATA_DIR: tracking-data
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Installed in its own folder, so the browser matches the Playwright version the tool uses.
+      - run: npm install --prefix "$RUNNER_TEMP/atd" "@analitikisler/ai-tag-debugger@$ATD_VERSION"
+      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/playwright" install --with-deps chromium'
+      # Each cache entry has a unique key, so the restore key picks up the newest saved history.
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.DATA_DIR }}
+          key: ai-tag-debugger-history-${{ github.run_id }}
+          restore-keys: ai-tag-debugger-history-
+      - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --data-dir "$DATA_DIR" --fail-on broken'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: tracking-report
+          path: ${{ env.DATA_DIR }}
+      # Save even when the audit failed, so the failing run is the baseline for the next one.
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.DATA_DIR }}
+          key: ai-tag-debugger-history-${{ github.run_id }}
