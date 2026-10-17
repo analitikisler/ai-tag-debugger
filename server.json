@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.analitikisler/ai-tag-debugger",
   "title": "AI Tag Debugger",
-  "description": "AI agent that QA-tests a website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok) from your chat app.",
+  "description": "QA-tests your site analytics, ad and consent tags (GA4, GTM, Ads, Meta, TikTok) from chat.",
   "repository": {
     "url": "https://github.com/analitikisler/ai-tag-debugger",
     "source": "github"
