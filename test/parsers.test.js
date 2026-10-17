@@ -79,7 +79,7 @@ test("parses Pinterest, Snap, Klaviyo and Hotjar hits", () => {
 
   const [hj] = parseTrackingRequest("https://in.hotjar.com/api/v2/client/sites/123456/visit-data?sv=7", null);
   assert.deepEqual([hj.platform, hj.id], ["hotjar", "123456"]);
-  assert.equal(parseTrackingRequest("https://static.hotjar.com/c/hotjar-123456.js?sv=7", null), null);
+  assert.equal(parseTrackingRequest("https://static.hotjar.com/c/hotjar-123456.js?sv=7", null)[0].name, "script_load");
 });
 
 test("Meta hit carries event_id and advanced matching fields", () => {

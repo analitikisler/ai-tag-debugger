@@ -1,0 +1,6 @@
+# Weekly, Monday 06:00 server time. Output and errors go to a log file.
+0 6 * * 1 /opt/aitd/run-audit.sh >> /var/log/aitd.log 2>&1
+
+# Daily at 06:00 instead.
+# 0 6 * * * /opt/aitd/run-audit.sh >> /var/log/aitd.log 2>&1
+
