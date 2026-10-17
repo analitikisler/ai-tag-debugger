@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.15.0 (unreleased)
+
+- The first run learns the plan. When a site has no saved plan, `aitd run` lists the events it already sends and asks whether to save them as its plan. Add `--yes` to save without asking; in a script without `--yes`, nothing is saved.
+- With `--against`, the report header says how the plan changed since the version before it: `Plan changed since <id>: 1 added, 0 removed, 2 changed`, or `Plan unchanged since <id>`. Each change is listed. `capture.json` has the same comparison under `planChanges`.
+- `aitd plan import` reads Google Sheets downloads: the events CSV with its `<Doc> - user_properties.csv` beside it, and checkboxes as yes and no (TRUE and FALSE).
+- Consent scenarios: each audit opens the start page once per consent choice (accept all, reject all, analytics only) and shows the hits each tag sent after each choice. Analytics only works with OneTrust and Cookiebot. Set `"consent_scenarios": false` in the config to turn them off.
+- Tag inventory: the report lists every vendor the site sent requests to, first or third party, the pages it was seen on, and its cookie names (never values). Each network call in `capture.json` now has a `pageUrl`, redacted unless `keep_bodies` is on.
+
+## 0.14.0 (2026-10-17)
+
+- The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
+- Alerts: `notify` in the config sends the "Changed since last run" diff to Slack and/or email (`SMTP_URL`) after each saved run.
+- Scheduled runs: GitHub Actions and cron templates in `examples/` keep the run history between runs, so "Changed since last run" works on a fresh runner.
+- Repeat runs start from the route the last completed run took, so the AI goes straight to the goal. Only for the same goal, and only for AI runs.
+- `--model cheap` picks a small, inexpensive model for each provider, for routine CI runs.
+- Cloudflare Workers AI is a built-in provider, set with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
+## 0.13.0 (2026-10-17)
+
+- Each journey step has a **Timeline** tab: every dataLayer push, the GTM event it raised (or the consent command), then the platform hits it caused. Hits with no push are listed last.
+- Findings are grouped by who fixes them (Developer, Tag Manager, Marketing). Each one has a **How to verify** list linking to the tool that shows the fix: Tag Assistant, GA4 DebugView, Meta Test Events, TikTok Pixel Helper or the Consent Mode guide.
+- When the AI took a different route through the site than in the last run, the report header names the journeys, and the Changed since last run section lists the pages before and after.
+- Platforms are detected automatically: a platform the site sends to is checked from its first request. No flag needed. Choosing platforms with `--platforms` or `providers` turns detection off.
+- New platforms: LinkedIn Insight Tag, Microsoft Advertising UET and Criteo OneTag (events are read); Adobe Analytics, Matomo and Piwik PRO (page views, links, goals, site search and ecommerce orders); Microsoft Clarity and Hotjar tag loads, which name the project or site id.
+
 ## 0.12.0 (2026-10-16)
 
 - The HTML report uses the Analitik İşler design system and the new ai tag debugger logo. The large title is now a compact `Site: example.com` line.
