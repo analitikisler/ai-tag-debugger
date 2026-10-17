@@ -88,12 +88,29 @@ function note(found, key, value) {
 }
 
 /** Redacts form-encoded parameters (a URL query or a GA4 body line). Returns null when nothing needed it. */
+// Criteo OneTag nests each event as a query string in p0, p1, …; its setEmail entry (e=ce) carries the email hash in m.
+const isNestedEvent = (k, v) => /^p\d+$/.test(k) && /^e=/.test(v);
+const nestedUserKey = (k) => /^m(\[\d*\])?$/.test(k) || isUserDataKey(k);
+
 function redactParamString(text, found, site) {
   const params = new URLSearchParams(text);
-  if (![...params].some(([k, v]) => isUserDataKey(k) || isEmail(v, site, k))) return null;
+  let changed = false;
   const out = new URLSearchParams();
-  for (const [k, v] of params) out.append(k, isUserDataKey(k) || isEmail(v, site, k) ? note(found, k, v) : v);
-  return out.toString();
+  for (const [k, v] of params) {
+    if (isNestedEvent(k, v)) {
+      const inner = new URLSearchParams();
+      for (const [ik, iv] of new URLSearchParams(v)) {
+        const hide = nestedUserKey(ik) || isEmail(iv, site, ik);
+        if (hide) changed = true;
+        inner.append(ik, hide ? note(found, ik, iv) : iv);
+      }
+      out.append(k, inner.toString());
+    } else if (isUserDataKey(k) || isEmail(v, site, k)) {
+      changed = true;
+      out.append(k, note(found, k, v));
+    } else out.append(k, v);
+  }
+  return changed ? out.toString() : null;
 }
 
 /** Redacts user data in a URL's query. Returns the URL unchanged when there is none. site: see isOwnAddress. */

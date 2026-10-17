@@ -2,24 +2,20 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { alertMessage, sendAlerts, sendSmtp } from "../src/notify.js";
-import { changesText } from "../src/changes.js";
 
 const changes = {
+  run: "2026-10-16T10-00-00",
   previous: "2026-10-15T10-00-00",
   mode: "findings",
   fixed: [{ check: "consent", platform: "ga4", event: "page_view", severity: "broken", detail: "Sent before consent" }],
   new: [{ check: "params", platform: "meta", event: "Purchase", severity: "broken", detail: "No value" }],
 };
 
-test("changesText gives a headline and one line per change", () => {
-  assert.equal(changesText(changes), "1 problem fixed, 1 new problem\n- Fixed: GA4 page_view (Sent before consent)\n- New: Meta Purchase (No value)");
-  assert.match(changesText({ previous: null }), /first saved run/);
-});
-
 test("alertMessage puts the site and headline in the subject", () => {
   const { subject, body } = alertMessage({ site: "shop.example", changes, reportPath: "/r/report.html" });
   assert.equal(subject, "shop.example: 1 problem fixed, 1 new problem");
-  assert.match(body, /^shop\.example\n1 problem fixed/);
+  assert.match(body, /^shop\.example\n1 problem fixed, 1 new problem\./);
+  assert.match(body, /- Fixed: GA4 page_view \(Sent before consent\)\n- New: Meta Purchase \(No value\)/);
   assert.match(body, /\/r\/report\.html$/);
 });
 

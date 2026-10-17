@@ -44,3 +44,15 @@ test("compares plan coverage when both runs used a plan", () => {
   assert.deepEqual(ch.new.map((c) => c.event).sort(), ["lead", "sign_up"]);
   assert.match(renderMarkdown({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch, lang: "tr" }), /1 olay düzeldi, 2 yeni sorun/);
 });
+
+test("flags a journey whose route differs from the last run", () => {
+  const run = (...pages) => ({ journeyId: "purchase", viewport: "desktop", steps: pages.map((pagePath) => ({ pagePath })) });
+  const prev = { id: "a", capture: { findings: [], runs: [run("https://x.com/", "https://x.com/cart")] } };
+  const same = compareRuns(prev, { findings: [], runs: [run("https://x.com/", "https://x.com/", "https://x.com/cart")] });
+  assert.equal(same.routes, undefined);
+  const ch = compareRuns(prev, { findings: [], runs: [run("https://x.com/", "https://x.com/shop", "https://x.com/cart")] });
+  assert.equal(ch.routes.length, 1);
+  assert.match(renderMarkdown({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch }), /different route through the site than in the last run: purchase \(desktop\)/);
+  assert.match(renderHtml({ title: "t", generatedAt: "g", findings: [], explained: null, runs: [], changes: ch }), /class="meta"><a href="#changes">The AI took a different route/);
+  assert.equal(compareRuns({ id: "a", capture: { findings: [] } }, { findings: [], runs: [run("https://x.com/")] }).routes, undefined);
+});

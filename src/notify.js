@@ -6,15 +6,18 @@
 // Nothing is sent when there is no earlier run or nothing changed.
 import { connect as tlsConnect } from "node:tls";
 import { connect as netConnect } from "node:net";
-import { changesText, hasChanges } from "./changes.js";
+import { changesLines } from "./changes.js";
 import { messages } from "./i18n.js";
+
+/** True when there is an earlier run and something was fixed, broke or took a new route since. */
+export const hasChanges = (ch) => Boolean(ch?.previous && (ch.fixed.length || ch.new.length || ch.routes?.length));
 
 const list = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 
-/** The alert's subject and plain-text body. */
+/** The alert's subject and plain-text body. changes carries the run id as `run` (see sinceLastRun). */
 export function alertMessage({ site, changes, lang = "en", reportPath = null }) {
   const subject = `${site}: ${messages(lang).ui.changesLine(changes)}`;
-  const body = [`${site}`, changesText(changes, lang), ...(reportPath ? ["", reportPath] : [])].join("\n");
+  const body = [`${site}`, ...changesLines(changes, lang), ...(reportPath ? ["", reportPath] : [])].join("\n");
   return { subject, body };
 }
 
