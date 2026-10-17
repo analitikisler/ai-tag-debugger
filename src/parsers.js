@@ -265,10 +265,88 @@ export function parseCriteo(url, postData) {
   return [{ platform: "criteo", name: name || "(unnamed)", id: q.get("a"), params, ...(Object.keys(user).length ? { userFields: user } : {}), url }];
 }
 
-/** Hotjar: calls to its in.hotjar.com / .hotjar.io API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
+/**
+ * Adobe Analytics image request: /b/ss/<report suite>/<version>/<code>/s<random> on omtrdc.net,
+ * 2o7.net or a first-party host. A link (pe: lnk_o, lnk_d, lnk_e) is named by its link name (pev2),
+ * anything else is the page view. events, products, purchase id, currency and the page are kept.
+ * @returns {Hit[] | null}
+ */
+export function parseAdobe(url) {
+  const u = new URL(url);
+  const m = u.pathname.match(/^\/b\/ss\/([^/]+)\/[^/]+\//);
+  if (!m) return null;
+  const q = u.searchParams;
+  const params = {};
+  for (const [from, to] of [["pageName", "page_title"], ["events", "events"], ["products", "items"], ["purchaseID", "transaction_id"], ["xact", "transaction_id"], ["cc", "currency"], ["g", "page_location"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const pe = q.get("pe");
+  return [{ platform: "adobe", name: pe ? `link:${q.get("pev2") || pe}` : "pageView", id: decodeURIComponent(m[1]), params, url }];
+}
+
+// Matomo and Piwik PRO share one tracking protocol: an idsite and either an event (e_c, e_a, e_n),
+// a goal (idgoal) or an ecommerce order (idgoal=0 with ec_id), otherwise a page view.
+function matomoHit(platform, q, url) {
+  const params = {};
+  for (const [from, to] of [["revenue", "value"], ["ec_id", "transaction_id"], ["ec_items", "items"], ["ec_tx", "tax"], ["ec_sh", "shipping"], ["e_v", "event_value"], ["action_name", "page_title"], ["url", "page_location"], ["search", "search_term"]]) {
+    if (q.has(from)) params[to] = q.get(from);
+  }
+  const goal = q.get("idgoal");
+  let name = "pageview";
+  if (q.has("e_c")) name = q.get("e_a") ? `${q.get("e_c")}:${q.get("e_a")}` : q.get("e_c");
+  else if (goal === "0") name = q.has("ec_id") ? "ecommerce_order" : "ecommerce_cart_update";
+  else if (goal) name = `goal:${goal}`;
+  else if (q.has("search")) name = "site_search";
+  else if (q.has("link")) name = "outlink";
+  else if (q.has("download")) name = "download";
+  const user = [...q].filter(([k, v]) => isUserDataKey(k) && v);
+  return { platform, name, id: q.get("idsite") || undefined, params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url };
+}
+
+// Matomo's tracker can batch hits: a JSON POST of { requests: ["?idsite=1&…", …] }.
+function matomoHits(platform, u, postData) {
+  const requests = jsonOr(postData ?? "{}", {})?.requests;
+  const batched = Array.isArray(requests) ? requests.filter((r) => typeof r === "string").map((r) => new URLSearchParams(r.replace(/^\?/, ""))) : [];
+  const queries = batched.length ? batched.map((b) => { for (const [k, v] of u.searchParams) if (!b.has(k)) b.set(k, v); return b; }) : [u.searchParams];
+  return queries.filter((q) => q.has("idsite")).map((q) => matomoHit(platform, q, u.href));
+}
+
+/** Matomo (self-hosted or cloud): /matomo.php or /piwik.php with idsite, on any host. @returns {Hit[] | null} */
+export function parseMatomo(url, postData) {
+  const u = new URL(url);
+  if (!/(^|\/)(matomo|piwik)\.php$/.test(u.pathname)) return null;
+  const hits = matomoHits("matomo", u, postData);
+  return hits.length ? hits : null;
+}
+
+/** Piwik PRO: /ppms.php with idsite (a UUID), on its cloud or a first-party host. @returns {Hit[] | null} */
+export function parsePiwikPro(url, postData) {
+  const u = new URL(url);
+  if (!/(^|\/)ppms\.php$/.test(u.pathname)) return null;
+  const hits = matomoHits("piwik_pro", u, postData);
+  return hits.length ? hits : null;
+}
+
+/**
+ * Microsoft Clarity: the tag load (www.clarity.ms/tag/<project>) names the project; the data
+ * itself goes to <letter>.clarity.ms/collect as a compressed payload, so only the call is shown.
+ * @returns {Hit[] | null}
+ */
+export function parseClarity(url) {
+  const u = new URL(url);
+  if (!/(^|\.)clarity\.ms$/.test(u.hostname)) return null;
+  const tag = u.pathname.match(/^\/tag\/([a-z0-9]+)\/?$/i);
+  if (tag) return [{ platform: "clarity", name: "script_load", id: tag[1], params: {}, url }];
+  if (/^\/collect\/?$/.test(u.pathname)) return [{ platform: "clarity", name: "collect", params: {}, url }];
+  return null;
+}
+
+/** Hotjar: the tag load (static.hotjar.com/c/hotjar-<id>.js) and calls to its API carry the site id in the path. Only the id is read. @returns {Hit[] | null} */
 export function parseHotjar(url) {
   const u = new URL(url);
   if (!/(^|\.)hotjar\.(com|io)$/.test(u.hostname)) return null;
+  const script = u.pathname.match(/^\/c\/hotjar-(\d+)\.js$/);
+  if (script) return [{ platform: "hotjar", name: "script_load", id: script[1], params: {}, url }];
   const m = u.pathname.match(/^\/api\/v\d+\/client\/sites\/(\d+)\/([a-z-]+)/i);
   if (!m) return null;
   return [{ platform: "hotjar", name: m[2], id: m[1], params: {}, url }];
@@ -318,8 +396,8 @@ export function isCollectionEndpoint(url) {
 }
 
 /**
- * Every tracking vendor: its key, display name, the hosts its requests go to and, when its
- * events are read, a parser. Adding a vendor is one entry here plus its icon in report.js.
+ * Every tracking vendor: its key, display name, the hosts its requests go to (path: how its
+ * tracker is told apart on a first-party host) and, when its events are read, a parser. Adding a vendor is one entry here plus its icon in report.js.
  */
 export const VENDORS = [
   { key: "ga4", label: "GA4", hosts: /(^|\.)(google-analytics|analytics\.google)\.com$/, parse: parseGa4 },
@@ -333,7 +411,11 @@ export const VENDORS = [
   { key: "snapchat", label: "Snapchat", hosts: /(^|\.)(snapchat\.com|sc-static\.net)$/, parse: parseSnapchat },
   { key: "criteo", label: "Criteo", hosts: /(^|\.)(criteo\.com|criteo\.net)$/, parse: parseCriteo },
   { key: "klaviyo", label: "Klaviyo", hosts: /(^|\.)klaviyo\.com$/, parse: parseKlaviyo },
-  { key: "clarity", label: "Microsoft Clarity", hosts: /(^|\.)clarity\.ms$/ },
+  { key: "adobe", label: "Adobe Analytics", hosts: /(^|\.)(omtrdc|2o7)\.net$/, path: /^\/b\/ss\//, parse: parseAdobe },
+  { key: "matomo", label: "Matomo", hosts: /(^|\.)(matomo\.cloud|innocraft\.cloud)$/, path: /(^|\/)(matomo|piwik)\.php$/, parse: parseMatomo },
+  // No host: piwik.pro also serves consent management, so its tracker is recognized by path.
+  { key: "piwik_pro", label: "Piwik PRO", path: /(^|\/)ppms\.php$/, parse: parsePiwikPro },
+  { key: "clarity", label: "Microsoft Clarity", hosts: /(^|\.)clarity\.ms$/, parse: parseClarity },
   { key: "hotjar", label: "Hotjar", hosts: /(^|\.)hotjar\.(com|io)$/, parse: parseHotjar },
   { key: "doubleclick", label: "DoubleClick" },
   { key: "adsense", label: "Google AdSense", hosts: /(^|\.)googlesyndication\.com$/ },
@@ -377,6 +459,8 @@ export function providerOf(url) {
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
   // Before the vendor hosts: a GA4 hit to a Stape or Elevar endpoint is still a GA4 hit.
   if (isGa4Path(u) && !GOOGLE_COMPANION_HOST.test(host)) return of("ga4");
+  // Before the hosts too: trackers on a first-party or consent vendor host are told apart by path.
+  for (const v of VENDORS) if (v.path?.test(u.pathname)) return of(v.key);
   for (const [pattern, key] of HOSTS) if (pattern.test(host)) return of(key);
   if (isGa4Path(u)) return of("ga4");
   if (u.pathname.startsWith("/pagead/") || /\/as\/p\/c\/\d+\/?$/.test(u.pathname)) return of("google_ads");
