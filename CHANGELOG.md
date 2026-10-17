@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 (2026-10-17)
 
 - The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
 - Alerts: `notify` in the config sends the "Changed since last run" diff to Slack and/or email (`SMTP_URL`) after each saved run.
