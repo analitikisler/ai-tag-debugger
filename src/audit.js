@@ -62,7 +62,8 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   outDir?: string, dataDir?: string, branding?: boolean, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
- *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok).
+ *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok plus
+ *     any other known platform the site sends to).
  *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
@@ -81,7 +82,9 @@ export async function runAudit(opts) {
 
   const against = opts.against ? { ...opts.against, label: opts.against.id ?? path.relative(process.cwd(), opts.against.file) } : null;
   const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events, against: Boolean(against) });
-  config = { ...config, providers: resolveProviders(opts.providers ?? config.providers, plan) };
+  const chosen = opts.providers ?? config.providers;
+  // Without a choice, any other known platform the site sends to is checked too (see AuditSession).
+  config = { ...config, providers: resolveProviders(chosen, plan), detect_providers: !(Array.isArray(chosen) ? chosen.length : chosen) };
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
   const allowed = Object.keys(VIEWPORTS).join(", ");
   if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
