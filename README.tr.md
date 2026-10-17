@@ -58,6 +58,10 @@ Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder; a
 
 Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen ya da sitenin gönderdiği her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
 
+### Onay senaryoları
+
+Her denetim ayrıca başlangıç sayfasını her çerez onay seçimi için bir kez açar; her seçim yeni bir tarayıcıda yapılır: tümünü kabul, tümünü reddet ve yalnızca analitik. Seçim, consent platformunun kendi API'siyle (OneTrust, Cookiebot, Usercentrics ya da Didomi) yapılır; API yoksa bannerın düğmelerine tıklanır. Rapor, her seçimden sonra her etiketin kaç istek gönderdiğini gösterir. Yalnızca analitik seçeneği OneTrust ve Cookiebot ile çalışır; diğer platformlarda o sütun "Burada desteklenmiyor" yazar. Tümünü reddet'ten sonra gönderilen bir etiket işaretlenir; Consent Mode'un çerezsiz ping'leri hariç. Yalnızca analitik'ten sonra gönderilen bir reklam etiketi, reklam depolaması reddedilmiş olarak gönderilmediği sürece işaretlenir. Tablo **Yolculuklar** sekmesinin en üstünde ve `report.md` içinde bulgulardan önce yer alır. Başlangıç sayfasında aracın yanıtlayabileceği bir banner yoksa ya da kayıtlı bir site tekrar oynatılıyorsa atlanır. Yapay zekâ modeli çağrılmaz, ama başlangıç sayfası üç kez daha ziyaret edilir. Kapatmak için ayar dosyasına `"consent_scenarios": false` yazın.
+
 ## Nasıl çalışır
 
 1. **Gezinme:** Yapay zekâ modeli, sade bir dille yazılmış bir hedef ("sepete herhangi bir ürün ekle ve test ödeme yöntemiyle siparişi tamamla") ve sayfanın metin görünümünü alır. İki araçla çalışır: `browser_action` (goto, click, fill, select, scroll, wait) ve `finish`. Playwright ile her seferinde bir adım atar.
@@ -238,7 +242,7 @@ Siteniz zaten gönderdiği event'ler `"seen": true` ile işaretlenir.
 
 Kullanmadan önce planı gözden geçirin. Örnekler ve öneriler yapay zekânın gördüğü sayfalardan gelir, bu yüzden her event'in işinize uyduğunu kontrol edin. Ek alanları kontroller yok sayar.
 
-**Elektronik tablo ile içe ve dışa aktarma.** `aitd plan export <plan> --site <url>`, planın yanına `plan.xlsx` yazar: `events` sekmesinde her event parametresi için bir satır (`event, platform, parameter, required, example, trigger, description`) ve `user_properties` sekmesinde her kullanıcı özelliği için bir satır. Bunun yerine `events.csv` ve `user_properties.csv` almak için `--format csv` ekleyin; CSV ek bir paket gerektirmez. `.xlsx`, araçla birlikte isteğe bağlı bir bağımlılık olarak gelen küçük bir kütüphane, `fflate` kullanır. `aitd plan import <dosya> --site <url>` elektronik tabloyu okuyup yeni bir plan klasörü olarak kaydeder. İçe aktarma mevcut bir planı asla düzenlemez. Tanınmayan sütunlar bir uyarıyla yok sayılır; bir hata, sekmeyi, satırı ve düzeltmeyi belirtir, örneğin `events, row 7: "required" must be yes or no (found "maybe").`
+**Elektronik tablo ile içe ve dışa aktarma.** `aitd plan export <plan> --site <url>`, planın yanına `plan.xlsx` yazar: `events` sekmesinde her event parametresi için bir satır (`event, platform, parameter, required, example, trigger, description`) ve `user_properties` sekmesinde her kullanıcı özelliği için bir satır. Bunun yerine `events.csv` ve `user_properties.csv` almak için `--format csv` ekleyin; CSV ek bir paket gerektirmez. `.xlsx`, araçla birlikte isteğe bağlı bir bağımlılık olarak gelen küçük bir kütüphane, `fflate` kullanır. `aitd plan import <dosya> --site <url>` elektronik tabloyu okuyup yeni bir plan klasörü olarak kaydeder. Google E-Tablolar'dan indirirken Dosya > İndir > Microsoft Excel (.xlsx) seçin ya da her sekmeyi CSV olarak indirin: `Shop plan - events.csv` dosyası, yanındaki `Shop plan - user_properties.csv` ile birlikte okunur ve onay kutuları evet/hayır olarak tanınır. İçe aktarma mevcut bir planı asla düzenlemez. Tanınmayan sütunlar bir uyarıyla yok sayılır; bir hata, sekmeyi, satırı ve düzeltmeyi belirtir, örneğin `events, row 7: "required" must be yes or no (found "maybe").`
 
 `measurement-plan.json` şöyle görünür:
 
@@ -263,6 +267,15 @@ Event adları gevşek eşleştirilir: `dl_add_to_cart` (Elevar), `addToCart` ve 
 
 `aitd plan list --site <url>`, sitenin plan kimliklerini en eskiden en yeniye listeler.
 
+**Planı ilk çalıştırmadan öğrenin.** Sitenin kayıtlı bir planı yokken, `--against` ya da `--out` olmadan yapılan bir çalıştırma, sitenin zaten gönderdiği event'leri listeler ve bunları sitenin planı olarak kaydedip kaydetmeyeceğinizi sorar:
+
+```
+No plan yet for this site. It already sends 3 events: ga4:page_view, ga4:purchase, meta:PageView
+Save them as the site's plan? (Y/n)
+```
+
+Evet derseniz sonraki çalıştırmalar `--against latest` ile bu plana karşı kontrol yapabilir. Bir event'in her isteğinde bulunan bir parametre, o event'in zorunlu parametrelerinden biri olur. Hiçbir değer kopyalanmaz, bu yüzden bir ziyaretçinin yazdıkları plana girmez. Bir betikte ya da CI işinde `--yes` eklemedikçe hiçbir şey kaydedilmez; çalıştırma bunun yerine daha ayrıntılı bir plan taslağı için `aitd plan --site` komutunu yazdırır.
+
 ### Plan ve site
 
 Bir çalıştırma `--against` kullandığında rapor, `report.html` ve `report.md` dosyalarında **Plan ve site** bölümüyle başlar. Planlanan her event bir kovaya düşer:
@@ -277,6 +290,12 @@ Bir çalıştırma `--against` kullandığında rapor, `report.html` ve `report.
 | Kontrol edilmedi | Planlandı, ama yolculuğu ya da platformu bu çalıştırmanın parçası değildi |
 
 Kapsam puanı, uygulanmış olanların kontrol edilebilir planlanmış event'lere (kontrol edilmedi hariç hepsi) bölünmesiyle bulunur; genel ve platform başına gösterilir, örneğin `Kapsam 11 olaydan 7 (%64), 2 olay kontrol edilmedi`. Aynı kayıtlar `plan-check.json` dosyasında da bulunur: planlanan her event için kovasıyla birlikte bir kayıt. Çıkış kodları değişmez: `--fail-on` yine bulgu önemine bakar. `--against` olmadan rapor tam olarak eskisi gibidir.
+
+Kontrol edilen plan sitenin ilk planı değilse, rapor başlığı onu bir önceki kayıtlı sürümle karşılaştırır: `Plan 2026-10-01_0900 sürümünden bu yana değişti: 1 eklendi, 0 çıkarıldı, 2 değişti` ya da `Plan 2026-10-01_0900 sürümünden bu yana değişmedi`. Başlık her değişikliği `report.html` ve `report.md` içinde listeler: eklenen event için `+`, çıkarılan için `−`, değişen için `~`, ardından neyin değiştiği (zorunlu parametreler, parametreler ya da yolculuklar). İlk sürümün karşılaştırılacak bir şeyi yoktur; `capture.json` aynı karşılaştırmayı `planChanges` altında da saklar.
+
+### Etiket envanteri
+
+Her raporda ayrıca bir **etiket envanteri** bulunur: sitenin istek gönderdiği her sağlayıcı; istekleri sitenin kendi alan adına gittiyse birinci taraf, sağlayıcıya gittiyse üçüncü taraf, ikisine de gittiyse ikisi olarak işaretlenir. Sağlayıcının görüldüğü sayfa sayısını ve ona bağlı çerezleri gösterir. Hiçbir sağlayıcıya ait olmayan çerezler ayrıca birinci ya da üçüncü taraf olarak listelenir. Yalnızca çerez adları kaydedilir, değerleri asla. Envanter `report.html` içindeki **Kapsam ve plan** sekmesinde, `report.md` içinde ise bir tablo olarak yer alır.
 
 ### Klasör yapısı ve plan kimlikleri
 
@@ -393,6 +412,7 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
+| `consent_scenarios` | Varsayılan `true`. [Onay senaryolarını](#onay-senaryoları) atlamak için `false` yapın; her onay seçimi için başlangıç sayfasını bir kez ziyaret ederler. |
 | `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
 | `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
 | `branding` | Varsayılan `true`. Analitik İşler logosunu ve "Generated by AI Tag Debugger · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ile aynıdır, ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false`. |
@@ -479,12 +499,12 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 - `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.
   - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) `--against` ile [Plan ve site](#plan-ve-site) kapsamı. Yapay zekâ siteyi son çalıştırmadan farklı bir yoldan gezdiyse, başlıkta yolu değişen yolculukları gösteren bir not ve **Son çalıştırmadan bu yana değişenler** bölümünde değişiklikten önceki ve sonraki sayfalar bulunur.
   - **Bulgular**: düzeltmesini kimin yapacağına göre gruplu (Yazılımcı, Tag Manager, Pazarlama) ve önem düzeyine göre filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları, olayın yaşandığı adımlar ve **Nasıl doğrulanır** listesi bulunur; bu liste düzeltmeyi kontrol edebileceğiniz araçlara bağlantı verir (Tag Assistant, GA4 DebugView, Meta Test Events, TikTok Pixel Helper).
-  - **Yolculuklar**: her seferinde bir yolculuk. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın dört sekmesi vardır:
+  - **Yolculuklar**: her seferinde bir yolculuk. Başlangıç sayfasında bir onay bannerı varsa, yolculukların üstünde [onay senaryoları](#onay-senaryoları) tablosu yer alır. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın dört sekmesi vardır:
     - **Zaman akışı**: adım sırasıyla. Önce her dataLayer gönderimi, ardından onu tetikleyen GTM event'i (ya da çerez onayı komutu), sonra da yol açtığı platform istekleri gelir. Gönderimi olmayan istekler en sonda listelenir.
     - **Event'ler**: her takip isteği, parametreleri, çerez onayı durumu, arkasındaki dataLayer gönderimi ve isteği ve bir bulgu buraya işaret ediyorsa bir not.
     - **dataLayer**: adımdaki her gönderim.
     - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede bir `?` ipucuyla bir parametre tablosuna çözülmüş. Toplu bir GA4 isteği, içindeki her event'i gösterir.
-  - **Kapsam ve plan**: planlanan her event'in her yolculukta gönderilip gönderilmediği ve kontrol edilen ya da dışarıda bırakılan platformlar, istek sayılarıyla.
+  - **Kapsam ve plan**: planlanan her event'in her yolculukta gönderilip gönderilmediği ve kontrol edilen ya da dışarıda bırakılan platformlar, istek sayılarıyla. Ayrıca [etiket envanteri](#etiket-envanteri): her sağlayıcı, birinci ya da üçüncü taraf, sayfaları ve çerezleri.
 
   Event'ler ve istekler kaynağa göre filtrelenebilir. GA4 ürün dizgileri (`pr1`…) ve dataLayer `ecommerce.items` ürün kartları olarak gösterilir; özel ürün parametreleri kendi grubunda yer alır. Raporda betik yoktur: sekmeler ve filtreler düz HTML ve CSS'tir (Chrome 105, Safari 15.4 ya da Firefox 121 ve sonrası gerekir) ve yazdırırken her sekme görünür. Logolar gömülüdür, bu yüzden internetten hiçbir şey yüklenmez. `--no-branding`, Analitik İşler logosunu ve kredi satırını çıkarır.
 - `timeline.csv`: aynı zaman akışı, her isteğe, dataLayer gönderimine ve ağ çağrısına bir satır olarak; Excel ya da Google Sheets için hazır.

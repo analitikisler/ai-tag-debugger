@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0 (unreleased)
+
+- The first run learns the plan. When a site has no saved plan, `aitd run` lists the events it already sends and asks whether to save them as its plan. Add `--yes` to save without asking; in a script without `--yes`, nothing is saved.
+- With `--against`, the report header says how the plan changed since the version before it: `Plan changed since <id>: 1 added, 0 removed, 2 changed`, or `Plan unchanged since <id>`. Each change is listed. `capture.json` has the same comparison under `planChanges`.
+- `aitd plan import` reads Google Sheets downloads: the events CSV with its `<Doc> - user_properties.csv` beside it, and checkboxes as yes and no (TRUE and FALSE).
+- Consent scenarios: each audit opens the start page once per consent choice (accept all, reject all, analytics only) and shows the hits each tag sent after each choice. Analytics only works with OneTrust and Cookiebot. Set `"consent_scenarios": false` in the config to turn them off.
+- Tag inventory: the report lists every vendor the site sent requests to, first or third party, the pages it was seen on, and its cookie names (never values). Each network call in `capture.json` now has a `pageUrl`, redacted unless `keep_bodies` is on.
+
 ## 0.14.0 (2026-10-17)
 
 - The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
