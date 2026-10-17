@@ -48,28 +48,29 @@ test("gtag.js array pushes link to their event, duplicates pair in order, and re
   assert.match(html, /gtag\(&quot;event&quot;, &quot;add_to_cart&quot;/);
   // Each event's Source box names one push: duplicates are paired with their own push.
   const sources = [...html.matchAll(/<span class="lbl">dataLayer<\/span>((?:<span class="mono">[^<]*<\/span>)+)<\/li>/g)].map((x) => x[1].split('class="mono"').length - 1);
-  assert.deepEqual(sources, [1, 1, 1]);
+  assert.deepEqual(sources, [1, 1, 1, 1, 1, 1]); // once in Timeline, once in Events
   const step2 = html.slice(html.indexOf('id="j0-s2"'));
   assert.ok(step2.indexOf("first") < step2.indexOf("second") && step2.indexOf("first") > 0);
   const onlyStep2 = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [{ ...r, hits: r.hits.slice(1) }], lang: "en" });
   assert.match(onlyStep2, /href="#j0-s2"/);
 });
 
-test("each step has Events, dataLayer and Network tabs, with source filters and no scripts", () => {
+test("each step has Timeline, Events, dataLayer and Network tabs, with source filters and no scripts", () => {
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
   assert.equal((html.match(/class="tabs seg"/g) ?? []).length, 1);
-  assert.match(html, /for="s0-1-1">Events <span class="n">3<\/span>/);
-  assert.match(html, /for="s0-1-2">dataLayer <span class="n">2<\/span>/);
-  assert.match(html, /for="s0-1-3">Network requests <span class="n">2<\/span>/);
+  assert.match(html, /for="s0-1-2">Events <span class="n">3<\/span>/);
+  assert.match(html, /for="s0-1-3">dataLayer <span class="n">2<\/span>/);
+  assert.match(html, /for="s0-1-4">Network requests <span class="n">2<\/span>/);
   // Events are ordered GA4, Meta, then other platforms, and can be filtered by source.
-  const events = html.slice(html.indexOf('id="s0-1-1"'), html.indexOf('id="s0-1-2"'));
-  const order = ['data-p="ga4"', 'data-p="meta"', 'data-p="pinterest"'].map((x) => html.indexOf(x));
+  const panels = html.split('<div class="panel">');
+  const events = panels[2];
+  const order = ['data-p="ga4"', 'data-p="meta"', 'data-p="pinterest"'].map((x) => events.indexOf(x));
   assert.ok(order.every((i) => i > 0) && order[0] < order[1] && order[1] < order[2], "GA4, Meta, then other platforms");
   assert.match(html, /id="s0-1e-pinterest" class="f-pinterest"/);
   assert.match(html, /\.filter>\.f-pinterest:checked~\.evlist>li:not\(\[data-p="pinterest"\]\)/);
   assert.ok(events.length > 0);
   // The Meta pixel's Source box names the GA4-named push behind it.
-  const meta = html.slice(html.indexOf('<li data-p="meta">'), html.indexOf('<li data-p="pinterest">'));
+  const meta = events.slice(events.indexOf('<li data-p="meta">'), events.indexOf('<li data-p="pinterest">'));
   assert.match(meta, /<span class="mono">add_to_cart · \+1\.1s<\/span>/);
   // dataLayer and Network tabs list everything in the step, with parameter tips.
   assert.match(html, /<code class="ev">consent update<\/code>/);
@@ -216,4 +217,24 @@ test("findings are grouped by owner and carry verify links for their platform", 
   assert.match(tr, /Nasıl doğrulanır/);
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "en" });
   assert.match(md, /- How to verify: \[Tag Assistant\]\(https:\/\/tagassistant\.google\.com\/\), \[GA4 DebugView\]/);
+});
+
+test("the Timeline tab shows each push, the GTM event it raised and the hits it caused, in order", () => {
+  const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
+  assert.match(html, /for="s0-1-1">Timeline <span class="n">5<\/span>/);
+  const tl = html.slice(html.indexOf('<ol class="timeline">'), html.indexOf("</ol>", html.indexOf('<ol class="timeline">')));
+  const at = (x) => tl.indexOf(x);
+  // Consent command first (earlier push), then the add_to_cart push, its GTM event and its GA4 and Meta hits.
+  assert.ok(at("Consent command") > 0 && at("Consent command") < at('GTM event</span><code>add_to_cart</code>'));
+  assert.ok(at('GTM event</span><code>add_to_cart</code>') < at('data-p="meta"') && at('data-p="meta"') < at('data-p="ga4"'));
+  assert.ok(at('data-p="ga4"') < at('data-p="pinterest"'));
+  assert.doesNotMatch(tl, /Hits without a dataLayer push/);
+  // A hit no push explains sits in its own group at the end.
+  const extra = { ...run, hits: [...run.hits, { platform: "ga4", name: "page_view", params: {}, url: "https://x/g/collect?en=page_view", step: 1, t: t0 + 1001 }] };
+  const tl2 = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [extra], lang: "en" });
+  assert.ok(tl2.indexOf("Hits without a dataLayer push") > tl2.indexOf('GTM event</span><code>add_to_cart</code>'));
+  // Flagged hits stay flagged in the timeline.
+  assert.match(tl, /class="event flag-broken" open/);
+  const tr = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
+  assert.match(tr, /Zaman çizelgesi/);
 });
