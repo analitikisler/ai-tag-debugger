@@ -3,6 +3,11 @@
 ## Unreleased
 
 - The MCP server has a `what_changed` tool that returns only the "since last run" diff for a site: what was fixed and what is new, without browsing or an AI.
+- Alerts: `notify` in the config sends the "Changed since last run" diff to Slack and/or email (`SMTP_URL`) after each saved run.
+- Scheduled runs: GitHub Actions and cron templates in `examples/` keep the run history between runs, so "Changed since last run" works on a fresh runner.
+- Repeat runs start from the route the last completed run took, so the AI goes straight to the goal. Only for the same goal, and only for AI runs.
+- `--model cheap` picks a small, inexpensive model for each provider, for routine CI runs.
+- Cloudflare Workers AI is a built-in provider, set with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
 
 ## 0.13.0 (2026-10-17)
 

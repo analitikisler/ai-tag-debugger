@@ -74,8 +74,9 @@ Bring your own API key. `ai-tag-debugger` uses the official SDK of each provider
 | Anthropic (Claude) | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-5.5` |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-pro-latest` |
+| Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
-The provider is picked from whichever key is set (Anthropic first if several are). Choose explicitly with `--provider anthropic|openai|gemini` or `"provider"` in the config, and pick another model with `--model`. Navigation asks for low reasoning effort to keep runs cheap; explanations ask for high effort and structured JSON output.
+Without `--provider`, the first setting found decides, in this order: `OPENAI_COMPATIBLE_BASE_URL`, Vercel AI Gateway (`AI_GATEWAY_API_KEY`), Cloudflare Workers AI, Anthropic, OpenAI, Gemini. Choose explicitly with `--provider anthropic|openai|gemini|vercel|cloudflare` or `"provider"` in the config, and pick another model with `--model`. `--model cheap` picks each provider's small, inexpensive model for routine runs in CI: `claude-haiku-5-5`, `gpt-5.5-mini`, `gemini-flash-latest`, or `anthropic/claude-haiku-5.5` on Vercel. Cloudflare has one model in its list, so `cheap` and the default are the same there. Navigation asks for low reasoning effort to keep runs cheap; explanations ask for high effort and structured JSON output.
 
 ### Any OpenAI-compatible API: Kimi, GLM, DeepSeek, OpenRouter, Ollama and more
 
@@ -119,9 +120,21 @@ export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/<account id>/default
 export AI_GATEWAY_TOKEN=...   # only if the gateway has authentication on
 ```
 
-This works with `anthropic`, `openai` and `gemini`. Leave caching off in the gateway so each run sees your live site. Cloudflare Workers AI models also work through the OpenAI-compatible provider, with `--base-url https://api.cloudflare.com/client/v4/accounts/<account id>/ai/v1`.
+This works with `anthropic`, `openai` and `gemini`. Leave caching off in the gateway so each run sees your live site. To run models on Cloudflare itself, see [Cloudflare Workers AI](#cloudflare-workers-ai).
 
 **A word on model choice.** The AI browses by calling tools, one step at a time, for 5 to 30 steps. Models differ a lot in how reliably they do that: smaller and local models may click the wrong thing, loop, or stop early. The checks stay correct whatever the model does, because they come from the captured hits, but a journey that doesn't finish can't show its later events. If a model struggles, try a larger one, a ready-made journey with a short goal, or `--max-steps`. The Anthropic, OpenAI and Gemini defaults are the tested ones.
+
+### Cloudflare Workers AI
+
+Open models on Cloudflare's network, billed per use by Cloudflare. Create an API token with Workers AI permission, and find your account ID in the Cloudflare dashboard:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+aitd run --site https://yourshop.com --journey purchase
+```
+
+Without `--model` it uses `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. When both variables are set, Cloudflare is picked before Anthropic, OpenAI and Gemini, so pass `--provider` to use one of those instead.
 
 Adding a native provider means implementing two functions in [`src/providers.js`](src/providers.js): a tool-calling conversation and a structured JSON call.
 
@@ -319,6 +332,7 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Run one viewport.** `--viewport mobile` halves the calls compared with desktop and mobile.
 - **Cap the steps.** `--max-steps 15` stops a journey that wanders.
 - **Expect bigger pages to cost more.** Each step sends the page view (up to 250 elements and 3,000 characters of text) to the model, so busy pages use more tokens per step than simple ones.
+- **Repeat runs start from the last route.** Once a journey has completed on a site, the next run gives the AI the pages that run went through, in order, so it goes straight to the goal instead of exploring. The route is reused only for the same goal, from runs made with 0.14.0 or later, and only for AI runs. It isn't used with `--out` or `replay`. If the site changed and the route no longer fits, the AI takes another path.
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
 - **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
@@ -382,8 +396,25 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
 | `branding` | Default `true`. Set to `false` to leave the Analitik İşler logo and the "Generated by AI Tag Debugger · analitikisler.com" line out of the reports. Same as `--no-branding`, or `branding: false` on the MCP `finish_audit` and `run_audit` tools. |
-| `provider` | Optional: `anthropic`, `openai`, `gemini` or `openai-compatible`. Same as `--provider`. |
+| `provider` | Optional: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` or `openai-compatible`. Same as `--provider`. |
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
+| `notify` | Optional alerts after each saved run: `slack` (a webhook URL, or `true` to read `SLACK_WEBHOOK_URL`) and `email` (an address or a list). See [Alerts](#alerts). |
+
+### Alerts
+
+After each saved run, `notify` sends the "Changed since last run" diff to your team, so a change on the site reaches you without opening a report:
+
+```json
+"notify": {
+  "slack": "https://hooks.slack.com/services/...",
+  "email": ["team@example.com"]
+}
+```
+
+- **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
+- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
+
+An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The message lists the problems fixed and the new ones, and its subject line gives the counts. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
 
 ## CLI
 
