@@ -37,7 +37,7 @@ const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracki
 
 Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")}). If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
 
-Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}); pass their choice as providers.
+Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}, plus any other platform the site turns out to use); pass their choice as providers, or leave it out for the default.
 
 To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language.
 
@@ -153,7 +153,7 @@ export function buildServer(opts) {
         providers: z
           .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
           .optional()
-          .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")}. Requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+          .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
       },
     },
     async ({ site, journey, viewport, allowed_hosts, providers }) => {
@@ -367,7 +367,7 @@ export function buildServer(opts) {
           providers: z
             .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
             .optional()
-            .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")}. Requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+            .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
         },
       },
       async ({ config: configFile, against, scripted, language, branding, providers }) => {
