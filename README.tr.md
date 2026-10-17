@@ -4,7 +4,7 @@
 
 **Web sitenizin analitik ve reklam takibini test eden, açık kaynaklı bir yapay zekâ ajanı.**
 
-Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculukları (ürün → sepet → ödeme, form gönderimleri) gerçek bir ziyaretçi gibi gezdirir. Gezerken `ai-tag-debugger` her GA4, Google Ads, Meta Pixel ve TikTok isteğini ve her dataLayer gönderimini kaydeder. Ardından bunları ölçümleme planınız ve Consent Mode kurulumunuzla karşılaştırır ve neyin bozulduğunu ve nasıl düzeltileceğini sade bir dille, Türkçe ya da İngilizce olarak yazılmış bir raporla anlatır.
+Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculukları (ürün → sepet → ödeme, form gönderimleri) gerçek bir ziyaretçi gibi gezdirir. Gezerken `ai-tag-debugger` her takip isteğini (GA4, Google Ads, Meta Pixel, TikTok ve bir düzine kadar başka platform) ve her dataLayer gönderimini kaydeder. Ardından bunları ölçümleme planınız ve Consent Mode kurulumunuzla karşılaştırır ve neyin bozulduğunu ve nasıl düzeltileceğini sade bir dille, Türkçe ya da İngilizce olarak yazılmış bir raporla anlatır.
 
 İki şekilde kullanabilirsiniz:
 
@@ -50,13 +50,13 @@ Manuel etiket kontrolü bunu yakalar, ama zahmetlidir; bu yüzden her sürümden
 | Planda olmayan event'ler | Ölçümleme planınızda bulunmayan, yine de fire olan event'ler |
 | Plan kapsamı | Planlanan her event'in uygulandı, eksik, parametresi eksik, değeri hatalı ya da kontrol edilmedi olarak sınıflandırılması (bkz. [Plan ve site](#plan-ve-site)) |
 
-Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel ve temel X Pixel event'leri.
+Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel, temel X Pixel event'leri, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag ile Pinterest, Snapchat ve Klaviyo event'leri. Adobe Analytics, Matomo ve Piwik PRO event'leri de okunur (sayfa görüntülemeleri, bağlantılar, hedefler, site içi arama ve e-ticaret siparişleri); Microsoft Clarity ve Hotjar etiket yüklemeleri ise proje ya da site kimliğini gösterir.
 
 ### Kontrol edilecek platformları seçin
 
-Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder. Başka platformları `--platforms ga4,meta,x` ile, ayar dosyasındaki `"providers"` ile ya da MCP `start_audit` ve `run_audit` araçlarındaki `providers` ile seçebilirsiniz. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok ve X için event'ler ayrıştırılır; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
+Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder; ayrıca sitenin kullandığı başka her platformu, ilk isteğinden itibaren kontrol eder. Bunun için bir ayar gerekmez. Platform seçmek bu otomatik algılamayı kapatır. Sabit bir liste için `--platforms ga4,meta,x` kullanın, ayar dosyasında `"providers"` ya da MCP `start_audit` ve `run_audit` araçlarında `providers` verin. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo ve Piwik PRO için event'ler ayrıştırılır. Clarity ve Hotjar etiket yüklemelerini gösterir; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
 
-Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
+Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen ya da sitenin gönderdiği her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
 
 ## Nasıl çalışır
 
@@ -391,7 +391,7 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
-| `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`. `--platforms` ile aynıdır. |
+| `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
 | `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
 | `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
@@ -472,12 +472,15 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 
 Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
 
+**Zamanlanmış çalıştırmalar.** Her dağıtımdan sonra değil de bir zamanlayıcıyla denetlemek için [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) dosyasını kullanın (varsayılan olarak haftalık; cron satırını değiştirebilirsiniz). Geçmişi çalıştırmalar arasında bir önbellekte saklar, böylece "Son çalıştırmadan beri değişenler" yeni bir runner'da da çalışır. Kendi sunucunuzda aynısı için [`examples/cron/`](examples/cron) içinde bir betik ve bir crontab satırı vardır.
+
 Çıktı:
 
 - `report.html`: dört sekmeli tek bir dosya. Bağlantılar sekmeler arasında çalışır (bir bulgunun "Nerede" çipi o adımı açar) ve her görünümün paylaşılabilir ya da yer imine eklenebilir kendi URL'si vardır.
-  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) ve `--against` ile [Plan ve site](#plan-ve-site) kapsamı.
-  - **Bulgular**: önem düzeyine göre gruplu ve filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları ve olayın yaşandığı adımlar bulunur.
-  - **Yolculuklar**: her seferinde bir yolculuk. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın üç sekmesi vardır:
+  - **Genel bakış**: sorun sayıları, yapay zekâ özeti (en önemli sorun önce, ve bulguların kapsamadığı kontrol edilmeye değer şeyler), yolculuklar ve sorun sayıları, bir **Bu çalıştırma** kartı (platformlar, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, dil, sürüm) `--against` ile [Plan ve site](#plan-ve-site) kapsamı. Yapay zekâ siteyi son çalıştırmadan farklı bir yoldan gezdiyse, başlıkta yolu değişen yolculukları gösteren bir not ve **Son çalıştırmadan bu yana değişenler** bölümünde değişiklikten önceki ve sonraki sayfalar bulunur.
+  - **Bulgular**: düzeltmesini kimin yapacağına göre gruplu (Yazılımcı, Tag Manager, Pazarlama) ve önem düzeyine göre filtrelenebilir. Her birinde etkisi, olası nedeni, kanıtı, numaralı düzeltme adımları, olayın yaşandığı adımlar ve **Nasıl doğrulanır** listesi bulunur; bu liste düzeltmeyi kontrol edebileceğiniz araçlara bağlantı verir (Tag Assistant, GA4 DebugView, Meta Test Events, TikTok Pixel Helper).
+  - **Yolculuklar**: her seferinde bir yolculuk. Üstteki **Onay** kartı Consent Mode varsayılanını ve her güncellemeyi, sinyal başına bir kutuyla gösterir. Altında solda adımları, sağda seçili adım. Sorunlu ilk adımda açılır. Her adımın dört sekmesi vardır:
+    - **Zaman akışı**: adım sırasıyla. Önce her dataLayer gönderimi, ardından onu tetikleyen GTM event'i (ya da çerez onayı komutu), sonra da yol açtığı platform istekleri gelir. Gönderimi olmayan istekler en sonda listelenir.
     - **Event'ler**: her takip isteği, parametreleri, çerez onayı durumu, arkasındaki dataLayer gönderimi ve isteği ve bir bulgu buraya işaret ediyorsa bir not.
     - **dataLayer**: adımdaki her gönderim.
     - **Ağ istekleri**: seçilen platformlara giden her istek; her parametrede bir `?` ipucuyla bir parametre tablosuna çözülmüş. Toplu bir GA4 isteği, içindeki her event'i gösterir.
@@ -503,6 +506,7 @@ Sunucunun sunduğu araçlar:
 | Araç | Ne yapar |
 |---|---|
 | `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
+| `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
 | `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
 | `get_page` | Geçerli sayfayı gösterir. |

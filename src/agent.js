@@ -188,7 +188,7 @@ export const harName = (journeyId, viewport) => `${String(journeyId).replace(/[^
 export async function runJourney(config, journey, viewport, opts = {}) {
   const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
   const session = new AuditSession({
-    viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, keepBodies: config.keep_bodies === true,
+    viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
     blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite),
   });
   try {

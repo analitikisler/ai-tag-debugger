@@ -1,5 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { messages } from "./i18n.js";
+import { platformLabel } from "./report.js";
 import { listRunIds, runsDir } from "./workspace.js";
 
 const PROBLEMS = new Set(["broken", "risk", "warning"]);
@@ -35,14 +37,42 @@ function planProblems(pc) {
   return out;
 }
 
+/** The pages one run visited, in order, one entry per journey and viewport. Null when it recorded none (older runs). */
+function routes(runs = []) {
+  const out = new Map();
+  for (const r of runs) {
+    const pages = [];
+    for (const s of r.steps ?? []) if (s.pagePath && pages.at(-1) !== s.pagePath) pages.push(s.pagePath);
+    if (pages.length) out.set(`${r.journeyId}|${r.viewport}`, { journeyId: r.journeyId, viewport: r.viewport, pages });
+  }
+  return out;
+}
+
+/** Journeys whose route through the site differs from the previous run: [{ journeyId, viewport, before, after }]. */
+export function compareRoutes(prevRuns, runs) {
+  const before = routes(prevRuns);
+  const out = [];
+  for (const [k, now] of routes(runs)) {
+    const was = before.get(k);
+    if (was && was.pages.join("\n") !== now.pages.join("\n")) out.push({ journeyId: now.journeyId, viewport: now.viewport, before: was.pages, after: now.pages });
+  }
+  return out;
+}
+
 /**
  * What changed since the previous run of the same site. Compares plan coverage when both runs were
  * checked against a plan, and the health findings otherwise.
  * Returns { previous: null } when there is no earlier run, else
  * { previous, mode: "plan" | "findings", fixed: [...], new: [...] }.
  */
-export function compareRuns(prev, { findings, planCheck = null }) {
+export function compareRuns(prev, { findings, planCheck = null, runs = [] }) {
   if (!prev) return { previous: null };
+  const routeChanges = compareRoutes(prev.capture?.runs, runs);
+  const base = compareFindings(prev, { findings, planCheck });
+  return routeChanges.length ? { ...base, routes: routeChanges } : base;
+}
+
+function compareFindings(prev, { findings, planCheck }) {
   if (planCheck && prev.planCheck) {
     const before = planProblems(prev.planCheck);
     const now = planProblems(planCheck);
@@ -63,4 +93,33 @@ export function compareRuns(prev, { findings, planCheck = null }) {
     fixed: [...before].filter(([k]) => !now.has(k)).map(([, f]) => f),
     new: [...now].filter(([k]) => !before.has(k)).map(([, f]) => f),
   };
+}
+
+/**
+ * The "since last run" diff for a site's newest saved run, as the report showed it: that run compared
+ * with the one before. Returns { run: null } when nothing is saved, else { run, ...compareRuns() }.
+ * Shared by anything that reports the diff outside the report (MCP, alerts).
+ */
+export async function sinceLastRun(dataDir, site) {
+  const latest = await previousRun(dataDir, site);
+  if (!latest) return { run: null, previous: null };
+  const saved = latest.capture.changes;
+  if (saved) return { run: latest.id, ...saved };
+  const prev = await previousRun(dataDir, site, latest.id);
+  return { run: latest.id, ...compareRuns(prev, { findings: latest.capture.findings ?? [], planCheck: latest.planCheck, runs: latest.capture.runs }) };
+}
+
+/** The diff as plain lines: a headline, then one line per fixed and new problem. */
+export function changesLines(ch, lang = "en") {
+  const m = messages(lang);
+  if (!ch.run) return [m.ui.noSavedRun];
+  if (!ch.previous) return [m.ui.noPreviousRun];
+  const label = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
+  const why = (c, bucket) => (ch.mode === "findings" ? c.detail : m.ui.bucket[bucket]);
+  return [
+    `${m.ui.changesLine(ch)}. ${m.ui.changesLead(ch.previous, ch.mode)} (${ch.run}).`,
+    ...ch.fixed.map((c) => `- ${m.ui.changeFixed}: ${label(c)} (${why(c, c.was)})`),
+    ...ch.new.map((c) => `- ${m.ui.changeNew}: ${label(c)} (${why(c, c.bucket)})`),
+    ...(ch.routes?.length ? [m.ui.routeChanged(ch.routes.map((r) => `${r.journeyId} (${r.viewport})`).join(", "))] : []),
+  ];
 }
