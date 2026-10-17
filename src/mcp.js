@@ -24,6 +24,7 @@ import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
 import { savePlan } from "./plan.js";
+import { changesLines, sinceLastRun } from "./changes.js";
 import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -282,7 +283,7 @@ export function buildServer(opts) {
       const grouped = groupFindings(findings);
       const counts = summarize(grouped);
       const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
-      const reportPath = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
+      const { reportPath } = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
       const m = messages(lang);
       const lines = [
         m.ui.counts(counts),
@@ -347,6 +348,28 @@ export function buildServer(opts) {
         // The CLI wording (--no-ai) means nothing to a chat app, so say it in this tool's terms.
         if (err.code === "NO_API_KEY") return fail("No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so it can't draft a plan. Set one and restart the server, or write the plan yourself from what an audit shows and pass it to finish_audit as measurement_plan.");
         return fail(`Could not draft the plan: ${err.message}`);
+      }
+    },
+  );
+
+  server.registerTool(
+    "what_changed",
+    {
+      title: "What changed since the last run",
+      description:
+        "Returns only the \"since last run\" diff for a site: which problems were fixed and which are new in its newest saved run (`aitd run`) compared with the run before it. Compares plan coverage when both runs were checked against a plan, health findings otherwise. Does not browse or use an AI. Use it to answer \"what changed on this site?\" without re-reading a whole report.",
+      inputSchema: {
+        site: z.string().describe("The site, e.g. https://www.example.com/. Its saved runs are the ones in the data folder of the computer running this server."),
+        language: z.enum(Object.keys(LANGUAGES)).optional().describe("Language of the answer. Default en."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ site, language }) => {
+      try {
+        const diff = await sinceLastRun(opts.dataDir ?? DEFAULT_DATA_DIR, site);
+        return text(changesLines(diff, language ?? "en").join("\n"));
+      } catch (err) {
+        return fail(err.message);
       }
     },
   );

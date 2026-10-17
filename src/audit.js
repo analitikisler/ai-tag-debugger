@@ -1,7 +1,8 @@
 // A full audit from a config file: run every journey, check, explain, write the reports.
 // Shared by the CLI and the MCP server's run_audit tool.
 import { newRunDir } from "./workspace.js";
-import { compareRuns, previousRun } from "./changes.js";
+import { compareRuns, previousRun, routeHints } from "./changes.js";
+import { sendAlerts } from "./notify.js";
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
@@ -38,7 +39,7 @@ export async function loadConfig(configFile) {
 /**
  * Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against.
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
- * the "Changed since last run" section.
+ * the "Changed since last run" section. Returns { reportPath, changes }.
  */
 export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined }) {
   await mkdir(outDir, { recursive: true });
@@ -46,14 +47,14 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
-  const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check });
+  const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
   const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
   await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}) }, null, 2));
-  return path.join(outDir, "report.html");
+  return { reportPath: path.join(outDir, "report.html"), changes };
 }
 
 /**
@@ -109,13 +110,18 @@ export async function runAudit(opts) {
   if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}${alsoSet(provider.key)}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
+  // Repeat runs start from the route the last completed run took. Not with --out or a replay, which have no history to learn from.
+  const hints = provider && !opts.outDir && !opts.replaySite ? await routeHints(opts.dataDir, config.site).catch(() => new Map()) : new Map();
   const runs = [];
   for (const journey of journeys) {
     for (const viewport of viewports) {
       log(`\n▶ ${journey.id} (${viewport})`);
+      const hint = hints.get(`${journey.id}|${viewport}`);
+      const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
+      if (routeHint) log(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
       // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
       // so one journey can't cost the report of the others.
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
+      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
       log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
       runs.push(run);
     }
@@ -143,7 +149,12 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const reportPath = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous });
+  const { reportPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous });
+  if (config.notify && changes) {
+    const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath });
+    if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
+    for (const e of errors) log(`\nCould not send an alert. ${e}`);
+  }
   const counts = summarize(groupFindings(findings));
   return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
 }
