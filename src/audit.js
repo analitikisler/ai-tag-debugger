@@ -1,7 +1,7 @@
 // A full audit from a config file: run every journey, check, explain, write the reports.
 // Shared by the CLI and the MCP server's run_audit tool.
 import { newRunDir } from "./workspace.js";
-import { compareRuns, previousRun } from "./changes.js";
+import { compareRuns, previousRun, routeHints } from "./changes.js";
 import { sendAlerts } from "./notify.js";
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -110,13 +110,18 @@ export async function runAudit(opts) {
   if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}${alsoSet(provider.key)}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
+  // Repeat runs start from the route the last completed run took. Not with --out or a replay, which have no history to learn from.
+  const hints = provider && !opts.outDir && !opts.replaySite ? await routeHints(opts.dataDir, config.site).catch(() => new Map()) : new Map();
   const runs = [];
   for (const journey of journeys) {
     for (const viewport of viewports) {
       log(`\n▶ ${journey.id} (${viewport})`);
+      const hint = hints.get(`${journey.id}|${viewport}`);
+      const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
+      if (routeHint) log(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
       // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
       // so one journey can't cost the report of the others.
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
+      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
       log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
       runs.push(run);
     }

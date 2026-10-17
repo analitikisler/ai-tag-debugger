@@ -38,14 +38,34 @@ function planProblems(pc) {
 }
 
 /** The pages one run visited, in order, one entry per journey and viewport. Null when it recorded none (older runs). */
-function routes(runs = []) {
+function routes(runs = [], completedOnly = false) {
   const out = new Map();
   for (const r of runs) {
+    if (completedOnly && (!r.completed || !r.goal)) continue;
     const pages = [];
     for (const s of r.steps ?? []) if (s.pagePath && pages.at(-1) !== s.pagePath) pages.push(s.pagePath);
-    if (pages.length) out.set(`${r.journeyId}|${r.viewport}`, { journeyId: r.journeyId, viewport: r.viewport, pages });
+    if (pages.length) out.set(`${r.journeyId}|${r.viewport}`, { journeyId: r.journeyId, viewport: r.viewport, goal: r.goal, pages });
   }
   return out;
+}
+
+const HINT_SCAN = 10;
+
+/**
+ * The pages each journey visited the last time it completed on this site, so a repeat run can start from a
+ * known route: Map of "journeyId|viewport" to { goal, pages }. A run only counts for the same goal, since
+ * "custom" and the like are reused for different goals, and only if it recorded its goal (older runs didn't).
+ */
+export async function routeHints(dataDir, site) {
+  const hints = new Map();
+  let before = null;
+  for (let i = 0; i < HINT_SCAN; i++) {
+    const prev = await previousRun(dataDir, site, before);
+    if (!prev) break;
+    for (const [k, r] of routes(prev.capture?.runs, true)) if (!hints.has(k)) hints.set(k, { goal: r.goal, pages: r.pages });
+    before = prev.id;
+  }
+  return hints;
 }
 
 /** Journeys whose route through the site differs from the previous run: [{ journeyId, viewport, before, after }]. */
