@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { messages } from "./i18n.js";
 import { platformLabel } from "./report.js";
-import { listRunIds, runsDir } from "./workspace.js";
+import { PLAN_FILE, listPlanIds, listRunIds, plansDir, runsDir } from "./workspace.js";
 
 const PROBLEMS = new Set(["broken", "risk", "warning"]);
 const PLAN_PROBLEMS = new Set(["missing", "missing_params", "wrong_values"]);
@@ -142,4 +142,41 @@ export function changesLines(ch, lang = "en") {
     ...ch.new.map((c) => `- ${m.ui.changeNew}: ${label(c)} (${why(c, c.bucket)})`),
     ...(ch.routes?.length ? [m.ui.routeChanged(ch.routes.map((r) => `${r.journeyId} (${r.viewport})`).join(", "))] : []),
   ];
+}
+
+const planKey = (e) => [e.platform ?? "ga4", e.name].join("|");
+const sortedList = (v) => JSON.stringify([...(v ?? [])].sort());
+
+/** What differs for an event kept in both plans: its required parameters, parameter list or journeys. */
+function eventChanges(a, b) {
+  const out = [];
+  if (sortedList(a.required_params) !== sortedList(b.required_params)) out.push("required parameters");
+  if (sortedList(Object.keys(a.parameters ?? {})) !== sortedList(Object.keys(b.parameters ?? {}))) out.push("parameters");
+  if (sortedList(a.journeys) !== sortedList(b.journeys)) out.push("journeys");
+  return out;
+}
+
+/**
+ * How a plan differs from the version before it: events added, removed and changed.
+ * Returns null when there is no earlier version, else { previous, added, removed, changed, same }.
+ */
+export function comparePlans(prevPlan, plan, previousId = null) {
+  if (!prevPlan || !plan) return null;
+  const before = new Map((prevPlan.events ?? []).map((e) => [planKey(e), e]));
+  const now = new Map((plan.events ?? []).map((e) => [planKey(e), e]));
+  const label = (e) => ({ platform: e.platform ?? "ga4", event: e.name });
+  const added = [...now].filter(([k]) => !before.has(k)).map(([, e]) => label(e));
+  const removed = [...before].filter(([k]) => !now.has(k)).map(([, e]) => label(e));
+  const changed = [...now].filter(([k]) => before.has(k)).map(([k, e]) => ({ ...label(e), what: eventChanges(before.get(k), e) })).filter((c) => c.what.length);
+  return { previous: previousId, added, removed, changed, same: !added.length && !removed.length && !changed.length };
+}
+
+/** The saved plan right before `planId` for the site, compared with `plan`; null for the first version or an unsaved plan. */
+export async function previousPlanChanges(dataDir, site, planId, plan) {
+  if (!planId) return null;
+  const ids = await listPlanIds(dataDir, site);
+  const prevId = ids.filter((id) => id < planId).at(-1);
+  if (!prevId) return null;
+  const prevPlan = await readJson(path.join(plansDir(dataDir, site), prevId, PLAN_FILE));
+  return comparePlans(prevPlan, plan, prevId);
 }

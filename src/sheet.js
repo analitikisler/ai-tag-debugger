@@ -84,7 +84,8 @@ export function rowsToPlan({ events: eventRows = [], user_properties: upRows = n
     if (!r.event) throw fail(`${at}: "event" is empty. Give the event name, e.g. purchase.`);
     const platform = (r.platform || "ga4").toLowerCase();
     if (!PLATFORMS[platform]) throw fail(`${at}: "platform" must be one of ${Object.keys(PLATFORMS).join(", ")} (found "${r.platform}").`);
-    const required = (r.required ?? "").toLowerCase();
+    // Google Sheets checkboxes export as TRUE/FALSE.
+    const required = { true: "yes", false: "no" }[(r.required ?? "").toLowerCase()] ?? (r.required ?? "").toLowerCase();
     if (!["yes", "no", ""].includes(required)) throw fail(`${at}: "required" must be yes or no (found "${r.required}").`);
     if (required && !r.parameter) throw fail(`${at}: "required" is set but "parameter" is empty. Name the parameter, or leave "required" empty on the event's own row.`);
     const custom = (r.custom ?? "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
@@ -290,15 +291,17 @@ export async function readPlanSheet(file, { site } = {}) {
     if (!events) throw new Error(`${path.basename(file)} has no tab named "events" (found ${Object.keys(sheets).map((k) => `"${k}"`).join(", ") || "none"}). Rename the tab with the events to "events".`);
     tabs = { events, user_properties: find("user_properties") ?? null };
   } else if (ext === ".csv") {
-    const upFile = path.join(path.dirname(file), "user_properties.csv");
-    const isUp = path.basename(file).toLowerCase() === "user_properties.csv";
-    if (isUp) throw new Error(`Import the events file (events.csv); ${path.basename(file)} beside it is read too.`);
+    // Google Sheets downloads each tab as "<Document> - <tab>.csv"; the sibling file keeps that prefix.
+    const base = path.basename(file);
+    const prefix = base.match(/^(.*?)events\.csv$/i)?.[1] ?? "";
+    const upFile = path.join(path.dirname(file), `${prefix}user_properties.csv`);
+    if (/user_properties\.csv$/i.test(base)) throw new Error(`Import the events file (${base.replace(/user_properties\.csv$/i, "events.csv")}); ${base} beside it is read too.`);
     tabs = { events: parseCsv(await readFile(file, "utf8")), user_properties: (await exists(upFile)) ? parseCsv(await readFile(upFile, "utf8")) : null };
   } else {
     throw new Error(`Import a .xlsx or .csv file (got ${path.basename(file)}).`);
   }
   const result = rowsToPlan(tabs, { site });
-  if (!tabs.user_properties) result.warnings.push(ext === ".csv" ? "No user_properties.csv beside the file, so the plan has no user properties." : 'No "user_properties" tab, so the plan has no user properties.');
+  if (!tabs.user_properties) result.warnings.push(ext === ".csv" ? `No ${path.basename(upFile)} beside the file, so the plan has no user properties.` : 'No "user_properties" tab, so the plan has no user properties.');
   return result;
 }
 
