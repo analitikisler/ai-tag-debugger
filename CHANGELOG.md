@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 (2026-10-17)
 
 - Campaign checks (`campaign_checks`, on by default): each run opens the first page like an ad click, with UTM parameters, `gclid` or `fbclid` (or the ones already in the start address), and reports when a redirect drops them or the hits show a page address without them. Set `campaign_checks` to `false` to open the plain address.
 - Server-side checks: one event ID reused on two different events is flagged, and so is a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container forwards. A server container is noted as an info finding.
