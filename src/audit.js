@@ -10,9 +10,11 @@ import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
 import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
 import { LANGUAGES, messages } from "./i18n.js";
+import { loadReportBrand, writePdf } from "./whitelabel.js";
 import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
+import { annotateFindings } from "./gtm.js";
 import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
 
@@ -33,7 +35,8 @@ export async function loadConfig(configFile) {
   const plan = typeof config.plan === "string" ? await readJson(config.plan, configDir) : config.plan;
   if (plan && !Array.isArray(plan.events)) throw new Error('The "plan" needs an "events" list.');
   const gtmContainer = config.gtm_container ? await readJson(config.gtm_container, configDir) : null;
-  return { config, plan, gtmContainer };
+  const brand = await loadReportBrand(config.report, configDir);
+  return { config, plan, gtmContainer, brand };
 }
 
 
@@ -42,26 +45,35 @@ export async function loadConfig(configFile) {
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
  * the "Changed since last run" section. Returns { reportPath, changes }.
  */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null }) {
   await mkdir(outDir, { recursive: true });
   const site = new URL(config.site).hostname;
   const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
   const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
-  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios };
+  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios, brand };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
   await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
-  return { reportPath: path.join(outDir, "report.html"), changes };
+  const reportPath = path.join(outDir, "report.html");
+  if (brand?.pdf) {
+    try {
+      await writePdf(reportPath, path.join(outDir, "report.pdf"));
+    } catch (err) {
+      // The HTML report is the main output; a PDF that can't be made is a warning, not a failed run.
+      console.error(`Could not write report.pdf: ${err.message}`);
+    }
+  }
+  return { reportPath, changes };
 }
 
 /**
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
- *   outDir?: string, dataDir?: string, branding?: boolean, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
+ *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok plus
@@ -133,7 +145,7 @@ export async function runAudit(opts) {
     ? null
     : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
-  const findings = filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events);
+  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer);
   let saveError = null;
   if (opts.saveSite) {
     try {
@@ -155,7 +167,7 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const { reportPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios });
+  const { reportPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null });
   if (config.notify && changes) {
     const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath });
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);

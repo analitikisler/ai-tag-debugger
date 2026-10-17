@@ -7,6 +7,7 @@ import { parseTrackingRequest, providerOf, PROVIDERS } from "./parsers.js";
 import { decodeGa4Item, isEventParam, paramTip } from "./glossary.js";
 import { buildInventory } from "./inventory.js";
 import { LOGOS } from "./brand.js";
+import { brandCss } from "./whitelabel.js";
 import { readFileSync } from "node:fs";
 
 export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -154,7 +155,7 @@ const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
 const routeList = (ch) => (ch?.routes ?? []).map((r) => `${r.journeyId} (${r.viewport})`).join(", ");
 
-export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
+export function renderMarkdown({ title, generatedAt, findings, explained, runs, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null, brand = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
@@ -183,6 +184,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     const vl = verifyLinks(f);
     if (vl.length) lines.push(`- ${m.ui.verify}: ${vl.map((l) => `[${l.name}](${l.url})`).join(", ")}`);
     if (f.evidence) lines.push(`- ${m.ui.captured}: \`${mdCode(f.evidence)}\``);
+    if (f.gtm) lines.push(`- ${m.ui.gtmTags}: ${f.gtm.length ? f.gtm.map((t) => `${t.name}${t.paused ? ` (${m.ui.gtmPaused})` : ""}, ${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map((x) => x.name).join(", ")}` : m.ui.gtmNoTrigger}`).join("; ") : m.ui.gtmNoTag}`);
     if (f.explanation) {
       if (f.explanation.impact) lines.push(`- ${m.ui.impact}: ${mdText(f.explanation.impact)}`);
       lines.push(`- ${m.ui.likelyCause}: ${mdText(f.explanation.likely_cause)}`, `- ${m.ui.fix}:`, ...fixSteps(f.explanation).map((t, i) => `   ${i + 1}. ${mdText(t)}`));
@@ -206,7 +208,9 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     }
     lines.push("");
   }
-  if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
+  // A report with its own name or logo carries no Analitik İşler credit; the AI Tag Debugger one stays.
+  if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
+  else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
   return lines.join("\n");
 }
 
@@ -466,6 +470,7 @@ const ICON = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   impact: '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
   cause: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  gtm: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   evidence: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   fix: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   where: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
@@ -593,6 +598,18 @@ function evidenceHtml(evidence) {
   return `<pre>${escapeHtml(evidence)}</pre>`;
 }
 
+/** The tags in the GTM container export that send this finding's event, with their triggers. */
+function gtmHtml(m, tags) {
+  if (!tags) return "";
+  if (!tags.length) return `${sec("gtm", m.ui.gtmTags)}<p class="muted">${m.ui.gtmNoTag}</p>`;
+  const trig = (t) => `${escapeHtml(t.name)}${t.event ? ` <span class="muted">(${escapeHtml(t.event)})</span>` : ""}`;
+  const rows = tags.map((t) => {
+    const notes = [t.paused ? m.ui.gtmPaused : "", t.consent.length ? m.ui.gtmConsent(t.consent.join(", ")) : ""].filter(Boolean);
+    return `<tr><th>${escapeHtml(t.name)}${notes.length ? `<div class="muted xs">${escapeHtml(notes.join(" · "))}</div>` : ""}</th><td>${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map(trig).join(", ")}` : `<span class="missing">${m.ui.gtmNoTrigger}</span>`}${t.blocking.length ? `<div class="muted xs">${m.ui.gtmBlockedBy} ${t.blocking.map(trig).join(", ")}</div>` : ""}</td></tr>`;
+  });
+  return `${sec("gtm", m.ui.gtmTags)}<table class="ptable ev-table gtm-tags"><tbody>${rows.join("")}</tbody></table>`;
+}
+
 function verifyHtml(m, f) {
   const links = verifyLinks(f);
   if (!links.length) return "";
@@ -621,7 +638,7 @@ function findingCard(m, runs, f, open, aiRan) {
 <span class="fhead"><span class="ftitle">${detailHtml(f.detail)}</span><span class="fmeta">${f.platform ? `<span class="ptag p-${safeKey(f.platform)}">${escapeHtml(platformLabel(f.platform))}</span>` : ""}<span>${escapeHtml(m.ui.spread(journeysN, stepsN))}</span></span></span>
 ${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
-<div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}</div>
+<div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}${gtmHtml(m, f.gtm)}</div>
 <div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div>${verifyHtml(m, f)}</div></div></div></details></li>`;
 }
 
@@ -889,6 +906,7 @@ code{font-size:12px;background:var(--muted-bg);padding:1px 5px;border-radius:4px
 .topbar{background:var(--bg);border-bottom:1px solid var(--border)}
 .topbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:56px}
 .product-logo img{display:block;height:26px;width:auto}
+.brand-name{font:600 16px var(--font-sans);color:var(--fg)}
 .byline{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}.byline:hover{opacity:.85}
 .logo-h img{display:block;height:18px;width:auto}
 .title{margin-top:20px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
@@ -1126,25 +1144,32 @@ pre{margin:8px 0 0;font-size:12px;line-height:1.5;background:var(--muted-bg);bor
 @media print{.toptabs,.jtabs,.stepnav,.filter>label,.filter>input,.tabs.seg>label,.sevfilter{display:none}.tabpanel,.jpanel,.sdetail,.tabs.seg>.panel{display:block!important}.jpanel{margin-bottom:32px}.sdetail{margin-bottom:16px;break-inside:avoid-page}details>*{display:block}}
 `;
 
-export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null }) {
+export function renderHtml({ title, site = null, ai = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null, brand = null }) {
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
   const problems = rows.filter((f) => f.severity !== "ok").length;
   const flagged = flaggedSteps(runs, rows);
   const atd = `<a class="f-atd" href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer"><img src="${LOGOS["atd-icon"]}" alt="" height="16">AI Tag Debugger</a>`;
+  // A custom name or logo takes the place of the Analitik İşler branding. The AI Tag Debugger logo and credit stay, smaller, as with branding false.
+  const whiteLabel = Boolean(brand?.logo || brand?.name);
+  if (whiteLabel) branding = false;
+  const brandName = brand?.name ? escapeHtml(brand.name) : "";
+  const brandLogo = brand?.logo ? `<img src="${brand.logo}" alt="${brandName}" height="26">` : "";
+  const productLogo = whiteLabel ? (brandLogo || `<span class="brand-name">${brandName}</span>`) : logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd");
+  const atdByline = whiteLabel ? `<a href="https://github.com/analitikisler/ai-tag-debugger" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "AI Tag Debugger", 18, "logo-atd")}</a>` : "";
   const footer = branding
     ? `<div class="wrap"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("stacked", "Analitik İşler", 56, "logo-s")}</a>
 <div><p>${m.ui.credit(atd)}</p><div class="f-links"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div></div>
 <div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`
-    : `<div class="wrap plain"><div class="f-meta">AI Tag Debugger</div><div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`;
+    : `<div class="wrap plain"><div class="f-meta">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "AI Tag Debugger"}</div><div class="f-meta">${escapeHtml(generatedAt)} · v${VERSION}</div></div>`;
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title><link rel="icon" type="image/png" href="${LOGOS.favicon}">
+<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/png"'} href="${brand?.logo ?? LOGOS.favicon}">
 <style>${CSS}${filterCss(runs)}
-${navCss(runs)}</style></head><body>
-<div class="topbar"><div class="wrap"><span class="product-logo">${logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd")}</span>${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
+${navCss(runs)}${brandCss(brand?.color)}</style></head><body>
+<div class="topbar"><div class="wrap"><span class="product-logo">${productLogo}</span>${atdByline}${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
 <div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${planChanges ? `\n<div class="meta plan-changes">${escapeHtml(m.ui.planChangesLine(planChanges))}${planChangeItems(planChanges).length ? `<ul>${planChangeItems(planChanges).map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>` : ""}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}

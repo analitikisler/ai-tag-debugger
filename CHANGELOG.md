@@ -7,7 +7,7 @@
 - GTM container awareness: with `gtm_container`, each broken event names the tag that sends it and the trigger it fires on, without an AI model.
 - White label: the `report` setting takes a `name`, `logo`, `color` and `pdf`. A name or logo replaces the Analitik İşler branding in the HTML report, and a small AI Tag Debugger logo and credit stay. `pdf: true` also writes `report.pdf`.
 
-## 0.15.0 (unreleased)
+## 0.15.0 (2026-10-17)
 
 - The first run learns the plan. When a site has no saved plan, `aitd run` lists the events it already sends and asks whether to save them as its plan. Add `--yes` to save without asking; in a script without `--yes`, nothing is saved.
 - With `--against`, the report header says how the plan changed since the version before it: `Plan changed since <id>: 1 added, 0 removed, 2 changed`, or `Plan unchanged since <id>`. Each change is listed. `capture.json` has the same comparison under `planChanges`.

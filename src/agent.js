@@ -1,5 +1,6 @@
 import path from "node:path";
 import { AuditSession } from "./browser.js";
+import { withCampaignParams } from "./campaign.js";
 import { messages } from "./i18n.js";
 import { createProvider, PROVIDERS } from "./providers.js";
 
@@ -200,8 +201,10 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   });
   try {
     await session.start();
-    const startUrl = new URL(journey.start ?? "/", config.site).href;
-    const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${startUrl}` });
+    // The first page is opened the way an ad click opens it, so the campaign checks have something to follow.
+    const start = new URL(journey.start ?? "/", config.site).href;
+    const startUrl = config.campaign_checks === false ? start : withCampaignParams(start);
+    const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${start}` });
     // A replayed journey that was unfinished when saved keeps its saved note, however it fails this time.
     if (startError) return { ...collect(session, journey, viewport), completed: false, note: journey.incomplete ?? `Could not open the start page: ${startError}` };
 
@@ -248,5 +251,6 @@ export function collect(session, journey, viewport) {
     bodyBudgetStep: session.bodyBudgetStep,
     startedAt: session.startedAt,
     pageErrors: session.errors,
+    landing: session.landing,
   };
 }
