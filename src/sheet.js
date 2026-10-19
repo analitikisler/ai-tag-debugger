@@ -4,6 +4,7 @@
 import { readFile, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { PROVIDERS as PLATFORMS } from "./parsers.js";
+import { validatePlan } from "./schema.js";
 
 export const EVENT_COLUMNS = ["event", "platform", "parameter", "required", "example", "trigger", "description"];
 // Optional columns that keep the rest of a plan on a round trip.
@@ -141,7 +142,10 @@ export function rowsToPlan({ events: eventRows = [], user_properties: upRows = n
       user_properties.push({ name: r.name, description: r.description ?? "", example: r.example ?? "" });
     }
   }
-  return { plan: { ...(site ? { site } : {}), consent_mode: true, events, user_properties }, warnings };
+  const plan = { ...(site ? { site } : {}), consent_mode: true, events, user_properties };
+  // The same check every plan gets when it is read, so a bad import fails here, not in a later run.
+  validatePlan(plan);
+  return { plan, warnings };
 }
 
 const toCells = (objs, columns) => [columns, ...objs.map((o) => columns.map((c) => o[c] ?? ""))];
