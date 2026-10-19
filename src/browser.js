@@ -351,6 +351,21 @@ function pagePath(href) {
   }
 }
 
+const NAVIGATION_RETRY_MS = 2000;
+
+// Chromium network errors that a second try can get past: the connection dropped, the network changed,
+// a lookup or the server took too long. Blocked, refused-by-proxy, certificate and protocol errors are not here.
+const TRANSIENT_NET_ERRORS = /net::ERR_(CONNECTION_(RESET|CLOSED|ABORTED|REFUSED|TIMED_OUT)|TIMED_OUT|NETWORK_CHANGED|NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED|DNS_TIMED_OUT|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|EMPTY_RESPONSE|SOCKET_NOT_CONNECTED|HTTP2_(PROTOCOL|SERVER_REFUSED_STREAM|PING_FAILED)|NETWORK_IO_SUSPENDED|SPDY_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)\b/;
+
+/** The net::ERR_* code or "timeout" from a Playwright navigation error, for the log line. */
+const navigationErrorCode = (err) => String(err?.message ?? err).match(/net::ERR_[A-Z0-9_]+/)?.[0] ?? (err?.name === "TimeoutError" || /Timeout \d+ms exceeded/.test(String(err?.message)) ? "timeout" : "error");
+
+/** True when a failed navigation is worth one more try: a transient network error or a timeout. */
+export function isTransientNavigationError(err) {
+  const code = navigationErrorCode(err);
+  return code === "timeout" || TRANSIENT_NET_ERRORS.test(code);
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
@@ -366,9 +381,11 @@ export class AuditSession {
    *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
    *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
+   *   log: gets one line when a dropped navigation is tried again. navigationRetryMs: the wait before that (default 2 s).
    */
   constructor(opts) {
     this.opts = { blockHits: true, headless: true, ...opts };
+    this.log = this.opts.log ?? (() => {});
     this.scope = this.opts.site ? hostScope(this.opts.site, this.opts.allowedHosts) : null;
     this.isBlockedAddress = typeof this.opts.blockPrivate === "function" ? this.opts.blockPrivate : isPrivateAddress;
     this.isPrivate = this.opts.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
@@ -635,6 +652,24 @@ export class AuditSession {
     return refused;
   }
 
+  /**
+   * Opens a page. When the network dropped the first attempt or it timed out, tries once more after a
+   * short wait, since one lost connection should not cost the journey. A navigation the guard refused
+   * (this.blocked, net::ERR_BLOCKED_BY_CLIENT) is never tried again: it would be refused again.
+   */
+  async navigate(url) {
+    const options = { waitUntil: "domcontentloaded", timeout: 30000 };
+    try {
+      return await this.page.goto(url, options);
+    } catch (err) {
+      if (this.blocked?.step === this.currentStep || !isTransientNavigationError(err)) throw err;
+      const delay = this.opts.navigationRetryMs ?? NAVIGATION_RETRY_MS;
+      this.log(`  Opening ${url} failed (${navigationErrorCode(err)}); trying once more in ${Math.round(delay / 1000)}s`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return this.page.goto(url, options);
+    }
+  }
+
   /** Error message when the browser may not be on this URL, or null. */
   checkUrl(url) {
     if (url.startsWith("chrome-error:")) return null; // Chromium's own error page, e.g. after a blocked navigation
@@ -848,7 +883,7 @@ export class AuditSession {
           step.replay = { action: "goto", url: target };
           const refused = await this.checkUrl(target);
           if (refused) return refused;
-          const response = await this.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 });
+          const response = await this.navigate(target);
           if (!this.landing) {
             // The first page: the address asked for, each redirect on the way, and where it ended up.
             const chain = [];
