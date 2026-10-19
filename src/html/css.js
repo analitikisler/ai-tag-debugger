@@ -882,32 +882,80 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-flag .ic{margin-top:2px}
 #journeys .jr-flag>span{flex:1 1 200px;min-width:0}
 #journeys .jr-hb{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s3) var(--s4)}
-#journeys .jr-hb h5{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+#journeys .jr-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;line-height:1.4;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 #journeys .jr-hb .tbl{font-size:12.5px;border:1px solid var(--border);border-radius:var(--r-sm);border-collapse:separate;border-spacing:0}
 #journeys .jr-hb .tbl th,#journeys .jr-hb .tbl td{padding:4px 8px}
 #journeys .jr-kvt tbody th{width:38%;font:11.5px var(--font-mono);color:var(--muted);vertical-align:top}
 #journeys .jr-kvt td{font:12px var(--font-mono)}
 #journeys .jr-raw{margin-top:var(--s3)}
 #journeys .jr-raw>summary{flex-wrap:nowrap;font-size:12.5px}
-#journeys .jr-raw>summary .t{font-weight:500;white-space:nowrap}
+#journeys .jr-raw>summary .t{flex:none;font-weight:500;white-space:nowrap}
 #journeys .jr-raw>summary .end{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 #journeys .jr-raw pre,#journeys .jr-push pre{margin:0}
 #journeys .jr-push>.body{padding:var(--s2)}
 
 /* requests: one compact table, URL truncated (full URL in the title) */
-#journeys .jr-req{table-layout:fixed;font-size:12.5px;min-width:520px}
+#journeys .jr-req{table-layout:fixed;font-size:12.5px;min-width:640px}
 #journeys .jr-req th,#journeys .jr-req td{padding:5px 8px}
-#journeys .jr-req th:nth-child(1){width:96px}
+#journeys .jr-req th:nth-child(1){width:112px}
 #journeys .jr-req th:nth-child(2){width:64px}
-#journeys .jr-req th:nth-child(4){width:60px}
-#journeys .jr-req th:nth-child(5){width:84px}
+#journeys .jr-req th:nth-child(3){width:150px}
+#journeys .jr-req th:nth-child(5){width:116px}
 #journeys .jr-req th:nth-child(6){width:64px}
 #journeys .jr-url span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 #journeys .jr-req td.mono{font-size:12px}
 
-/* not fired (only where the run stopped) */
-#journeys .jr-nf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:var(--s3);font-size:12.5px}
-#journeys .jr-nf code{background:none;padding:0;font-size:11.5px}
+/* a request's events (one per line in a GA4 batch), its status with the blocked chip, notes under the table */
+#journeys .jr-rev{display:flex;flex-wrap:wrap;gap:0 6px;align-items:baseline}
+#journeys .jr-rev+.jr-rev{margin-top:2px}
+#journeys .jr-rev code{background:none;padding:0;font-size:12px;font-weight:600}
+#journeys .jr-rev .muted{font-size:11.5px}
+#journeys .jr-st-c{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+#journeys .jr-st-c .chip{height:20px;font-size:11.5px}
+#journeys .jr-note-s{margin-top:var(--s2)}
+
+/* the plan line under the status: the funnel sentence, then a chip per planned event that failed */
+#journeys .jr-plan{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s2);margin:calc(-1 * var(--s1)) 0 var(--s3);font-size:12.5px;min-width:0}
+#journeys .jr-plan-h{font:600 11px/1.4 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+#journeys .jr-plan-t{display:inline-flex;align-items:center;gap:5px;min-width:0}
+#journeys .jr-plan-t .jr-bad{color:var(--sev-broken)}
+#journeys .jr-plan-t .jr-good{color:var(--sev-ok)}
+#journeys .jr-plan .chip code{background:none;padding:0;font-size:11.5px;color:inherit;font-weight:600}
+/* why an incomplete run stopped */
+#journeys .jr-stop{display:flex;gap:6px;align-items:flex-start;margin:calc(-1 * var(--s1)) 0 var(--s3);font-size:12.5px;color:var(--sev-warning-fg);overflow-wrap:anywhere}
+#journeys .jr-stop .ic{color:var(--sev-warning);margin-top:2px}
+/* platform parity on a step: the same event on two platforms that disagree */
+#journeys .jr-par{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:var(--s2) var(--s4) 0;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12.5px}
+#journeys .jr-par>.ic{color:var(--sev-warning)}
+#journeys .jr-par-h{font-weight:600}
+#journeys .jr-par b{color:var(--sev-warning-fg)}
+#journeys .jr-pp{display:inline-flex;align-items:center;gap:5px}
+#journeys .jr-pp code{background:none;padding:0;font-size:12px}
+
+/* platform chips carry plat(): icon and name side by side; glossary tips on parameter names */
+#journeys .chip .plat{display:inline-flex;align-items:center;gap:5px}
+#journeys .chip .plat>svg{width:13px;height:13px}
+#journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:50%;font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
+#journeys .q:hover{border-color:var(--accent);color:var(--accent-fg)}
+#journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-sm);white-space:normal;text-align:left;text-transform:none;letter-spacing:0}
+#journeys .jr-kvt .pk{font-family:var(--font-mono)}
+#journeys .jr-kvt tr.pr td{font-family:var(--font-sans)}
+#journeys .jr-batch{margin-bottom:6px}
+#journeys .jr-ctx{margin-top:var(--s2)}
+#journeys .jr-ctx>summary{font-size:12.5px}
+#journeys .jr-ctx>summary .t{font-weight:500}
+#journeys .jr-ctx>.body{padding:var(--s2)}
+/* source of a hit: the dataLayer push and the request behind it, each linking to its row */
+#journeys .jr-src{list-style:none;display:grid;gap:6px;font-size:12.5px}
+#journeys .jr-src li{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;min-width:0}
+#journeys .jr-src .lbl{flex:0 0 76px;color:var(--muted);font-size:11.5px}
+#journeys .jr-src .mono{font-size:12px;overflow-wrap:anywhere}
+#journeys .jr-src .muted{flex:1 1 200px}
+/* items: one row per item, the extra fields as key value pairs */
+#journeys .jr-ts{overflow-x:auto}
+#journeys .jr-it td{vertical-align:top}
+#journeys .jr-ikv{display:block;white-space:nowrap;font-size:12px}
+#journeys .jr-ikv code{background:none;padding:0;color:var(--muted);font-size:11.5px}
 
 /* ---------- 900 px and below: step strip over the pane ---------- */
 @media (max-width:900px){
@@ -946,6 +994,7 @@ html:not(.js) #journeys .jr-steps{display:none}
   #journeys .jr-pane [role=tabpanel][id$="-dl"],#journeys .jr-pane [role=tabpanel][id$="-req"]{display:none!important}
   #journeys .jr-pane:not([data-flagged]){padding-bottom:0}
   #journeys .jr-flag{background:none;border:1px solid currentColor}
+  #journeys .q{display:none}
   #journeys .jr-vp{display:none}
   #journeys .jr-run[hidden]{display:block!important}
   #journeys .jr-runh{display:inline-flex!important}

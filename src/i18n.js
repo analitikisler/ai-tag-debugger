@@ -685,6 +685,25 @@ const en = {
 
     // ---- html.journeys: strings of src/html/journeys.js, edited only by its builder ----
     journeys: {
+      steps: "Steps",
+      pickViewport: "Viewport",
+      dataLayer: "Data Layer",
+      stats: (steps, hits, secs) => `${steps} ${steps === 1 ? "step" : "steps"} · ${hits} ${hits === 1 ? "hit" : "hits"}${secs === null ? "" : ` · ${secs} s`}`,
+      noRuns: "No journey was run.",
+      nothing: "Nothing was sent in this step.",
+      noSignal: "no signal",
+      noSignalTitle: "No consent signal on this hit",
+      signals: { ad_storage: "ad", analytics_storage: "an", ad_user_data: "ud", ad_personalization: "ap" },
+      blocked: "blocked",
+      clear: "clear",
+      colUrl: "URL",
+      colId: "ID",
+      colName: "Name",
+      colPrice: "Price",
+      colQty: "Qty",
+      itemMore: "Item parameters",
+      hitsOf: (count, platform) => `${count} ${platform} ${count === 1 ? "hit" : "hits"}`,
+      stepOf: (i) => `Step ${i}`,
     },
     // ---- end of html.journeys ----
 
@@ -1394,6 +1413,25 @@ const tr = {
 
     // ---- html.journeys: strings of src/html/journeys.js, edited only by its builder ----
     journeys: {
+      steps: "Adımlar",
+      pickViewport: "Görünüm",
+      dataLayer: "Veri katmanı",
+      stats: (steps, hits, secs) => `${steps} adım · ${hits} istek${secs === null ? "" : ` · ${secs} sn`}`,
+      noRuns: "Hiç yolculuk çalıştırılmadı.",
+      nothing: "Bu adımda hiçbir şey gönderilmedi.",
+      noSignal: "sinyal yok",
+      noSignalTitle: "Bu istekte onay sinyali yok",
+      signals: { ad_storage: "ad", analytics_storage: "an", ad_user_data: "ud", ad_personalization: "ap" },
+      blocked: "engellendi",
+      clear: "temizleme",
+      colUrl: "URL",
+      colId: "Kimlik",
+      colName: "Ad",
+      colPrice: "Fiyat",
+      colQty: "Adet",
+      itemMore: "Ürün parametreleri",
+      hitsOf: (count, platform) => `${count} ${platform} isteği`,
+      stepOf: (i) => `Adım ${i}`,
     },
     // ---- end of html.journeys ----
 
