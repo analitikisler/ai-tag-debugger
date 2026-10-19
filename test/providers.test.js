@@ -1,11 +1,12 @@
 // The OpenAI and Gemini adapters, driven with fake clients against the demo shop.
+import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { runJourney } from "../src/agent.js";
 import { createProvider, resolveProviderName, gatewayOptions, aiStatus } from "../src/providers.js";
 
-const PORT = 4398;
+const PORT = await freePort();
 let server;
 before(async () => {
   server = spawn(process.execPath, ["examples/serve.js"], { env: { ...process.env, PORT: String(PORT) }, stdio: "pipe" });

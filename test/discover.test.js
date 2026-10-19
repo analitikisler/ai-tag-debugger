@@ -1,10 +1,11 @@
 // Explores the demo shop with a fake provider, to test plan --site end to end without an API key.
+import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { TOPICS, checkTopic, discoverPlan, pageTypeCoverage, pagesSeen, toPlan } from "../src/discover.js";
 
-const PORT = 4411;
+const PORT = await freePort();
 let server;
 before(async () => {
   server = spawn(process.execPath, ["examples/serve.js"], { env: { ...process.env, PORT: String(PORT) }, stdio: "pipe" });

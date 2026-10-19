@@ -15,8 +15,9 @@ test("--version and -v print the package version", () => {
 
 test("the top-level help is short and lists the commands and examples", () => {
   const help = cli("--help");
-  assert.ok(help.trim().split("\n").length <= 20, "top-level help is about 20 lines at most");
-  for (const c of ["plan", "run", "replay", "mcp"]) assert.match(help, new RegExp(`^  ${c} {2,}\\S`, "m"));
+  // 21 since aitd history joined the command list; one line per command, nothing else grows.
+  assert.ok(help.trim().split("\n").length <= 21, "top-level help is about 20 lines at most");
+  for (const c of ["plan", "run", "replay", "mcp", "doctor", "history"]) assert.match(help, new RegExp(`^  ${c} {2,}\\S`, "m"));
   assert.match(help, /aitd run --site https:\/\/example\.com --against latest/);
   assert.match(help, /-v, --version/);
   assert.doesNotMatch(help, /--max-steps|--base-url|--providers/);
@@ -34,9 +35,19 @@ test("each command has its own help with its essential options", () => {
   assert.ok(replay.includes("--update") && replay.includes("--out"));
   const mcp = cli("mcp", "--help");
   for (const o of ["--http", "--port", "--host", "--token", "--allow-private-network", "--reports", "--public-url"]) assert.ok(mcp.includes(o), `mcp help has ${o}`);
+  const history = cli("history", "--help");
+  for (const o of ["--site", "--limit", "--json", "--lang", "--data-dir"]) assert.ok(history.includes(o), `history help has ${o}`);
 });
 
 const fails = (args, pattern) => assert.throws(() => execFileSync(process.execPath, ["src/cli.js", ...args], { encoding: "utf8", stdio: "pipe" }), (e) => e.status === 2 && pattern.test(e.stderr));
+
+test("a plan given with --against is checked against the schema, also when --config already checked its own plan", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "atd-cli-"));
+  writeFileSync(path.join(dir, "config.json"), JSON.stringify({ site: "https://x.test" }));
+  // An event without a name, which readJson accepts and the schema does not; the error names the --against file.
+  writeFileSync(path.join(dir, "bad-plan.json"), JSON.stringify({ site: "https://x.test", events: [{ platform: "ga4" }] }));
+  fails(["run", "--config", path.join(dir, "config.json"), "--against", path.join(dir, "bad-plan.json")], /Invalid plan in .*bad-plan\.json:\n\s+events\[0\]\.name/);
+});
 
 test("removed plan flags say what to run instead", () => {
   fails(["plan", "--from", "x.json"], /--from was removed\. Draft a plan with: aitd plan --site <url>/);

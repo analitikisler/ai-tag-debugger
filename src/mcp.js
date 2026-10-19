@@ -20,6 +20,10 @@ import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
+import { validatePlan } from "./schema.js";
+import { readBaseline } from "./baseline.js";
+import { MAX_CONCURRENCY } from "./pool.js";
+import { scriptCspSource } from "./report.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
@@ -120,6 +124,8 @@ async function loadAgainst(ref, site, opts) {
   const found = await resolvePlan(ref, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site });
   const plan = await readJson(found.file);
   if (!Array.isArray(plan?.events)) throw new Error(`${found.file} is not a plan: it needs an "events" list.`);
+  // The same schema check the CLI gives a plan named with --against; the config's own plan was checked by loadConfig.
+  validatePlan(plan, { file: found.file });
   return { found, plan };
 }
 
@@ -387,14 +393,24 @@ export function buildServer(opts) {
           scripted: z.boolean().optional().describe("Replay fixed steps instead of browsing with an AI model. Default true."),
           language: z.enum(Object.keys(LANGUAGES)).optional(),
           branding: z.boolean().optional().describe("Set false to leave the Analitik İşler logo and credit line out of the report."),
+          concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).optional().describe("How many journeys to run at once, each in its own browser. Default 1."),
           providers: z
             .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
             .optional()
             .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+          baseline: z.string().optional().describe('Path to a baseline file of accepted findings, written by the CLI with --update-baseline. Default: the config\'s "baseline". Accepted findings are listed but not counted.'),
         },
       },
-      async ({ config: configFile, against, scripted, language, branding, providers }) => {
+      async ({ config: configFile, against, scripted, language, branding, concurrency, providers, baseline: baselineFile }) => {
         const loaded = await loadConfig(configFile);
+        let baseline = null;
+        if (baselineFile ?? loaded.baselineFile) {
+          try {
+            baseline = await readBaseline(baselineFile ?? loaded.baselineFile);
+          } catch (err) {
+            return fail(err.message);
+          }
+        }
         let againstPlan = null;
         if (against) {
           try {
@@ -412,7 +428,7 @@ export function buildServer(opts) {
         const replay = scripted !== false;
         let result;
         try {
-          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, against: againstPlan, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, concurrency, providers, against: againstPlan, baseline, dataDir: opts.dataDir, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
         } catch (err) {
           // The CLI wording (--scripted --no-ai) means nothing to a chat app, so say it in this tool's terms.
           if (err.code !== "NO_API_KEY") throw err;
@@ -425,8 +441,9 @@ export function buildServer(opts) {
         return text(
           [
             m.ui.counts(result.counts),
+            ...(result.baseline ? [`${result.baseline.accepted} accepted from the baseline${result.baseline.partial ? `, ${result.baseline.partial} accepted in some places only (still counted)` : ""}, ${result.baseline.stale.length} stale baseline entries`] : []),
             ...result.runs.map((r) => `${r.journeyId} (${r.viewport}): ${r.completed ? "completed" : "not completed"}, ${r.note}`),
-            ...grouped.map((f) => `- ${m.severity[f.severity]}: ${f.detail}`),
+            ...grouped.map((f) => `- ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${f.detail}`),
             `Report: ${result.reportPath}`,
           ].join("\n"),
         );
@@ -475,7 +492,8 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
     return m ? { ok: timingSafeEqual(digest(m[1]), secretDigest), rest: m[2] ?? "" } : { ok: false, rest: "" };
   };
   const securityHeaders = {
-    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+    // The report's only script is the fixed inline one (tabs, deep links, theme), allowed by its hash; nothing else may load or run.
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}`,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   };

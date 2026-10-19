@@ -120,7 +120,7 @@ function withTimeout(promise, ms, message) {
  *   timeouts: milliseconds for one model answer, one browser action and one read of the page.
  */
 export async function runAgentJourney(session, journey, opts = {}) {
-  const provider = opts.provider ?? (await createProvider({ name: opts.providerName, model: opts.model, client: opts.client }));
+  const provider = opts.provider ?? (await createProvider({ name: opts.providerName, model: opts.model, client: opts.client, log: opts.log }));
   const maxSteps = opts.maxSteps ?? 30;
   const log = opts.log ?? (() => {});
   const limit = { ...TIMEOUTS, ...opts.timeouts };
@@ -170,14 +170,21 @@ export async function runAgentJourney(session, journey, opts = {}) {
   return { completed: false, note: `Stopped after ${maxSteps} steps without reaching the goal.` };
 }
 
-/** Replays fixed steps from the config, without calling an AI model. */
+/**
+ * Replays fixed steps from the config, without calling an AI model. journey.stepsFrom names the earlier
+ * run the steps were taken from when the journey has none of its own (see lastSteps in replay.js).
+ */
 export async function runScriptedJourney(session, journey, opts = {}) {
   const log = opts.log ?? (() => {});
   if (!journey.steps?.length && !journey.incomplete) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
   for (const step of journey.steps ?? []) {
     log(`  ${step.reason ?? `${step.action} ${step.selector ?? step.url ?? ""}`}`);
     const error = await session.act(step);
-    if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
+    if (error && !step.optional) {
+      const failed = `Step "${step.reason ?? step.action}" failed: ${error}`;
+      // Saved steps stop fitting when the site changes; only a model can find the new way through.
+      return { completed: false, note: journey.stepsFrom ? `${failed} The steps saved by run ${journey.stepsFrom} no longer fit the site. Run the journey with an AI model once to save new ones.` : failed };
+    }
   }
   // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
   // while the model answers; a scripted run would otherwise close the browser first.
@@ -197,7 +204,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
   const session = new AuditSession({
     viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
-    blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite),
+    blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
   });
   try {
     await session.start();

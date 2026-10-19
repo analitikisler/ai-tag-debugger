@@ -68,4 +68,11 @@ test("without a plan the report has no Plan vs. site section and no plan-check.j
   const json = JSON.parse(await readFile(path.join(withPlan, "plan-check.json"), "utf8"));
   assert.equal(json.plan_id, "p1");
   assert.equal(json.events.length, 7);
+  // Every run also gets the CI files, next to the others.
+  assert.match(await readFile(path.join(plain, "junit.xml"), "utf8"), /<testsuites name="ai-tag-debugger example.com"/);
+  const summary = JSON.parse(await readFile(path.join(withPlan, "summary.json"), "utf8"));
+  assert.equal(summary.plan.id, "p1");
+  // The summary names the run folder, not the runner's path, so it can be uploaded as a CI artifact.
+  assert.equal(summary.run, path.basename(withPlan));
+  assert.equal(summary.files.junit, "junit.xml");
 });

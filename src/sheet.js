@@ -4,6 +4,7 @@
 import { readFile, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { PROVIDERS as PLATFORMS } from "./parsers.js";
+import { validatePlan } from "./schema.js";
 
 export const EVENT_COLUMNS = ["event", "platform", "parameter", "required", "example", "trigger", "description"];
 // Optional columns that keep the rest of a plan on a round trip.
@@ -141,7 +142,10 @@ export function rowsToPlan({ events: eventRows = [], user_properties: upRows = n
       user_properties.push({ name: r.name, description: r.description ?? "", example: r.example ?? "" });
     }
   }
-  return { plan: { ...(site ? { site } : {}), consent_mode: true, events, user_properties }, warnings };
+  const plan = { ...(site ? { site } : {}), consent_mode: true, events, user_properties };
+  // The same check every plan gets when it is read, so a bad import fails here, not in a later run.
+  validatePlan(plan);
+  return { plan, warnings };
 }
 
 const toCells = (objs, columns) => [columns, ...objs.map((o) => columns.map((c) => o[c] ?? ""))];
@@ -156,7 +160,7 @@ export const toCsv = (rows) => `${rows.map((r) => r.map(csvCell).join(",")).join
 
 /** Parses CSV text (RFC 4180, comma or semicolon separated) into an array of cell arrays. */
 export function parseCsv(text) {
-  text = text.replace(/^﻿/, "");
+  text = text.replace(/^\uFEFF/, "");
   const firstLine = text.slice(0, text.search(/\r?\n|$/));
   const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
   const rows = [];
@@ -200,6 +204,7 @@ async function loadFflate() {
   }
 }
 
+// eslint-disable-next-line no-control-regex -- the characters XML forbids are stripped on purpose.
 const xmlEscape = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "");
 const xmlUnescape = (s) => s.replace(/&(lt|gt|quot|apos|amp|#\d+|#x[0-9a-f]+);/gi, (_, e) => {
   const named = { lt: "<", gt: ">", quot: '"', apos: "'", amp: "&" }[e.toLowerCase()];
@@ -284,6 +289,7 @@ export async function readPlanSheet(file, { site } = {}) {
   const ext = path.extname(file).toLowerCase();
   if (!(await exists(file))) throw new Error(`No file at ${file}.`);
   let tabs;
+  let upFile; // Only a CSV import has one, but the warning below names it either way.
   if (ext === ".xlsx") {
     const sheets = await readXlsx(await readFile(file));
     const find = (n) => Object.entries(sheets).find(([k]) => k.trim().toLowerCase() === n)?.[1];
@@ -294,7 +300,7 @@ export async function readPlanSheet(file, { site } = {}) {
     // Google Sheets downloads each tab as "<Document> - <tab>.csv"; the sibling file keeps that prefix.
     const base = path.basename(file);
     const prefix = base.match(/^(.*?)events\.csv$/i)?.[1] ?? "";
-    const upFile = path.join(path.dirname(file), `${prefix}user_properties.csv`);
+    upFile = path.join(path.dirname(file), `${prefix}user_properties.csv`);
     if (/user_properties\.csv$/i.test(base)) throw new Error(`Import the events file (${base.replace(/user_properties\.csv$/i, "events.csv")}); ${base} beside it is read too.`);
     tabs = { events: parseCsv(await readFile(file, "utf8")), user_properties: (await exists(upFile)) ? parseCsv(await readFile(upFile, "utf8")) : null };
   } else {
@@ -313,8 +319,8 @@ export async function writePlanSheet(plan, dir, { format = "xlsx" } = {}) {
   const tabs = { events: toCells(events, eventColumns), user_properties: toCells(user_properties, USER_PROPERTY_COLUMNS) };
   if (format === "csv") {
     const files = [path.join(dir, "events.csv"), path.join(dir, "user_properties.csv")];
-    await writeFile(files[0], `﻿${toCsv(tabs.events)}`);
-    await writeFile(files[1], `﻿${toCsv(tabs.user_properties)}`);
+    await writeFile(files[0], `\uFEFF${toCsv(tabs.events)}`);
+    await writeFile(files[1], `\uFEFF${toCsv(tabs.user_properties)}`);
     return files;
   }
   if (format !== "xlsx") throw new Error(`--format must be xlsx or csv (found "${format}").`);

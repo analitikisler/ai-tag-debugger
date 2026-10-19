@@ -1,4 +1,5 @@
 // The MCP server, through an in-memory client, against the demo shop.
+import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -10,7 +11,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer } from "../src/mcp.js";
 
-const PORT = 4397;
+const PORT = await freePort();
 let server;
 before(async () => {
   server = spawn(process.execPath, ["examples/serve.js"], { env: { ...process.env, PORT: String(PORT) }, stdio: "pipe" });
@@ -44,7 +45,7 @@ test("a chat app can drive an audit through the MCP tools", async () => {
 
   const plan = JSON.stringify({ consent_mode: true, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }] });
   const result = await call("finish_audit", { audit_id: id, completed: true, note: "Added.", measurement_plan: plan });
-  assert.match(result, /PageView" fired before the visitor accepted cookies/);
+  assert.match(result, /Meta "PageView" was sent before the visitor made a consent choice/);
   assert.match(result, /sent 2 times/);
   const reportPath = result.match(/event timeline: (.+report\.html)/)[1];
   assert.ok(existsSync(reportPath));
@@ -175,7 +176,7 @@ test("what_changed returns only the since-last-run diff, and says so when there 
 });
 
 test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {
-  const { client, call } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  const { client } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
   const refused = await client.callTool({ name: "make_plan", arguments: { site: "http://127.0.0.1:1/" } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /limited to public websites/);

@@ -29,7 +29,7 @@ test("flags tags after reject and ad tags after analytics only, but not cookiele
 test("a state the consent platform can't answer shows as not run", () => {
   const scenarios = { cmp: "banner", before: {}, states: { accept: { via: "banner", after: { ga4: { page_view: n(1) } } }, reject: { via: "banner", after: {} }, analytics: { via: null } } };
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [], consentScenarios: scenarios });
-  assert.match(md, /\| GA4 `page_view` \| 0 \| 1 \| 0 \| – \|/);
+  assert.match(md, /\| GA4 `page_view` \| 0 \| 1 ✓ \| 0 \| – \|/);
 });
 
 const PAGE = `<!doctype html><html><body>
@@ -52,6 +52,8 @@ test("answers each choice through the consent platform's API", async () => {
     assert.deepEqual(result.states.reject.after, {});
     assert.ok(result.states.analytics.after.ga4);
     assert.equal(result.states.analytics.after.meta, undefined);
+    // Each choice has its own browser, so the ones after the first can run side by side with the same outcome.
+    assert.deepEqual(await runConsentScenarios({ site }, { concurrency: 3 }), result);
   } finally {
     server.close();
   }

@@ -13,6 +13,8 @@ Commands:
   run      Audit what a site actually sends, and compare it to a plan
   replay   Re-check saved sites offline, without AI
   mcp      Start the MCP server for Claude, ChatGPT and other chat apps
+  doctor   Check that Node, Chromium, an AI key and the data folder are ready
+  history  Show how a site's saved runs trend: counts, open problems, flapping, journeys
 
 Examples:
   aitd plan --site https://example.com
@@ -40,12 +42,16 @@ Options:
   --lang <code>        Report language: ${Object.keys(LANGUAGES).join(" or ")}
   --headed             Show the browser window
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
+  --baseline <file>    Known findings to accept; they don't count toward --fail-on
+  --update-baseline    Write the baseline file after the run (creates it)
 
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
 Advanced:
-  --max-steps <n>   --platforms <list>   --viewport <name>   --data-dir <dir>
-  --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)`;
+  --max-steps <n>   --platforms <list>   --viewport <name>   --concurrency <n>   --data-dir <dir>
+  --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)
+  --scripted replays each journey's fixed steps; a journey without any repeats the steps
+  of its last completed run, which every run saves in its folder as steps.json.`;
 
 const PLAN = `Usage: aitd plan --site <url>
        aitd plan list --site <url>
@@ -99,7 +105,31 @@ Advanced:
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 
-const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP };
+const DOCTOR = `Usage: aitd doctor [--site <url>] [--data-dir <dir>]
+
+Check that this machine can run an audit: the Node version, Playwright's Chromium, whether
+an AI provider key is set, and that the data folder is writable. Exits with code 1 when a
+check an audit needs fails. A missing AI key is only reported: --no-ai and replay work without one.
+
+Options:
+  --site <url>         Also check that the site is an http(s) address whose host resolves (nothing is fetched)
+  --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
+
+const HISTORY = `Usage: aitd history --site <url> [--limit <n>] [--json] [--data-dir <dir>]
+
+Show the trend of a site's saved runs: one row per run with its problem counts and score, a
+text sparkline, the problems open longest, the ones that come and go, and the journeys that do
+not finish every time. Reads the runs in aitd/<domain>/runs/ and its history.json; no browser,
+no AI, nothing is changed.
+
+Options:
+  --site <url>         The site (required)
+  --limit <n>          How many of the newest runs to read (default 30)
+  --json               Print the trend, the finding timeline and the journey stability as JSON
+  --lang <code>        Language of the lines: ${Object.keys(LANGUAGES).join(" or ")}
+  --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
+
+const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP, doctor: DOCTOR, history: HISTORY };
 
 /** Help text for a command, or the top-level help when the command is unknown or missing. */
 export function helpText(command) {

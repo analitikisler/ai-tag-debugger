@@ -5,7 +5,9 @@ import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
 import { messages } from "./i18n.js";
 import { helpText } from "./help.js";
+import { validatePlan } from "./schema.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
+import { readBaseline, writeBaseline } from "./baseline.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
 import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
@@ -25,6 +27,7 @@ async function main(args = process.argv.slice(2)) {
       out: { type: "string" },
       journey: { type: "string", multiple: true },
       viewport: { type: "string", multiple: true },
+      concurrency: { type: "string" },
       platforms: { type: "string", multiple: true },
       providers: { type: "string", multiple: true },
       "allow-host": { type: "string", multiple: true },
@@ -36,6 +39,8 @@ async function main(args = process.argv.slice(2)) {
       "base-url": { type: "string" },
       lang: { type: "string" },
       "fail-on": { type: "string", default: "broken" },
+      baseline: { type: "string" },
+      "update-baseline": { type: "boolean", default: false },
       headed: { type: "boolean", default: false },
       "no-branding": { type: "boolean", default: false },
       "keep-bodies": { type: "boolean", default: false },
@@ -53,6 +58,8 @@ async function main(args = process.argv.slice(2)) {
       from: { type: "string" },
       topic: { type: "string" },
       format: { type: "string" },
+      limit: { type: "string" },
+      json: { type: "boolean", default: false },
       force: { type: "boolean", default: false },
       yes: { type: "boolean", short: "y", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -131,6 +138,18 @@ async function main(args = process.argv.slice(2)) {
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
     return;
   }
+  if (command === "history" && !values.help) {
+    await showHistory(values);
+    return;
+  }
+  if (command === "doctor" && !values.help) {
+    const { doctorChecks } = await import("./doctor.js");
+    const checks = await doctorChecks({ site: values.site, dataDir: values["data-dir"] });
+    for (const c of checks) console.log(`${c.ok ? "✓" : "✗"} ${c.text}`);
+    // Only a check an audit cannot run without fails the command; a missing AI key is advice.
+    if (checks.some((c) => c.hard && !c.ok)) process.exitCode = 1;
+    return;
+  }
   if (values.help || command !== "run" || (!values.config && !values.site && !values.against)) {
     console.log(helpText(command));
     process.exit(values.help ? 0 : 2);
@@ -161,6 +180,8 @@ async function main(args = process.argv.slice(2)) {
     against = await resolvePlan(values.against, { dataDir: values["data-dir"] ?? DEFAULT_DATA_DIR, site: loaded.config.site });
     const plan = await readJson(against.file);
     if (!Array.isArray(plan?.events)) throw new Error(`${against.file} is not a plan: it needs an "events" list.`);
+    // loadConfig checked the config's own plan; the one --against names replaces it and gets the same check.
+    for (const w of validatePlan(plan, { file: against.file }).warnings) console.log(w);
     if (!loaded.config.site) {
       if (!plan.site) throw new Error(`${against.file} has no "site". Add --site <url>.`);
       loaded.config = { ...loaded.config, site: plan.site };
@@ -178,6 +199,17 @@ async function main(args = process.argv.slice(2)) {
   if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
   // run --out is a hidden alias kept for one minor version; --data-dir replaces it.
   if (values.out) console.log("Note: run --out will be removed in a later version. Runs are saved in aitd/<domain>/runs/<id>/; use --data-dir <dir> to keep them elsewhere.");
+  const baselineFile = values.baseline ?? loaded.baselineFile ?? null;
+  if (values["update-baseline"] && !baselineFile) throw new Error('--update-baseline needs --baseline <file> or "baseline" in the config.');
+  // A baseline that doesn't exist yet is fine when this run writes it.
+  const baseline = baselineFile
+    ? await readBaseline(baselineFile).catch((err) => {
+        if (values["update-baseline"] && err.code === "ENOENT") return null;
+        throw err;
+      })
+    : null;
+  // A baseline written for another site matches nothing of this one, so say so, but let the run go on.
+  if (baseline?.site && baseline.site !== loaded.config.site) console.log(`Warning: the baseline ${baselineFile} was written for ${baseline.site}, not ${loaded.config.site}. Its entries may not match this site.`);
   const result = await runAudit({
     ...loaded,
     journeys: values.journey,
@@ -185,6 +217,7 @@ async function main(args = process.argv.slice(2)) {
     events: (values.events ?? []).flatMap((e) => e.split(",")).map((e) => e.trim()).filter(Boolean),
     maxSteps,
     viewports: values.viewport,
+    concurrency: values.concurrency,
     providers: platforms.length ? platforms.flatMap((p) => p.split(",")) : undefined,
     scripted: values.scripted,
     ai: !values["no-ai"],
@@ -198,12 +231,27 @@ async function main(args = process.argv.slice(2)) {
     dataDir: values["data-dir"],
     saveSite: values["save-site"],
     against,
+    failOn,
+    baseline,
     log: (msg) => console.log(msg),
   });
 
-  console.log(`\n${messages(result.lang).ui.counts(result.counts)}`);
-  const rel = path.relative(process.cwd(), result.reportPath);
-  console.log(`Report: ${rel.startsWith("..") ? result.reportPath : rel}`);
+  const m = messages(result.lang);
+  console.log(`\n${m.ui.counts(result.counts)}`);
+  if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.partial ? `${result.baseline.partial} ${result.baseline.partial === 1 ? "problem" : "problems"} accepted in some places only (still counted), ` : ""}${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
+  if (result.verdict) console.log(m.ui.cli.verdict(result.verdict.statusText, result.verdict.headline, result.verdict.score));
+  // The trend needs two saved runs; with one there is nothing to say yet.
+  if (result.trend?.runs >= 2) {
+    const { historySummaryLines } = await import("./history.js");
+    for (const line of historySummaryLines(result.trend, result.lang, result.stability ?? []).slice(0, 3)) console.log(line);
+  }
+  const shown = (p) => (path.relative(process.cwd(), p).startsWith("..") ? p : path.relative(process.cwd(), p));
+  console.log(`Report: ${shown(result.reportPath)}`);
+  console.log(`Summary: ${shown(result.summaryPath)} (junit.xml next to it)`);
+  if (values["update-baseline"]) {
+    const n = await writeBaseline(baselineFile, { site: loaded.config.site, findings: result.findings });
+    console.log(`Baseline ${baselineFile} now holds ${n} ${n === 1 ? "finding" : "findings"}. Later runs with --baseline fail only on new ones.`);
+  }
 
   if (!against && !values.out) await offerLearnedPlan(result, loaded.config.site, values);
 
@@ -222,6 +270,39 @@ async function main(args = process.argv.slice(2)) {
       process.exitCode = 1;
     }
   }
+}
+
+// aitd history --site <url>: the trend of the site's saved runs as a small table, the text sparkline and the summary lines.
+async function showHistory(values) {
+  if (!values.site) throw new Error("history needs --site <url>: aitd history --site https://www.example.com");
+  const limit = values.limit ? Number(values.limit) : 30;
+  if (!(Number.isInteger(limit) && limit > 0)) throw new Error("--limit must be a positive whole number.");
+  const lang = values.lang ?? "en";
+  const m = messages(lang);
+  const { domainOf } = await import("./workspace.js");
+  domainOf(values.site);
+  const { findingTimeline, historySummaryLines, journeyStability, loadHistory, sparkline, trend } = await import("./history.js");
+  const history = await loadHistory(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site, { limit });
+  const t = trend(history);
+  const stability = journeyStability(history);
+  if (values.json) {
+    console.log(JSON.stringify({ site: values.site, runs: history.length, trend: t, timeline: findingTimeline(history), stability }, null, 2));
+    return;
+  }
+  if (!history.length) {
+    console.log(m.ui.history.noRuns);
+    return;
+  }
+  const cols = [m.ui.cli.runCol, m.severity.broken, m.severity.risk, m.severity.warning, m.ui.cli.scoreCol, m.ui.cli.completeCol];
+  const rows = t.series.map((p) => [p.id, p.broken, p.risk, p.warning, p.score, p.complete ? m.ui.md.yes : m.ui.md.no].map(String));
+  const widths = cols.map((c, i) => Math.max(c.length, ...rows.map((r) => r[i].length)));
+  const line = (cells) => cells.map((c, i) => (i ? c.padStart(widths[i]) : c.padEnd(widths[i]))).join("  ");
+  console.log(line(cols));
+  for (const r of rows) console.log(line(r));
+  console.log("");
+  const s = m.ui.history;
+  if (t.runs >= 2) console.log(s.sparkline(sparkline(t), s.direction[t.direction], t.runs, t.first.slice(0, 10), t.last.slice(0, 10)));
+  for (const l of historySummaryLines(t, lang, stability)) console.log(l);
 }
 
 // The first run of a site with no plan: offer what it already tracks as its plan.

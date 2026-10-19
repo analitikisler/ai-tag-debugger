@@ -50,8 +50,8 @@ test("an unknown viewport stops the audit before the browser or model starts", a
   const config = { site: "http://127.0.0.1:9", journeys: [{ id: "home", steps: [{ action: "wait", value: "1" }] }] };
   const base = { config, plan: { events: [] }, provider: "anthropic", log: (m) => logged.push(m) };
   await assert.rejects(runAudit({ ...base, viewports: ["tablet"] }), /^Error: Unknown viewport "tablet"\. Use: desktop, mobile\.$/);
-  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: ["desktop", "phone"] } }), /Unknown viewport "phone"/);
-  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: "mobile" } }), /"viewports" must be a list/);
+  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: ["desktop", "phone"] } }), /viewports\[1\]: must be one of desktop, mobile \(got "phone"\)/);
+  await assert.rejects(runAudit({ ...base, config: { ...config, viewports: "mobile" } }), /viewports: must be a list \(got "mobile"\)/);
   assert.deepEqual(logged, [], "no model was set up and no journey started");
 });
 

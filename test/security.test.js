@@ -12,7 +12,7 @@ import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
 import { pageView } from "../src/agent.js";
 import { buildServer, closeIdleAudits, startMcp } from "../src/mcp.js";
 import { checkRun } from "../src/checks.js";
-import { renderCsv, renderMarkdown } from "../src/report.js";
+import { renderCsv, renderMarkdown, scriptCspSource } from "../src/report.js";
 import { isCollectionEndpoint } from "../src/parsers.js";
 import { startEgressProxy } from "../src/egress.js";
 
@@ -127,7 +127,7 @@ test("Google Ads remarketing and other ad beacons are answered locally", () => {
 });
 
 test("reports don't let page data run as formulas or raw HTML", () => {
-  const run = { journeyId: "j", viewport: "desktop", completed: true, note: "<img src=x onerror=alert(1)>", startedAt: 0, network: [],
+  const run = { journeyId: "j", viewport: "desktop", completed: false, note: "<img src=x onerror=alert(1)>", startedAt: 0, network: [],
     steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "=HYPERLINK(\"http://evil\")", t: 1 }],
     hits: [{ platform: "ga4", name: "x", params: { a: "<script>" }, step: 1, t: 1 }],
     dataLayerLog: [{ step: 1, t: 1, value: { event: "`x`<b>" } }] };
@@ -153,7 +153,8 @@ test("the HTTP server rejects short tokens, big bodies and wrong secrets, and se
     assert.equal((await fetch(`${base}/mcp/${token}/reports/none/report.html`)).status, 404);
     const report = await fetch(`${base}/mcp/${token}/reports/audit1/report.html`);
     assert.equal(report.status, 200);
-    assert.equal(report.headers.get("content-security-policy"), "default-src 'none'; style-src 'unsafe-inline'; img-src data:");
+    // The report's own tab script is allowed by its hash; no other script, style source or image source is.
+    assert.equal(report.headers.get("content-security-policy"), `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}`);
     assert.equal(report.headers.get("x-content-type-options"), "nosniff");
   } finally {
     server.close();

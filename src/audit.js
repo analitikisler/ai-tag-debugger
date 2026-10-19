@@ -8,15 +8,21 @@ import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
 import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
-import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
+import { explainFindings, renderCsv, renderHtml, renderMarkdown, verdictHeadline, VERSION } from "./report.js";
+import { computeMetrics } from "./metrics.js";
+import { journeyStability, loadHistory, trend as trendOf, updateHistoryIndex } from "./history.js";
+import { buildSummary, renderJunit } from "./ci-output.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadReportBrand, writePdf } from "./whitelabel.js";
 import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
 import { annotateFindings } from "./gtm.js";
-import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
+import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
+import { validateConfig, validatePlan } from "./schema.js";
+import { applyBaseline } from "./baseline.js";
+import { parseConcurrency, runPool, taggedLog } from "./pool.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -27,38 +33,67 @@ export async function readJson(file, baseDir = ".") {
   }
 }
 
-/** Reads a config file and everything it points to. */
-export async function loadConfig(configFile) {
+/**
+ * Reads a config file and everything it points to. The config and the plan are checked against their
+ * schema first, so a typo fails here with the field named; unknown keys are only warned about, through
+ * log (default: stderr). The result carries validated: true, which tells runAudit not to check again.
+ */
+export async function loadConfig(configFile, { log = console.error } = {}) {
   const configPath = path.resolve(configFile);
   const configDir = path.dirname(configPath);
   const config = await readJson(configPath);
+  const { warnings } = validateConfig(config, { file: configFile });
   const plan = typeof config.plan === "string" ? await readJson(config.plan, configDir) : config.plan;
-  if (plan && !Array.isArray(plan.events)) throw new Error('The "plan" needs an "events" list.');
+  if (plan) warnings.push(...validatePlan(plan, typeof config.plan === "string" ? { file: config.plan } : { file: configFile, at: "plan" }).warnings);
+  for (const w of warnings) log(w);
   const gtmContainer = config.gtm_container ? await readJson(config.gtm_container, configDir) : null;
   const brand = await loadReportBrand(config.report, configDir);
-  return { config, plan, gtmContainer, brand };
+  // The baseline is only resolved here, not read: --update-baseline may create it on this run.
+  const baselineFile = typeof config.baseline === "string" ? path.resolve(configDir, config.baseline) : null;
+  return { config, plan, gtmContainer, brand, baselineFile, validated: true };
 }
 
 
 /**
- * Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against.
+ * Writes report.md, report.html, timeline.csv, capture.json and steps.json, plus plan-check.json with --against,
+ * and junit.xml and summary.json for CI. failOn: the --fail-on level, so junit.xml fails the same findings the exit code does.
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
- * the "Changed since last run" section. Returns { reportPath, changes }.
+ * the "Changed since last run" section. history: { dataDir } when the run is saved in the site's runs folder,
+ * so its history index is updated and the reports get the trend; null for --out and replays.
+ * Returns { reportPath, summaryPath, changes, metrics, verdict, trend, stability }.
  */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null, failOn = "broken", history = null }) {
   await mkdir(outDir, { recursive: true });
   const site = new URL(config.site).hostname;
   const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
   const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
-  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios, brand };
+  const metrics = computeMetrics({ plan, runs, findings, consentScenarios });
+  const verdict = verdictHeadline({ findings, runs, metrics, lang });
+  // The capture goes first: the history index summarises it, and the reports then show the trend including this run.
+  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  let trend = null;
+  let stability = null;
+  if (history) {
+    // A history that cannot be read or written costs the trend, never the report.
+    await updateHistoryIndex(history.dataDir, config.site, { id: path.basename(outDir), capture: { runs, findings }, version: VERSION, ai }).catch(() => null);
+    const saved = await loadHistory(history.dataDir, config.site).catch(() => []);
+    trend = trendOf(saved);
+    stability = journeyStability(saved);
+  }
+  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios, brand, metrics, trend };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
-  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  // The steps taken, so the next --scripted run can repeat them without a model (see lastSteps). Typed values are
+  // stored as typed, since a replay has to type them again: journeys should use test data, and the run folder stays out of version control.
+  await writeFile(path.join(outDir, STEPS_FILE), JSON.stringify(savedSteps({ site: config.site, runs }), null, 2));
   const reportPath = path.join(outDir, "report.html");
+  const summaryPath = path.join(outDir, "summary.json");
+  await writeFile(path.join(outDir, "junit.xml"), renderJunit({ runs, findings, lang, failOn, version: VERSION, site }));
+  await writeFile(summaryPath, JSON.stringify(buildSummary({ runs, findings, counts: summarize(groupFindings(findings)), plan, against, ai, lang, reportPath, outDir, changes, consentScenarios, version: VERSION, site, metrics, trend }), null, 2));
   if (brand?.pdf) {
     try {
       await writePdf(reportPath, path.join(outDir, "report.pdf"));
@@ -67,28 +102,37 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
       console.error(`Could not write report.pdf: ${err.message}`);
     }
   }
-  return { reportPath, changes };
+  return { reportPath, summaryPath, changes, metrics, verdict, trend, stability };
 }
 
 /**
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
- *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
+ *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, concurrency?: number | string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok plus
  *     any other known platform the site sends to).
  *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
+ *   failOn: the --fail-on level (default "broken"), which decides what junit.xml marks as failed.
+ *   concurrency: how many journeys (and consent scenarios) run at once, each in its own browser. Default 1, at most 8.
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
+ *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
+ *   baseline: a baseline read with readBaseline (see baseline.js). The findings it accepts are flagged
+ *     accepted and left out of the counts; the result then has baseline: { accepted, partial, stale }.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
   let config = opts.config;
   const events = opts.events ?? [];
-  if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
   const log = opts.log ?? (() => {});
+  if (!opts.validated) {
+    const checked = [validateConfig(config), ...(opts.plan ? [validatePlan(opts.plan)] : [])];
+    for (const w of checked.flatMap((c) => c.warnings)) log(w);
+  }
+  if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
   const lang = opts.lang ?? config.language ?? "en";
   if (!LANGUAGES[lang]) throw new Error(`Language must be one of ${Object.keys(LANGUAGES).join(", ")}.`);
   const useAi = opts.ai !== false;
@@ -104,10 +148,21 @@ export async function runAudit(opts) {
   if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
   const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
   if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
+  const concurrency = parseConcurrency(opts.concurrency ?? config.concurrency);
   if (!journeys.length) throw new Error(`No journeys to run. A run needs one of:\n  --journey <name>   one of: ${Object.keys(JOURNEY_PRESETS).join(", ")} (or a journey id from your config)\n  --goal "<text>"    describe what to do in your own words\n  --config <file>    a config file with "journeys"\nNot sure what to test? "aitd plan --site ${config.site}" drafts a measurement plan.`);
+  // A journey without fixed steps of its own repeats the steps of the site's last completed run, which every run saves.
+  const replayed = new Map();
   if (opts.scripted) {
-    const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
-    if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}.`);
+    const unscripted = [];
+    for (const j of journeys.filter((j) => !j.steps?.length && !j.incomplete)) {
+      for (const viewport of viewports) {
+        // A saved-site replay stays offline: it never borrows steps from the runs folder.
+        const last = opts.replaySite ? null : await lastSteps(opts.dataDir, config.site, { journeyId: j.id, viewport }).catch(() => null);
+        if (last) replayed.set(`${j.id}|${viewport}`, last);
+        else if (!unscripted.includes(j.id)) unscripted.push(j.id);
+      }
+    }
+    if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}. Run them once with an AI model first; every completed run saves its steps.`);
   }
 
   if (against) {
@@ -119,33 +174,40 @@ export async function runAudit(opts) {
     }
   }
 
-  const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url }) : null;
+  const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url, log }) : null;
   if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}${alsoSet(provider.key)}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   // Repeat runs start from the route the last completed run took. Not with --out or a replay, which have no history to learn from.
   const hints = provider && !opts.outDir && !opts.replaySite ? await routeHints(opts.dataDir, config.site).catch(() => new Map()) : new Map();
-  const runs = [];
-  for (const journey of journeys) {
-    for (const viewport of viewports) {
-      log(`\n▶ ${journey.id} (${viewport})`);
-      const hint = hints.get(`${journey.id}|${viewport}`);
-      const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
-      if (routeHint) log(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
-      // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
-      // so one journey can't cost the report of the others.
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
-      log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
-      runs.push(run);
-    }
-  }
+  // Every journey × viewport pair has its own browser, so they can run side by side. The runs keep the pairs'
+  // order whatever finishes first: the report and the comparison with the last run count on it.
+  const jobs = journeys.flatMap((journey) => viewports.map((viewport) => ({ journey, viewport })));
+  const runs = await runPool(jobs, concurrency, async ({ journey, viewport }) => {
+    // Side by side, each job's lines start with its name, so the interleaved output stays readable.
+    const jobLog = concurrency > 1 ? taggedLog(log, `[${journey.id}/${viewport}]`) : log;
+    jobLog(`\n▶ ${journey.id} (${viewport})`);
+    const hint = hints.get(`${journey.id}|${viewport}`);
+    const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
+    if (routeHint) jobLog(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
+    const last = replayed.get(`${journey.id}|${viewport}`);
+    if (last) jobLog(`  Replaying the steps of run ${last.runId}${last.viewport === viewport ? "" : ` (${last.viewport})`}`);
+    const fixed = last ? { ...journey, ...(last.start ? { start: last.start } : {}), steps: last.steps, stepsFrom: last.runId } : journey;
+    // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
+    // so one journey can't cost the report of the others.
+    const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log: jobLog, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
+    jobLog(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
+    return run;
+  });
 
   // Consent scenarios need the live site, so a replay from a saved site skips them. "consent_scenarios": false turns them off.
   const consentScenarios = opts.replaySite || config.consent_scenarios === false
     ? null
-    : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
+    : await runConsentScenarios(config, { headed: opts.headed, log, concurrency }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
-  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer);
+  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer, runs, { lang });
+  // Applied before anything reads the findings, so the explanation, the reports, the alerts and the counts all skip accepted ones.
+  const applied = opts.baseline ? applyBaseline(findings, opts.baseline) : null;
   let saveError = null;
   if (opts.saveSite) {
     try {
@@ -167,12 +229,14 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const { reportPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null });
+  const { reportPath, summaryPath, changes, metrics, verdict, trend, stability } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null, failOn: opts.failOn, history: previous === undefined ? null : { dataDir: opts.dataDir } });
   if (config.notify && changes) {
-    const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath });
+    const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath, verdict, trend });
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
     for (const e of errors) log(`\nCould not send an alert. ${e}`);
   }
   const counts = summarize(groupFindings(findings));
-  return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
+  // Accepted counts every finding the baseline matched; a problem accepted in some places only is still counted, and reported as partial.
+  const baseline = applied ? { accepted: applied.accepted, partial: applied.partial, stale: applied.stale } : null;
+  return { journeys, plan, runs, findings, explained, counts, metrics, verdict, trend, stability, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(baseline ? { baseline } : {}), ...(saveError ? { saveError } : {}) };
 }

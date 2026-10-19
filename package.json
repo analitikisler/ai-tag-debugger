@@ -1,7 +1,7 @@
 {
   "name": "@analitikisler/ai-tag-debugger",
   "mcpName": "io.github.analitikisler/ai-tag-debugger",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Open-source AI agent that QA-tests your website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok). Bring your own model (Claude, OpenAI, Gemini) or use it from your chat app over MCP.",
   "type": "module",
   "bin": {
@@ -17,6 +17,8 @@
   "scripts": {
     "setup": "node scripts/setup.js",
     "test": "node --test test/*.test.js",
+    "test:unit": "node --test test/campaign.test.js test/changes.test.js test/ci-output.test.js test/checks.test.js test/consent-scenarios.test.js test/doctor.test.js test/gtm.test.js test/history-cli.test.js test/history.test.js test/i18n.test.js test/inventory.test.js test/journeys.test.js test/learn.test.js test/metrics.test.js test/notify.test.js test/parsers.test.js test/plan-check.test.js test/plan-html.test.js test/plan.test.js test/report-md.test.js test/report.test.js test/schema.test.js test/server-json.test.js test/server-side.test.js test/setup.test.js test/workspace.test.js",
+    "lint": "eslint .",
     "demo:serve": "node examples/serve.js",
     "demo": "node src/cli.js run --config examples/demo.config.json --scripted --no-ai"
   },
@@ -60,5 +62,10 @@
   },
   "optionalDependencies": {
     "fflate": "^0.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
   }
 }

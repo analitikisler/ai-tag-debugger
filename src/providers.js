@@ -42,9 +42,10 @@ function hasApiKey(env) {
 }
 
 /**
- * @param {{ name?: string, model?: string, baseUrl?: string, client?: any }} opts
+ * @param {{ name?: string, model?: string, baseUrl?: string, client?: any, log?: (msg: string) => void, retry?: { attempts?: number, baseDelayMs?: number, sleep?: (ms: number) => Promise<void> } }} opts
  *   baseUrl: for openai-compatible, e.g. https://api.deepseek.com or http://localhost:11434/v1.
  *   client: an already constructed SDK client (used by tests).
+ *   log: gets one line per retried model request. retry: overrides for withRetry (tests).
  */
 export async function createProvider(opts = {}, env = process.env) {
   // A bare client (tests, embedding) is an Anthropic client unless named otherwise.
@@ -66,38 +67,111 @@ async function buildProvider(name, opts, env) {
     if (!model) throw new Error("openai-compatible needs a model id: --model or OPENAI_COMPATIBLE_MODEL (\"cheap\" has no meaning here, since the API's models are unknown).");
     // Local servers such as Ollama need no key, but the SDK wants a non-empty one.
     const apiKey = env.OPENAI_COMPATIBLE_API_KEY || "not-needed";
-    const client = opts.client ?? new (await import("openai")).default({ baseURL, apiKey });
+    const client = opts.client ?? new (await import("openai")).default(sdkOptions({ baseURL, apiKey }));
     return openaiProvider(client, model, { compatible: true, label: new URL(baseURL).host });
   }
   if (name === "vercel") {
-    const client = opts.client ?? new (await import("openai")).default({ baseURL: VERCEL_GATEWAY, apiKey: env.AI_GATEWAY_API_KEY });
+    const client = opts.client ?? new (await import("openai")).default(sdkOptions({ baseURL: VERCEL_GATEWAY, apiKey: env.AI_GATEWAY_API_KEY }));
     return { ...openaiProvider(client, pickModel("vercel", opts.model), { compatible: true }), name: "vercel" };
   }
   if (name === "cloudflare") {
     const account = env.CLOUDFLARE_ACCOUNT_ID;
     if (!opts.client && !(account && env.CLOUDFLARE_API_TOKEN)) throw new Error("Cloudflare Workers AI needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.");
-    const client = opts.client ?? new (await import("openai")).default({ baseURL: `${CLOUDFLARE_API}/${account}/ai/v1`, apiKey: env.CLOUDFLARE_API_TOKEN });
+    const client = opts.client ?? new (await import("openai")).default(sdkOptions({ baseURL: `${CLOUDFLARE_API}/${account}/ai/v1`, apiKey: env.CLOUDFLARE_API_TOKEN }));
     return { ...openaiProvider(client, pickModel("cloudflare", opts.model), { compatible: true }), name: "cloudflare" };
   }
   const model = pickModel(name, opts.model);
   const gateway = gatewayOptions(name, env);
-  const provider = await builtInProvider(name, model, gateway, opts.client, env);
+  const provider = await builtInProvider(name, model, gateway, opts, env);
   // Shown in the "Using ..." line so a run says whether its calls went through the gateway.
   if (gateway.baseURL && !opts.client) provider.via = "Cloudflare AI Gateway";
   return provider;
 }
 
-async function builtInProvider(name, model, gateway, client, env) {
-  if (name === "anthropic") return anthropicProvider(client ?? new (await import("@anthropic-ai/sdk")).default(gateway), model);
-  if (name === "openai") return openaiProvider(client ?? new (await import("openai")).default(gateway), model);
+async function builtInProvider(name, model, gateway, { client, log, retry }, env) {
+  if (name === "anthropic") return anthropicProvider(client ?? new (await import("@anthropic-ai/sdk")).default(sdkOptions(gateway)), model);
+  if (name === "openai") return openaiProvider(client ?? new (await import("openai")).default(sdkOptions(gateway)), model);
   const { GoogleGenAI } = await import("@google/genai");
   const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
+  // The Gemini SDK retries only when asked (httpOptions.retryOptions) and says nothing when it does,
+  // so its calls go through withRetry below instead, which logs each retry.
   const httpOptions = gateway.baseURL ? { httpOptions: { baseUrl: gateway.baseURL, headers: gateway.defaultHeaders } } : {};
-  return geminiProvider(client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model);
+  return geminiProvider(client ?? new GoogleGenAI({ ...(apiKey ? { apiKey } : {}), ...httpOptions }), model, { ...retry, log });
 }
 
 const VERCEL_GATEWAY = "https://ai-gateway.vercel.sh/v1";
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4/accounts";
+
+// --- Retries -----------------------------------------------------------------
+
+/** How many times a failed model request is tried in all (the first try included). */
+export const MODEL_ATTEMPTS = 3;
+/** The wait before the first retry; each later one waits twice as long, give or take some jitter. */
+export const RETRY_BASE_DELAY_MS = 2000;
+/** The longest wait a retry-after header is allowed to ask for, so a run never hangs on one request. */
+const RETRY_AFTER_MAX_MS = 60_000;
+/** How long one request may take before it counts as failed. The SDKs' own 10 minutes would outlast the step. */
+const MODEL_TIMEOUT_MS = 300_000;
+
+/**
+ * The Anthropic and OpenAI SDKs retry on their own (408, 409, 429, 5xx, connection errors, with backoff
+ * and retry-after), so they only get the attempt count and a timeout; withRetry is not stacked on them.
+ */
+function sdkOptions(extra = {}) {
+  // maxRetries counts retries, not attempts, so this gives the SDKs the same total as withRetry.
+  return { maxRetries: MODEL_ATTEMPTS - 1, timeout: MODEL_TIMEOUT_MS, ...extra };
+}
+
+const TRANSIENT_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
+const TRANSIENT_MESSAGES = /overloaded|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|EPIPE|fetch failed|socket hang up|network error|terminated/i;
+
+/**
+ * True for a failure a second try can get past: a rate limit, an overloaded or restarting API, a dropped
+ * connection. Bad requests, bad keys, missing models, refusals and schema errors fail at once.
+ */
+export function isTransientModelError(err) {
+  const status = err?.status ?? err?.statusCode ?? err?.response?.status;
+  if (Number.isInteger(status)) return TRANSIENT_STATUSES.has(status);
+  return TRANSIENT_MESSAGES.test([err?.code, err?.message, err?.cause?.code, err?.cause?.message].filter(Boolean).join(" "));
+}
+
+/** The wait a retry-after header asks for, in milliseconds (seconds or an HTTP date), or null when there is none. */
+export function retryAfterMs(err, now = Date.now()) {
+  const headers = err?.headers ?? err?.response?.headers;
+  const header = (name) => (typeof headers?.get === "function" ? headers.get(name) : headers?.[name]) ?? null;
+  const ms = Number(header("retry-after-ms"));
+  if (ms > 0) return Math.min(ms, RETRY_AFTER_MAX_MS);
+  const after = header("retry-after");
+  if (after == null || after === "") return null;
+  const seconds = Number(after);
+  const wait = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(after) - now;
+  return wait > 0 ? Math.min(wait, RETRY_AFTER_MAX_MS) : null;
+}
+
+/** What the log line says went wrong: the HTTP status when there is one, else the error code or message. */
+const describeError = (err) => err?.status ?? err?.statusCode ?? err?.response?.status ?? err?.code ?? err?.cause?.code ?? String(err?.message ?? err).split("\n")[0].slice(0, 80);
+
+/**
+ * Runs fn, trying again after a transient failure with exponential backoff (2s, 4s, 8s... with jitter),
+ * or after the wait a retry-after header asks for. Any other failure, or the last one, is thrown as is.
+ * @param {() => Promise<any>} fn
+ * @param {{ attempts?: number, baseDelayMs?: number, isTransient?: (err: any) => boolean, log?: (msg: string) => void, sleep?: (ms: number) => Promise<void>, random?: () => number }} opts
+ *   sleep and random are injectable so tests run without waiting.
+ */
+export async function withRetry(fn, { attempts = MODEL_ATTEMPTS, baseDelayMs = RETRY_BASE_DELAY_MS, isTransient = isTransientModelError, log = () => {}, sleep = wait, random = Math.random } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= attempts || !isTransient(err)) throw err;
+      const delay = retryAfterMs(err) ?? Math.round(baseDelayMs * 2 ** (attempt - 1) * (1 + random() * 0.25));
+      log(`  Model request failed (${describeError(err)}); retrying in ${Math.round(delay / 1000)}s (attempt ${attempt + 1} of ${attempts})`);
+      await sleep(delay);
+    }
+  }
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** An openai-compatible API has no known cheap model, so `cheap` falls back to OPENAI_COMPATIBLE_MODEL. */
 function compatibleModel(model, env) {
@@ -160,6 +234,7 @@ function anthropicProvider(client, model) {
   return {
     name: "anthropic",
     model,
+    client, // exposed so the retry settings can be checked
     conversation({ system, tools, firstMessage }) {
       const messages = [{ role: "user", content: firstMessage }];
       const toolDefs = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
@@ -217,6 +292,7 @@ function openaiProvider(client, model, { compatible = false, label } = {}) {
   return {
     name: compatible ? `openai-compatible (${label})` : "openai",
     model,
+    client, // exposed so the retry settings can be checked
     conversation({ system, tools, firstMessage }) {
       const messages = [
         { role: "system", content: system },
@@ -275,10 +351,12 @@ function openaiProvider(client, model, { compatible = false, label } = {}) {
 
 // --- Google Gemini -----------------------------------------------------------
 
-function geminiProvider(ai, model) {
+function geminiProvider(ai, model, retry = {}) {
+  const generate = (params) => withRetry(() => ai.models.generateContent(params), retry);
   return {
     name: "gemini",
     model,
+    client: ai,
     conversation({ system, tools, firstMessage }) {
       const contents = [{ role: "user", parts: [{ text: firstMessage }] }];
       const config = {
@@ -288,7 +366,7 @@ function geminiProvider(ai, model) {
       let pendingNames = new Map();
       return {
         async next() {
-          const response = await ai.models.generateContent({ model, contents, config });
+          const response = await generate({ model, contents, config });
           const candidate = response.candidates?.[0];
           if (!candidate?.content) return { toolCalls: [], stop: candidate?.finishReason === "MAX_TOKENS" ? "max_tokens" : "refusal" };
           contents.push(candidate.content);
@@ -322,7 +400,7 @@ function geminiProvider(ai, model) {
       };
     },
     async json({ system, texts, schema }) {
-      const response = await ai.models.generateContent({
+      const response = await generate({
         model,
         contents: [{ role: "user", parts: texts.map((text) => ({ text })) }],
         config: { systemInstruction: system, responseMimeType: "application/json", responseJsonSchema: schema },

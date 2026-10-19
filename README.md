@@ -56,7 +56,7 @@ Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths
 
 When GA4 hits go to a server container on another host, or its loader is served from one, the report adds an info finding: the events it forwards to ad platforms never pass through the browser, so they can't be seen here.
 
-With a `gtm_container` export, each broken event also names the GTM tag that sends it and the trigger it fires on, or says that no tag sends it. This needs no AI model.
+With a `gtm_container` export, each broken event also names the GTM tag that sends it and the trigger it fires on, or says that no tag sends it. Each tag then says whether its trigger fired in that journey and, when it did not, why: the tag is paused, no dataLayer push carried the trigger's event, a trigger condition failed (with the value the push had, read from the cumulative dataLayer the way GTM's Data Layer Variables read it), an exception trigger blocked it, or the consent it needs was denied when the event fired. When everything fired and the hit is still wrong, it says so, pointing at the tag's own setup. Click, form, visibility and timer triggers are evaluated by GTM in the page, so they are reported as not evaluable unless their `gtm.click`-style event reached the dataLayer. All of this is evaluated from the captured dataLayer, with no AI model.
 
 ### Choose the platforms to check
 
@@ -71,7 +71,7 @@ Each audit also opens the start page once per consent choice, each time in a fre
 ## How it works
 
 1. **Browse:** the AI model gets a goal in plain language ("add any product to the cart and complete checkout with the test payment") and a text view of the page. It acts through two tools, `browser_action` (goto, click, fill, select, scroll, wait) and `finish`, one step at a time with Playwright.
-2. **Capture:** every request to a tracking endpoint is parsed into normalized hits and tagged with the step that caused it. Every dataLayer push is recorded through an init script, including `gtag('consent', ...)` commands. By default, the collection requests of GA4, Google Ads, Meta, TikTok, Microsoft Ads, LinkedIn, Pinterest, Snapchat and X are answered locally, so **test traffic doesn't reach those real accounts**. Tags from other vendors still send their requests; the network part of the timeline shows each call and whether it was answered locally.
+2. **Capture:** every request to a tracking endpoint is parsed into normalized hits and tagged with the step that caused it. Every dataLayer push is recorded through an init script, including `gtag('consent', ...)` commands. By default, the collection requests of every platform the tool can parse (GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo and Piwik PRO), plus Google's conversion, remarketing and consent pings, are answered locally, so **test traffic doesn't reach those real accounts**. Tag loads and requests to vendors the tool only recognises by host (such as Clarity and Hotjar) still go out; the network part of the timeline shows each call and whether it was answered locally.
 3. **Check:** deterministic rules compare the hits with your measurement plan. This part needs no API calls, so results are reproducible.
 4. **Explain:** the model reads the findings, the hits per step and (optionally) your GTM container export. It writes the likely cause and fix for each problem, naming the tags and triggers involved.
 
@@ -164,7 +164,7 @@ The global install also adds `aitd`, a short alias: `aitd run --site … --journ
 
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options.
+Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options. If something does not work, `aitd doctor` checks Node, Chromium, your AI key and the data folder, and says what to fix.
 
 ### Try the demo shop (from source)
 
@@ -311,13 +311,32 @@ Plans and runs are kept in `aitd/` in the folder you run the tool from:
 aitd/
   example.com/                      the site's host, without www.
     plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (after an export)
-    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json
-                                    and plan-check.json (with --against)
+    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json, steps.json,
+                                    junit.xml, summary.json and plan-check.json (with --against)
+    history.json                    a small summary of every saved run, for the trend (see below)
 ```
 
 An ID is the local time, `YYYY-MM-DD_HHMM`. When that minute is already taken, seconds are added (`_HHMMSS`). Nothing is ever replaced: each draft, import and run gets a new folder. Use `--data-dir <dir>` to keep the `aitd/` folder somewhere else. `replay` and `--save-site` folders are not affected.
 
-Each report opens with a "Changed since last run" section that compares the run with the site's previous one in `runs/`, for example `2 events fixed, 1 new problem`, and lists each one. When both runs used `--against`, it compares plan coverage (an event that went from Missing to Implemented is fixed); otherwise it compares the health findings. The first run for a site says there is nothing to compare yet. There is no flag to set. The comparison is also saved under `changes` in `capture.json`.
+Each report has a "Changed since last run" section that compares the run with the site's previous one in `runs/`, for example `2 events fixed, 1 new problem`, and lists each one: what was fixed (with what it was), what is new, and what is still open. When both runs used `--against`, it compares plan coverage (an event that went from Missing to Implemented is fixed); otherwise it compares the health findings. The first run for a site says there is nothing to compare yet. There is no flag to set. The comparison is also saved under `changes` in `capture.json`.
+
+### Trend over runs
+
+From the second saved run on, the tool also looks at the site's last 30 runs together. After the counts, the CLI prints the verdict line and up to three trend lines:
+
+```
+2 broken · 1 risk · 1 warning · 0 info · 4 ok
+Verdict: Fail · purchase tracking is broken on mobile · score 25/100
+Trend over 5 runs (2026-10-01 → 2026-10-07): improving. Now 0 broken · 1 risk · 2 warning; 3 runs ago 2 broken · 1 risk · 0 warning.
+Open longest: Meta PageView before_consent in 4 places since 2026-10-01 (5 runs); GA4 add_to_cart duplicate in 4 places since 2026-10-03 (3 runs).
+Journeys that do not finish every time: checkout (mobile) 80%.
+```
+
+The same lines, with a text sparkline of the runs (one character per run, `·` for a run whose journeys did not all finish), make the **Trend** section of `report.md` and `report.html`. A problem counts as *open* while the last run that completed its journey still showed it; a run whose journey stopped early proves nothing, so it neither fixes nor reintroduces anything. *Flapping* problems (seen, gone, back again) are named, because they usually depend on timing or on the product the AI picked rather than on a fix. The direction compares the last few complete runs with the ones before them.
+
+`aitd history --site <url>` prints the trend on its own: one row per run with its counts and score (`3·broken + 2·risk + warning`, lower is better), the sparkline and the lines above. `--limit <n>` reads only the newest `n` runs (default 30), `--lang tr` switches the lines to Turkish, and `--json` prints the trend series, the per-finding timeline (first seen, last seen, open since, fixed in, flapping) and the journey completion rates for scripts.
+
+The summaries live in `aitd/<domain>/history.json`, about 2 KB per run, which every saved run updates after writing its `capture.json`. The file is a cache: a run folder that is not in it is read from its `capture.json`, a folder that was deleted drops out on the next update, and deleting the file is always safe. Runs sent to `--out` and replays are not part of the history.
 
 ## Choose what to test
 
@@ -359,8 +378,11 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Expect bigger pages to cost more.** Each step sends the page view (up to 250 elements and 3,000 characters of text) to the model, so busy pages use more tokens per step than simple ones.
 - **Repeat runs start from the last route.** Once a journey has completed on a site, the next run gives the AI the pages that run went through, in order, so it goes straight to the goal instead of exploring. The route is reused only for the same goal, from runs made with 0.14.0 or later, and only for AI runs. It isn't used with `--out` or `replay`. If the site changed and the route no longer fits, the AI takes another path.
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
-- **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
+- **Replay without AI.** Every completed run saves the steps it took as `steps.json` in its run folder, and `--scripted --no-ai` repeats the last completed run's steps for a journey that has no fixed steps of its own. Run a journey once with the AI, then replay it on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
+- **Transient failures don't cost a run.** A rate limit, an overloaded answer or a dropped connection from the model API (429, 529, 5xx and the like) is tried again up to 3 times with a growing wait, honoring `retry-after`, and a page load the network dropped or that timed out is tried once more after 2 seconds. Other errors, such as a bad key or a refused page, fail at once.
+
+Running time is another matter: `--concurrency 3` runs up to three journeys at once, each in its own browser, so a run with several journeys and viewports finishes much sooner. It makes the same model calls, only closer together, so stay at `1` or `2` when the provider rate-limits you.
 
 ### Check a new version against saved sites
 
@@ -377,14 +399,34 @@ The first run's findings become the expected ones. When a change is right, for e
 
 ### Save the steps and replay them without AI
 
-`--save-steps <file>` writes the steps each journey took into `journeys[].steps` of a config file. It creates the file if it's missing, and it also saves the run's plan when the config has none. The same config then repeats the journey with no AI model and no API key:
+Every completed run saves the steps each journey took in its run folder, `aitd/<domain>/runs/<id>/steps.json`. A `--scripted --no-ai` run then repeats them for every journey that has no `steps` of its own: it takes the site's newest run that completed the journey, on the same viewport when there is one and on another otherwise, and says which run it is replaying under the journey's `▶` line. So the AI is needed once per journey, and every run after that costs nothing:
+
+```bash
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase --scripted --no-ai
+```
+
+When the site changes and a saved step no longer finds its element, the journey ends as incomplete with a note that says the steps of that run no longer fit; run it with the AI once more and the next replay uses the new steps. A journey that has never completed on the site stops the run before the browser starts. Only runs saved in `aitd/` are replayed from: a run sent elsewhere with `--out` or made over MCP still writes `steps.json`, but the next run doesn't look there. The steps are stored as they were taken, typed values included (an email address typed into a form is in `steps.json` as typed, since a replay has to type it again), so use test data on the journeys and keep the run folder out of version control.
+
+To keep the steps in your repository instead, `--save-steps <file>` writes them into `journeys[].steps` of a config file. It creates the file if it's missing, and it also saves the run's plan when the config has none. The same config then repeats the journey with no AI model and no API key:
 
 ```bash
 ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-steps ai-tag-debugger.config.json
 ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
 ```
 
-When a journey ran on both viewports, only the first viewport's steps are kept. Keep the config in your repository and run the second command on every deploy to check the same journey without any model calls.
+When a journey ran on both viewports, only the first viewport's steps are kept. Run the second command on every deploy to check the same journey without any model calls.
+
+### Accept known findings
+
+`--fail-on` fails the build on every finding at a level. When a finding is known and won't be fixed soon, for example a vendor pixel that fires before consent, a baseline lets later runs fail only on new findings. Run once with `--update-baseline` to write every current finding into a file, look through it, and commit it:
+
+```bash
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai --baseline baseline.json --update-baseline
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai --baseline baseline.json --fail-on warning
+```
+
+The file holds one entry per finding, with a `key` the run matches on (the check, platform, event, journey, viewport and, for missing parameters, which ones) and the rest for whoever reads it. Delete an entry to start failing on it again, or add a `"note"` saying why it's accepted; notes survive the next `--update-baseline`. An accepted finding stays in the report with an "Accepted" label, is left out of the counts and the AI explanation, and doesn't count toward `--fail-on`. After the counts, the run prints how many findings were accepted and how many baseline entries are stale, that is no longer seen, so the file can be trimmed. A problem accepted on some viewports or journeys only is reported as partially accepted and still counted, and a baseline written for another site prints a warning. `"baseline": "baseline.json"` in the config, relative to the config file, saves passing the option; the MCP `run_audit` tool takes `baseline` too.
 
 ## Configure your site
 
@@ -409,17 +451,19 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 |---|---|
 | `site` | Base URL. Use staging when you can. |
 | `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. A run with `--against` uses that plan instead. |
-| `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), even without an AI model. |
+| `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), and says whether that trigger fired in the journey and why not (paused tag, no push with the event, a failed condition with the value seen, a blocking trigger, denied consent), evaluated from the captured dataLayer without an AI model. |
 | `viewports` | `desktop` and/or `mobile`. |
+| `concurrency` | Default `1`. How many journeys (and consent scenarios) run at once, each in its own browser, up to `8`. Same as `--concurrency`. |
 | `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
 | `journeys[].start` | Optional start path (default `/`). |
-| `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. |
+| `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
 | `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
 | `consent_scenarios` | Default `true`. Set to `false` to skip the [consent scenarios](#consent-scenarios), which visit the start page once per consent choice. |
+| `baseline` | Optional path, relative to the config file, of a baseline of accepted findings. Same as `--baseline`. See [Accept known findings](#accept-known-findings). |
 | `language` | Report language, `en` (default) or `tr`. Same as `--lang`. |
 | `keep_bodies` | Default `false`. Set to `true` to store tracking requests as sent, without redacting user data. Same as `--keep-bodies`. |
 | `branding` | Default `true`. Set to `false` to leave the Analitik İşler logo and the "Generated by AI Tag Debugger · analitikisler.com" line out of the reports. Same as `--no-branding`, or `branding: false` on the MCP `finish_audit` and `run_audit` tools. |
@@ -427,6 +471,8 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `provider` | Optional: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` or `openai-compatible`. Same as `--provider`. |
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
 | `notify` | Optional alerts after each saved run: `slack` (a webhook URL, or `true` to read `SLACK_WEBHOOK_URL`) and `email` (an address or a list). See [Alerts](#alerts). |
+
+The config and the plan are checked as soon as they are read, before the browser starts. An error names the field and, for a fixed choice, the allowed values, for example `viewports[1]: must be one of desktop, mobile (got "tablet")` or `journeys[0].steps[2].action: must be one of goto, click, fill, select, scroll, wait`. A key the tool does not know is ignored with a warning that suggests the closest one (`Unknown key "viewport" ... Did you mean "viewports"?`), so an extra note in the file does not stop a run. Plans saved by `aitd plan` and imported from a spreadsheet get the same check.
 
 ### Alerts
 
@@ -442,7 +488,18 @@ After each saved run, `notify` sends the "Changed since last run" diff to your t
 - **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
 - **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
 
-An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The message lists the problems fixed and the new ones, and its subject line gives the counts. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
+An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The subject carries the verdict first, then the counts and the headline: `shop.example: Fail · 2 new problems · purchase tracking is broken on mobile`. The body repeats the verdict line, then lists what was fixed (with what it *was*) and what is new, each new item with its severity and owner, then the trend line with its sparkline, the flapping problems, and "Still open after N runs" when a problem reaches 5, 10, 20 runs open (then every 10), so the same open list does not repeat in every message:
+
+```
+shop.example
+Verdict: Fail · purchase tracking is broken on mobile · score 25/100
+1 problem fixed, 1 new problem. Compared with run 2026-10-15_1000, by health findings (2026-10-16_1000).
+- Fixed: GA4 page_view (was: Sent before consent)
+- New: Meta Purchase · Broken · "Purchase" was sent without "value". · Developer
+Trend over 5 runs (2026-10-12 → 2026-10-16): worsening. Now 2 broken · 1 risk · 0 warning; 3 runs ago 0 broken · 1 risk · 0 warning. `▃▃·▅█`
+```
+
+The trend never triggers an alert on its own. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
 
 ## CLI
 
@@ -453,12 +510,15 @@ aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
 aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--config <file>] [--events <names>]
-         [--max-steps <n>] [--viewport desktop|mobile] [--platforms <list>] [--data-dir <dir>]
+         [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <list>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
-         [--fail-on broken|risk|warning|never] [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>]
+         [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network]
+aitd doctor [--site <url>] [--data-dir <dir>]
+aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
 
 `aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options. Run `aitd <command> --help` for the essential options of each command.
@@ -467,24 +527,29 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 
 | Option | Commands | Meaning |
 |---|---|---|
-| `--site <url>` | plan, run | The site. Required for `plan`; for `run`, needed unless `--against` or the config gives it. |
+| `--site <url>` | plan, run, doctor, history | The site. Required for `plan` and `history`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
 | `--against <plan>` | run | Check against a plan: `latest` (or `last`), `first`, a plan ID, or a path to a plan file or folder. |
 | `--journey <id>` | run | A ready-made journey (repeatable). |
 | `--goal "<text>"` | run | A journey in plain language (repeatable). |
 | `--config <file>` | run | Take the site, journeys and plan from a config file. |
 | `--events <names>` | run | Only check these events, e.g. `purchase,add_to_cart`. |
 | `--viewport <name>` | run | `desktop` or `mobile` (repeatable). |
+| `--concurrency <n>` | run | How many journeys to run at once, each in its own browser: `1` (default) to `8`. Side by side, each journey's log lines start with `[journey/viewport]`, and `--headed` opens that many browser windows. Same as `concurrency` in the config. |
 | `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. Replaces `--providers`, which still works for one more minor version. |
 | `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
-| `--lang <code>` | run | Report language: `en` or `tr`. |
+| `--lang <code>` | run, history | Report language: `en` or `tr`. For `history`, the language of the trend lines. |
 | `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
+| `--baseline <file>` | run | A file of accepted findings. They are still reported, but don't count toward `--fail-on`. See [Accept known findings](#accept-known-findings). |
+| `--update-baseline` | run | Write every finding of this run into the baseline file after the run, creating it if needed. |
 | `--headed` | plan, run | Show the browser window. |
 | `--provider <name>`, `--model <id>` | plan, run | The AI provider and model. Default: whichever API key is set. |
-| `--scripted` | run | Replay each journey's fixed steps, with no AI navigation. |
+| `--scripted` | run | Replay each journey's fixed steps, with no AI navigation. A journey without steps repeats those of the site's last completed run. |
 | `--no-ai` | run | No AI model at all. Implies `--scripted`. |
 | `--save-site <dir>` | run | Save the site's responses for `replay`. |
 | `--save-steps <file>` | run | Write the steps each journey took into a config file. |
-| `--data-dir <dir>` | plan, run | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--data-dir <dir>` | plan, run, doctor, history | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--limit <n>` | history | How many of the site's newest runs the trend reads. Default: 30. |
+| `--json` | history | Print the trend series, the finding timeline and the journey stability as JSON instead of text. |
 | `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
 | `--update` | replay | Make this replay's findings the expected ones. |
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
@@ -496,7 +561,32 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 
 Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a plan always saves a new folder, and a removed flag prints what to run instead.
 
-The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
+The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. Findings accepted in a [baseline](#accept-known-findings) don't count. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
+
+**Test results in CI.** Every run also writes `junit.xml`, where each journey is a test suite and each finding a test case, failed when it reaches `--fail-on`, so GitHub Actions, GitLab and Jenkins show the findings as test failures. In GitHub Actions, upload it and hand it to a JUnit reporter action:
+
+```yaml
+      - run: aitd run --config ai-tag-debugger.config.json --data-dir tracking-report
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: junit
+          path: tracking-report/**/junit.xml
+      # Optional: any JUnit reporter action turns the file into annotations on the run.
+      - uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: tracking
+          path: tracking-report/**/junit.xml
+          reporter: java-junit
+```
+
+In GitLab, point `artifacts: reports: junit:` at the same path. Next to it, `summary.json` holds the counts, the verdict (`status`: `fail`, `attention` or `pass`, and the `headline` key such as `fail_broken`), the data quality `score` (0 to 100), the trend `direction` over the saved runs, the journeys, every finding (check, severity, platform, event, journey, viewport, title, message), the run folder's name as `run` and the names of the other files as `files`, relative to that folder, so a script can read the result without parsing `capture.json`, and nothing in it depends on the machine the run was made on:
+
+```sh
+jq '.counts.broken' aitd/example.com/runs/*/summary.json
+jq -r '.verdict.status + " " + (.score | tostring)' aitd/example.com/runs/*/summary.json
+```
 
 **Scheduled runs.** To audit on a timer instead of after each deploy, use [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) (weekly by default, with a cron line you can change). It saves the history between runs in a cache, so "Changed since last run" keeps working on a fresh runner. On your own server, [`examples/cron/`](examples/cron) has a script and a crontab line that do the same.
 
@@ -514,9 +604,11 @@ Output:
 
   Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
-- `report.md`: the report in Markdown, e.g. for a pull request comment.
-- `capture.json`: everything captured, for your own analysis.
+- `report.md`: the report in Markdown for a pull request comment, a Slack message or a mail, around 100 lines and under 8 KB for a four-journey run. Its title is the verdict (`# shop.example: purchase tracking is broken on mobile`), then one meta line, the status with the data quality score, and the counts. Then, in this order: **Changed since last run** and **Trend** (when the site has earlier runs), **Plan vs. site** (with `--against`), **Priorities** (the to-do list per owner: Developer, Tag Manager, Marketing), **Findings** (up to five full blocks with Where, Impact, Cause, Evidence, Also fine on, Owner, Fix, How to verify and a link into `report.html`; the rest one line each under *Also*), **Consent** (the Consent Mode timing sentence and the scenario table with a reason in every cell), **What passed**, **Journeys** (one row per run, then only the steps that carry a problem), **Not checked** (what the run could not judge, with the config key that enables it) and the **Tag inventory**. The per-hit timeline is not in the file; `timeline.csv` has it.
+- `capture.json`: everything captured, for your own analysis, including the tool `version`, the `ai` provider and the computed `metrics` (verdict, score, plan coverage, funnel, platform parity, consent compliance, conversion integrity, timing, priorities).
 - `plan-check.json`: with `--against`, one entry per planned event with its bucket.
+- `junit.xml`: the findings as JUnit test results, one suite per journey and viewport, for CI systems to show as test failures (see above).
+- `summary.json`: the counts, verdict, score, trend direction, journeys, findings and file names of the run in one small file for scripts.
 - `plan.html` (in the plan's folder): a readable page of the plan's events, parameters and user properties.
 
 Reports end with a credit line, "Generated by AI Tag Debugger · analitikisler.com", where the domain is a plain link (no images, no tracking, and no referrer, so report URLs aren't leaked). `--no-branding` removes it along with the logo.
@@ -537,7 +629,7 @@ Tools the server offers:
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
 | `get_page` | Shows the current page. |
 | `finish_audit` | Checks everything against your measurement plan (JSON), a saved one given as `against` (`latest`, `first`, a plan ID, or on a local server a path), or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. The site comes from the audit. |
-| `run_audit` | Runs a config file end to end. With `against`, it checks the run against a saved plan and, when the config has no journeys, walks the journeys derived from that plan. Local only for file paths. |
+| `run_audit` | Runs a config file end to end. With `against`, it checks the run against a saved plan and, when the config has no journeys, walks the journeys derived from that plan. `concurrency` runs that many journeys at once, each in its own browser (default 1), and `baseline` names a file of accepted findings written with `--update-baseline` (default: the config's `baseline`; see [Accept known findings](#accept-known-findings)). Local only for file paths. |
 
 `against` takes the same values as the CLI's `--against`. Over HTTP it takes only `latest`, `first` or a plan ID, never a path. Plans are the ones saved by `aitd plan --site <url>` or by `make_plan`. Ask for a plan when you want to know what to track, and for an audit when you want to know what the site sends.
 
@@ -613,6 +705,8 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 ```bash
 npm run setup   # checks Node, installs the dependencies and Chromium, says whether an AI provider key is set
 npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
+npm run test:unit   # only the tests that need no browser, in about ten seconds
+npm run lint    # ESLint, the recommended rules only: undefined names, unused imports and the like
 ```
 
 The repository also has a dev container (`.devcontainer/devcontainer.json`). Open it in VS Code with the Dev Containers extension, or in GitHub Codespaces, and it runs `npm run setup` for you, Chromium's system libraries included. To use an AI model there, add your key as a Codespaces secret or export it in the container's terminal.
