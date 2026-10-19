@@ -601,7 +601,10 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .filterbar [data-filter].chip-vp svg{color:var(--k)}
 .fnd .filterbar [data-filter][aria-pressed=true] svg{color:currentColor}
 .fnd .filterbar [data-filter][aria-pressed=true]{counter-increment:fc}
-.fnd .filterbar [data-filter-search]{order:6;flex:1 1 120px;min-width:100px;max-width:260px;margin-left:auto;height:28px}
+/* the search field's icon is the sprite's ui-search inside the label (the CSS may carry no data URI) */
+.fnd .fb-search{order:6;position:relative;display:flex;align-items:center;flex:1 1 120px;min-width:100px;max-width:260px;margin-left:auto}
+.fnd .fb-search>svg{position:absolute;left:11px;width:14px;height:14px;color:var(--muted);pointer-events:none}
+.fnd .filterbar [data-filter-search]{flex:1 1 auto;width:100%;max-width:none;margin-left:0;height:28px}
 .fnd .fb-clear{order:2;margin-left:auto;height:28px;padding:0 10px;border:0;border-radius:var(--r-pill);background:none;color:var(--accent-fg);font:500 12.5px var(--font-sans);cursor:pointer}
 .fnd .fb-clear:hover{background:var(--accent-bg)}
 .fnd .fb-clear[hidden]~[data-filter-count]{margin-left:auto}
@@ -610,11 +613,11 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .fb-fold{display:none}
 @media (max-width:719px){
   .fnd .filterbar{padding:8px}
-  .fnd .filterbar [data-filter-search]{order:1;flex:1 1 100px;min-width:100px;max-width:none;margin-left:0}
+  .fnd .fb-search{order:1;flex:1 1 100px;min-width:100px;max-width:none;margin-left:0}
   .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
-  .fnd .fb-fold::after{content:"Filters"}
+  .fnd .fb-fold::after{content:attr(data-label)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-fg)}
-  .fnd .filterbar:has([aria-pressed=true]) .fb-fold::after{content:"Filters (" counter(fc) ")"}
+  .fnd .filterbar:has([aria-pressed=true]) .fb-fold::after{content:attr(data-label) " (" counter(fc) ")"}
   .fnd .filterbar:has(.fb-fold:focus-visible) .fb-fold{outline:2px solid var(--accent);outline-offset:2px}
   .fnd .filterbar::after{display:none}
   .fnd .fb-clear{order:3;margin-left:0}
@@ -708,8 +711,9 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd-where{list-style:none;display:grid;gap:6px}
 .fnd-where li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px}
 .fnd-step{min-width:0}
-.fnd .tabs h5{margin:var(--s4) 0 var(--s2);display:flex;align-items:center;gap:8px}
-.fnd .tabs h5 .chip{text-transform:none;letter-spacing:0}
+.fnd .fnd-h{margin:var(--s4) 0 var(--s2);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.fnd .fnd-h .chip{text-transform:none;letter-spacing:0}
+.fnd .fnd-h>svg{width:14px;height:14px}
 .fnd-fix>span{min-width:0}
 .fnd-recipe{list-style:none;counter-reset:rc;display:grid;gap:2px;margin:0;padding:var(--s2) var(--s3);background:var(--well);border-radius:var(--r-sm)}
 .fnd-recipe li{counter-increment:rc;display:flex;gap:10px;font-size:12px;line-height:1.6}
@@ -727,7 +731,32 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
   .fnd-recipe{background:none;border:1px solid var(--border)}
 }
 
-.fnd .fnd-empty{display:flex;align-items:center;gap:6px;padding:var(--s4);border:1px dashed var(--border);border-radius:var(--r-md)}`;
+.fnd .fnd-empty{display:flex;align-items:center;gap:6px;padding:var(--s4);border:1px dashed var(--border);border-radius:var(--r-md)}
+
+/* ---------- product data the mockup did not show: the check's detail, the model's explanation, GTM tags, accepted ---------- */
+.fnd-detail{margin-bottom:var(--s3);font-size:13px;overflow-wrap:anywhere}
+.fnd-detail code{font-size:12px}
+.fnd-ai{margin-top:var(--s3);padding:var(--s2) var(--s3);border-left:2px solid var(--border);color:var(--muted);font-size:13px}
+.fnd-ai p+p,.fnd-ai p+ol{margin-top:6px}
+.fnd-ai-h{display:flex;align-items:center;gap:6px;font-weight:500}
+.fnd-ai-h .ic{width:14px;height:14px}
+p.fnd-ai{border-left:0;padding:0}
+.fnd .fix-steps{margin:6px 0 0;padding-left:20px;display:grid;gap:4px}
+.fnd .gtm-tags th{white-space:normal}
+.fnd .gtm-why{margin-top:4px;color:var(--muted)}
+.fnd .note{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:var(--s3) 0 0;color:var(--muted)}
+.fnd .f-t>.badge{margin-left:6px;vertical-align:1px}
+.fnd .fnd-none{display:flex;align-items:center;gap:6px;padding:var(--s2) 0;font-size:13px}
+.fnd .g-rows:empty{display:none}
+a.chip.chip-sev:hover{text-decoration:none}
+
+/* ---------- changed since last run: a collapsed card between the filter bar and the groups ---------- */
+.fnd .fnd-changes{margin-top:var(--s3)}
+.fnd details.fnd-changes>summary{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);padding:8px 40px 8px var(--s4)}
+.fnd details.fnd-changes>summary h3{font-size:14px}
+.fnd .fnd-changes>.body{padding:var(--s3) var(--s4)}
+.fnd-change-list{list-style:none;display:grid;gap:6px;margin-top:var(--s2);font-size:13px}
+.fnd-change-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;overflow-wrap:anywhere}`;
 // ---------- end of findings ----------
 
 // ---------- journeys: #journeys ----------
