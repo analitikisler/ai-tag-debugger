@@ -122,20 +122,18 @@ test("the verdict headline follows the verdict key, with a fallback per key and 
   assert.equal(headline([], [run()], { events: [{ platform: "ga4", name: "purchase" }] }).headline, "all 1 planned events fired correctly on 1 journey");
   assert.equal(headline([], [run()]).headline, "all checks passed on 1 journey");
   assert.equal(verdictHeadline({ findings: [broken], runs: [run()], metrics: computeMetrics({ runs: [run()], findings: [broken] }), lang: "tr" }).headline, "purchase izlemesi bozuk");
-  // The verdict, consequence and fix tables are being written in parallel: a string or a function of the finding is used when present.
+  // The consequence and fix tables accept a string or a function of the finding.
   const en = LANGUAGES.en;
-  en.verdict = { headline: { fail_broken: ({ what, scope }) => `custom: ${what}${scope}` } };
+  const kept = { consequence: en.consequence, fix: en.fix };
   en.consequence = { missing_params: (f) => `${f.event} arrived without its value` };
   en.fix = { missing_params: "add the parameters to the push" };
   try {
     const md = renderMarkdown({ title: "t", site: "shop.test", generatedAt: "now", findings: [broken], explained: null, runs: [run(), run({ viewport: "mobile" })] });
-    assert.equal(md.split("\n")[0], "# shop.test: custom: purchase tracking on desktop");
+    assert.equal(md.split("\n")[0], "# shop.test: purchase tracking is broken on desktop");
     assert.match(md, /\n- Impact: purchase arrived without its value\n/);
     assert.match(md, /\n- Fix: add the parameters to the push\n/);
   } finally {
-    delete en.verdict;
-    delete en.consequence;
-    delete en.fix;
+    Object.assign(en, kept);
   }
 });
 

@@ -265,9 +265,9 @@ function mdScope(m, runs, lead) {
 }
 
 /**
- * The verdict sentence for the title, with no model: from `verdict.headline` in i18n when that table
- * exists (a string, or a function of { key, what, scope, journey, events, journeys, counts, lead }),
- * else from the built-in fallbacks keyed the same way as metrics.verdict.headline.
+ * The verdict sentence for the title, with no model, keyed the same way as metrics.verdict.headline. It names
+ * the lead problem and where it is ("purchase tracking is broken on mobile"): the counts sit next to the
+ * headline on every surface, so the count-based sentences in `verdict.headline` are left to the HTML verdict block.
  */
 function mdHeadline(m, runs, rows, metrics) {
   const v = metrics.verdict;
@@ -276,8 +276,6 @@ function mdHeadline(m, runs, rows, metrics) {
   const scope = mdScope(m, runs, lead);
   const incomplete = runs.find((r) => !r.completed);
   const ctx = { key: v.headline, what, scope, journey: incomplete ? String(incomplete.journeyId) : "", events: metrics.coverage?.checkable ?? 0, journeys: runs.length, counts: v.counts, lead };
-  const custom = mdTemplate(m.verdict?.headline, v.headline, ctx);
-  if (custom) return custom;
   const fallback = m.ui.md.headline[v.headline] ?? m.ui.md.headline.attention_nothing_tested;
   if (v.headline === "fail_incomplete") return fallback(ctx.journey);
   if (v.headline === "pass") return fallback(ctx.events, ctx.journeys);
