@@ -164,6 +164,8 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     var f = el;
     if (!f.matches("a[href],button,summary,input,[tabindex]")) f.setAttribute("tabindex", "-1");
     el.scrollIntoView({ block: "start" });
+    f.classList.add("revealed");
+    f.addEventListener("blur", function () { f.classList.remove("revealed"); }, { once: true });
     f.focus({ preventScroll: true });
     el.classList.add("flash");
     setTimeout(function () { el.classList.remove("flash"); }, 1500);

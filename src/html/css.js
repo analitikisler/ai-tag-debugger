@@ -199,7 +199,7 @@ details.card[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
 details.card>summary:hover{background:var(--well)}
 details.card>summary:hover::after{border-color:var(--fg)}
 details.card>summary:focus-visible{outline-offset:-2px}
-details.card:focus-visible,.card:focus-visible{outline-offset:1px;border-radius:var(--r-md)}
+.revealed:focus,.revealed:focus-visible{outline:none}
 details.card[open]>summary{border-bottom:1px solid var(--border);border-bottom-left-radius:0;border-bottom-right-radius:0}
 details.card>summary .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
 details.card>summary .end{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
