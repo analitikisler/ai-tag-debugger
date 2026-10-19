@@ -131,6 +131,14 @@ async function main(args = process.argv.slice(2)) {
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
     return;
   }
+  if (command === "doctor" && !values.help) {
+    const { doctorChecks } = await import("./doctor.js");
+    const checks = await doctorChecks({ site: values.site, dataDir: values["data-dir"] });
+    for (const c of checks) console.log(`${c.ok ? "✓" : "✗"} ${c.text}`);
+    // Only a check an audit cannot run without fails the command; a missing AI key is advice.
+    if (checks.some((c) => c.hard && !c.ok)) process.exitCode = 1;
+    return;
+  }
   if (values.help || command !== "run" || (!values.config && !values.site && !values.against)) {
     console.log(helpText(command));
     process.exit(values.help ? 0 : 2);

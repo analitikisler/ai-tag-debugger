@@ -164,7 +164,7 @@ The global install also adds `aitd`, a short alias: `aitd run --site … --journ
 
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options.
+Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options. If something does not work, `aitd doctor` checks Node, Chromium, your AI key and the data folder, and says what to fix.
 
 ### Try the demo shop (from source)
 
@@ -469,6 +469,7 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--c
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network]
+aitd doctor [--site <url>] [--data-dir <dir>]
 ```
 
 `aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options. Run `aitd <command> --help` for the essential options of each command.
@@ -477,7 +478,7 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 
 | Option | Commands | Meaning |
 |---|---|---|
-| `--site <url>` | plan, run | The site. Required for `plan`; for `run`, needed unless `--against` or the config gives it. |
+| `--site <url>` | plan, run, doctor | The site. Required for `plan`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
 | `--against <plan>` | run | Check against a plan: `latest` (or `last`), `first`, a plan ID, or a path to a plan file or folder. |
 | `--journey <id>` | run | A ready-made journey (repeatable). |
 | `--goal "<text>"` | run | A journey in plain language (repeatable). |
@@ -494,7 +495,7 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 | `--no-ai` | run | No AI model at all. Implies `--scripted`. |
 | `--save-site <dir>` | run | Save the site's responses for `replay`. |
 | `--save-steps <file>` | run | Write the steps each journey took into a config file. |
-| `--data-dir <dir>` | plan, run | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--data-dir <dir>` | plan, run, doctor | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
 | `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
 | `--update` | replay | Make this replay's findings the expected ones. |
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
@@ -649,6 +650,8 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 ```bash
 npm run setup   # checks Node, installs the dependencies and Chromium, says whether an AI provider key is set
 npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
+npm run test:unit   # only the tests that need no browser, in about ten seconds
+npm run lint    # ESLint, the recommended rules only: undefined names, unused imports and the like
 ```
 
 The repository also has a dev container (`.devcontainer/devcontainer.json`). Open it in VS Code with the Dev Containers extension, or in GitHub Codespaces, and it runs `npm run setup` for you, Chromium's system libraries included. To use an AI model there, add your key as a Codespaces secret or export it in the container's terminal.
