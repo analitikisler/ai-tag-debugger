@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { LANGUAGES } from "../src/i18n.js";
 import { computeMetrics } from "../src/metrics.js";
 import { renderMarkdown, verdictHeadline } from "../src/report.js";
+import { context } from "../src/html/shell.js";
+import { failedInput, reportInput } from "./helpers/demo-capture.js";
 
 const capture = JSON.parse(readFileSync(new URL("./fixtures/demo-capture.json", import.meta.url), "utf8"));
 const demo = { title: "AI Tag Debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, consentScenarios: capture.consentScenarios, changes: { previous: null } };
@@ -58,6 +60,24 @@ test("a finding block has the fixed fields: where, evidence, also fine on, owner
   assert.match(md, /### Risk: meta `PageView` fired before the visitor accepted cookies\.\n- Where: all 4 journeys · step 1 "Open http:\/\/localhost:4321\/" · \/ · \+0\.1s/);
   // Without a consequence table there is no Impact line, and nothing tells the reader to re-run the tool.
   assert.doesNotMatch(md, /--no-ai/);
+});
+
+test("every Link line opens the HTML card of its finding, site-level and repeated ones included", () => {
+  const links = (input) => [...renderMarkdown(input).matchAll(/^- Link: report\.html#(\S+)$/gm)].map((x) => x[1]);
+  const failed = links(failedInput());
+  assert.ok(failed.includes("f-site-journey_incomplete"), failed.join(" "));
+  assert.ok(failed.includes("f-site-consent_default_missing"), failed.join(" "));
+  // Two cards with the same platform, event and check: the second is f-…-2 in the HTML, so it is in the Markdown too.
+  const { findings } = reportInput();
+  const dup = findings.find((f) => f.check === "duplicate");
+  const twice = reportInput({ findings: [...findings, { ...dup, severity: "broken", detail: "sent 3 times", journey: "browse", viewport: "desktop" }] });
+  for (const input of [failedInput(), reportInput(), twice]) {
+    const ids = new Set(context(input).ids.values());
+    const md = links(input);
+    assert.ok(md.length > 0);
+    for (const id of md) assert.ok(ids.has(id), `${id} is not a card id`);
+  }
+  assert.ok(links(twice).includes("f-ga4-add_to_cart-duplicate-2"), links(twice).join(" "));
 });
 
 test("the consent section has the Consent Mode timing sentence and a reason in every scenario cell", () => {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.0 (2026-10-19)
+
+- The HTML report was rebuilt as an inspector: a collapsible rail with seven sections (Summary, Findings, Journeys, Consent, Coverage, Inventory, Run), one screen at a time. The Summary is a score ring banded red, amber and green, the verdict, up to three lines saying what cost the points, status chips that open the findings pre-filtered, and six cards about the run. Findings have a filter bar (severity, owner, platform, journey, viewport, search) over failed, unverified and passed groups, every row collapsed and opening into Evidence, Fix, Where and Verify tabs. Journeys show the steps by page title on the left and the selected step's Hits, Data Layer and Requests tabs on the right, with a consent chip on every hit. Every card starts collapsed except the Summary; every section, filter and card has its own URL. With a model, the Summary shows its one-line headline and an AI summary card in Findings keeps its points and its "worth checking" list; a route that differs from the last run is named under the Run facts. Severity is never colour alone, one hue per kind of chip, light and dark mode, keyboard (`[` folds the rail, `1`–`7` jump), no horizontal scroll on phones, and the stacked no-JavaScript document is the print layout. Design notes and the mockups it was built from are under `docs/design/directions/`.
+- `plan.html` uses the same stylesheet and chips as the report.
+- The Trend table's last column is labelled "Problem points": it is the weighted count of open problems per run (lower is better), not the 0–100 data quality score.
+- Fixed: in `report.md`, the link under a finding with no platform (a journey that did not finish, no Consent Mode default) or under a second finding with the same platform, event and check now opens its card in `report.html` instead of the Summary.
+- Fixed: a `value` that is not a number (an unresolved template, a product name) showed as `NaN` in the platform parity table; the report now shows the text the tag sent, and a number on one platform against text on the other counts as a value difference.
+- Development: the HTML report lives in `src/html/` (one module per section, the stylesheet and the hashed script as constants); the real demo capture is a test fixture; the design record under `docs/design/directions/` holds the UX research, the four directions with their rationales, and the chosen mockup.
+
 ## 0.17.0 (2026-10-19)
 
 - The report opens with a verdict. A deterministic sentence names the lead problem and where it is ("purchase tracking is broken on mobile"), with a data quality score whose weights are printed next to it, so a run without an AI model still says what matters first. The same verdict heads report.md, the CLI output, `summary.json` and the Slack and email alerts.

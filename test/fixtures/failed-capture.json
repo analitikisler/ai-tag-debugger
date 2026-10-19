@@ -1,0 +1,2200 @@
+{
+  "version": "0.17.0",
+  "ai": null,
+  "config": {
+    "site": "http://localhost:4350",
+    "plan": {
+      "consent_mode": true,
+      "events": [
+        {
+          "platform": "ga4",
+          "name": "page_view",
+          "allow_multiple": false
+        },
+        {
+          "platform": "ga4",
+          "name": "view_item_list",
+          "journeys": [
+            "browse",
+            "checkout"
+          ],
+          "required_params": [
+            "currency",
+            "items"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "name": "view_item",
+          "journeys": [
+            "browse",
+            "checkout"
+          ],
+          "required_params": [
+            "currency",
+            "value",
+            "items"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "name": "add_to_cart",
+          "journeys": [
+            "browse",
+            "checkout"
+          ],
+          "required_params": [
+            "currency",
+            "value",
+            "items"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "name": "view_cart",
+          "journeys": [
+            "checkout"
+          ],
+          "required_params": [
+            "currency",
+            "value"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "name": "begin_checkout",
+          "journeys": [
+            "checkout"
+          ],
+          "required_params": [
+            "currency",
+            "value",
+            "items"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "name": "purchase",
+          "journeys": [
+            "checkout"
+          ],
+          "required_params": [
+            "transaction_id",
+            "currency",
+            "value",
+            "items"
+          ]
+        },
+        {
+          "platform": "meta",
+          "name": "PageView"
+        },
+        {
+          "platform": "meta",
+          "name": "AddToCart",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "name": "InitiateCheckout",
+          "journeys": [
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "name": "Purchase",
+          "journeys": [
+            "checkout"
+          ],
+          "required_params": [
+            "value",
+            "currency"
+          ]
+        }
+      ]
+    },
+    "viewports": [
+      "desktop",
+      "mobile"
+    ],
+    "block_hits": true,
+    "journeys": [
+      {
+        "id": "browse",
+        "goal": "Accept cookies, open any product from the home page and add it to the cart.",
+        "steps": [
+          {
+            "action": "click",
+            "selector": "#consent-accept",
+            "accepts_consent": true,
+            "reason": "Accept cookies"
+          },
+          {
+            "action": "click",
+            "selector": "a.card",
+            "reason": "Open the first product"
+          },
+          {
+            "action": "click",
+            "selector": "#add-to-cart",
+            "reason": "Add to cart"
+          }
+        ]
+      },
+      {
+        "id": "checkout",
+        "goal": "Accept cookies, add any product to the cart, go to checkout and place the order with the test payment option until the thank-you page shows an order number.",
+        "steps": [
+          {
+            "action": "click",
+            "selector": "#consent-accept",
+            "accepts_consent": true,
+            "reason": "Accept cookies"
+          },
+          {
+            "action": "click",
+            "selector": "a.card",
+            "reason": "Open the first product"
+          },
+          {
+            "action": "click",
+            "selector": "#add-to-cart",
+            "reason": "Add to cart"
+          },
+          {
+            "action": "click",
+            "selector": "#cart-link",
+            "reason": "Open the cart"
+          },
+          {
+            "action": "click",
+            "selector": "#checkout-btn",
+            "reason": "Go to checkout"
+          },
+          {
+            "action": "fill",
+            "selector": "input[name=name]",
+            "value": "Test User",
+            "reason": "Fill in name"
+          },
+          {
+            "action": "fill",
+            "selector": "input[name=email]",
+            "value": "qa-test@example.com",
+            "reason": "Fill in email"
+          },
+          {
+            "action": "fill",
+            "selector": "input[name=address]",
+            "value": "1 Test Street",
+            "reason": "Fill in address"
+          },
+          {
+            "action": "select",
+            "selector": "select[name=payment]",
+            "value": "test",
+            "reason": "Choose test payment"
+          },
+          {
+            "action": "click",
+            "selector": "button[type=submit]",
+            "reason": "Place the order"
+          }
+        ]
+      }
+    ],
+    "providers": [
+      "ga4",
+      "google_ads",
+      "meta",
+      "tiktok"
+    ],
+    "detect_providers": true
+  },
+  "runs": [
+    {
+      "journeyId": "browse",
+      "viewport": "desktop",
+      "goal": "Accept cookies, open any product from the home page and add it to the cart.",
+      "hits": [],
+      "steps": [
+        {
+          "index": 0,
+          "label": "start",
+          "t": 1792401055661
+        },
+        {
+          "index": 1,
+          "label": "Open http://localhost:4350/",
+          "t": 1792401055662,
+          "action": "goto",
+          "acceptsConsent": false,
+          "rejectsConsent": false,
+          "replay": {
+            "action": "goto",
+            "url": "http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+          },
+          "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid",
+          "pagePath": null
+        }
+      ],
+      "consentStep": null,
+      "rejectStep": null,
+      "cookieLog": [],
+      "dataLayerLog": [],
+      "network": [],
+      "providers": [
+        "ga4",
+        "google_ads",
+        "meta",
+        "tiktok"
+      ],
+      "skipped": {},
+      "bodyBudgetStep": null,
+      "startedAt": 1792401054510,
+      "pageErrors": [],
+      "landing": null,
+      "completed": false,
+      "note": "Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+    },
+    {
+      "journeyId": "browse",
+      "viewport": "mobile",
+      "goal": "Accept cookies, open any product from the home page and add it to the cart.",
+      "hits": [],
+      "steps": [
+        {
+          "index": 0,
+          "label": "start",
+          "t": 1792401057887
+        },
+        {
+          "index": 1,
+          "label": "Open http://localhost:4350/",
+          "t": 1792401057887,
+          "action": "goto",
+          "acceptsConsent": false,
+          "rejectsConsent": false,
+          "replay": {
+            "action": "goto",
+            "url": "http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+          },
+          "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid",
+          "pagePath": null
+        }
+      ],
+      "consentStep": null,
+      "rejectStep": null,
+      "cookieLog": [],
+      "dataLayerLog": [],
+      "network": [],
+      "providers": [
+        "ga4",
+        "google_ads",
+        "meta",
+        "tiktok"
+      ],
+      "skipped": {},
+      "bodyBudgetStep": null,
+      "startedAt": 1792401057789,
+      "pageErrors": [],
+      "landing": null,
+      "completed": false,
+      "note": "Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+    },
+    {
+      "journeyId": "checkout",
+      "viewport": "desktop",
+      "goal": "Accept cookies, add any product to the cart, go to checkout and place the order with the test payment option until the thank-you page shows an order number.",
+      "hits": [],
+      "steps": [
+        {
+          "index": 0,
+          "label": "start",
+          "t": 1792401060049
+        },
+        {
+          "index": 1,
+          "label": "Open http://localhost:4350/",
+          "t": 1792401060050,
+          "action": "goto",
+          "acceptsConsent": false,
+          "rejectsConsent": false,
+          "replay": {
+            "action": "goto",
+            "url": "http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+          },
+          "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid",
+          "pagePath": null
+        }
+      ],
+      "consentStep": null,
+      "rejectStep": null,
+      "cookieLog": [],
+      "dataLayerLog": [],
+      "network": [],
+      "providers": [
+        "ga4",
+        "google_ads",
+        "meta",
+        "tiktok"
+      ],
+      "skipped": {},
+      "bodyBudgetStep": null,
+      "startedAt": 1792401059953,
+      "pageErrors": [],
+      "landing": null,
+      "completed": false,
+      "note": "Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+    },
+    {
+      "journeyId": "checkout",
+      "viewport": "mobile",
+      "goal": "Accept cookies, add any product to the cart, go to checkout and place the order with the test payment option until the thank-you page shows an order number.",
+      "hits": [],
+      "steps": [
+        {
+          "index": 0,
+          "label": "start",
+          "t": 1792401062218
+        },
+        {
+          "index": 1,
+          "label": "Open http://localhost:4350/",
+          "t": 1792401062218,
+          "action": "goto",
+          "acceptsConsent": false,
+          "rejectsConsent": false,
+          "replay": {
+            "action": "goto",
+            "url": "http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+          },
+          "error": "page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid",
+          "pagePath": null
+        }
+      ],
+      "consentStep": null,
+      "rejectStep": null,
+      "cookieLog": [],
+      "dataLayerLog": [],
+      "network": [],
+      "providers": [
+        "ga4",
+        "google_ads",
+        "meta",
+        "tiktok"
+      ],
+      "skipped": {},
+      "bodyBudgetStep": null,
+      "startedAt": 1792401062120,
+      "pageErrors": [],
+      "landing": null,
+      "completed": false,
+      "note": "Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid"
+    }
+  ],
+  "findings": [
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "risk",
+      "check": "consent_default_missing",
+      "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "warning",
+      "check": "journey_incomplete",
+      "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "page_view",
+      "detail": "\"page_view\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item_list",
+      "detail": "\"view_item_list\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item",
+      "detail": "\"view_item\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "add_to_cart",
+      "detail": "\"add_to_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "PageView",
+      "detail": "\"PageView\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "AddToCart",
+      "detail": "\"AddToCart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "risk",
+      "check": "consent_default_missing",
+      "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "warning",
+      "check": "journey_incomplete",
+      "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "page_view",
+      "detail": "\"page_view\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item_list",
+      "detail": "\"view_item_list\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item",
+      "detail": "\"view_item\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "add_to_cart",
+      "detail": "\"add_to_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "PageView",
+      "detail": "\"PageView\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "browse",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "AddToCart",
+      "detail": "\"AddToCart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "risk",
+      "check": "consent_default_missing",
+      "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "warning",
+      "check": "journey_incomplete",
+      "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "page_view",
+      "detail": "\"page_view\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item_list",
+      "detail": "\"view_item_list\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item",
+      "detail": "\"view_item\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "add_to_cart",
+      "detail": "\"add_to_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_cart",
+      "detail": "\"view_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "begin_checkout",
+      "detail": "\"begin_checkout\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "purchase",
+      "detail": "\"purchase\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "PageView",
+      "detail": "\"PageView\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "AddToCart",
+      "detail": "\"AddToCart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "InitiateCheckout",
+      "detail": "\"InitiateCheckout\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "desktop",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "Purchase",
+      "detail": "\"Purchase\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "risk",
+      "check": "consent_default_missing",
+      "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "warning",
+      "check": "journey_incomplete",
+      "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "page_view",
+      "detail": "\"page_view\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item_list",
+      "detail": "\"view_item_list\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_item",
+      "detail": "\"view_item\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "add_to_cart",
+      "detail": "\"add_to_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "view_cart",
+      "detail": "\"view_cart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "begin_checkout",
+      "detail": "\"begin_checkout\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "ga4",
+      "event": "purchase",
+      "detail": "\"purchase\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "PageView",
+      "detail": "\"PageView\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "AddToCart",
+      "detail": "\"AddToCart\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "InitiateCheckout",
+      "detail": "\"InitiateCheckout\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    },
+    {
+      "journey": "checkout",
+      "viewport": "mobile",
+      "severity": "info",
+      "check": "missing_event",
+      "platform": "meta",
+      "event": "Purchase",
+      "detail": "\"Purchase\" was not seen, but the journey stopped early, so it is unverified rather than missing."
+    }
+  ],
+  "explained": null,
+  "metrics": {
+    "verdict": {
+      "status": "fail",
+      "headline": "fail_incomplete",
+      "counts": {
+        "broken": 0,
+        "risk": 1,
+        "warning": 1,
+        "info": 11,
+        "ok": 0
+      },
+      "journeys": {
+        "total": 4,
+        "completed": 0,
+        "incomplete": 4
+      },
+      "problems": 2
+    },
+    "score": {
+      "score": 75,
+      "deductions": [
+        {
+          "check": "journey_incomplete",
+          "severity": "warning",
+          "platform": null,
+          "event": null,
+          "owner": "developer",
+          "conversion": false,
+          "points": 15,
+          "where": 4
+        },
+        {
+          "check": "consent_default_missing",
+          "severity": "risk",
+          "platform": null,
+          "event": null,
+          "owner": "gtm",
+          "conversion": false,
+          "points": 10,
+          "where": 4
+        }
+      ],
+      "lost": 25
+    },
+    "coverage": {
+      "planned": 11,
+      "checkable": 11,
+      "counts": {
+        "implemented": 0,
+        "missing": 11,
+        "missing_params": 0,
+        "wrong_values": 0,
+        "unplanned": 0,
+        "not_checked": 0
+      },
+      "percent": {
+        "implemented": 0,
+        "missing": 100,
+        "missing_params": 0,
+        "wrong_values": 0
+      },
+      "platforms": {
+        "ga4": {
+          "planned": 7,
+          "checkable": 7,
+          "counts": {
+            "implemented": 0,
+            "missing": 7,
+            "missing_params": 0,
+            "wrong_values": 0,
+            "unplanned": 0,
+            "not_checked": 0
+          },
+          "percent": {
+            "implemented": 0,
+            "missing": 100,
+            "missing_params": 0,
+            "wrong_values": 0
+          }
+        },
+        "meta": {
+          "planned": 4,
+          "checkable": 4,
+          "counts": {
+            "implemented": 0,
+            "missing": 4,
+            "missing_params": 0,
+            "wrong_values": 0,
+            "unplanned": 0,
+            "not_checked": 0
+          },
+          "percent": {
+            "implemented": 0,
+            "missing": 100,
+            "missing_params": 0,
+            "wrong_values": 0
+          }
+        }
+      },
+      "events": [
+        {
+          "platform": "ga4",
+          "event": "page_view",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "view_item_list",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "view_item",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "add_to_cart",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "view_cart",
+          "bucket": "missing",
+          "journeys": [
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "begin_checkout",
+          "bucket": "missing",
+          "journeys": [
+            "checkout"
+          ]
+        },
+        {
+          "platform": "ga4",
+          "event": "purchase",
+          "bucket": "missing",
+          "journeys": [
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "event": "PageView",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "event": "AddToCart",
+          "bucket": "missing",
+          "journeys": [
+            "browse",
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "event": "InitiateCheckout",
+          "bucket": "missing",
+          "journeys": [
+            "checkout"
+          ]
+        },
+        {
+          "platform": "meta",
+          "event": "Purchase",
+          "bucket": "missing",
+          "journeys": [
+            "checkout"
+          ]
+        }
+      ]
+    },
+    "funnel": [
+      {
+        "journey": "browse",
+        "viewport": "desktop",
+        "completed": false,
+        "source": "plan",
+        "expected": 6,
+        "observed": 0,
+        "ok": 0,
+        "percent": 0,
+        "firstMissing": "page_view",
+        "events": [
+          {
+            "platform": "ga4",
+            "event": "page_view",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item_list",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "add_to_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "PageView",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "AddToCart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          }
+        ]
+      },
+      {
+        "journey": "browse",
+        "viewport": "mobile",
+        "completed": false,
+        "source": "plan",
+        "expected": 6,
+        "observed": 0,
+        "ok": 0,
+        "percent": 0,
+        "firstMissing": "page_view",
+        "events": [
+          {
+            "platform": "ga4",
+            "event": "page_view",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item_list",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "add_to_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "PageView",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "AddToCart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          }
+        ]
+      },
+      {
+        "journey": "checkout",
+        "viewport": "desktop",
+        "completed": false,
+        "source": "plan",
+        "expected": 11,
+        "observed": 0,
+        "ok": 0,
+        "percent": 0,
+        "firstMissing": "page_view",
+        "events": [
+          {
+            "platform": "ga4",
+            "event": "page_view",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item_list",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "add_to_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "begin_checkout",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "purchase",
+            "conversion": true,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "transaction_id",
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "PageView",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "AddToCart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "InitiateCheckout",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "Purchase",
+            "conversion": true,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "value",
+              "currency"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          }
+        ]
+      },
+      {
+        "journey": "checkout",
+        "viewport": "mobile",
+        "completed": false,
+        "source": "plan",
+        "expected": 11,
+        "observed": 0,
+        "ok": 0,
+        "percent": 0,
+        "firstMissing": "page_view",
+        "events": [
+          {
+            "platform": "ga4",
+            "event": "page_view",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item_list",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_item",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "add_to_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "view_cart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "begin_checkout",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "ga4",
+            "event": "purchase",
+            "conversion": true,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "transaction_id",
+              "currency",
+              "value",
+              "items"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "PageView",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "AddToCart",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "InitiateCheckout",
+            "conversion": false,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          },
+          {
+            "platform": "meta",
+            "event": "Purchase",
+            "conversion": true,
+            "observed": false,
+            "count": 0,
+            "step": null,
+            "stepLabel": null,
+            "page": null,
+            "required": [
+              "value",
+              "currency"
+            ],
+            "missingParams": [],
+            "paramsOk": false,
+            "status": "missing"
+          }
+        ]
+      }
+    ],
+    "parity": [
+      {
+        "journey": "browse",
+        "viewport": "desktop",
+        "shared": [],
+        "onlyOn": [],
+        "mismatches": 0
+      },
+      {
+        "journey": "browse",
+        "viewport": "mobile",
+        "shared": [],
+        "onlyOn": [],
+        "mismatches": 0
+      },
+      {
+        "journey": "checkout",
+        "viewport": "desktop",
+        "shared": [],
+        "onlyOn": [],
+        "mismatches": 0
+      },
+      {
+        "journey": "checkout",
+        "viewport": "mobile",
+        "shared": [],
+        "onlyOn": [],
+        "mismatches": 0
+      }
+    ],
+    "consent": {
+      "status": "attention",
+      "consentMode": {
+        "expected": true,
+        "defaultPresent": false,
+        "defaultOnTime": null,
+        "v2Signals": {
+          "present": false,
+          "missing": [
+            "ad_user_data",
+            "ad_personalization"
+          ]
+        },
+        "runs": [
+          {
+            "journey": "browse",
+            "viewport": "desktop",
+            "present": false,
+            "step": null,
+            "stepLabel": null,
+            "ms": null,
+            "beforeFirstGoogleHit": null,
+            "v2Signals": {
+              "present": false,
+              "missing": [
+                "ad_user_data",
+                "ad_personalization"
+              ]
+            }
+          },
+          {
+            "journey": "browse",
+            "viewport": "mobile",
+            "present": false,
+            "step": null,
+            "stepLabel": null,
+            "ms": null,
+            "beforeFirstGoogleHit": null,
+            "v2Signals": {
+              "present": false,
+              "missing": [
+                "ad_user_data",
+                "ad_personalization"
+              ]
+            }
+          },
+          {
+            "journey": "checkout",
+            "viewport": "desktop",
+            "present": false,
+            "step": null,
+            "stepLabel": null,
+            "ms": null,
+            "beforeFirstGoogleHit": null,
+            "v2Signals": {
+              "present": false,
+              "missing": [
+                "ad_user_data",
+                "ad_personalization"
+              ]
+            }
+          },
+          {
+            "journey": "checkout",
+            "viewport": "mobile",
+            "present": false,
+            "step": null,
+            "stepLabel": null,
+            "ms": null,
+            "beforeFirstGoogleHit": null,
+            "v2Signals": {
+              "present": false,
+              "missing": [
+                "ad_user_data",
+                "ad_personalization"
+              ]
+            }
+          }
+        ]
+      },
+      "platforms": [],
+      "scenarios": null,
+      "findings": [
+        "consent_default_missing"
+      ]
+    },
+    "conversions": {
+      "rows": [],
+      "total": 0,
+      "passed": 0,
+      "percent": null
+    },
+    "timing": [
+      {
+        "journey": "browse",
+        "viewport": "desktop",
+        "durationMs": 1152,
+        "medianFirstHitMs": null,
+        "steps": [
+          {
+            "index": 0,
+            "label": "start",
+            "action": null,
+            "page": null,
+            "hits": 0,
+            "durationMs": 1,
+            "firstHitMs": null,
+            "lastHitMs": null
+          },
+          {
+            "index": 1,
+            "label": "Open http://localhost:4350/",
+            "action": "goto",
+            "page": null,
+            "hits": 0,
+            "durationMs": null,
+            "firstHitMs": null,
+            "lastHitMs": null
+          }
+        ],
+        "slowest": []
+      },
+      {
+        "journey": "browse",
+        "viewport": "mobile",
+        "durationMs": 98,
+        "medianFirstHitMs": null,
+        "steps": [
+          {
+            "index": 0,
+            "label": "start",
+            "action": null,
+            "page": null,
+            "hits": 0,
+            "durationMs": 0,
+            "firstHitMs": null,
+            "lastHitMs": null
+          },
+          {
+            "index": 1,
+            "label": "Open http://localhost:4350/",
+            "action": "goto",
+            "page": null,
+            "hits": 0,
+            "durationMs": null,
+            "firstHitMs": null,
+            "lastHitMs": null
+          }
+        ],
+        "slowest": []
+      },
+      {
+        "journey": "checkout",
+        "viewport": "desktop",
+        "durationMs": 97,
+        "medianFirstHitMs": null,
+        "steps": [
+          {
+            "index": 0,
+            "label": "start",
+            "action": null,
+            "page": null,
+            "hits": 0,
+            "durationMs": 1,
+            "firstHitMs": null,
+            "lastHitMs": null
+          },
+          {
+            "index": 1,
+            "label": "Open http://localhost:4350/",
+            "action": "goto",
+            "page": null,
+            "hits": 0,
+            "durationMs": null,
+            "firstHitMs": null,
+            "lastHitMs": null
+          }
+        ],
+        "slowest": []
+      },
+      {
+        "journey": "checkout",
+        "viewport": "mobile",
+        "durationMs": 98,
+        "medianFirstHitMs": null,
+        "steps": [
+          {
+            "index": 0,
+            "label": "start",
+            "action": null,
+            "page": null,
+            "hits": 0,
+            "durationMs": 0,
+            "firstHitMs": null,
+            "lastHitMs": null
+          },
+          {
+            "index": 1,
+            "label": "Open http://localhost:4350/",
+            "action": "goto",
+            "page": null,
+            "hits": 0,
+            "durationMs": null,
+            "firstHitMs": null,
+            "lastHitMs": null
+          }
+        ],
+        "slowest": []
+      }
+    ],
+    "where": {
+      "byPage": [
+        {
+          "key": null,
+          "counts": {
+            "broken": 0,
+            "risk": 4,
+            "warning": 4,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            }
+          ],
+          "total": 8
+        }
+      ],
+      "byOwner": [
+        {
+          "key": "gtm",
+          "counts": {
+            "broken": 0,
+            "risk": 4,
+            "warning": 0,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            }
+          ],
+          "total": 4
+        },
+        {
+          "key": "developer",
+          "counts": {
+            "broken": 0,
+            "risk": 0,
+            "warning": 4,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            }
+          ],
+          "total": 4
+        }
+      ],
+      "byPlatform": [
+        {
+          "key": null,
+          "counts": {
+            "broken": 0,
+            "risk": 4,
+            "warning": 4,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            }
+          ],
+          "total": 8
+        }
+      ],
+      "byJourney": [
+        {
+          "key": "browse",
+          "counts": {
+            "broken": 0,
+            "risk": 2,
+            "warning": 2,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "browse",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            }
+          ],
+          "total": 4
+        },
+        {
+          "key": "checkout",
+          "counts": {
+            "broken": 0,
+            "risk": 2,
+            "warning": 2,
+            "info": 0,
+            "ok": 0
+          },
+          "findings": [
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "desktop",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "risk",
+              "check": "consent_default_missing",
+              "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer."
+            },
+            {
+              "journey": "checkout",
+              "viewport": "mobile",
+              "severity": "warning",
+              "check": "journey_incomplete",
+              "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked."
+            }
+          ],
+          "total": 4
+        }
+      ]
+    },
+    "priorities": [
+      {
+        "owner": "developer",
+        "total": 1,
+        "counts": {
+          "broken": 0,
+          "risk": 0,
+          "warning": 1,
+          "info": 0,
+          "ok": 0
+        },
+        "points": 15,
+        "top": [
+          {
+            "severity": "warning",
+            "check": "journey_incomplete",
+            "detail": "The journey did not reach its goal: Could not open the start page: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4350/?utm_source=aitd&utm_medium=check&utm_campaign=aitd-campaign-check&gclid=aitd-gclid&fbclid=aitd-fbclid Events after that point could not be checked.",
+            "where": [
+              {
+                "journey": "browse",
+                "viewport": "desktop"
+              },
+              {
+                "journey": "browse",
+                "viewport": "mobile"
+              },
+              {
+                "journey": "checkout",
+                "viewport": "desktop"
+              },
+              {
+                "journey": "checkout",
+                "viewport": "mobile"
+              }
+            ],
+            "owner": "developer",
+            "points": 15,
+            "conversion": false
+          }
+        ]
+      },
+      {
+        "owner": "gtm",
+        "total": 1,
+        "counts": {
+          "broken": 0,
+          "risk": 1,
+          "warning": 0,
+          "info": 0,
+          "ok": 0
+        },
+        "points": 10,
+        "top": [
+          {
+            "severity": "risk",
+            "check": "consent_default_missing",
+            "detail": "No Google Consent Mode default command (gtag('consent', 'default', ...)) was found in the dataLayer.",
+            "where": [
+              {
+                "journey": "browse",
+                "viewport": "desktop"
+              },
+              {
+                "journey": "browse",
+                "viewport": "mobile"
+              },
+              {
+                "journey": "checkout",
+                "viewport": "desktop"
+              },
+              {
+                "journey": "checkout",
+                "viewport": "mobile"
+              }
+            ],
+            "owner": "gtm",
+            "points": 10,
+            "conversion": false
+          }
+        ]
+      }
+    ]
+  }
+}

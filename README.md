@@ -284,7 +284,7 @@ Say yes, and the next runs can check against it with `--against latest`. A param
 
 ### Plan vs. site
 
-When a run uses `--against`, the report starts with a **Plan vs. site** section, in `report.html` and `report.md`. Each planned event lands in one bucket:
+When a run uses `--against`, the report has a **Plan vs. site** section: at the top of `report.md`, and in the Coverage section of `report.html`. Each planned event lands in one bucket:
 
 | Bucket | Meaning |
 |---|---|
@@ -301,7 +301,7 @@ When the plan is not the site's first, the header compares it with the version s
 
 ### Tag inventory
 
-Every report also has a **tag inventory**: each vendor the site sent requests to, marked first party when its requests went to the site's own domain, third party when they went to the vendor, or both. It shows how many pages the vendor was seen on and the cookies tied to it. Cookies that no vendor owns are listed apart, as first or third party. Only cookie names are recorded, never their values. It is in the **Scope and plan** tab of `report.html` and as a table in `report.md`.
+Every report also has a **tag inventory**: each vendor the site sent requests to, marked first party when its requests went to the site's own domain, third party when they went to the vendor, or both. It shows how many pages the vendor was seen on and the cookies tied to it. Cookies that no vendor owns are listed apart, as first or third party. Only cookie names are recorded, never their values. It is the **Inventory** section of `report.html` and a table in `report.md`.
 
 ### Folder layout and plan IDs
 
@@ -592,17 +592,16 @@ jq -r '.verdict.status + " " + (.score | tostring)' aitd/example.com/runs/*/summ
 
 Output:
 
-- `report.html`: one file with four tabs. Links work across tabs (a finding's "Where" chip opens that step), and every view has its own URL you can bookmark or share.
-  - **Overview**: problem counts, the AI summary (most important problem first, plus things worth checking that the findings don't cover), the journeys with their problem counts, a **This run** card (platforms, AI provider and model, plan, journeys, viewports, language, version), and, with `--against`, the [Plan vs. site](#plan-vs-site) coverage. When the AI took a different route through the site than in the last run, the header names the journeys whose route changed, and the **Changed since last run** section shows the pages before and after.
-  - **Findings**: grouped by who fixes them (Developer, Tag Manager, Marketing) and filterable by severity. Each one has its impact, likely cause, evidence, numbered fix steps, the steps where it happened, and a **How to verify** list of tools to check the fix in, such as Tag Assistant, GA4 DebugView, Meta Test Events or TikTok Pixel Helper.
-  - **Journeys**: one journey at a time. Above them, when the start page has a consent banner, the [consent scenarios](#consent-scenarios) table. A **Consent** card at the top lists the Consent Mode default and every update, one tile per signal. Below it are the steps on the left and the selected step on the right. It opens on the first step with a problem. Each step has four tabs:
-    - **Timeline**: the step in order. Each dataLayer push comes first, then the GTM event it raised (or the consent command), then the platform hits it caused. Hits with no push are listed last.
-    - **Events**: each tracking hit with its parameters, consent state, the dataLayer push and request behind it, and a note when a finding points at it.
-    - **dataLayer**: every push in the step.
-    - **Network requests**: every request to the chosen platforms, decoded into a parameter table with a `?` tip on each parameter. A batched GA4 request shows each of its events.
-  - **Scope and plan**: whether each planned event was sent on each journey, and the platforms checked or left out, with request counts. The [tag inventory](#tag-inventory) lists each vendor with its party, pages and cookies.
+- `report.html`: one file, one screen at a time. A collapsible rail on the left lists seven sections; every section, filter and card has its own URL you can bookmark or share, and a link from one section opens the right card in another (a finding's "Where" chip opens that hit in its step).
+  - **Summary**: the data quality score as a ring, coloured red below 50, amber to 89 and green from 90, the verdict and its headline, up to three lines saying what cost the points (none for a perfect score), status chips that open the findings filtered by severity, and six cards about the run: vendors checked, journeys with the platforms seen on each, events checked, consent, the AI provider and the run itself.
+  - **Findings**: a filter bar (severity, owner, platform, journey, viewport, search) over three groups: failed, unverified and passed. Every row starts collapsed and opens into **Evidence**, **Fix**, **Where** and **Verify** tabs: the impact, the likely cause, the evidence with missing parameters marked, numbered fix steps, the steps where it happened, and the tools to check the fix in, such as Tag Assistant, GA4 DebugView, Meta Test Events or TikTok Pixel Helper. **Changed since last run** sits above the groups when the site has an earlier run.
+  - **Journeys**: one journey and viewport at a time. The steps on the left, named after the pages ("Open Home", "Add to cart") and grouped by page, with the hits each step produced; the selected step on the right with **Hits**, **Data Layer** and **Requests** tabs. Each hit shows its event, key parameters and consent state, and opens into the decoded parameters, item cards and the raw request. A batched GA4 request shows each of its events. It opens on the first step with a problem.
+  - **Consent**: one line per platform with what it received before a choice, after accept and after reject, the Consent Mode default and updates with their timing, and the [consent scenarios](#consent-scenarios) table.
+  - **Coverage**: whether each planned event was sent on each journey, with the parameters it still needs, conversion integrity, and, with `--against`, the [Plan vs. site](#plan-vs-site) buckets.
+  - **Inventory**: the [tag inventory](#tag-inventory), one line per platform, opening into its hosts, pages and cookies.
+  - **Run**: the facts of the run (site, version, AI provider and model, plan, journeys, viewports, platforms, timing, files) and, when the site has earlier runs, the **Trend**.
 
-  Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
+  Every card starts collapsed except the Summary; each section has Expand all and Collapse all. The page carries one small script, allowed by its hash in the page's Content Security Policy, for the rail, the filters, the tabs and the deep links; without JavaScript the sections stack into one document, which is also the print layout. Keyboard: `[` folds the rail, `1`–`7` jump to a section. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
 - `report.md`: the report in Markdown for a pull request comment, a Slack message or a mail, around 100 lines and under 8 KB for a four-journey run. Its title is the verdict (`# shop.example: purchase tracking is broken on mobile`), then one meta line, the status with the data quality score, and the counts. Then, in this order: **Changed since last run** and **Trend** (when the site has earlier runs), **Plan vs. site** (with `--against`), **Priorities** (the to-do list per owner: Developer, Tag Manager, Marketing), **Findings** (up to five full blocks with Where, Impact, Cause, Evidence, Also fine on, Owner, Fix, How to verify and a link into `report.html`; the rest one line each under *Also*), **Consent** (the Consent Mode timing sentence and the scenario table with a reason in every cell), **What passed**, **Journeys** (one row per run, then only the steps that carry a problem), **Not checked** (what the run could not judge, with the config key that enables it) and the **Tag inventory**. The per-hit timeline is not in the file; `timeline.csv` has it.
 - `capture.json`: everything captured, for your own analysis, including the tool `version`, the `ai` provider and the computed `metrics` (verdict, score, plan coverage, funnel, platform parity, consent compliance, conversion integrity, timing, priorities).

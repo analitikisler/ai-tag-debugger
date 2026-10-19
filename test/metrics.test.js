@@ -172,6 +172,20 @@ test("platformParity: a different value or currency, or a value only one platfor
   assert.deepEqual([empty.shared, empty.onlyOn, empty.mismatches], [[], [], 0]);
 });
 
+test("platformParity: a value that is not a number is kept as the text the tag sent, never NaN, and is left out of the value comparison", () => {
+  const r = run("checkout", [
+    hit("ga4", "purchase", 3, { value: "50", currency: "EUR" }), hit("meta", "Purchase", 3, { value: "{{order.total}}", currency: "EUR" }),
+    hit("ga4", "add_to_cart", 2, { value: "5" }), hit("meta", "AddToCart", 2, { value: "<img src=x onerror=alert(1)>" }),
+  ]);
+  const [p] = platformParity({ runs: [r] });
+  assert.deepEqual(p.shared.map((s) => Object.values(s.platforms).map((x) => x.value)), [[50, "{{order.total}}"], [5, "<img src=x onerror=alert(1)>"]]);
+  assert.ok(!JSON.stringify(p).includes("NaN"));
+  // A number against text means the platforms do not agree on revenue; the same text on both sides would.
+  assert.deepEqual(p.shared.map((s) => s.mismatch), [["value"], ["value"]]);
+  const [same] = platformParity({ runs: [run("checkout", [hit("ga4", "purchase", 3, { value: "{{total}}" }), hit("meta", "Purchase", 3, { value: "{{total}}" })])] });
+  assert.deepEqual(same.shared[0].mismatch, []);
+});
+
 test("consentCompliance: the demo's Meta pixel fires before consent and after reject, Consent Mode default is on time with v2 signals", () => {
   const c = consentCompliance(capture);
   assert.equal(c.status, "fail");
