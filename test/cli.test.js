@@ -41,6 +41,14 @@ test("each command has its own help with its essential options", () => {
 
 const fails = (args, pattern) => assert.throws(() => execFileSync(process.execPath, ["src/cli.js", ...args], { encoding: "utf8", stdio: "pipe" }), (e) => e.status === 2 && pattern.test(e.stderr));
 
+test("a plan given with --against is checked against the schema, also when --config already checked its own plan", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "atd-cli-"));
+  writeFileSync(path.join(dir, "config.json"), JSON.stringify({ site: "https://x.test" }));
+  // An event without a name, which readJson accepts and the schema does not; the error names the --against file.
+  writeFileSync(path.join(dir, "bad-plan.json"), JSON.stringify({ site: "https://x.test", events: [{ platform: "ga4" }] }));
+  fails(["run", "--config", path.join(dir, "config.json"), "--against", path.join(dir, "bad-plan.json")], /Invalid plan in .*bad-plan\.json:\n\s+events\[0\]\.name/);
+});
+
 test("removed plan flags say what to run instead", () => {
   fails(["plan", "--from", "x.json"], /--from was removed\. Draft a plan with: aitd plan --site <url>/);
   fails(["plan", "--site", "https://x.test", "--out", "p.json"], /--out was removed[\s\S]*--data-dir/);

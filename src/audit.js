@@ -87,7 +87,8 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
-  // The steps taken, so the next --scripted run can repeat them without a model (see lastSteps).
+  // The steps taken, so the next --scripted run can repeat them without a model (see lastSteps). Typed values are
+  // stored as typed, since a replay has to type them again: journeys should use test data, and the run folder stays out of version control.
   await writeFile(path.join(outDir, STEPS_FILE), JSON.stringify(savedSteps({ site: config.site, runs }), null, 2));
   const reportPath = path.join(outDir, "report.html");
   const summaryPath = path.join(outDir, "summary.json");
@@ -120,7 +121,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
  *   baseline: a baseline read with readBaseline (see baseline.js). The findings it accepts are flagged
- *     accepted and left out of the counts; the result then has baseline: { accepted, stale }.
+ *     accepted and left out of the counts; the result then has baseline: { accepted, partial, stale }.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
@@ -234,9 +235,8 @@ export async function runAudit(opts) {
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
     for (const e of errors) log(`\nCould not send an alert. ${e}`);
   }
-  const grouped = groupFindings(findings);
-  const counts = summarize(grouped);
-  // Accepted is counted on the grouped findings, like the counts shown next to it.
-  const baseline = applied ? { accepted: grouped.filter((f) => f.accepted).length, stale: applied.stale } : null;
+  const counts = summarize(groupFindings(findings));
+  // Accepted counts every finding the baseline matched; a problem accepted in some places only is still counted, and reported as partial.
+  const baseline = applied ? { accepted: applied.accepted, partial: applied.partial, stale: applied.stale } : null;
   return { journeys, plan, runs, findings, explained, counts, metrics, verdict, trend, stability, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(baseline ? { baseline } : {}), ...(saveError ? { saveError } : {}) };
 }

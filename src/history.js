@@ -38,16 +38,17 @@ export const dateOfId = (id) => {
 /**
  * The summary of one run that history keeps: its journeys, its counts and its problems, a few hundred
  * bytes instead of a capture. Fields a capture may lack (older shapes, or ones audit.js does not write
- * yet such as version and ai) come out null, never throw.
+ * yet such as version and ai) come out null, never throw. Findings a baseline accepted are left out,
+ * as the counts and the verdict leave them out, so an accepted problem is not "still open" in the trend.
  */
 export function runSummary(id, capture = {}, { version = null, ai = null } = {}) {
   const findings = Array.isArray(capture.findings) ? capture.findings : [];
   const counts = { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 };
-  for (const f of groupFindings(findings.filter((f) => f.severity in counts))) counts[f.severity] += 1;
+  for (const f of groupFindings(findings.filter((f) => f.severity in counts))) if (!f.accepted) counts[f.severity] += 1;
   const seen = new Set();
   const problems = [];
   for (const f of findings) {
-    if (!PROBLEMS.has(f.severity) || !f.check) continue;
+    if (!PROBLEMS.has(f.severity) || !f.check || f.accepted === true) continue;
     const key = findingKey(f);
     if (seen.has(key)) continue;
     seen.add(key);

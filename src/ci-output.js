@@ -57,7 +57,8 @@ function suite(name, cases, seconds) {
 export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "broken", version = "", site = "" }) {
   const m = messages(lang).ui;
   const suites = runs.map((run) => {
-    const journey = testcase({ classname: "journey", name: m.junitJourney, time: runSeconds(run), failed: run.completed === false, type: "incomplete", text: run.note, message: run.note ?? "" });
+    // With --fail-on never the CLI exits 0 whatever happened, so the JUnit file must not fail the job on its own.
+    const journey = testcase({ classname: "journey", name: m.junitJourney, time: runSeconds(run), failed: failOn !== "never" && run.completed === false, type: "incomplete", text: run.note, message: run.note ?? "" });
     return suite(`${run.journeyId} (${run.viewport})`, [journey, ...findings.filter((f) => belongsTo(f, run)).map((f) => findingCase(f, failOn))], runSeconds(run));
   });
   const loose = findings.filter((f) => !runs.some((run) => belongsTo(f, run)));
@@ -68,7 +69,7 @@ export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "b
 
 /** The run in one small object: counts, journeys, findings and where the other files are. */
 export function buildSummary({ runs = [], findings = [], counts, plan = null, against = null, ai = null, lang = "en", reportPath, outDir, changes = null, version = "", site = "", metrics = null, trend = null }) {
-  // File names are relative to the run folder, so a summary uploaded as a CI artifact still makes sense on another machine.
+  // Only the run folder's name and file names relative to it: a summary uploaded as a CI artifact must not carry the runner's paths.
   const dir = outDir ?? (reportPath ? path.dirname(reportPath) : ".");
   const file = (name) => name;
   return {
@@ -97,7 +98,7 @@ export function buildSummary({ runs = [], findings = [], counts, plan = null, ag
       ...(f.accepted === true ? { accepted: true } : {}),
     })),
     changes: changes ? { fixed: changes.fixed ?? [], new: changes.new ?? [] } : null,
-    dir,
+    run: path.basename(dir),
     files: { html: file("report.html"), md: file("report.md"), csv: file("timeline.csv"), capture: file("capture.json"), ...(against ? { planCheck: file("plan-check.json") } : {}), junit: file("junit.xml"), summary: file("summary.json") },
   };
 }

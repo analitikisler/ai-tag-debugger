@@ -229,7 +229,7 @@ const en = {
       meta: (at, journeys, platforms, version) => `Generated ${at} · ${journeys} ${journeys === 1 ? "journey" : "journeys"} · ${platforms} · ai-tag-debugger ${version}`,
       platformsSeen: (n, list) => (n ? `${n} ${n === 1 ? "platform" : "platforms"} seen (${list})` : "no platform seen"),
       htmlReport: "HTML report",
-      status: { fail: "Fail", attention: "Needs attention", pass: "Pass" },
+      noParams: "the hit carried no parameters",
       score: (score) => `data quality score ${score}/100`,
       // Fallback headlines per verdict key, used when the `verdict.headline` strings are not there.
       headline: {
@@ -462,7 +462,7 @@ const en = {
   // The deterministic verdict. Each headline takes the object verdict() in metrics.js returns
   // ({ status, headline, counts, journeys, problems }); a bare counts object also works.
   verdict: {
-    status: { pass: "Ready", fail: "Not ready", attention: "Needs attention" },
+    status: { pass: "Pass", fail: "Fail", attention: "Needs attention" },
     headline: {
       fail_broken: (v) => {
         const c = countsOf(v);
@@ -502,16 +502,6 @@ const en = {
     themeLight: "Theme: light",
     themeDark: "Theme: dark",
     newTab: "opens in a new tab",
-    verdict: { fail_broken: "Broken", fail_incomplete: "Not verified", attention_risk: "At risk", attention_warning: "Needs attention", attention_no_hits: "Not verified", attention_nothing_tested: "Not verified", pass: "Pass" },
-    headline: {
-      fail_broken: (v, { split }) => `${v.counts.broken} broken ${v.counts.broken === 1 ? "finding puts" : "findings put"} wrong or missing numbers in front of the reports and the ad platforms. ${split}`,
-      fail_incomplete: (v) => `${v.journeys.incomplete} of ${v.journeys.total} journeys did not finish, so the events after the stop, including any conversion, were not checked.`,
-      attention_risk: (v, { split }) => `No broken data. ${v.counts.risk} consent or data ${v.counts.risk === 1 ? "risk" : "risks"}${v.counts.warning ? ` and ${v.counts.warning} ${v.counts.warning === 1 ? "warning" : "warnings"}` : ""} need attention. ${split}`,
-      attention_warning: (v, { split }) => `Data arrives. ${v.counts.warning} ${v.counts.warning === 1 ? "warning" : "warnings"} to tidy. ${split}`,
-      attention_no_hits: (v) => `No tracking request was captured on ${v.journeys.total} ${v.journeys.total === 1 ? "journey" : "journeys"}, so nothing could be verified.`,
-      attention_nothing_tested: () => "Nothing was tested in this run.",
-      pass: (v, { coverage }) => `All planned events fired correctly on ${v.journeys.total} ${v.journeys.total === 1 ? "journey" : "journeys"}.${coverage ? ` ${coverage.counts.implemented} of ${coverage.checkable} planned events verified.` : ""}`,
-    },
     ownerSplit: (parts) => `${parts.join(", ")}.`,
     forOwner: { developer: (n) => `${n} for the developer`, gtm: (n) => `${n} for Tag Manager`, marketing: (n) => `${n} for marketing` },
     aiSummary: "AI summary",
@@ -825,7 +815,7 @@ const tr = {
       meta: (at, journeys, platforms, version) => `${at} tarihinde oluşturuldu · ${journeys} yolculuk · ${platforms} · ai-tag-debugger ${version}`,
       platformsSeen: (n, list) => (n ? `${n} platform görüldü (${list})` : "hiçbir platform görülmedi"),
       htmlReport: "HTML rapor",
-      status: { fail: "Başarısız", attention: "Dikkat gerekiyor", pass: "Başarılı" },
+      noParams: "istek hiç parametre taşımıyordu",
       score: (score) => `veri kalitesi puanı ${score}/100`,
       headline: {
         fail_broken: (what, scope) => `${what} bozuk${scope}`,
@@ -1050,7 +1040,7 @@ const tr = {
   },
   categoryLabel: { money: "Para", legal: "Hukuki", hygiene: "Veri kalitesi" },
   verdict: {
-    status: { pass: "Hazır", fail: "Hazır değil", attention: "Dikkat gerekiyor" },
+    status: { pass: "Geçti", fail: "Kaldı", attention: "Dikkat gerekiyor" },
     headline: {
       fail_broken: (v) => {
         const c = countsOf(v);
@@ -1090,16 +1080,6 @@ const tr = {
     themeLight: "Tema: açık",
     themeDark: "Tema: koyu",
     newTab: "yeni sekmede açılır",
-    verdict: { fail_broken: "Bozuk", fail_incomplete: "Doğrulanamadı", attention_risk: "Riskli", attention_warning: "Dikkat gerekiyor", attention_no_hits: "Doğrulanamadı", attention_nothing_tested: "Doğrulanamadı", pass: "Geçti" },
-    headline: {
-      fail_broken: (v, { split }) => `${v.counts.broken} bozuk bulgu, raporların ve reklam platformlarının önüne yanlış ya da eksik sayılar koyuyor. ${split}`,
-      fail_incomplete: (v) => `${v.journeys.total} yolculuktan ${v.journeys.incomplete} tanesi tamamlanmadı; durduğu noktadan sonraki olaylar, dönüşümler dahil, kontrol edilemedi.`,
-      attention_risk: (v, { split }) => `Bozuk veri yok. ${v.counts.risk} onay ya da veri riski${v.counts.warning ? ` ve ${v.counts.warning} uyarı` : ""} dikkat istiyor. ${split}`,
-      attention_warning: (v, { split }) => `Veri geliyor. Düzeltilecek ${v.counts.warning} uyarı var. ${split}`,
-      attention_no_hits: (v) => `${v.journeys.total} yolculukta hiçbir izleme isteği yakalanmadı, bu yüzden hiçbir şey doğrulanamadı.`,
-      attention_nothing_tested: () => "Bu çalıştırmada hiçbir şey test edilmedi.",
-      pass: (v, { coverage }) => `Planlanan tüm olaylar ${v.journeys.total} yolculukta doğru çalıştı.${coverage ? ` Planlanan ${coverage.checkable} olaydan ${coverage.counts.implemented} tanesi doğrulandı.` : ""}`,
-    },
     ownerSplit: (parts) => `${parts.join(", ")}.`,
     forOwner: { developer: (n) => `geliştirici için ${n}`, gtm: (n) => `Tag Manager için ${n}`, marketing: (n) => `pazarlama için ${n}` },
     aiSummary: "Yapay zekâ özeti",

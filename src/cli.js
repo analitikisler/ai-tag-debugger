@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
 import { messages } from "./i18n.js";
 import { helpText } from "./help.js";
+import { validatePlan } from "./schema.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { readBaseline, writeBaseline } from "./baseline.js";
 import { savePlan } from "./plan.js";
@@ -179,6 +180,8 @@ async function main(args = process.argv.slice(2)) {
     against = await resolvePlan(values.against, { dataDir: values["data-dir"] ?? DEFAULT_DATA_DIR, site: loaded.config.site });
     const plan = await readJson(against.file);
     if (!Array.isArray(plan?.events)) throw new Error(`${against.file} is not a plan: it needs an "events" list.`);
+    // loadConfig checked the config's own plan; the one --against names replaces it and gets the same check.
+    for (const w of validatePlan(plan, { file: against.file }).warnings) console.log(w);
     if (!loaded.config.site) {
       if (!plan.site) throw new Error(`${against.file} has no "site". Add --site <url>.`);
       loaded.config = { ...loaded.config, site: plan.site };
@@ -205,6 +208,8 @@ async function main(args = process.argv.slice(2)) {
         throw err;
       })
     : null;
+  // A baseline written for another site matches nothing of this one, so say so, but let the run go on.
+  if (baseline?.site && baseline.site !== loaded.config.site) console.log(`Warning: the baseline ${baselineFile} was written for ${baseline.site}, not ${loaded.config.site}. Its entries may not match this site.`);
   const result = await runAudit({
     ...loaded,
     journeys: values.journey,
@@ -233,7 +238,7 @@ async function main(args = process.argv.slice(2)) {
 
   const m = messages(result.lang);
   console.log(`\n${m.ui.counts(result.counts)}`);
-  if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
+  if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.partial ? `${result.baseline.partial} ${result.baseline.partial === 1 ? "problem" : "problems"} accepted in some places only (still counted), ` : ""}${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
   if (result.verdict) console.log(m.ui.cli.verdict(result.verdict.statusText, result.verdict.headline, result.verdict.score));
   // The trend needs two saved runs; with one there is nothing to say yet.
   if (result.trend?.runs >= 2) {

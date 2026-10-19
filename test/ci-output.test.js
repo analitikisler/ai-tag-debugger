@@ -42,8 +42,8 @@ test("the fail-on level decides which findings are failures", () => {
   assert.deepEqual(failures(renderJunit({ runs, findings, failOn: "broken" })), ["broken", "incomplete"]);
   assert.deepEqual(failures(renderJunit({ runs, findings, failOn: "risk" })), ["broken", "risk", "incomplete"]);
   assert.deepEqual(failures(renderJunit({ runs, findings, failOn: "warning" })), ["broken", "risk", "incomplete", "warning"]);
-  // "never" fails nothing in the CLI, so nothing fails here either, except the journey that did not finish.
-  assert.deepEqual(failures(renderJunit({ runs, findings, failOn: "never" })), ["incomplete"]);
+  // "never" fails nothing in the CLI, so nothing fails here either, not even the journey that did not finish.
+  assert.deepEqual(failures(renderJunit({ runs, findings, failOn: "never" })), []);
   const risk = renderJunit({ runs, findings, failOn: "risk" });
   assert.match(risk, /<testcase classname="pii" name="Meta Purchase: An email address[^"]*" time="0"><failure message="Meta Purchase: An email address[^"]*" type="risk">An email address was sent in plain text with &quot;Purchase&quot; to meta.<\/failure><\/testcase>/);
   // Below the threshold, the message is kept as output, not as a failure.
@@ -89,7 +89,9 @@ test("the summary has the counts, the journeys, each finding and the file list",
   assert.deepEqual(s.findings[0], { check: "missing_params", severity: "broken", platform: "ga4", event: "add_to_cart", journey: "checkout", viewport: "desktop", title: 'GA4 add_to_cart: "add_to_cart" was sent without "value".', message: '"add_to_cart" was sent without "value".', key: "ga4:add_to_cart" });
   assert.equal("key" in s.findings[2], false);
   assert.deepEqual(s.changes, { fixed: [{ check: "pii" }], new: [] });
-  assert.equal(s.dir, "/out/run");
+  // Only the folder's name, not the runner's path: the file is uploaded as a CI artifact.
+  assert.equal(s.run, "run");
+  assert.equal("dir" in s, false);
   assert.deepEqual(s.files, { html: "report.html", md: "report.md", csv: "timeline.csv", capture: "capture.json", planCheck: "plan-check.json", junit: "junit.xml", summary: "summary.json" });
   assert.equal(s.verdict, null);
   assert.equal(s.score, null);

@@ -2,7 +2,9 @@
 // a browser, a network or the real environment.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { doctorChecks } from "../src/doctor.js";
 
@@ -58,6 +60,33 @@ test("an unwritable data folder fails hard and names the folder that was checked
   assert.match(hardFailed(checks)[0].text, /Data folder \/data\/aitd is not writable \(checked \/data\)\. Pick another with --data-dir/);
   const relative = await doctorChecks({ ...healthy, dataDir: "aitd", exists: (p) => p === "/opt/chrome/chrome" || p === process.cwd() });
   assert.match(relative[3].text, new RegExp(`Data folder ${path.resolve("aitd").replace(/[\\\\/]/g, "[\\\\/]")} is writable`));
+});
+
+// `aitd doctor` on this machine: Node and Chromium are in place (the end-to-end tests need them), so only the data folder decides the exit code.
+test("aitd doctor prints one ✓ or ✗ line per check and exits 1 only when a hard check fails", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "atd-doctor-"));
+  const run = (dataDir) => {
+    try {
+      return { status: 0, stdout: execFileSync(process.execPath, ["src/cli.js", "doctor", "--data-dir", dataDir], { encoding: "utf8", stdio: "pipe" }) };
+    } catch (e) {
+      return { status: e.status, stdout: e.stdout };
+    }
+  };
+  const ok = run(path.join(dir, "aitd"));
+  const lines = ok.stdout.trim().split("\n");
+  assert.equal(ok.status, 0, ok.stdout);
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every((l) => /^[✓✗] /.test(l)), ok.stdout);
+  assert.match(lines[0], /^✓ Node v\d+/);
+  assert.match(lines[1], /^✓ Playwright .* with Chromium at /);
+  assert.match(lines[2], /^[✓✗] AI: /);
+  assert.match(lines[3], new RegExp(`^✓ Data folder ${path.join(dir, "aitd").replace(/[\\/]/g, "[\\\\/]")} is writable \\(it will be created\\)$`));
+  // A data folder under a file can never be created, so the check fails and the command exits 1.
+  writeFileSync(path.join(dir, "file"), "");
+  const bad = run(path.join(dir, "file", "aitd"));
+  assert.equal(bad.status, 1, bad.stdout);
+  assert.match(bad.stdout, /^✗ Data folder .* is not writable \(checked .*file\)\. Pick another with --data-dir <dir>$/m);
+  assert.equal((bad.stdout.match(/^✓ /gm) ?? []).length, bad.stdout.includes("✗ AI:") ? 2 : 3);
 });
 
 test("--site must be an http(s) URL whose host resolves, and nothing is fetched", async () => {

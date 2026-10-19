@@ -81,6 +81,10 @@ test("a run summary keeps counts, journeys and problems and tolerates older shap
   assert.deepEqual(runSummary("x", { findings: [{ severity: "odd" }, { severity: "broken" }], runs: [null, { viewport: "desktop" }] }).findings, []);
   assert.equal(runSummary("x", { version: "0.16.0", ai: { name: "p", model: "m" } }, { version: "0.9.0" }).version, "0.16.0");
   assert.equal(runSummary("x", {}, { version: "0.9.0", ai: { name: "p" } }).ai.name, "p");
+  // Findings a baseline accepted are neither counted nor open problems, so the trend does not keep them "still open".
+  const accepted = runSummary(ID[0], capture([...beforeConsent().map((f) => ({ ...f, accepted: true })), ...purchase(), ...okRows()]));
+  assert.deepEqual(accepted.counts, { broken: 2, risk: 0, warning: 0, info: 0, ok: 4 });
+  assert.deepEqual(accepted.findings.map((f) => f.check), ["missing_params", "missing_params"]);
 });
 
 test("loadHistory reads the newest runs oldest first and skips corrupt and missing captures", async () => {

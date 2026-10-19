@@ -1,6 +1,6 @@
 // `aitd doctor`: one line per thing an audit needs, so a broken setup is found before a run starts.
 import { existsSync, readFileSync } from "node:fs";
-import { access, constants } from "node:fs/promises";
+import { access, constants, stat } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import path from "node:path";
 import { aiStatus } from "./providers.js";
@@ -23,7 +23,7 @@ function existingAncestor(dir, exists) {
  * a soft one is advice. Everything that touches the machine can be injected, so tests need no
  * browser or network.
  */
-export async function doctorChecks({ site, dataDir = DEFAULT_DATA_DIR, nodeVersion = process.version, chromiumPath, env = process.env, exists = existsSync, writable = (d) => access(d, constants.W_OK), resolve = lookup } = {}) {
+export async function doctorChecks({ site, dataDir = DEFAULT_DATA_DIR, nodeVersion = process.version, chromiumPath, env = process.env, exists = existsSync, writable = writableDir, resolve = lookup } = {}) {
   const checks = [];
   const range = pkg.engines?.node;
   const nodeOk = Number(/^v?(\d+)/.exec(nodeVersion)?.[1] ?? 0) >= minNodeMajor(range);
@@ -46,6 +46,12 @@ export async function doctorChecks({ site, dataDir = DEFAULT_DATA_DIR, nodeVersi
 
   if (site !== undefined) checks.push(await siteCheck(site, resolve));
   return checks;
+}
+
+/** Rejects unless d is a directory the process may write to: a data dir under a file can never be created, whatever the permissions say. */
+async function writableDir(d) {
+  if (!(await stat(d)).isDirectory()) throw new Error(`${d} is not a directory`);
+  await access(d, constants.W_OK);
 }
 
 /** The site is an http(s) address whose host resolves. Nothing is fetched. */
