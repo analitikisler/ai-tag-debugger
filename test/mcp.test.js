@@ -44,7 +44,7 @@ test("a chat app can drive an audit through the MCP tools", async () => {
 
   const plan = JSON.stringify({ consent_mode: true, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }] });
   const result = await call("finish_audit", { audit_id: id, completed: true, note: "Added.", measurement_plan: plan });
-  assert.match(result, /PageView" fired before the visitor accepted cookies/);
+  assert.match(result, /Meta "PageView" was sent before the visitor made a consent choice/);
   assert.match(result, /sent 2 times/);
   const reportPath = result.match(/event timeline: (.+report\.html)/)[1];
   assert.ok(existsSync(reportPath));
