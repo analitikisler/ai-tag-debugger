@@ -198,12 +198,14 @@ async function main(args = process.argv.slice(2)) {
     dataDir: values["data-dir"],
     saveSite: values["save-site"],
     against,
+    failOn,
     log: (msg) => console.log(msg),
   });
 
   console.log(`\n${messages(result.lang).ui.counts(result.counts)}`);
-  const rel = path.relative(process.cwd(), result.reportPath);
-  console.log(`Report: ${rel.startsWith("..") ? result.reportPath : rel}`);
+  const shown = (p) => (path.relative(process.cwd(), p).startsWith("..") ? p : path.relative(process.cwd(), p));
+  console.log(`Report: ${shown(result.reportPath)}`);
+  console.log(`Summary: ${shown(result.summaryPath)} (junit.xml next to it)`);
 
   if (!against && !values.out) await offerLearnedPlan(result, loaded.config.site, values);
 
