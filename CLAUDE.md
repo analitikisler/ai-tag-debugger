@@ -8,7 +8,7 @@ An open-source Node CLI and MCP server that QA-tests a website's analytics and a
 2. Browse: `src/agent.js` runs the model loop through `src/providers.js`; `src/browser.js` (`AuditSession`) drives Chromium within the limits of `src/guard.js` and `src/egress.js`.
 3. Capture: `src/parsers.js` turns requests into hits, `src/redact.js` strips user data, `src/consent.js` and `src/inventory.js` add consent scenarios and the tag inventory, `src/gtm.js` reads a container export.
 4. Check: `src/checks.js` emits findings with no model call; `src/verify.js` adds owners and verify links; `src/changes.js` compares with the previous run.
-5. Explain and report: `src/report.js` asks the model for causes and fixes and renders the reports with strings from `src/i18n.js`.
+5. Explain and report: `src/report.js` asks the model for causes and fixes and renders the Markdown and CSV reports; `src/html/` renders the HTML report (`shell.js` assembles the page, one module per section, `css.js` and `script.js` hold the stylesheet and the hashed script), all with strings from `src/i18n.js` through `src/report-shared.js`.
 6. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
 
 ## Commands
