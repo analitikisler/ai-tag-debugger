@@ -24,6 +24,18 @@ rationale measures the nine reader tasks from `../ux-audit.md` against 0.17.0.
 Each direction's rationale has the full task table, the information architecture and the
 decisions it asks for.
 
+## Direction D: the inspector, simplified
+
+After reviewing A, B and C the owner asked for C's rail made collapsible, a calmer Summary (a big
+scorecard, a short reason, status chips, cards about the run), A's filter on C's findings, the
+journey pane's Hits / Data Layer / Requests as tabs with page titles instead of URLs, denied in red,
+every card collapsed except Summary, less text and more distinct colours. `d-inspector/mockup.html`
+is that report, built by a second team (UX spec, visual system, shell, five section builders, a
+reviewer) from the same demo data. Measured at 1280 px with the rail open: Summary 684 px, Findings
+426 px with rows closed, Journeys 658 px with one step selected; the nine reader tasks take 10 clicks
+and no manual scrolling. `d-inspector/rationale.md` maps the eight points to the mockup and lists
+what the implementation needs.
+
 ## Recommendation: one report, three screens
 
 Take the screen each direction does best and keep the current four tabs, so the renderer
