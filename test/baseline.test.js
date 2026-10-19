@@ -73,7 +73,7 @@ test("the reports label accepted findings, in English and Turkish, and say how m
   const findings = [finding({ accepted: true }), finding({ check: "duplicate", severity: "warning", event: "add_to_cart", params: undefined, detail: "sent twice" })];
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
   assert.match(md, /\*\*0 broken · 0 risk · 1 warning · 0 info · 0 ok\*\*\n\n1 accepted finding from the baseline is not counted\n/);
-  assert.match(md, /^### Broken \(Accepted\): "purchase" was sent without "value"\./m);
+  assert.match(md, /^### Broken \(Accepted\): `purchase` was sent without `value`\./m);
   assert.match(md, /^### Warning: sent twice/m);
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
   assert.match(html, /<div class="meta accepted-line">1 accepted finding from the baseline is not counted<\/div>/);

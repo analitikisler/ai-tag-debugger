@@ -313,11 +313,30 @@ aitd/
     plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (after an export)
     runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json, steps.json,
                                     junit.xml, summary.json and plan-check.json (with --against)
+    history.json                    a small summary of every saved run, for the trend (see below)
 ```
 
 An ID is the local time, `YYYY-MM-DD_HHMM`. When that minute is already taken, seconds are added (`_HHMMSS`). Nothing is ever replaced: each draft, import and run gets a new folder. Use `--data-dir <dir>` to keep the `aitd/` folder somewhere else. `replay` and `--save-site` folders are not affected.
 
-Each report opens with a "Changed since last run" section that compares the run with the site's previous one in `runs/`, for example `2 events fixed, 1 new problem`, and lists each one. When both runs used `--against`, it compares plan coverage (an event that went from Missing to Implemented is fixed); otherwise it compares the health findings. The first run for a site says there is nothing to compare yet. There is no flag to set. The comparison is also saved under `changes` in `capture.json`.
+Each report has a "Changed since last run" section that compares the run with the site's previous one in `runs/`, for example `2 events fixed, 1 new problem`, and lists each one: what was fixed (with what it was), what is new, and what is still open. When both runs used `--against`, it compares plan coverage (an event that went from Missing to Implemented is fixed); otherwise it compares the health findings. The first run for a site says there is nothing to compare yet. There is no flag to set. The comparison is also saved under `changes` in `capture.json`.
+
+### Trend over runs
+
+From the second saved run on, the tool also looks at the site's last 30 runs together. After the counts, the CLI prints the verdict line and up to three trend lines:
+
+```
+2 broken · 1 risk · 1 warning · 0 info · 4 ok
+Verdict: Fail · purchase tracking is broken on mobile · score 25/100
+Trend over 5 runs (2026-10-01 → 2026-10-07): improving. Now 0 broken · 1 risk · 2 warning; 3 runs ago 2 broken · 1 risk · 0 warning.
+Open longest: Meta PageView before_consent in 4 places since 2026-10-01 (5 runs); GA4 add_to_cart duplicate in 4 places since 2026-10-03 (3 runs).
+Journeys that do not finish every time: checkout (mobile) 80%.
+```
+
+The same lines, with a text sparkline of the runs (one character per run, `·` for a run whose journeys did not all finish), make the **Trend** section of `report.md` and `report.html`. A problem counts as *open* while the last run that completed its journey still showed it; a run whose journey stopped early proves nothing, so it neither fixes nor reintroduces anything. *Flapping* problems (seen, gone, back again) are named, because they usually depend on timing or on the product the AI picked rather than on a fix. The direction compares the last few complete runs with the ones before them.
+
+`aitd history --site <url>` prints the trend on its own: one row per run with its counts and score (`3·broken + 2·risk + warning`, lower is better), the sparkline and the lines above. `--limit <n>` reads only the newest `n` runs (default 30), `--lang tr` switches the lines to Turkish, and `--json` prints the trend series, the per-finding timeline (first seen, last seen, open since, fixed in, flapping) and the journey completion rates for scripts.
+
+The summaries live in `aitd/<domain>/history.json`, about 2 KB per run, which every saved run updates after writing its `capture.json`. The file is a cache: a run folder that is not in it is read from its `capture.json`, a folder that was deleted drops out on the next update, and deleting the file is always safe. Runs sent to `--out` and replays are not part of the history.
 
 ## Choose what to test
 
@@ -469,7 +488,18 @@ After each saved run, `notify` sends the "Changed since last run" diff to your t
 - **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
 - **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
 
-An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The message lists the problems fixed and the new ones, and its subject line gives the counts. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
+An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The subject carries the verdict first, then the counts and the headline: `shop.example: Fail · 2 new problems · purchase tracking is broken on mobile`. The body repeats the verdict line, then lists what was fixed (with what it *was*) and what is new, each new item with its severity and owner, then the trend line with its sparkline, the flapping problems, and "Still open after N runs" when a problem reaches 5, 10, 20 runs open (then every 10), so the same open list does not repeat in every message:
+
+```
+shop.example
+Verdict: Fail · purchase tracking is broken on mobile · score 25/100
+1 problem fixed, 1 new problem. Compared with run 2026-10-15_1000, by health findings (2026-10-16_1000).
+- Fixed: GA4 page_view (was: Sent before consent)
+- New: Meta Purchase · Broken · "Purchase" was sent without "value". · Developer
+Trend over 5 runs (2026-10-12 → 2026-10-16): worsening. Now 2 broken · 1 risk · 0 warning; 3 runs ago 0 broken · 1 risk · 0 warning. `▃▃·▅█`
+```
+
+The trend never triggers an alert on its own. If a channel fails, the run prints why and carries on. The exit code still follows `--fail-on`.
 
 ## CLI
 
@@ -488,6 +518,7 @@ aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network]
 aitd doctor [--site <url>] [--data-dir <dir>]
+aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
 
 `aitd` is a short alias for `ai-tag-debugger` and takes the same commands and options. Run `aitd <command> --help` for the essential options of each command.
@@ -496,7 +527,7 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 
 | Option | Commands | Meaning |
 |---|---|---|
-| `--site <url>` | plan, run, doctor | The site. Required for `plan`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
+| `--site <url>` | plan, run, doctor, history | The site. Required for `plan` and `history`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
 | `--against <plan>` | run | Check against a plan: `latest` (or `last`), `first`, a plan ID, or a path to a plan file or folder. |
 | `--journey <id>` | run | A ready-made journey (repeatable). |
 | `--goal "<text>"` | run | A journey in plain language (repeatable). |
@@ -506,7 +537,7 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 | `--concurrency <n>` | run | How many journeys to run at once, each in its own browser: `1` (default) to `8`. Side by side, each journey's log lines start with `[journey/viewport]`, and `--headed` opens that many browser windows. Same as `concurrency` in the config. |
 | `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. Replaces `--providers`, which still works for one more minor version. |
 | `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
-| `--lang <code>` | run | Report language: `en` or `tr`. |
+| `--lang <code>` | run, history | Report language: `en` or `tr`. For `history`, the language of the trend lines. |
 | `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
 | `--baseline <file>` | run | A file of accepted findings. They are still reported, but don't count toward `--fail-on`. See [Accept known findings](#accept-known-findings). |
 | `--update-baseline` | run | Write every finding of this run into the baseline file after the run, creating it if needed. |
@@ -516,7 +547,9 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 | `--no-ai` | run | No AI model at all. Implies `--scripted`. |
 | `--save-site <dir>` | run | Save the site's responses for `replay`. |
 | `--save-steps <file>` | run | Write the steps each journey took into a config file. |
-| `--data-dir <dir>` | plan, run, doctor | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--data-dir <dir>` | plan, run, doctor, history | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--limit <n>` | history | How many of the site's newest runs the trend reads. Default: 30. |
+| `--json` | history | Print the trend series, the finding timeline and the journey stability as JSON instead of text. |
 | `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
 | `--update` | replay | Make this replay's findings the expected ones. |
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
@@ -548,10 +581,11 @@ The exit code is `1` when findings reach `--fail-on` (default `broken`), so it c
           reporter: java-junit
 ```
 
-In GitLab, point `artifacts: reports: junit:` at the same path. Next to it, `summary.json` holds the counts, the journeys, every finding (check, severity, platform, event, journey, viewport, title, message) and the paths of the other files, so a script can read the result without parsing `capture.json`:
+In GitLab, point `artifacts: reports: junit:` at the same path. Next to it, `summary.json` holds the counts, the verdict (`status`: `fail`, `attention` or `pass`, and the `headline` key such as `fail_broken`), the data quality `score` (0 to 100), the trend `direction` over the saved runs, the journeys, every finding (check, severity, platform, event, journey, viewport, title, message) and the paths of the other files, so a script can read the result without parsing `capture.json`:
 
 ```sh
 jq '.counts.broken' aitd/example.com/runs/*/summary.json
+jq -r '.verdict.status + " " + (.score | tostring)' aitd/example.com/runs/*/summary.json
 ```
 
 **Scheduled runs.** To audit on a timer instead of after each deploy, use [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) (weekly by default, with a cron line you can change). It saves the history between runs in a cache, so "Changed since last run" keeps working on a fresh runner. On your own server, [`examples/cron/`](examples/cron) has a script and a crontab line that do the same.
@@ -570,11 +604,11 @@ Output:
 
   Events and requests can be filtered by source. GA4 item strings (`pr1`…) and dataLayer `ecommerce.items` are shown as item cards, with custom item parameters in their own group. The report has no scripts: tabs and filters are plain HTML and CSS (they need Chrome 105, Safari 15.4 or Firefox 121 or newer), and printing shows every tab. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
-- `report.md`: the report in Markdown, e.g. for a pull request comment.
-- `capture.json`: everything captured, for your own analysis.
+- `report.md`: the report in Markdown for a pull request comment, a Slack message or a mail, around 100 lines and under 8 KB for a four-journey run. Its title is the verdict (`# shop.example: purchase tracking is broken on mobile`), then one meta line, the status with the data quality score, and the counts. Then, in this order: **Changed since last run** and **Trend** (when the site has earlier runs), **Plan vs. site** (with `--against`), **Priorities** (the to-do list per owner: Developer, Tag Manager, Marketing), **Findings** (up to five full blocks with Where, Impact, Cause, Evidence, Also fine on, Owner, Fix, How to verify and a link into `report.html`; the rest one line each under *Also*), **Consent** (the Consent Mode timing sentence and the scenario table with a reason in every cell), **What passed**, **Journeys** (one row per run, then only the steps that carry a problem), **Not checked** (what the run could not judge, with the config key that enables it) and the **Tag inventory**. The per-hit timeline is not in the file; `timeline.csv` has it.
+- `capture.json`: everything captured, for your own analysis, including the tool `version`, the `ai` provider and the computed `metrics` (verdict, score, plan coverage, funnel, platform parity, consent compliance, conversion integrity, timing, priorities).
 - `plan-check.json`: with `--against`, one entry per planned event with its bucket.
 - `junit.xml`: the findings as JUnit test results, one suite per journey and viewport, for CI systems to show as test failures (see above).
-- `summary.json`: the counts, journeys, findings and file paths of the run in one small file for scripts.
+- `summary.json`: the counts, verdict, score, trend direction, journeys, findings and file paths of the run in one small file for scripts.
 - `plan.html` (in the plan's folder): a readable page of the plan's events, parameters and user properties.
 
 Reports end with a credit line, "Generated by AI Tag Debugger · analitikisler.com", where the domain is a plain link (no images, no tracking, and no referrer, so report URLs aren't leaked). `--no-branding` removes it along with the logo.

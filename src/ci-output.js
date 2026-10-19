@@ -67,7 +67,7 @@ export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "b
 }
 
 /** The run in one small object: counts, journeys, findings and where the other files are. */
-export function buildSummary({ runs = [], findings = [], counts, plan = null, against = null, ai = null, lang = "en", reportPath, outDir, changes = null, version = "", site = "" }) {
+export function buildSummary({ runs = [], findings = [], counts, plan = null, against = null, ai = null, lang = "en", reportPath, outDir, changes = null, version = "", site = "", metrics = null, trend = null }) {
   // File names are relative to the run folder, so a summary uploaded as a CI artifact still makes sense on another machine.
   const dir = outDir ?? (reportPath ? path.dirname(reportPath) : ".");
   const file = (name) => name;
@@ -80,6 +80,10 @@ export function buildSummary({ runs = [], findings = [], counts, plan = null, ag
     plan: { id: against?.id ?? null, events: (plan?.events ?? []).map((e) => `${String(e.platform ?? "").toLowerCase()}:${e.name}`) },
     journeys: runs.map((r) => ({ id: r.journeyId, viewport: r.viewport, completed: r.completed !== false, note: r.note ?? "", steps: r.steps?.length ?? 0, hits: r.hits?.length ?? 0 })),
     counts: counts ?? summarize(groupFindings(findings)),
+    // The deterministic verdict (see src/metrics.js): its status, the headline key, and the data quality score.
+    verdict: metrics ? { status: metrics.verdict.status, headline: metrics.verdict.headline } : null,
+    score: metrics?.score?.score ?? null,
+    trend: trend ? { direction: trend.direction, runs: trend.runs } : null,
     findings: findings.map((f) => ({
       check: f.check,
       severity: f.severity,

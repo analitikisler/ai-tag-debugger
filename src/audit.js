@@ -8,7 +8,9 @@ import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
 import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
-import { explainFindings, renderCsv, renderHtml, renderMarkdown, VERSION } from "./report.js";
+import { explainFindings, renderCsv, renderHtml, renderMarkdown, verdictHeadline, VERSION } from "./report.js";
+import { computeMetrics } from "./metrics.js";
+import { journeyStability, loadHistory, trend as trendOf, updateHistoryIndex } from "./history.js";
 import { buildSummary, renderJunit } from "./ci-output.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadReportBrand, writePdf } from "./whitelabel.js";
@@ -56,27 +58,41 @@ export async function loadConfig(configFile, { log = console.error } = {}) {
  * Writes report.md, report.html, timeline.csv, capture.json and steps.json, plus plan-check.json with --against,
  * and junit.xml and summary.json for CI. failOn: the --fail-on level, so junit.xml fails the same findings the exit code does.
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
- * the "Changed since last run" section. Returns { reportPath, summaryPath, changes }.
+ * the "Changed since last run" section. history: { dataDir } when the run is saved in the site's runs folder,
+ * so its history index is updated and the reports get the trend; null for --out and replays.
+ * Returns { reportPath, summaryPath, changes, metrics, verdict, trend, stability }.
  */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null, failOn = "broken" }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null, failOn = "broken", history = null }) {
   await mkdir(outDir, { recursive: true });
   const site = new URL(config.site).hostname;
   const title = messages(lang).ui.title(site);
   const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
   const check = against ? { plan_id: against.id ?? null, ...planCheck(plan, runs, findings) } : null;
   const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
-  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios, brand };
+  const metrics = computeMetrics({ plan, runs, findings, consentScenarios });
+  const verdict = verdictHeadline({ findings, runs, metrics, lang });
+  // The capture goes first: the history index summarises it, and the reports then show the trend including this run.
+  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  let trend = null;
+  let stability = null;
+  if (history) {
+    // A history that cannot be read or written costs the trend, never the report.
+    await updateHistoryIndex(history.dataDir, config.site, { id: path.basename(outDir), capture: { runs, findings }, version: VERSION, ai }).catch(() => null);
+    const saved = await loadHistory(history.dataDir, config.site).catch(() => []);
+    trend = trendOf(saved);
+    stability = journeyStability(saved);
+  }
+  const report = { title, site, ai, generatedAt, findings, explained, runs, plan, lang, branding, against: against?.label ?? null, planCheck: check, changes, planChanges, consentScenarios, brand, metrics, trend };
   await writeFile(path.join(outDir, "report.md"), renderMarkdown(report));
   await writeFile(path.join(outDir, "report.html"), renderHtml(report));
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
-  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
   // The steps taken, so the next --scripted run can repeat them without a model (see lastSteps).
   await writeFile(path.join(outDir, STEPS_FILE), JSON.stringify(savedSteps({ site: config.site, runs }), null, 2));
   const reportPath = path.join(outDir, "report.html");
   const summaryPath = path.join(outDir, "summary.json");
   await writeFile(path.join(outDir, "junit.xml"), renderJunit({ runs, findings, lang, failOn, version: VERSION, site }));
-  await writeFile(summaryPath, JSON.stringify(buildSummary({ runs, findings, counts: summarize(groupFindings(findings)), plan, against, ai, lang, reportPath, outDir, changes, consentScenarios, version: VERSION, site }), null, 2));
+  await writeFile(summaryPath, JSON.stringify(buildSummary({ runs, findings, counts: summarize(groupFindings(findings)), plan, against, ai, lang, reportPath, outDir, changes, consentScenarios, version: VERSION, site, metrics, trend }), null, 2));
   if (brand?.pdf) {
     try {
       await writePdf(reportPath, path.join(outDir, "report.pdf"));
@@ -85,7 +101,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
       console.error(`Could not write report.pdf: ${err.message}`);
     }
   }
-  return { reportPath, summaryPath, changes };
+  return { reportPath, summaryPath, changes, metrics, verdict, trend, stability };
 }
 
 /**
@@ -212,9 +228,9 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const { reportPath, summaryPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null, failOn: opts.failOn });
+  const { reportPath, summaryPath, changes, metrics, verdict, trend, stability } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null, failOn: opts.failOn, history: previous === undefined ? null : { dataDir: opts.dataDir } });
   if (config.notify && changes) {
-    const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath });
+    const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath, verdict, trend });
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
     for (const e of errors) log(`\nCould not send an alert. ${e}`);
   }
@@ -222,5 +238,5 @@ export async function runAudit(opts) {
   const counts = summarize(grouped);
   // Accepted is counted on the grouped findings, like the counts shown next to it.
   const baseline = applied ? { accepted: grouped.filter((f) => f.accepted).length, stale: applied.stale } : null;
-  return { journeys, plan, runs, findings, explained, counts, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(baseline ? { baseline } : {}), ...(saveError ? { saveError } : {}) };
+  return { journeys, plan, runs, findings, explained, counts, metrics, verdict, trend, stability, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(baseline ? { baseline } : {}), ...(saveError ? { saveError } : {}) };
 }
