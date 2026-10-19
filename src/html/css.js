@@ -508,6 +508,14 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-num.sm-none{margin-top:0;color:var(--muted);font-weight:500}
 .sm .sc-verdict{margin-top:2px}
 .sm .sc-head{margin-top:var(--s1)}
+/* the model's summary (one line, under the headline) and the baseline's accepted line (p.meta, under the chips) get
+   rows of their own; with nothing in them the rows take no height. The class name stays out of the stylesheet, so
+   a page holds it only when a finding was accepted. */
+.sm .scorecard{grid-template-areas:"ring verdict" "ring head" "ring ai" "ring costs" "chips chips" "acc acc"}
+.sm .sc-ai{grid-area:ai;margin-top:var(--s1);max-width:72ch;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sm .sc-ai .ai-l{margin-right:4px;font:600 11px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.04em}
+.sm .scorecard>p.meta{grid-area:acc;margin-top:var(--s2);font-size:12.5px;color:var(--muted)}
+.sm .info .val .sm-note{font-size:14px;font-weight:500;color:var(--muted)}
 
 /* explanation lines: one subgrid so points, text, platform chips and the where chip line up across lines */
 .sm .sc-costs{grid-template-columns:44px auto auto auto minmax(0,1fr);column-gap:var(--s3);row-gap:0;margin-top:var(--s3)}
@@ -565,13 +573,14 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-costs:not(.nopts) .pl:empty+.sr+.wh,.sm .sc-costs:not(.nopts) .pl:empty~.wh{margin-left:44px}
 }
 @media (max-width:640px){
-.sm .scorecard{grid-template-columns:96px minmax(0,1fr);padding:var(--s4)}
+.sm .scorecard{grid-template-columns:96px minmax(0,1fr);grid-template-areas:"ring verdict" "ring head" "ai ai" "costs costs" "chips chips" "acc acc";padding:var(--s4)}
 .sm .sc-ring{width:96px;height:96px}
 .sm .sc-num{font-size:34px;margin-top:-6px}
 .sm .sc-of{top:calc(50% + 13px)}
 }
 @media (max-width:599px){.sm .sm-about{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}}
 @media print{
+.sm .sc-ai{white-space:normal}
 .sm .sc-costs li>a{padding-left:0;padding-right:0;margin:0}
 .sm .sm-about{grid-template-columns:repeat(3,minmax(0,1fr))}
 .sm .chip.sm-unseen{border-style:dashed}
