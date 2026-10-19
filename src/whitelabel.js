@@ -43,16 +43,45 @@ const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const toHex = (c) => `#${c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("")}`;
 const mix = (hex, other, amount) => toHex(rgb(hex).map((v, i) => v + (other[i] - v) * amount));
 
-/** CSS that recolors the report's accent. The light theme gets a darker text color and a pale tint; the dark theme a lighter one. */
+// WCAG relative luminance and contrast ratio, so the link colour is checked instead of guessed.
+const luminance = (hex) => {
+  const [r, g, b] = rgb(hex).map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+export const contrast = (a, b) => {
+  const [h, l] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (h + 0.05) / (l + 0.05);
+};
+const MIN_TEXT_CONTRAST = 4.5;
+// The card surfaces of visual-system.md §1, which the link colour must read on.
+const LIGHT_CARD = "#ffffff";
+const DARK_CARD = "#141927";
+
+/** The colour mixed step by step towards `toward` until it reads at 4.5:1 on `surface`; the input when it already does. */
+function readable(hex, toward, surface) {
+  let c = hex;
+  for (let i = 0; i < 20 && contrast(c, surface) < MIN_TEXT_CONTRAST; i++) c = mix(c, toward, 0.1);
+  return c;
+}
+
+/**
+ * CSS that recolors the report's accent: the active tab rule, focus rings, links and the step plates (visual-system.md §9).
+ * The light theme gets a link colour darkened until it reads on a white card, the dark theme one lightened until it
+ * reads on the dark card, so a pale brand colour never gives unreadable links. The dark set is written under both dark
+ * selectors the report uses, so a forced light theme on a dark OS keeps the light accent.
+ */
 export function brandCss(color) {
   if (!color) return "";
   const black = [0, 0, 0], white = [255, 255, 255];
-  const light = `--accent:${color};--accent-fg:${mix(color, black, 0.2)};--accent-bg:${mix(color, white, 0.9)}`;
-  const dark = `--accent:${mix(color, white, 0.2)};--accent-fg:${mix(color, white, 0.5)};--accent-bg:${mix(color, [10, 14, 26], 0.75)}`;
-  return `:root{${light}}@media (prefers-color-scheme:dark){:root{${dark}}}`;
+  const light = `--accent:${color};--accent-fg:${readable(mix(color, black, 0.2), black, LIGHT_CARD)};--accent-bg:${mix(color, white, 0.9)}`;
+  const dark = `--accent:${mix(color, white, 0.2)};--accent-fg:${readable(mix(color, white, 0.5), white, DARK_CARD)};--accent-bg:${mix(color, [10, 14, 26], 0.75)}`;
+  return `:root{${light}}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
 }
 
-/** Prints an HTML report to a PDF with Chromium. The print styles open every tab, so the PDF holds the whole report. */
+// A forwarded PDF loses its file name, so every page carries the document title and the page number (Chromium fills the spans).
+const PDF_FOOTER = '<div style="width:100%;font:9px system-ui,sans-serif;color:#4b5567;padding:0 10mm;display:flex;justify-content:space-between"><span class="title"></span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>';
+
+/** Prints an HTML report to a PDF with Chromium. The print styles stack every tab and open every details, so the PDF holds the whole report. */
 export async function writePdf(htmlPath, pdfPath) {
   const launch = { headless: true, env: browserEnv() };
   let browser;
@@ -69,7 +98,7 @@ export async function writePdf(htmlPath, pdfPath) {
     const page = await context.newPage();
     await page.goto(new URL(`file://${path.resolve(htmlPath)}`).href);
     await page.emulateMedia({ media: "print", colorScheme: "light" });
-    await page.pdf({ path: pdfPath, format: "A4", printBackground: true, margin: { top: "14mm", bottom: "14mm", left: "10mm", right: "10mm" } });
+    await page.pdf({ path: pdfPath, format: "A4", printBackground: true, displayHeaderFooter: true, headerTemplate: "<span></span>", footerTemplate: PDF_FOOTER, margin: { top: "14mm", bottom: "16mm", left: "10mm", right: "10mm" } });
   } finally {
     await browser.close();
   }

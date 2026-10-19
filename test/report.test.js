@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderHtml, renderMarkdown } from "../src/report.js";
+import { renderHtml, renderMarkdown, SCRIPT } from "../src/report.js";
+
+// The one fixed inline script (tabs, deep links, theme) is allowed; nothing else may run.
+const withoutScript = (html) => html.replace(`<script>${SCRIPT}</script>`, "");
 
 const t0 = 1_000_000;
 const run = {
@@ -48,42 +51,37 @@ test("gtag.js array pushes link to their event, duplicates pair in order, and re
   assert.match(html, /gtag\(&quot;event&quot;, &quot;add_to_cart&quot;/);
   // Each event's Source box names one push: duplicates are paired with their own push.
   const sources = [...html.matchAll(/<span class="lbl">dataLayer<\/span>((?:<span class="mono">[^<]*<\/span>)+)<\/li>/g)].map((x) => x[1].split('class="mono"').length - 1);
-  assert.deepEqual(sources, [1, 1, 1, 1, 1, 1]); // once in Timeline, once in Events
+  assert.deepEqual(sources, [1, 1, 1]); // one hit list per step
   const step2 = html.slice(html.indexOf('id="j0-s2"'));
   assert.ok(step2.indexOf("first") < step2.indexOf("second") && step2.indexOf("first") > 0);
   const onlyStep2 = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [{ ...r, hits: r.hits.slice(1) }], lang: "en" });
   assert.match(onlyStep2, /href="#j0-s2"/);
 });
 
-test("each step has Timeline, Events, dataLayer and Network tabs, with source filters and no scripts", () => {
+test("each step row lists its hits in time order, its dataLayer pushes and its network requests, with no script but the fixed one", () => {
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
-  assert.equal((html.match(/class="tabs seg"/g) ?? []).length, 1);
-  assert.match(html, /for="s0-1-2">Events <span class="n">3<\/span>/);
-  assert.match(html, /for="s0-1-3">dataLayer <span class="n">2<\/span>/);
-  assert.match(html, /for="s0-1-4">Network requests <span class="n">2<\/span>/);
-  // Events are ordered GA4, Meta, then other platforms, and can be filtered by source.
-  const panels = html.split('<div class="panel">');
-  const events = panels[2];
-  const order = ['data-p="ga4"', 'data-p="meta"', 'data-p="pinterest"'].map((x) => events.indexOf(x));
-  assert.ok(order.every((i) => i > 0) && order[0] < order[1] && order[1] < order[2], "GA4, Meta, then other platforms");
-  assert.match(html, /id="s0-1e-pinterest" class="f-pinterest"/);
-  assert.match(html, /\.filter>\.f-pinterest:checked~\.evlist>li:not\(\[data-p="pinterest"\]\)/);
-  assert.ok(events.length > 0);
+  assert.match(html, /<tr id="j0-s1" class="srow flagged sev-broken has-d">/);
+  assert.match(html, /<summary><svg[^>]*><use href="#ui-chevron"\/><\/svg><span>Details · 3 hits · 2 dataLayer<\/span><\/summary>/);
+  assert.match(html, /Network requests <span class="n">2<\/span>/);
+  // Hits come in the order they were sent: Meta, GA4, then Pinterest.
+  const step = html.slice(html.indexOf('id="j0-s1"'), html.indexOf('class="netblock"', html.indexOf('id="j0-s1"')));
+  const order = ['<use href="#p-meta"/></svg><span>Meta</span></span><code class="ev">AddToCart', '<use href="#p-ga4"/></svg><span>GA4</span></span><code class="ev">add_to_cart', '<use href="#p-pinterest"/></svg><span>Pinterest</span></span><code class="ev">addtocart'].map((x) => step.indexOf(x));
+  assert.ok(order.every((i) => i > 0) && order[0] < order[1] && order[1] < order[2], "hits in time order");
   // The Meta pixel's Source box names the GA4-named push behind it.
-  const meta = events.slice(events.indexOf('<li data-p="meta">'), events.indexOf('<li data-p="pinterest">'));
+  const meta = step.slice(order[0], order[1]);
   assert.match(meta, /<span class="mono">add_to_cart · \+1\.1s<\/span>/);
-  // dataLayer and Network tabs list everything in the step, with parameter tips.
+  // dataLayer pushes and network requests are listed too, with parameter tips that take no focus.
   assert.match(html, /<code class="ev">consent update<\/code>/);
   assert.match(html, /gtm\.js\?id=GTM-X/);
-  assert.match(html, /data-tip="Meta event name\."/);
+  assert.match(html, /<span class="q" aria-hidden="true" data-tip="Meta event name\.">\?<\/span><span class="sr">Meta event name\.<\/span>/);
   assert.doesNotMatch(html, /Other dataLayer pushes and network calls/);
-  // Findings link to the step, flagged events are marked with the finding, and page values are escaped.
+  // Findings link to the step, flagged events are marked with the finding and link back to its card, and page values are escaped.
   assert.match(html, /href="#j0-s1"/);
-  assert.match(html, /class="event flag-broken" open/);
-  assert.match(html, /<p class="flagnote broken">&quot;add_to_cart&quot; was sent without &quot;value&quot;\.<\/p>/);
+  assert.match(html, /class="event flag-broken sev-broken"><details open>/);
+  assert.match(html, /<p class="flagnote sev-broken"><code>add_to_cart<\/code> was sent without <code>value<\/code>\. <a href="#f-ga4-add_to_cart-missing_params">Finding →<\/a><\/p>/);
   assert.doesNotMatch(html, /<img src=x/);
-  // No scripts: the MCP server serves reports with a CSP that blocks them.
-  assert.doesNotMatch(html, /<script/i);
+  // The MCP server's CSP allows the fixed script by its hash and nothing else.
+  assert.doesNotMatch(withoutScript(html), /<script/i);
 });
 
 test("GA4 batches show every event, items are decoded, and out-of-scope providers are counted", () => {
@@ -108,10 +106,10 @@ test("GA4 batches show every event, items are decoded, and out-of-scope provider
   assert.match(html, /<b>Shoe<\/b><span class="mono muted">42<\/span><span class="item-price mono">10 × 2<\/span>/);
   assert.match(html, /Custom item parameters<\/h6><dl class="grid4"><div><dt>size<\/dt><dd>XL<\/dd>/);
   // The scope card, the providers table and the step's skipped count.
-  assert.match(html, /<dt>Platforms<\/dt><dd><span class="ptag p-ga4">GA4<\/span><span class="ptag p-meta">Meta<\/span><\/dd>/);
+  assert.match(html, /<dt>Platforms<\/dt><dd><span class="plat"><svg[^>]*><use href="#p-ga4"\/><\/svg><span>GA4<\/span><\/span> <span class="plat"><svg[^>]*><use href="#p-meta"\/><\/svg><span>Meta<\/span><\/span><\/dd>/);
   assert.match(html, /4 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick\./);
-  assert.match(html, /<tr><td>GA4<\/td><td><span class="badge ok">Checked<\/span><\/td><td class="num">1<\/td><\/tr>/);
-  assert.match(html, /<tr><td>Microsoft Clarity<\/td><td><span class="badge muted">Out of scope<\/span><\/td><td class="num">3<\/td><\/tr>/);
+  assert.match(html, /<tr><td><span class="plat"><svg[^>]*><use href="#p-ga4"\/><\/svg><span>GA4<\/span><\/span><\/td><td><span class="badge sev-ok"><svg[^>]*><use href="#sev-ok"\/><\/svg>Checked<\/span><\/td><td class="num">1<\/td><\/tr>/);
+  assert.match(html, /<tr><td>Microsoft Clarity<\/td><td><span class="badge">Out of scope<\/span><\/td><td class="num">3<\/td><\/tr>/);
   assert.match(html, /4 out-of-scope requests were skipped in this step: Microsoft Clarity 3, DoubleClick 1\./);
 });
 
@@ -123,19 +121,19 @@ test("structured summaries and explanations render, findings are grouped by seve
   };
   const f = [findings[0], { ...findings[0], severity: "warning", check: "duplicate", detail: "Sent twice." }];
   const html = renderHtml({ title: "t", generatedAt: "now", findings: f, explained, runs: [run], lang: "en" });
-  assert.match(html, /<p class="headline">begin_checkout never reaches GA4\.<\/p>/);
-  assert.match(html, /<li><span class="badge broken">Broken<\/span><span>Checkout funnel is cut\.<\/span><\/li>/);
-  assert.match(html, /Not in the findings list, but worth checking<\/div><ul class="also"><li>A conversion fires on page load\.<\/li>/);
+  assert.match(html, /<span class="ai-l">AI summary<\/span> begin_checkout never reaches GA4\.<\/p>/);
+  assert.match(html, /<li><span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span><span>Checkout funnel is cut\.<\/span><\/li>/);
+  assert.match(html, /Not in the findings list, but worth checking<\/p><ul class="also"><li>A conversion fires on page load\.<\/li>/);
   assert.match(html, /<span class="impact-l">Impact<\/span>The funnel looks broken\./);
   assert.match(html, /<ol class="fix-steps"><li><span>Open GTM\.<\/span><\/li><li><span>Add the tag\.<\/span><\/li><\/ol>/);
-  // Broken findings come first, and only the first one is open.
+  // Broken findings come first, and the first card of each owner group (developer, then Tag Manager) is open.
   assert.ok(html.indexOf('data-sev="broken"') < html.indexOf('data-sev="warning"') && html.indexOf('data-sev="broken"') > 0);
-  assert.equal((html.match(/<li class="finding [^"]+" data-sev="[a-z]+"><details open>/g) ?? []).length, 1);
+  assert.equal((html.match(/<li class="finding [^"]+" id="[^"]+" data-sev="[a-z]+"><details open>/g) ?? []).length, 2);
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained, runs: [run], lang: "en" });
   assert.match(md, /\*\*begin_checkout never reaches GA4\.\*\*/);
   assert.match(md, / {3}2\. Add the tag\./);
   const old = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: { summary: "Plain text summary.", explanations: [{ finding: 0, likely_cause: "c", fix: "Do this." }] }, runs: [run], lang: "en" });
-  assert.match(old, /<p class="summary-text">Plain text summary\.<\/p>/);
+  assert.match(old, /<span class="ai-l">AI summary<\/span> Plain text summary\.<\/p>/);
   assert.match(old, /<ol class="fix-steps"><li><span>Do this\.<\/span><\/li><\/ol>/);
 });
 
@@ -147,7 +145,7 @@ test("reports carry the logos and credit line, and branding false leaves out the
   assert.match(branded, /<a href="https:\/\/analitikisler\.com" class="byline"/);
   assert.match(branded, /<link rel="icon" type="image\/png" href="data:image\/png;base64,/);
   // Logos are inline data URIs with a dark version, so the report needs no files and fetches nothing.
-  assert.match(branded, /<source media="\(prefers-color-scheme: dark\)" srcset="data:image\/svg\+xml;base64,/);
+  assert.match(branded, /<img class="l-dark" src="data:image\/svg\+xml;base64,/);
   assert.doesNotMatch(branded, /(src|srcset|href)="(?!data:|#|https:\/\/(analitikisler\.com|github\.com\/analitikisler\/ai-tag-debugger)")/);
   assert.match(md(report), /_Generated by AI Tag Debugger · \[analitikisler\.com\]\(https:\/\/analitikisler\.com\)_/);
   assert.match(html({ ...report, lang: "tr" }), /Bu rapor açık kaynak <a class="f-atd"[^>]*>.*AI Tag Debugger<\/a> ile oluşturuldu\./);
@@ -158,23 +156,22 @@ test("reports carry the logos and credit line, and branding false leaves out the
   assert.doesNotMatch(md({ ...report, branding: false }), /analitikisler\.com/);
 });
 
-test("the report has four tabs switched by the URL hash, journeys open on the first flagged step, and plan coverage is shown", () => {
+test("the report has four tab panels, flagged steps open with their details, and plan coverage is shown", () => {
   const r = { ...run, steps: [...run.steps, { index: 2, label: "Checkout", t: t0 + 2000 }], providers: ["ga4", "meta"] };
   const plan = { events: [{ platform: "GA4", name: "add_to_cart" }, { platform: "ga4", name: "begin_checkout", journeys: ["checkout"] }, { platform: "ga4", name: "purchase", journeys: ["other"] }, { platform: "tiktok", name: "AddToCart" }] };
   const f = [{ ...findings[0], step: "Checkout", event: "nothing" }];
   const html = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [r], plan, lang: "en" });
-  for (const id of ["overview", "findings", "journeys", "scope"]) assert.match(html, new RegExp(`<a href="#${id}">`));
-  assert.match(html, /\.tabpanel:target,\.tabpanel:has\(:target\)\{display:block\}/);
-  // The journey opens on step 2, which the finding points at, and its step list marks it.
-  assert.match(html, /<section class="sdetail default" id="j0-s2"/);
-  assert.match(html, /<a href="#j0-s2" data-s="j0-s2" class="def">/);
+  for (const id of ["overview", "findings", "journeys", "scope"]) assert.match(html, new RegExp(`<button type="button" role="tab" id="tab-${id}" aria-controls="${id}"`));
+  assert.match(html, /html\.js \.panel:not\(\.active\)\{display:none\}/);
+  // Step 2, which the finding points at, is flagged although nothing was captured in it.
+  assert.match(html, /<tr id="j0-s2" class="srow flagged sev-broken">/);
   assert.match(html, /<a href="#j0-s2" class="chip"><span class="chip-step">2<\/span>/);
   // Coverage: sent, not sent, not expected on this journey, and a provider that was not checked.
   const cov = html.slice(html.indexOf('class="dt cov"'));
-  assert.match(cov, /<code>add_to_cart<\/code><\/td><td class="c y">✓<\/td>/);
-  assert.match(cov, /<code>begin_checkout<\/code><\/td><td class="c x">✗<\/td>/);
-  assert.match(cov, /<code>purchase<\/code><\/td><td class="c o">–<\/td>/);
-  assert.match(cov, /<code>AddToCart<\/code> <span class="badge muted">not checked<\/span><\/td><td class="c o">–<\/td>/);
+  assert.match(cov, /<code>add_to_cart<\/code><\/td><td class="c y">✓<span class="sr"> sent<\/span><\/td>/);
+  assert.match(cov, /<code>begin_checkout<\/code><\/td><td class="c x">✗<span class="sr"> not sent<\/span><\/td>/);
+  assert.match(cov, /<code>purchase<\/code><\/td><td class="c o">–<span class="sr"> not expected<\/span><\/td>/);
+  assert.match(cov, /<code>AddToCart<\/code> <span class="badge">not checked<\/span><\/td><td class="c o">–<span class="sr"> not expected<\/span><\/td>/);
   // Without a plan the Scope tab says so.
   assert.match(renderHtml({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [r], lang: "en" }), /No measurement plan was given/);
 });
@@ -189,7 +186,7 @@ test("AI text renders bold numbers and code names only; everything else stays es
   assert.match(html, /<strong>\+70\.4s<\/strong> &lt;b&gt;late&lt;\/b&gt;/);
   assert.match(html, /<code>&lt;script&gt;<\/code>/);
   assert.match(html, /\[link\]\(https:\/\/evil\.example\)/);
-  assert.doesNotMatch(html, /<script|<img src=x|<b>late/);
+  assert.doesNotMatch(withoutScript(html), /<script|<img src=x|<b>late/);
 });
 
 test("a run against a plan names the plan in the report header, in English and Turkish", async () => {
@@ -211,7 +208,7 @@ test("findings are grouped by owner and carry verify links for their platform", 
   const html = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "en" });
   const order = ["developer", "gtm", "marketing"].map((o) => html.indexOf(`data-owner="${o}"`));
   assert.ok(order.every((i) => i > 0) && order[0] < order[1] && order[1] < order[2]);
-  assert.match(html, /How to verify<\/span><\/div><ul class="verify"><li><a href="https:\/\/tagassistant\.google\.com\/"/);
+  assert.match(html, /How to verify<\/span><\/h5><ul class="verify"><li><a href="https:\/\/tagassistant\.google\.com\/"/);
   assert.match(html, /Meta Test Events/);
   const tr = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run], lang: "tr" });
   assert.match(tr, /Nasıl doğrulanır/);
@@ -219,24 +216,21 @@ test("findings are grouped by owner and carry verify links for their platform", 
   assert.match(md, /- How to verify: \[Tag Assistant\]\(https:\/\/tagassistant\.google\.com\/\), \[GA4 DebugView\]/);
 });
 
-test("the Timeline tab shows each push, the GTM event it raised and the hits it caused, in order", () => {
+test("a step's dataLayer pushes come in time order after its hits, and a hit without a push says so", () => {
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
-  assert.match(html, /for="s0-1-1">Timeline <span class="n">5<\/span>/);
-  const tl = html.slice(html.indexOf('<ol class="timeline">'), html.indexOf("</ol>", html.indexOf('<ol class="timeline">')));
-  const at = (x) => tl.indexOf(x);
-  // Consent command first (earlier push), then the add_to_cart push, its GTM event and its GA4 and Meta hits.
-  assert.ok(at("Consent command") > 0 && at("Consent command") < at('GTM event</span><code>add_to_cart</code>'));
-  assert.ok(at('GTM event</span><code>add_to_cart</code>') < at('data-p="meta"') && at('data-p="meta"') < at('data-p="ga4"'));
-  assert.ok(at('data-p="ga4"') < at('data-p="pinterest"'));
-  assert.doesNotMatch(tl, /Hits without a dataLayer push/);
-  // A hit no push explains sits in its own group at the end.
+  const step = html.slice(html.indexOf('id="j0-s1"'), html.indexOf('class="netblock"', html.indexOf('id="j0-s1"')));
+  const at = (x, from = 0) => step.indexOf(x, from);
+  // The hit list first, then the consent command (the earlier push) before the add_to_cart push.
+  assert.ok(at("Hits in this step") > 0 && at("Hits in this step") < at("<h5>dataLayer"));
+  assert.ok(at("<h5>dataLayer") < at('<code class="ev">consent update</code>') && at('<code class="ev">consent update</code>') < at('<code class="ev">add_to_cart</code>', at("<h5>dataLayer")));
+  // A hit no push explains says so in its Source box.
   const extra = { ...run, hits: [...run.hits, { platform: "ga4", name: "page_view", params: {}, url: "https://x/g/collect?en=page_view", step: 1, t: t0 + 1001 }] };
-  const tl2 = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [extra], lang: "en" });
-  assert.ok(tl2.indexOf("Hits without a dataLayer push") > tl2.indexOf('GTM event</span><code>add_to_cart</code>'));
-  // Flagged hits stay flagged in the timeline.
-  assert.match(tl, /class="event flag-broken" open/);
+  const html2 = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [extra], lang: "en" });
+  assert.match(html2, /<code class="ev">page_view<\/code>[\s\S]*?<span class="lbl">dataLayer<\/span><span class="muted">No dataLayer push with this event name in this step\./);
+  // Flagged hits stay flagged, with the severity as text.
+  assert.match(step, /class="event flag-broken sev-broken"><details open>[\s\S]*?<span class="tag badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span>/);
   const tr = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
-  assert.match(tr, /Zaman çizelgesi/);
+  assert.match(tr, /Bu adımdaki istekler/);
 });
 
 test("a GTM tag's evaluation is shown as a why line under the finding, in both languages", () => {

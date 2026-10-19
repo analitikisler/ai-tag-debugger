@@ -20,6 +20,7 @@ import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
+import { scriptCspSource } from "./report.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
@@ -475,7 +476,8 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
     return m ? { ok: timingSafeEqual(digest(m[1]), secretDigest), rest: m[2] ?? "" } : { ok: false, rest: "" };
   };
   const securityHeaders = {
-    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+    // The report's only script is the fixed inline one (tabs, deep links, theme), allowed by its hash; nothing else may load or run.
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}`,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   };
