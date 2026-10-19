@@ -28,7 +28,7 @@ const failures = (xml) => [...xml.matchAll(/<failure message="[^"]*" type="([^"]
 
 test("one suite per journey and viewport, with the run's duration and counts", () => {
   const xml = renderJunit({ runs, findings, lang: "en", failOn: "broken", version: "1.0.0", site: "example.com" });
-  assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?>\n<testsuites name="ai-tag-debugger example.com" tests="7" failures="2" time="5"/);
+  assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?>\n<testsuites name="ai-tag-debugger example.com" version="1.0.0" tests="7" failures="2" time="5"/);
   assert.deepEqual(suites(xml), [
     { name: "checkout (desktop)", tests: 4, failures: 1, time: "2.5" },
     { name: "checkout (mobile)", tests: 3, failures: 1, time: "2.5" },
