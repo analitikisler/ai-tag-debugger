@@ -330,7 +330,9 @@ function mdFinding(m, runs, f) {
   const impact = e?.impact ?? mdTemplate(m.consequence, f.check, f);
   if (impact) lines.push(`- ${m.ui.impact}: ${mdText(impact)}`);
   if (e?.likely_cause) lines.push(`- ${m.ui.likelyCause}: ${mdText(e.likely_cause)}`);
-  if (f.evidence) lines.push(`- ${m.ui.evidence}: \`${mdClip(mdCode(f.evidence), MD_EVIDENCE)}\``);
+  // Evidence is the hit's parameters as JSON; "{}" is a hit that carried none, and no evidence at all means there was no hit.
+  if (f.evidence === "{}") lines.push(`- ${m.ui.evidence}: ${mdText(m.ui.md.noParams)}`);
+  else if (f.evidence) lines.push(`- ${m.ui.evidence}: \`${mdClip(mdCode(f.evidence), MD_EVIDENCE)}\``);
   const fine = mdAlsoFineOn(m, runs, f);
   if (fine) lines.push(`- ${m.ui.md.alsoFineOn}: ${fine}`);
   lines.push(`- ${m.ui.md.owner}: ${m.ui.owners[ownerOf(f)]}`);
@@ -471,7 +473,7 @@ function mdTrend(m, trend, lang) {
 export function verdictHeadline({ findings = [], runs = [], metrics, lang = "en" }) {
   const m = messages(lang);
   const rows = groupFindings(findings).sort((a, b) => SEVERITY_ORDER_MD[a.severity] - SEVERITY_ORDER_MD[b.severity] || b.where.length - a.where.length);
-  return { status: metrics.verdict.status, statusText: m.ui.md.status[metrics.verdict.status], headline: mdHeadline(m, runs, rows, metrics), score: metrics.score?.score ?? null };
+  return { status: metrics.verdict.status, statusText: m.verdict.status[metrics.verdict.status], headline: mdHeadline(m, runs, rows, metrics), score: metrics.score?.score ?? null };
 }
 
 /**
@@ -488,7 +490,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   metrics ??= computeMetrics({ plan, runs, findings, consentScenarios });
   const platformsSeen = sortPlatforms([...new Set(runs.flatMap((r) => (r.hits ?? []).map((h) => h.platform)))]);
   const meta = [m.ui.md.meta(mdText(generatedAt), runs.length, m.ui.md.platformsSeen(platformsSeen.length, platformsSeen.map((p) => mdText(platformLabel(p))).join(", ")), VERSION), `[${m.ui.md.htmlReport}](report.html)`, ...(against ? [mdText(m.ui.checkedAgainst(against))] : [])];
-  const status = `**${m.ui.md.status[metrics.verdict.status]}**${metrics.score?.score === null || metrics.score?.score === undefined ? "" : ` · ${m.ui.md.score(metrics.score.score)}`}`;
+  const status = `**${m.verdict.status[metrics.verdict.status]}**${metrics.score?.score === null || metrics.score?.score === undefined ? "" : ` · ${m.ui.md.score(metrics.score.score)}`}`;
   const lines = [`# ${mdText(m.ui.md.title(site ?? title, mdHeadline(m, runs, rows, metrics)))}`, "", meta.join(" · "), status, `**${m.ui.counts(counts)}**${changes && !changes.previous ? ` · ${m.ui.noPreviousRun}` : ""}`, ""];
   if (accepted) lines.push(mdText(m.ui.acceptedLine(accepted)), "");
   if (planChanges) lines.push(mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : []));
@@ -1377,11 +1379,10 @@ function findingsPanel(m, runs, plan, rows, ids, counts) {
   return `${bar}<p class="muted xs lead">${m.html.findingsLead}${okCount ? ` ${escapeHtml(m.html.okInOverview(okCount))}` : ""}</p>${groups}`;
 }
 
-/** The verdict word and its glyph for a metrics verdict. */
-function verdictLook(v) {
-  const sev = { fail_broken: "broken", fail_incomplete: "warning", attention_risk: "risk", attention_warning: "warning", attention_no_hits: "info", attention_nothing_tested: "info", pass: "ok" }[v.headline] ?? "info";
-  return { sev, word: (m) => m.html.verdict[v.headline] ?? m.html.verdict.pass };
-}
+/** The glyph of a metrics verdict. */
+const verdictGlyph = (v) => ({ fail_broken: "broken", fail_incomplete: "warning", attention_risk: "risk", attention_warning: "warning", attention_no_hits: "info", attention_nothing_tested: "info", pass: "ok" })[v.headline] ?? "info";
+/** The owner split starts a sentence here, so it gets a capital; the locale keeps Turkish "i" as "İ". */
+const sentence = (s, lang) => (s ? s[0].toLocaleUpperCase(lang) + s.slice(1) : s);
 
 /** "2 for the developer, 2 for Tag Manager." from the priorities, or nothing. */
 const ownerSplit = (m, priorities) => (priorities.length ? m.html.ownerSplit(priorities.map((p) => m.html.forOwner[p.owner](p.total))) : "");
@@ -1429,16 +1430,19 @@ function runFacts(m, runs, metrics, { ai, plan, lang, against, planChanges, cons
   return `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
 }
 
-function verdictBlock(m, { site, title, generatedAt, runs, metrics, explained, counts, runInfo, changes }) {
+function verdictBlock(m, { site, title, generatedAt, findings, runs, lang, metrics, explained, counts, accepted, runInfo, changes }) {
   const v = metrics.verdict;
-  const { sev, word } = verdictLook(v);
-  const headline = m.html.headline[v.headline]?.(v, { split: ownerSplit(m, metrics.priorities), coverage: metrics.coverage }) ?? "";
+  const sev = verdictGlyph(v);
+  // The same status word and headline as the CLI, the alerts and the Markdown title ("Fail: purchase tracking is broken on
+  // mobile."); the count-and-owner sentence follows, except on a pass, where it would only repeat the headline.
+  const head = verdictHeadline({ findings, runs, metrics, lang });
+  const headline = [`${head.headline}.`, v.headline === "pass" ? "" : m.verdict.headline[v.headline]?.(v) ?? "", sentence(ownerSplit(m, metrics.priorities), lang)].filter(Boolean).join(" ");
   const tiles = ["broken", "risk", "warning", "info", "ok"].map((s) => `<li class="count sev-${s}${counts[s] ? "" : " zero"}"><a href="#findings">${use(`sev-${s}`, 16)}<span class="k">${m.severity[s]}</span><span class="v">${counts[s]}</span></a></li>`).join("");
   return `<section class="verdict" id="verdict" aria-labelledby="site"><div class="wrap">
 <p class="eyebrow">${m.html.eyebrow} · ${escapeHtml(generatedAt)}</p>
 <h1 id="site">${escapeHtml(site ?? title)}</h1>
-<p class="verdict-line">${use(`sev-${sev}`, 22, `vmark sev-${sev}`)}<span><strong>${escapeHtml(word(m))}.</strong> ${escapeHtml(headline)}</span></p>
-${aiSummary(m, explained)}
+<p class="verdict-line">${use(`sev-${sev}`, 22, `vmark sev-${sev}`)}<span><strong>${escapeHtml(head.statusText)}:</strong> ${escapeHtml(headline)}</span></p>
+${accepted ? `<p class="meta accepted-line">${escapeHtml(m.ui.acceptedLine(accepted))}</p>\n` : ""}${aiSummary(m, explained)}
 <ul class="counts" aria-label="${m.html.countsLabel}">${tiles}</ul>
 ${runFacts(m, runs, metrics, runInfo)}${changes?.routes?.length ? `\n<p class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></p>` : ""}
 </div></section>`;
@@ -1908,7 +1912,7 @@ export function renderHtml({ title, site = null, ai = null, generatedAt, finding
   const themeButton = `<button type="button" class="btn js-only" id="theme" aria-pressed="false" aria-label="${m.html.themeAuto}" title="${m.html.themeAuto}" data-auto="${m.html.themeAuto}" data-light="${m.html.themeLight}" data-dark="${m.html.themeDark}">${use("ui-theme", 16)}</button>`;
   const tab = (id, label, selected) => `<button type="button" role="tab" id="tab-${id}" aria-controls="${id}" aria-selected="${selected ? "true" : "false"}"${selected ? "" : ' tabindex="-1"'}>${label}</button>`;
   const panel = (id, heading, body) => `<section class="panel" id="${id}" role="tabpanel" aria-labelledby="tab-${id}"><h2>${heading}</h2>${body}</section>`;
-  const body = `${verdictBlock(m, { site, title, generatedAt, runs, metrics, explained, counts, runInfo, changes })}
+  const body = `${verdictBlock(m, { site, title, generatedAt, findings, runs, lang, metrics, explained, counts, accepted: rows.filter((f) => f.accepted).length, runInfo, changes })}
 <nav class="tabbar" aria-label="${m.ui.sections}"><div class="wrap"><div class="tabs js-only" role="tablist" aria-label="${m.ui.sections}">${tab("overview", m.ui.tabOverview, true)}${tab("findings", `${m.ui.findings} <span class="n">${problems}</span>`)}${tab("journeys", `${m.ui.tabJourneys} <span class="n">${runs.length}</span>`)}${tab("scope", m.ui.tabScope)}</div></div></nav>
 <div class="wrap">
 ${panel("overview", m.ui.tabOverview, overviewPanel(m, runs, rows, ids, metrics, trend, changes))}

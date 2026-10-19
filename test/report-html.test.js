@@ -20,20 +20,21 @@ test("the verdict block states the verdict and a headline without a model, and t
   const html = render();
   const verdict = html.slice(html.indexOf('<section class="verdict"'), html.indexOf('<nav class="tabbar"'));
   assert.match(verdict, /<h1 id="site">localhost<\/h1>/);
-  assert.match(verdict, /<p class="verdict-line">.*<strong>Broken\.<\/strong> 2 broken findings put wrong or missing numbers in front of the reports and the ad platforms\. 2 for the developer, 2 for Tag Manager\./);
+  // The status word and the first sentence are the CLI's and the Markdown title's (verdictHeadline); the count-and-owner sentence follows.
+  assert.match(verdict, /<p class="verdict-line">.*<strong>Fail:<\/strong> purchase tracking is broken on mobile\. 2 broken findings need a fix before the numbers can be trusted; 1 consent or personal-data risk sits with Tag Manager\. 2 for the developer, 2 for Tag Manager\.<\/span><\/p>/);
   // Five tiles with a shape glyph each, then the run facts.
   for (const s of ["broken", "risk", "warning", "info", "ok"]) assert.match(verdict, new RegExp(`<li class="count sev-${s}[^"]*"><a href="#findings"><svg class="ic"[^>]*><use href="#sev-${s}"/></svg>`));
   assert.match(verdict, /<span class="k">Broken<\/span><span class="v">2<\/span>/);
   assert.match(verdict, /<dt>Platforms checked<\/dt><dd><span class="plats"><span class="plat"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#p-ga4"\/><\/svg><span>GA4<\/span><\/span>/);
   assert.doesNotMatch(verdict, /AI summary/);
   const withAi = render({ explained: { summary: { headline: "Mobile purchases send no revenue.", points: [{ severity: "broken", text: "Revenue is **0**." }], also_check: [] }, explanations: [] } });
-  assert.match(withAi, /<strong>Broken\.<\/strong> 2 broken findings/);
+  assert.match(withAi, /<strong>Fail:<\/strong> purchase tracking is broken on mobile\. 2 broken findings/);
   assert.match(withAi, /<span class="ai-l">AI summary<\/span> Mobile purchases send no revenue\./);
   assert.match(withAi, /Revenue is <strong>0<\/strong>\./);
   // The same verdict in Turkish, and a passing run reads as a result.
-  assert.match(render({ lang: "tr" }), /<strong>Bozuk\.<\/strong> 2 bozuk bulgu/);
+  assert.match(render({ lang: "tr" }), /<strong>Kaldı:<\/strong> purchase izlemesi bozuk \(mobile\)\. 2 bozuk bulgu[^<]*Geliştirici için 2, Tag Manager için 2\./);
   const pass = render({ findings: capture.findings.filter((f) => f.severity === "ok"), consentScenarios: null });
-  assert.match(pass, /<strong>Pass\.<\/strong> All planned events fired correctly on 4 journeys\. 11 of 11 planned events verified\./);
+  assert.match(pass, /<strong>Pass:<\/strong> all 11 planned events fired correctly on 4 journeys\.<\/span><\/p>/);
   assert.match(pass, /What was checked/);
   // Metrics given by the caller are used as they are.
   const metrics = computeMetrics({ plan: demo.plan, runs: demo.runs, findings: demo.findings, consentScenarios: demo.consentScenarios });

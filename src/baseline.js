@@ -32,21 +32,31 @@ export async function readBaseline(file) {
 
 /**
  * Marks the findings the baseline accepts with accepted: true.
- * @returns {{ accepted: number, stale: string[] }} how many were accepted, and the baseline keys no finding matched any more.
+ * @returns {{ accepted: number, partial: number, stale: string[] }} how many findings were accepted, how many
+ *   problems are accepted in some of their places but not all (the report still counts those, see groupFindings),
+ *   and the baseline keys no finding matched any more.
  */
 export function applyBaseline(findings, baseline) {
   const keys = new Set(baseline.findings.map((b) => b.key));
   const seen = new Set();
+  // Per problem, as groupFindings merges the places: how many of its findings the baseline accepts.
+  const problems = new Map();
   let accepted = 0;
   for (const f of findings) {
     if (f.severity === "ok") continue;
     const key = findingKey(f);
+    const problem = [f.severity, f.check, f.platform, f.event, f.detail].join("|");
+    const p = problems.get(problem) ?? { total: 0, accepted: 0 };
+    p.total += 1;
+    problems.set(problem, p);
     if (!keys.has(key)) continue;
     f.accepted = true;
     accepted += 1;
+    p.accepted += 1;
     seen.add(key);
   }
-  return { accepted, stale: [...keys].filter((k) => !seen.has(k)) };
+  const partial = [...problems.values()].filter((p) => p.accepted && p.accepted < p.total).length;
+  return { accepted, partial, stale: [...keys].filter((k) => !seen.has(k)) };
 }
 
 /**

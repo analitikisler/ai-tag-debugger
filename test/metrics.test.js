@@ -78,6 +78,16 @@ test("qualityScore: 100 minus the weighted distinct problems, doubled on convers
   // An unfinished journey costs its own weight, not the warning's.
   const stopped = run("checkout", [], { completed: false });
   assert.equal(qualityScore({ findings: checkRun({ events: [] }, stopped), runs: [stopped] }).score, 100 - SCORE_WEIGHTS.check.journey_incomplete);
+  // A problem the baseline accepted costs nothing, as the verdict skips it; accepted in one place only, it still counts.
+  const accepted = capture.findings.map((f) => (f.check === "duplicate" ? { ...f, accepted: true } : f));
+  assert.equal(qualityScore({ findings: accepted, runs: capture.runs }).score, 30);
+  assert.ok(!qualityScore({ findings: accepted, runs: capture.runs }).deductions.some((d) => d.check === "duplicate"));
+  const partly = capture.findings.map((f) => (f.check === "duplicate" && f.viewport === "desktop" ? { ...f, accepted: true } : f));
+  assert.equal(qualityScore({ findings: partly, runs: capture.runs }).score, 25);
+  const allAccepted = capture.findings.map((f) => (f.severity === "ok" ? f : { ...f, accepted: true }));
+  assert.equal(qualityScore({ findings: allAccepted, runs: capture.runs }).score, 100);
+  assert.equal(verdict({ findings: allAccepted, runs: capture.runs }).status, "pass");
+  assert.deepEqual(prioritiesByOwner(allAccepted), []);
 });
 
 test("planCoverage: buckets with shares of the checkable events, overall and per platform; null without a plan", () => {

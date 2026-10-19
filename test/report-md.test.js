@@ -48,6 +48,12 @@ test("a finding block has the fixed fields: where, evidence, also fine on, owner
   assert.match(block, /^- How to verify: \[Tag Assistant\]\(https:\/\/tagassistant\.google\.com\/\), \[GA4 DebugView\]/m);
   assert.match(block, /^- Link: report\.html#f-ga4-purchase-missing_params$/m);
   assert.ok(block.trim().split("\n").length <= 10, "a block is at most ten lines");
+  // A hit that carried no parameters is said in words, not as `{}`; a finding without a hit has no evidence line.
+  const bare = { journey: "checkout", viewport: "desktop", severity: "broken", check: "missing_params", platform: "ga4", event: "purchase", step: "Pay", detail: '"purchase" was sent without "value".' };
+  const runs = [{ journeyId: "checkout", viewport: "desktop", completed: true, note: "", startedAt: 0, steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Pay", t: 5 }], hits: [] }];
+  assert.match(renderMarkdown({ title: "t", generatedAt: "now", findings: [{ ...bare, evidence: "{}" }], explained: null, runs }), /^- Evidence: the hit carried no parameters$/m);
+  assert.match(renderMarkdown({ title: "t", generatedAt: "now", findings: [{ ...bare, evidence: "{}" }], explained: null, runs, lang: "tr" }), /^- Kanıt: istek hiç parametre taşımıyordu$/m);
+  assert.doesNotMatch(renderMarkdown({ title: "t", generatedAt: "now", findings: [{ ...bare, check: "missing_event", evidence: undefined }], explained: null, runs }), /^- Evidence:/m);
   // A problem on every journey says so instead of listing four places.
   assert.match(md, /### Risk: meta `PageView` fired before the visitor accepted cookies\.\n- Where: all 4 journeys · step 1 "Open http:\/\/localhost:4321\/" · \/ · \+0\.1s/);
   // Without a consequence table there is no Impact line, and nothing tells the reader to re-run the tool.
@@ -160,7 +166,7 @@ test("more than five findings become one line each under Also, with the most sev
 test("the Turkish report has the same structure with Turkish headings and status", () => {
   const md = renderMarkdown({ ...demo, metrics, lang: "tr" });
   assert.equal(md.split("\n")[0], "# localhost: purchase izlemesi bozuk (mobile)");
-  assert.match(md, /^\*\*Başarısız\*\* · veri kalitesi puanı 25\/100$/m);
+  assert.match(md, /^\*\*Kaldı\*\* · veri kalitesi puanı 25\/100$/m);
   assert.deepEqual(sections(md), ["Öncelikler", "Bulgular", "Onay", "Sorunsuz olanlar", "Yolculuklar", "Kontrol edilmeyenler"]);
   assert.match(md, /^### Yazılımcı\n1\. \*\*Bozuk\*\* /m);
   assert.match(md, /\| Meta `PageView` \| 1 ✗ onaydan önce \| 1 ✓ \| \*\*1\*\* ✗ gönderilmemeliydi \| – \|/);

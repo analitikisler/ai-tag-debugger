@@ -106,12 +106,13 @@ export function verdict({ findings = [], runs = [] } = {}) {
  * Data quality score, 0 to 100: start at 100 and take off SCORE_WEIGHTS points for every distinct
  * problem, doubled when the problem is on a conversion event, never below 0. The deductions list
  * says exactly what moved the score and who owns the fix. A run with no findings and no runs is
- * not a 100; it is null, because nothing was measured.
+ * not a 100; it is null, because nothing was measured. Problems a baseline accepted cost nothing,
+ * as the verdict skips them too.
  */
 export function qualityScore({ findings = [], runs = [] } = {}) {
   if (!runs.length && !findings.length) return { score: null, deductions: [], lost: 0 };
   const deductions = groupFindings(findings)
-    .filter(isProblem)
+    .filter((f) => isProblem(f) && !f.accepted)
     .map((f) => {
       const { points, conversion } = deductionFor(f);
       return { check: f.check, severity: f.severity, platform: f.platform ?? null, event: f.event ?? null, owner: ownerOf(f), conversion, points, where: f.where.length };
@@ -445,10 +446,11 @@ export function findingsBy({ findings = [], runs = [] } = {}) {
 /**
  * The fix list per owner: distinct problems (groupFindings) sorted by the points they cost on the
  * score, with the top three per owner and how many points fixing all of theirs would recover. Owners
- * come in the order of points recovered, so the group that moves the score most is first.
+ * come in the order of points recovered, so the group that moves the score most is first. Accepted
+ * problems cost no points, so they are not listed.
  */
 export function prioritiesByOwner(findings = [], { top = 3 } = {}) {
-  const grouped = groupFindings(findings).filter(isProblem).map((f) => ({ ...f, owner: ownerOf(f), ...deductionFor(f) }));
+  const grouped = groupFindings(findings).filter((f) => isProblem(f) && !f.accepted).map((f) => ({ ...f, owner: ownerOf(f), ...deductionFor(f) }));
   return OWNERS.map((owner) => {
     const mine = grouped.filter((f) => f.owner === owner).sort((a, b) => b.points - a.points || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
     const counts = emptyCounts();

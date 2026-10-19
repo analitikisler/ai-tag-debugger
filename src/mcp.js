@@ -20,6 +20,7 @@ import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
 import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
+import { validatePlan } from "./schema.js";
 import { readBaseline } from "./baseline.js";
 import { MAX_CONCURRENCY } from "./pool.js";
 import { scriptCspSource } from "./report.js";
@@ -123,6 +124,8 @@ async function loadAgainst(ref, site, opts) {
   const found = await resolvePlan(ref, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site });
   const plan = await readJson(found.file);
   if (!Array.isArray(plan?.events)) throw new Error(`${found.file} is not a plan: it needs an "events" list.`);
+  // The same schema check the CLI gives a plan named with --against; the config's own plan was checked by loadConfig.
+  validatePlan(plan, { file: found.file });
   return { found, plan };
 }
 
@@ -425,7 +428,7 @@ export function buildServer(opts) {
         const replay = scripted !== false;
         let result;
         try {
-          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, concurrency, providers, against: againstPlan, baseline, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, concurrency, providers, against: againstPlan, baseline, dataDir: opts.dataDir, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
         } catch (err) {
           // The CLI wording (--scripted --no-ai) means nothing to a chat app, so say it in this tool's terms.
           if (err.code !== "NO_API_KEY") throw err;
@@ -438,7 +441,7 @@ export function buildServer(opts) {
         return text(
           [
             m.ui.counts(result.counts),
-            ...(result.baseline ? [`${result.baseline.accepted} accepted from the baseline, ${result.baseline.stale.length} stale baseline entries`] : []),
+            ...(result.baseline ? [`${result.baseline.accepted} accepted from the baseline${result.baseline.partial ? `, ${result.baseline.partial} accepted in some places only (still counted)` : ""}, ${result.baseline.stale.length} stale baseline entries`] : []),
             ...result.runs.map((r) => `${r.journeyId} (${r.viewport}): ${r.completed ? "completed" : "not completed"}, ${r.note}`),
             ...grouped.map((f) => `- ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${f.detail}`),
             `Report: ${result.reportPath}`,

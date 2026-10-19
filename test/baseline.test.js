@@ -32,7 +32,7 @@ test("the key is the same for the same problem seen again, and differs by parame
 test("applyBaseline flags the matches, leaves ok findings alone and names the entries no longer seen", () => {
   const findings = [finding(), finding({ viewport: "mobile" }), { journey: "checkout", viewport: "desktop", severity: "ok", check: "matches_plan", detail: "fine" }];
   const baseline = { findings: [{ key: findingKey(finding()) }, { key: "duplicate ga4 add_to_cart checkout desktop -" }] };
-  assert.deepEqual(applyBaseline(findings, baseline), { accepted: 1, stale: ["duplicate ga4 add_to_cart checkout desktop -"] });
+  assert.deepEqual(applyBaseline(findings, baseline), { accepted: 1, partial: 1, stale: ["duplicate ga4 add_to_cart checkout desktop -"] });
   assert.equal(findings[0].accepted, true);
   assert.equal(findings[1].accepted, undefined);
   assert.equal(findings[2].accepted, undefined);
@@ -40,12 +40,14 @@ test("applyBaseline flags the matches, leaves ok findings alone and names the en
 
 test("accepted findings are left out of the counts, and a grouped problem is accepted only in all its places", () => {
   const findings = [finding(), finding({ viewport: "mobile" }), finding({ check: "duplicate", severity: "warning", event: "add_to_cart", params: undefined })];
-  applyBaseline(findings, { findings: [{ key: findingKey(findings[0]) }, { key: findingKey(findings[2]) }] });
+  // Accepted is per finding (2 of 3); the purchase problem is accepted on desktop only, so it is partial and still counted.
+  assert.deepEqual(applyBaseline(findings, { findings: [{ key: findingKey(findings[0]) }, { key: findingKey(findings[2]) }] }), { accepted: 2, partial: 1, stale: [] });
   const grouped = groupFindings(findings);
   assert.deepEqual(grouped.map((f) => [f.check, f.accepted ?? false]), [["missing_params", false], ["duplicate", true]]);
   assert.deepEqual(summarize(grouped), { broken: 1, risk: 0, warning: 0, info: 0, ok: 0 });
-  applyBaseline(findings, { findings: [{ key: findingKey(findings[1]) }] });
-  assert.deepEqual(summarize(groupFindings(findings)), { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 });
+  const both = [finding(), finding({ viewport: "mobile" })];
+  assert.deepEqual(applyBaseline(both, { findings: both.map((f) => ({ key: findingKey(f) })) }), { accepted: 2, partial: 0, stale: [] });
+  assert.deepEqual(summarize(groupFindings(both)), { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 });
 });
 
 test("writeBaseline and readBaseline round-trip, keep notes, and reject files that are not baselines", async () => {
@@ -56,7 +58,7 @@ test("writeBaseline and readBaseline round-trip, keep notes, and reject files th
   assert.equal(written.site, "https://shop.test");
   assert.match(written.updated, /^\d{4}-\d{2}-\d{2}T/);
   assert.deepEqual(written.findings[0], { key: findingKey(finding()), check: "missing_params", severity: "broken", platform: "ga4", event: "purchase", journey: "checkout", viewport: "desktop" });
-  assert.deepEqual(applyBaseline(findings, written), { accepted: 3, stale: [] });
+  assert.deepEqual(applyBaseline(findings, written), { accepted: 3, partial: 0, stale: [] });
 
   written.findings[0].note = "Value is added in the next release.";
   await writeFile(file, JSON.stringify(written));
@@ -76,9 +78,11 @@ test("the reports label accepted findings, in English and Turkish, and say how m
   assert.match(md, /^### Broken \(Accepted\): `purchase` was sent without `value`\./m);
   assert.match(md, /^### Warning: sent twice/m);
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
-  assert.match(html, /<div class="meta accepted-line">1 accepted finding from the baseline is not counted<\/div>/);
-  assert.match(html, /<span class="badge broken">Broken<\/span><span class="badge muted">Accepted<\/span>/);
-  assert.equal((html.match(/class="badge muted">Accepted/g) ?? []).length, 1);
+  // The verdict block carries the accepted line under the verdict, and only the accepted card wears the badge.
+  assert.match(html, /<p class="verdict-line">[^\n]*<strong>Needs attention:<\/strong>[^\n]*<\/p>\n<p class="meta accepted-line">1 accepted finding from the baseline is not counted<\/p>/);
+  assert.match(html, /<span class="badge">Accepted<\/span><\/span><\/span>/);
+  assert.equal((html.match(/<span class="badge">Accepted<\/span><\/span>/g) ?? []).length, 1);
+  assert.doesNotMatch(renderHtml({ title: "t", generatedAt: "now", findings: findings.slice(1), explained: null, runs: [run], lang: "en" }), /accepted-line/);
   const tr = renderMarkdown({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
   assert.match(tr, /Temel dosyada kabul edilen 1 bulgu sayılmadı/);
   assert.match(tr, /^### Bozuk \(Kabul edildi\):/m);
@@ -137,6 +141,12 @@ test("a run with --update-baseline writes the file, and the next run with --base
     const capture = JSON.parse(await readFile(path.join(dir, runDir, "capture.json"), "utf8"));
     assert.deepEqual(capture.findings.filter((f) => f.severity !== "ok").map((f) => f.accepted), [true, true]);
     assert.match(await readFile(path.join(dir, runDir, "report.md"), "utf8"), /2 accepted findings from the baseline are not counted/);
+
+    // A baseline written for another site is a warning, not an error: the run goes on and still passes.
+    await writeFile(path.join(dir, "known", "baseline.json"), JSON.stringify({ ...baseline, site: "https://other.test" }));
+    const third = cli(common, dir);
+    assert.equal(third.status, 0, third.stdout);
+    assert.match(third.stdout, /^Warning: the baseline .*known[\\/]baseline\.json was written for https:\/\/other\.test, not http:\/\/localhost:\d+\. Its entries may not match this site\.$/m);
   } finally {
     server.kill();
   }

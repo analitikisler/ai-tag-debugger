@@ -48,9 +48,10 @@ test("the alert carries the verdict in the subject and body, then the trend with
   assert.match(alertMessage({ site: "s", changes, verdict, trend: { ...trend, runs: 30, openLongest: [{ ...trend.openLongest[0], runsOpen: 30 }] } }).body, /Still open after 30 runs/);
   // One saved run has no trend yet, and the Turkish alert follows the report language.
   assert.doesNotMatch(alertMessage({ site: "s", changes, verdict, trend: { ...trend, runs: 1, series: trend.series.slice(0, 1) } }).body, /Trend|█/);
-  const tr = alertMessage({ site: "s", changes, lang: "tr", verdict: { ...verdict, statusText: "Başarısız" }, trend });
-  assert.match(tr.subject, /^s: Başarısız · 1 sorun düzeldi, 1 yeni sorun · purchase tracking/);
-  assert.match(tr.body, /Sonuç: Başarısız · [^\n]* · puan 25\/100\n/);
+  // statusText comes from verdict.status in the report's language, the one vocabulary every surface uses.
+  const tr = alertMessage({ site: "s", changes, lang: "tr", verdict: { ...verdict, statusText: "Kaldı" }, trend });
+  assert.match(tr.subject, /^s: Kaldı · 1 sorun düzeldi, 1 yeni sorun · purchase tracking/);
+  assert.match(tr.body, /Sonuç: Kaldı · [^\n]* · puan 25\/100\n/);
   assert.match(tr.body, /5 çalıştırmada eğilim[^\n]*`▃▃·▅█`\nGelip giden/);
 });
 
