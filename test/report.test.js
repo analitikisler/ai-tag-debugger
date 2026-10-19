@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderHtml } from "../src/report.js";
+import { renderHtml, renderMarkdown } from "../src/report.js";
 
 const t0 = 1_000_000;
 const run = {
@@ -237,4 +237,13 @@ test("the Timeline tab shows each push, the GTM event it raised and the hits it 
   assert.match(tl, /class="event flag-broken" open/);
   const tr = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
   assert.match(tr, /Zaman çizelgesi/);
+});
+
+test("a GTM tag's evaluation is shown as a why line under the finding, in both languages", () => {
+  const gtm = [{ name: "GA4 - add_to_cart", type: "gaawe", paused: false, consent: [], triggers: [{ id: "10", name: "CE - add_to_cart", type: "CUSTOM_EVENT" }], blocking: [], evaluation: { fired: false, why: 'trigger "CE - add_to_cart" needs ecommerce.value greater than 0, the push had 0' } }];
+  const withGtm = [{ ...findings[0], gtm }];
+  const md = renderMarkdown({ title: "t", generatedAt: "now", findings: withGtm, explained: null, runs: [run] });
+  assert.match(md, /- In your GTM container: GA4 - add_to_cart, Fires on CE - add_to_cart\n- Tag "GA4 - add_to_cart": did not fire — trigger "CE - add_to_cart" needs ecommerce.value greater than 0, the push had 0/);
+  const html = renderHtml({ title: "t", generatedAt: "now", findings: withGtm, explained: null, runs: [run], lang: "tr" });
+  assert.match(html, /&quot;GA4 - add_to_cart&quot; etiketi: tetiklenmedi — trigger &quot;CE - add_to_cart&quot; needs/);
 });

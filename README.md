@@ -56,7 +56,7 @@ Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths
 
 When GA4 hits go to a server container on another host, or its loader is served from one, the report adds an info finding: the events it forwards to ad platforms never pass through the browser, so they can't be seen here.
 
-With a `gtm_container` export, each broken event also names the GTM tag that sends it and the trigger it fires on, or says that no tag sends it. This needs no AI model.
+With a `gtm_container` export, each broken event also names the GTM tag that sends it and the trigger it fires on, or says that no tag sends it. Each tag then says whether its trigger fired in that journey and, when it did not, why: the tag is paused, no dataLayer push carried the trigger's event, a trigger condition failed (with the value the push had, read from the cumulative dataLayer the way GTM's Data Layer Variables read it), an exception trigger blocked it, or the consent it needs was denied when the event fired. When everything fired and the hit is still wrong, it says so, pointing at the tag's own setup. Click, form, visibility and timer triggers are evaluated by GTM in the page, so they are reported as not evaluable unless their `gtm.click`-style event reached the dataLayer. All of this is evaluated from the captured dataLayer, with no AI model.
 
 ### Choose the platforms to check
 
@@ -419,7 +419,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 |---|---|
 | `site` | Base URL. Use staging when you can. |
 | `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. A run with `--against` uses that plan instead. |
-| `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), even without an AI model. |
+| `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), and says whether that trigger fired in the journey and why not (paused tag, no push with the event, a failed condition with the value seen, a blocking trigger, denied consent), evaluated from the captured dataLayer without an AI model. |
 | `viewports` | `desktop` and/or `mobile`. |
 | `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
