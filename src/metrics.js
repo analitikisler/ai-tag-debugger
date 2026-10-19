@@ -210,7 +210,10 @@ export function platformParity({ runs = [] } = {}) {
       const platforms = Object.fromEntries([...byPlatform].map(([platform, hits]) => {
         const valued = hits.find((h) => paramOf(h, "value") !== undefined) ?? hits.find((h) => paramOf(h, "currency") !== undefined) ?? hits[0];
         const value = paramOf(valued, "value");
-        return [platform, { names: uniq(hits.map((h) => h.name)), count: hits.length, value: value === undefined ? null : Number(value), currency: paramOf(valued, "currency") ?? null }];
+        // A value that is not a number (a template left unresolved, a product name) stays as the text the
+        // tag sent, so the report shows what the platform received instead of NaN. Only numbers are compared.
+        const n = Number(value);
+        return [platform, { names: uniq(hits.map((h) => h.name)), count: hits.length, value: value === undefined ? null : Number.isFinite(n) ? n : String(value), currency: paramOf(valued, "currency") ?? null }];
       }));
       if (byPlatform.size < 2) {
         const [[platform, p]] = Object.entries(platforms);
@@ -220,8 +223,11 @@ export function platformParity({ runs = [] } = {}) {
       const list = Object.values(platforms);
       const mismatch = [];
       if (uniq(list.map((p) => p.count)).length > 1) mismatch.push("count");
-      const values = list.map((p) => p.value).filter((v) => v !== null && Number.isFinite(v));
-      if (values.length > 1 && Math.max(...values) - Math.min(...values) > 0.005) mismatch.push("value");
+      // Numbers compare within rounding; once a side sent text, the platforms agree only on the same text.
+      const sent = list.map((p) => p.value).filter((v) => v !== null);
+      const numbers = sent.filter((v) => Number.isFinite(v));
+      const differs = numbers.length === sent.length ? Math.max(...numbers) - Math.min(...numbers) > 0.005 : uniq(sent.map(String)).length > 1;
+      if (sent.length > 1 && differs) mismatch.push("value");
       const currencies = uniq(list.map((p) => p.currency).filter(Boolean).map((c) => c.toUpperCase()));
       if (currencies.length > 1) mismatch.push("currency");
       // A value one platform has and the other lacks is a mismatch too: the platforms will not agree on revenue.

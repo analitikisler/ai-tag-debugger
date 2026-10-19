@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: a `value` that is not a number (an unresolved template, a product name) showed as `NaN` in the platform parity table; the report now shows the text the tag sent, and a number on one platform against text on the other counts as a value difference.
+
 ## 0.17.0 (2026-10-19)
 
 - The report opens with a verdict. A deterministic sentence names the lead problem and where it is ("purchase tracking is broken on mobile"), with a data quality score whose weights are printed next to it, so a run without an AI model still says what matters first. The same verdict heads report.md, the CLI output, `summary.json` and the Slack and email alerts.

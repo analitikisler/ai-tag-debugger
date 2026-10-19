@@ -218,6 +218,9 @@ test("AI text renders bold numbers and code names only; everything else stays es
   assert.match(html, /<code>&lt;script&gt;<\/code>/);
   assert.match(html, /\[link\]\(https:\/\/evil\.example\)/);
   assert.doesNotMatch(withoutScript(html), /<script|<img src=x|<b>late/);
+  // The Meta hit's value is text, not a number: the parity card shows it escaped, never as NaN.
+  assert.match(html, /1× · &lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html, /NaN/);
 });
 
 test("a run against a plan names the plan in the report header, in English and Turkish", async () => {
