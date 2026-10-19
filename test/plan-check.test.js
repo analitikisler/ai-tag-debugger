@@ -72,5 +72,6 @@ test("without a plan the report has no Plan vs. site section and no plan-check.j
   assert.match(await readFile(path.join(plain, "junit.xml"), "utf8"), /<testsuites name="ai-tag-debugger example.com"/);
   const summary = JSON.parse(await readFile(path.join(withPlan, "summary.json"), "utf8"));
   assert.equal(summary.plan.id, "p1");
-  assert.equal(summary.files.junit, path.join(withPlan, "junit.xml"));
+  assert.equal(summary.dir, withPlan);
+  assert.equal(summary.files.junit, "junit.xml");
 });
