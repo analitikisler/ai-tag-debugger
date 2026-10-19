@@ -6,7 +6,8 @@ shop at 1280 px: the verdict header takes the first 490 px of every tab, and the
 shows eleven near-identical info cards.
 
 Three designers each built one direction as a working single-file mockup from the real demo
-data, after a research pass on the tools practitioners use (`../reference-ux.md`). Each mockup
+data (only Direction D's mockup is kept in the repository; the others live in the branch history before
+commit ea1451f, and each `rationale.md` stays), after a research pass on the tools practitioners use (`../reference-ux.md`). Each mockup
 has light and dark modes, a 390 px layout, print rules and a no-JavaScript fallback, and each
 rationale measures the nine reader tasks from `../ux-audit.md` against 0.17.0.
 

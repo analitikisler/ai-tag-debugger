@@ -1,5 +1,7 @@
 # Direction B: "the brief"
 
+_Not chosen. The mockup this describes was removed from the repository once Direction D was implemented; see `../README.md`._
+
 Working mockup: `mockup.html` (the 0.17.0 demo run, `current-0.17/capture.json`) and `mockup-failed-run.html` (the run whose start page refused the connection). Both are generated from the real `capture.json` by one script; only the verdict, the three "do first" lines and the three cards' sentences are written by hand, because the renderer does not yet merge findings by cause or carry an action sentence per check.
 
 ## Thesis

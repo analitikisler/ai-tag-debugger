@@ -1,5 +1,7 @@
 # Direction A: the console
 
+_Not chosen. The mockup this describes was removed from the repository once Direction D was implemented; see `../README.md`._
+
 `mockup.html` next to this file is a working mockup built from the real 0.17.0 demo run (`capture.json`, `summary.json`: 2 journeys × 2 viewports, 2 broken, 1 risk, 1 warning, 4 ok, 3 consent scenarios, 4 platforms checked, 2 seen). A "Mockup state" button in the top bar swaps in the failed-run capture (every journey stopped at step 1) to show how repetitive findings collapse. Open it at 1280 px and at 390 px, with JavaScript on and off, in light and dark, and print it.
 
 ## Thesis

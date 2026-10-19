@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
 import { render } from "../src/html/findings.js";
-import { context, renderHtmlNext } from "../src/html/shell.js";
+import { context, renderHtml } from "../src/html/shell.js";
 import { demoCapture, failedInput, reportInput } from "./helpers/demo-capture.js";
 
 const section = (input) => render(context(input));
@@ -233,7 +233,7 @@ test("in the page: the section measures at most 700 px with rows closed, filters
   const dir = mkdtempSync(path.join(tmpdir(), "aitd-findings-"));
   try {
     const file = path.join(dir, "report.html");
-    writeFileSync(file, renderHtmlNext(reportInput()));
+    writeFileSync(file, renderHtml(reportInput()));
     const errors = [];
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.on("pageerror", (e) => errors.push(e.message));
@@ -266,7 +266,7 @@ test("in the page: a filter that matches only accepted rows shows them in an ope
   try {
     const file = path.join(dir, "report.html");
     const { findings } = demoCapture();
-    writeFileSync(file, renderHtmlNext(reportInput({ findings: findings.map((f) => (f.platform === "ga4" && f.check === "missing_params" ? { ...f, accepted: true } : f)) })));
+    writeFileSync(file, renderHtml(reportInput({ findings: findings.map((f) => (f.platform === "ga4" && f.check === "missing_params" ? { ...f, accepted: true } : f)) })));
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     const state = () => page.evaluate(() => ({
       count: document.querySelector("#findings p[data-filter-count]").textContent,

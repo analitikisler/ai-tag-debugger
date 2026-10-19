@@ -3,14 +3,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { renderHtmlNext, context, SECTIONS } from "../src/html/shell.js";
+import { renderHtml, context, SECTIONS } from "../src/html/shell.js";
 import { CSS, brandCss } from "../src/html/css.js";
 import { SCRIPT, scriptCspSource } from "../src/html/script.js";
 import { hitAnchor, pageTitle, passedRows, stepTitle, sprite } from "../src/html/lib.js";
 import { LANGUAGES } from "../src/i18n.js";
 import { demoCapture, failedInput, reportInput } from "./helpers/demo-capture.js";
 
-const render = (opts) => renderHtmlNext(reportInput(opts));
+const render = (opts) => renderHtml(reportInput(opts));
 const sectionIds = (html) => [...html.matchAll(/<section class="sec[^"]*" id="([^"]+)" aria-labelledby="\1-h"><h2 id="\1-h">/g)].map((x) => x[1]);
 
 test("the page has one main, one h1 and the seven sections in rail order, each with its h2", () => {
@@ -99,7 +99,7 @@ test("the Summary carries the accepted line when the baseline accepted a finding
   const ctx = context(reportInput({ findings: accepted }));
   assert.equal(ctx.accepted, 1);
   assert.equal(ctx.tally.failed, 3, "an accepted problem is not counted");
-  const html = renderHtmlNext(reportInput({ findings: accepted }));
+  const html = renderHtml(reportInput({ findings: accepted }));
   const summary = html.slice(html.indexOf('id="summary"'), html.indexOf('id="findings"'));
   assert.match(summary, /<p class="meta accepted-line">1 accepted finding from the baseline is not counted<\/p>/);
   assert.doesNotMatch(render(), /accepted-line/);
@@ -120,7 +120,7 @@ test("the context gives every section the same rows, ids, counts and verdict", (
   const failed = context(failedInput());
   assert.equal(failed.tally.completed, 0);
   assert.equal(failed.tally.score, null);
-  const html = renderHtmlNext(failedInput());
+  const html = renderHtml(failedInput());
   assert.deepEqual(sectionIds(html), SECTIONS);
   assert.match(html, /aria-label="No score, verdict Fail"><span class="sc-l">Score<\/span><b>–<\/b>/);
 });
@@ -142,7 +142,7 @@ test("ids: a finding's place links to the hit that carried its event, and steps 
 });
 
 test("a report with no runs and no findings renders every section, as the PDF, GTM and changes tests need", () => {
-  const html = renderHtmlNext({ title: "T", site: "example.com", generatedAt: "now", findings: [], explained: null, runs: [], lang: "en" });
+  const html = renderHtml({ title: "T", site: "example.com", generatedAt: "now", findings: [], explained: null, runs: [], lang: "en" });
   assert.deepEqual(sectionIds(html), SECTIONS);
   assert.match(html, /<h1 class="sr">Tracking audit of example\.com<\/h1>/);
 });

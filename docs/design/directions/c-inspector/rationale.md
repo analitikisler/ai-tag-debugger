@@ -1,5 +1,7 @@
 # Direction C: the inspector
 
+_Not chosen. The mockup this describes was removed from the repository once Direction D was implemented; see `../README.md`._
+
 `mockup.html` beside this file is a working, single-file mockup of the 0.17.0 demo report (localhost, 4 runs, 2 broken · 1 risk · 1 warning · 4 ok) rebuilt from the real `capture.json`. It loads nothing from the network, keeps the visual-system tokens, logos and sprite, works with JavaScript off (sections stacked, rail as a table of contents), has light and dark mode through the two-selector pattern, prints, and holds a second, clearly marked state built from the failed-run capture. Screenshots live outside the repository under the review scratchpad (`c-inspector-{overview,findings,journeys}-{1280,390}.png` and `c-inspector-journeys-1280-dark.png`).
 
 ## Thesis
