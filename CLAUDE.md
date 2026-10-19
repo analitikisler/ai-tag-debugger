@@ -39,7 +39,6 @@ npm run demo                      # scripted, no-AI run against it, saved under 
 - Edit README.tr.md without making the same change in README.md, or the other way round.
 - Put a user-facing string in a module other than `src/i18n.js`, or in one language only.
 - Loosen the navigation limits, redaction or the HTTP server's checks (see SECURITY.md).
-- Name an AI model vendor or model id in commit messages.
 
 ## Where things live
 
