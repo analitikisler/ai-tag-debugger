@@ -175,7 +175,7 @@ test("what_changed returns only the since-last-run diff, and says so when there 
 });
 
 test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {
-  const { client, call } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  const { client } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
   const refused = await client.callTool({ name: "make_plan", arguments: { site: "http://127.0.0.1:1/" } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /limited to public websites/);

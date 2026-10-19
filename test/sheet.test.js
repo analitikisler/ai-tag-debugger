@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { planToRows, rowsToPlan, parseCsv, toCsv, writeXlsx, readXlsx, readPlanSheet, writePlanSheet, EVENT_COLUMNS } from "../src/sheet.js";
@@ -55,6 +55,11 @@ test("Google Sheets CSV downloads import with their prefixed sibling and TRUE/FA
   assert.deepEqual(back.user_properties.map((u) => u.name), ["customer_type"]);
   assert.deepEqual(warnings, []);
   await assert.rejects(readPlanSheet(path.join(dir, "Shop plan - user_properties.csv")), { message: /Import the events file \(Shop plan - events\.csv\)/ });
+  // Without the sibling file the plan simply has no user properties, and the warning names the file looked for.
+  writeFileSync(path.join(dir, "events.csv"), "event,platform,parameter,required,example,trigger,description\npurchase,ga4,value,TRUE,9.9,,\n");
+  const alone = await readPlanSheet(path.join(dir, "events.csv"), { site: "https://shop.test" });
+  assert.deepEqual(alone.plan.user_properties, []);
+  assert.deepEqual(alone.warnings, ["No user_properties.csv beside the file, so the plan has no user properties."]);
 });
 
 test("xlsx round trip gives the same plan", async () => {

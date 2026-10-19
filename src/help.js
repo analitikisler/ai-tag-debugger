@@ -13,6 +13,7 @@ Commands:
   run      Audit what a site actually sends, and compare it to a plan
   replay   Re-check saved sites offline, without AI
   mcp      Start the MCP server for Claude, ChatGPT and other chat apps
+  doctor   Check that Node, Chromium, an AI key and the data folder are ready
 
 Examples:
   aitd plan --site https://example.com
@@ -99,7 +100,17 @@ Advanced:
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 
-const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP };
+const DOCTOR = `Usage: aitd doctor [--site <url>] [--data-dir <dir>]
+
+Check that this machine can run an audit: the Node version, Playwright's Chromium, whether
+an AI provider key is set, and that the data folder is writable. Exits with code 1 when a
+check an audit needs fails. A missing AI key is only reported: --no-ai and replay work without one.
+
+Options:
+  --site <url>         Also check that the site is an http(s) address whose host resolves (nothing is fetched)
+  --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
+
+const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP, doctor: DOCTOR };
 
 /** Help text for a command, or the top-level help when the command is unknown or missing. */
 export function helpText(command) {
