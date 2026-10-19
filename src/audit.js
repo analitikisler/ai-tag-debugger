@@ -8,7 +8,8 @@ import path from "node:path";
 import { failedRun, runJourney } from "./agent.js";
 import { VIEWPORTS } from "./browser.js";
 import { checkRun, groupFindings, planCheck, summarize } from "./checks.js";
-import { explainFindings, renderCsv, renderHtml, renderMarkdown } from "./report.js";
+import { explainFindings, renderCsv, renderHtml, renderMarkdown, VERSION } from "./report.js";
+import { buildSummary, renderJunit } from "./ci-output.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadReportBrand, writePdf } from "./whitelabel.js";
 import { createProvider, alsoSet } from "./providers.js";
@@ -41,11 +42,12 @@ export async function loadConfig(configFile) {
 
 
 /**
- * Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against.
+ * Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against,
+ * and junit.xml and summary.json for CI. failOn: the --fail-on level, so junit.xml fails the same findings the exit code does.
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
- * the "Changed since last run" section. Returns { reportPath, changes }.
+ * the "Changed since last run" section. Returns { reportPath, summaryPath, changes }.
  */
-export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null }) {
+export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null, failOn = "broken" }) {
   await mkdir(outDir, { recursive: true });
   const site = new URL(config.site).hostname;
   const title = messages(lang).ui.title(site);
@@ -59,6 +61,9 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
   await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
   const reportPath = path.join(outDir, "report.html");
+  const summaryPath = path.join(outDir, "summary.json");
+  await writeFile(path.join(outDir, "junit.xml"), renderJunit({ runs, findings, lang, failOn, version: VERSION, site }));
+  await writeFile(summaryPath, JSON.stringify(buildSummary({ runs, findings, counts: summarize(groupFindings(findings)), plan, against, ai, lang, reportPath, outDir, changes, consentScenarios, version: VERSION, site }), null, 2));
   if (brand?.pdf) {
     try {
       await writePdf(reportPath, path.join(outDir, "report.pdf"));
@@ -67,7 +72,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
       console.error(`Could not write report.pdf: ${err.message}`);
     }
   }
-  return { reportPath, changes };
+  return { reportPath, summaryPath, changes };
 }
 
 /**
@@ -80,6 +85,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *     any other known platform the site sends to).
  *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
+ *   failOn: the --fail-on level (default "broken"), which decides what junit.xml marks as failed.
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  */
@@ -167,12 +173,12 @@ export async function runAudit(opts) {
   // Runs saved in the site's runs folder are compared with the one before; a run sent to --out is not.
   const previous = opts.outDir ? undefined : await previousRun(opts.dataDir, config.site);
   const outDir = path.resolve(opts.outDir ?? (await newRunDir(opts.dataDir, config.site)).dir);
-  const { reportPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null });
+  const { reportPath, summaryPath, changes } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null, failOn: opts.failOn });
   if (config.notify && changes) {
     const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath });
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
     for (const e of errors) log(`\nCould not send an alert. ${e}`);
   }
   const counts = summarize(groupFindings(findings));
-  return { journeys, plan, runs, findings, explained, counts, reportPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
+  return { journeys, plan, runs, findings, explained, counts, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
 }

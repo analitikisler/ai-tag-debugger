@@ -30,3 +30,9 @@ jobs:
         with:
           name: tracking-report
           path: tracking-report
+      # The findings as JUnit test results, for a JUnit reporter action or a quick download.
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: junit
+          path: tracking-report/**/junit.xml
