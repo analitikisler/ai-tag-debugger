@@ -15,6 +15,8 @@ test("one status line per platform with severity, counts per choice and a link t
   assert.match(h, /^<section class="sec" id="consent" aria-labelledby="consent-h"><h2 id="consent-h">Consent<\/h2>/);
   const ga4 = h.slice(h.indexOf('id="consent-ga4"'), h.indexOf('id="consent-meta"'));
   assert.match(ga4, /^id="consent-ga4"/);
+  // The platform chip names the platform once: decorative artwork, then the visible name, no extra sr label.
+  assert.match(ga4, /<span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span>/);
   assert.match(h, /<li class="card sev-ok cs-row" id="consent-ga4">/);
   assert.match(ga4, /<span class="chip chip-sev ok">.*OK<\/span>/);
   assert.match(ga4, /<span class="chip chip-consent denied">2 · denied<\/span>/);

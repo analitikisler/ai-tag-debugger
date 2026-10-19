@@ -1111,6 +1111,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .run-facts dt{font:600 11px/1.2 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 #run .run-facts dd{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 #run .run-facts code{margin:0}
+#run>p.meta{margin:0 0 var(--s2);font-size:12.5px;color:var(--muted)}
 #run .run-facts code.file{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
 #run .tm-tbl .tm-d{display:inline-block;width:80px;height:6px;margin-right:var(--s2);vertical-align:middle;border-radius:3px;background:var(--well);overflow:hidden;text-align:left}
 #run .tm-tbl .tm-bar{display:block;height:100%;border-radius:3px;background:var(--muted)}

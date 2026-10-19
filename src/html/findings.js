@@ -4,7 +4,7 @@
 // writes markup. The evidence, GTM, verify and "fine on" data are read the way the 0.17 finding card read them.
 import { verifyLinks } from "../verify.js";
 import { consentTable } from "../consent.js";
-import { changeLabel, fixSteps, platformRank } from "../report-shared.js";
+import { changeLabel, fixSteps, platformRank, summaryParts } from "../report-shared.js";
 import {
   PLATFORM_ART, OWNERS, alsoFineOn, badge, chip, detailHtml, esc, fmt, hitAnchor, hitFor, hitsOf, hostPath, missingParamRows, ownerOf,
   passedRows, pathOf, platformLabel, pushesOf, safeKey, secs, sectionBlock, sortPlatforms, stepTitle, use, whereTarget,
@@ -439,6 +439,19 @@ function changesCard(ctx) {
   return `<details class="card fnd-changes" id="changes">${summary}<div class="body"><p class="muted xs">${esc(m.ui.changesLead(ch.previous, ch.mode))}</p>${items.length ? `<ul class="fnd-change-list">${items.join("")}</ul>` : ""}${routes.length ? `<ul class="fnd-change-list">${routes.join("")}</ul>` : ""}</div></details>`;
 }
 
+/**
+ * The model's summary points and its "worth checking" list. The Summary keeps only the headline, on one line; the rest
+ * sits here, collapsed next to the findings it talks about, so a model's extra leads are not lost from the HTML.
+ */
+function aiSummaryCard(ctx) {
+  const { m } = ctx;
+  const s = summaryParts(ctx.explained?.summary);
+  if (!s?.points?.length && !s?.also_check?.length) return "";
+  const points = s.points.length ? `<ul class="fnd-change-list">${s.points.map((p) => `<li>${badge(p.severity, m.severity[p.severity])}<span>${fmt(p.text)}</span></li>`).join("")}</ul>` : "";
+  const also = s.also_check.length ? `<p class="xs muted">${esc(m.ui.alsoCheck)}</p><ul class="fnd-change-list also">${s.also_check.map((x) => `<li>${fmt(x)}</li>`).join("")}</ul>` : "";
+  return `<details class="card fnd-changes" id="ai-summary"><summary><h3 class="t">${esc(m.html.aiSummary)}</h3></summary><div class="body">${points}${also}</div></details>`;
+}
+
 /* ---------- section ---------- */
 
 /** @param {import("./shell.js").Ctx} ctx */
@@ -464,7 +477,7 @@ export function render(ctx) {
     ? details("passed", failedRows.length ? t.groups.passed : m.html.whatWasChecked, tally.passed, passed.map((p) => p.html).join("\n"), !failedRows.length)
     : failedRows.length ? "" : `<p class="fnd-none muted">${esc(m.html.whatWasChecked)}: ${esc(m.html.nothingVerified)}</p>`;
   const body = `${filterBar(ctx, items)}
-${changesCard(ctx)}
+${[changesCard(ctx), aiSummaryCard(ctx)].filter(Boolean).join("\n")}
 <div class="fnd-list" id="f-list">
 ${failed}
 ${unverified}

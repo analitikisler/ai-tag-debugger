@@ -1,6 +1,5 @@
 // The new HTML report's shell (src/html/shell.js): the seven sections, the CSP hash of its script, the stylesheet's
-// theme and data-URI rules, the white label, the baseline line and the ids the sections share. The sections are
-// still stubs around the 0.17 panels; these checks hold for the ported ones too.
+// theme and data-URI rules, the white label, the baseline line and the ids the sections share.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -8,7 +7,6 @@ import { renderHtmlNext, context, SECTIONS } from "../src/html/shell.js";
 import { CSS, brandCss } from "../src/html/css.js";
 import { SCRIPT, scriptCspSource } from "../src/html/script.js";
 import { hitAnchor, pageTitle, passedRows, stepTitle, sprite } from "../src/html/lib.js";
-import { renderHtml } from "../src/report.js";
 import { LANGUAGES } from "../src/i18n.js";
 import { demoCapture, failedInput, reportInput } from "./helpers/demo-capture.js";
 
@@ -147,10 +145,4 @@ test("a report with no runs and no findings renders every section, as the PDF, G
   const html = renderHtmlNext({ title: "T", site: "example.com", generatedAt: "now", findings: [], explained: null, runs: [], lang: "en" });
   assert.deepEqual(sectionIds(html), SECTIONS);
   assert.match(html, /<h1 class="sr">Tracking audit of example\.com<\/h1>/);
-});
-
-test("src/report.js still renders the 0.17 report, so the switch to the new one is a separate step", () => {
-  const html = renderHtml(reportInput());
-  assert.match(html, /<nav class="tabbar"/);
-  assert.doesNotMatch(html, /<nav class="rail"/);
 });

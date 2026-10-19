@@ -2,7 +2,7 @@
 // granted green and "no signal" grey, all by token through chip("consent", ...).
 import { consentTable } from "../consent.js";
 import { isConsentEntry } from "../report-shared.js";
-import { chip, esc, platIcon, platformLabel, safeKey, sectionBlock, sortPlatforms, stepTitle, secs, use, badge } from "./lib.js";
+import { PLATFORM_ART, chip, esc, platformLabel, safeKey, sectionBlock, sortPlatforms, stepTitle, secs, use, badge } from "./lib.js";
 
 // Google tags carry Consent Mode signals on the hit; every other platform sends none, so its state is "none".
 const GOOGLE = new Set(["ga4", "google_ads"]);
@@ -10,6 +10,14 @@ const SCENARIOS = ["before", "accept", "reject", "analytics"];
 const LINE_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing"]);
 const MODE_CHECKS = new Set(["consent_default_missing", "consent_default_late", "consent_v2_missing", "consent_v2_update"]);
 const SEVERITY_RANK = { broken: 0, risk: 1, warning: 2, info: 3 };
+
+/** A platform's artwork, or its initials when it has none. Decorative: the chip's text names it once for screen readers. */
+function platArt(key) {
+  const k = safeKey(key);
+  if (PLATFORM_ART[k]) return use(`p-${k}`, 13);
+  const initials = platformLabel(key).split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  return `<span class="plat-fb s14" aria-hidden="true">${esc(initials)}</span>`;
+}
 
 /** The worst problem row among these, or null. Accepted rows (the baseline's) do not count, as everywhere else. */
 const worstRow = (rows) => rows.filter((f) => !f.accepted && f.severity in SEVERITY_RANK).sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])[0] ?? null;
@@ -43,7 +51,7 @@ export function render(ctx) {
   const sevChip = (sev, label) => chip("sev", sev, `${use(`sev-${sev}`, 13)}${esc(label)}`);
   const stateWord = (state) => t.state[state];
   const stateChip = (state, label = stateWord(state)) => chip("consent", state, esc(label));
-  const platChip = (key) => chip("plat", key, `${platIcon(key, 13)}${esc(platformLabel(key))}`);
+  const platChip = (key) => chip("plat", key, `${platArt(key)}${esc(platformLabel(key))}`);
   const findingLink = (row, cls = "") => (row && ids.get(row) ? `<a${cls ? ` class="${cls}"` : ""} href="#${ids.get(row)}">${esc(m.html.findingLink)}</a>` : "");
 
   /* ---- one status line per platform ---- */

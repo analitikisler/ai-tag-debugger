@@ -18,23 +18,37 @@ const render = (props = {}) => renderHtml({ ...demo, ...props });
 
 test("the verdict block states the verdict and a headline without a model, and the AI headline stays secondary", () => {
   const html = render();
-  const verdict = html.slice(html.indexOf('<section class="verdict"'), html.indexOf('<nav class="tabbar"'));
-  assert.match(verdict, /<h1 id="site">localhost<\/h1>/);
-  // The status word and the first sentence are the CLI's and the Markdown title's (verdictHeadline); the count-and-owner sentence follows.
-  assert.match(verdict, /<p class="verdict-line">.*<strong>Fail:<\/strong> purchase tracking is broken on mobile\. 2 broken findings need a fix before the numbers can be trusted; 1 consent or personal-data risk sits with Tag Manager\. 2 for the developer, 2 for Tag Manager\.<\/span><\/p>/);
-  // Five tiles with a shape glyph each, then the run facts.
-  for (const s of ["broken", "risk", "warning", "info", "ok"]) assert.match(verdict, new RegExp(`<li class="count sev-${s}[^"]*"><a href="#findings"><svg class="ic"[^>]*><use href="#sev-${s}"/></svg>`));
-  assert.match(verdict, /<span class="k">Broken<\/span><span class="v">2<\/span>/);
-  assert.match(verdict, /<dt>Platforms checked<\/dt><dd><span class="plats"><span class="plat"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#p-ga4"\/><\/svg><span>GA4<\/span><\/span>/);
+  // The inspector design moved the verdict into the Summary section's scorecard; the page's one h1 names the site.
+  const verdict = html.slice(html.indexOf('id="summary"'), html.indexOf('id="findings"'));
+  assert.match(html, /<h1 class="sr">Tracking audit of localhost<\/h1>/);
+  // The status word and the first sentence are the CLI's and the Markdown title's (verdictHeadline), now as the
+  // scorecard's verdict word and its headline line.
+  assert.match(verdict, /<p class="sc-verdict sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Fail<\/p>\n<p class="sc-head">Purchase tracking is broken on mobile\.<\/p>/);
+  // The count-and-owner sentence became the status chips (counts) and the Findings owner filter (owner split): the
+  // design keeps the verdict to one sentence (SPEC 2.1).
+  assert.match(verdict, /<b>2<\/b> Broken<\/a>/);
+  assert.match(verdict, /<b>1<\/b> Risk<\/a>/);
+  const findings = html.slice(html.indexOf('id="findings"'), html.indexOf('id="journeys"'));
+  assert.match(findings, /data-filter="owner=developer"[^>]*><span class="dot"><\/span>Developer<span class="n">2<\/span>/);
+  assert.match(findings, /data-filter="owner=gtm"[^>]*><span class="dot"><\/span>Tag Manager<span class="n">2<\/span>/);
+  // Five status chips with a shape glyph each, linking into Findings filtered by severity; a zero count is not a link.
+  for (const s of ["broken", "risk", "warning", "info", "ok"]) assert.match(verdict, new RegExp(`(?:<a class="chip chip-sev ${s} lg" href="#findings\\?sev=${s}">|<span class="chip chip-sev ${s} lg zero" aria-disabled="true">)<svg class="ic"[^>]*><use href="#sev-${s}"/></svg>`));
+  assert.match(verdict, /<span class="chip chip-sev info lg zero" aria-disabled="true">/);
+  // The Vendors card names the platforms checked with their icons (a chip per platform since the inspector design).
+  assert.match(verdict, /<a class="lbl" href="#inventory">Platforms checked<svg[^>]*>.*?<\/a><span class="val"><span class="chips"><span class="chip chip-plat ga4"[^>]*><svg class="ic" width="13" height="13" aria-hidden="true"><use href="#p-ga4"\/><\/svg>GA4/);
   assert.doesNotMatch(verdict, /AI summary/);
   const withAi = render({ explained: { summary: { headline: "Mobile purchases send no revenue.", points: [{ severity: "broken", text: "Revenue is **0**." }], also_check: [] }, explanations: [] } });
-  assert.match(withAi, /<strong>Fail:<\/strong> purchase tracking is broken on mobile\. 2 broken findings/);
-  assert.match(withAi, /<span class="ai-l">AI summary<\/span> Mobile purchases send no revenue\./);
+  const aiVerdict = withAi.slice(withAi.indexOf('id="summary"'), withAi.indexOf('id="findings"'));
+  assert.match(aiVerdict, /Fail<\/p>\n<p class="sc-head">Purchase tracking is broken on mobile\.<\/p>/);
+  assert.match(aiVerdict, /<p class="sc-ai muted"[^>]*><span class="ai-l">AI summary<\/span> Mobile purchases send no revenue\.<\/p>/);
+  // The AI headline comes after the product's own verdict.
+  assert.ok(aiVerdict.indexOf("sc-head") < aiVerdict.indexOf("sc-ai"));
+  // The Summary keeps the AI's headline only; its points sit in the Findings section's AI summary card.
   assert.match(withAi, /Revenue is <strong>0<\/strong>\./);
   // The same verdict in Turkish, and a passing run reads as a result.
-  assert.match(render({ lang: "tr" }), /<strong>Kaldı:<\/strong> purchase izlemesi bozuk \(mobile\)\. 2 bozuk bulgu[^<]*Geliştirici için 2, Tag Manager için 2\./);
+  assert.match(render({ lang: "tr" }), /Kaldı<\/p>\n<p class="sc-head">Purchase izlemesi bozuk \(mobile\)\.<\/p>/);
   const pass = render({ findings: capture.findings.filter((f) => f.severity === "ok"), consentScenarios: null });
-  assert.match(pass, /<strong>Pass:<\/strong> all 11 planned events fired correctly on 4 journeys\.<\/span><\/p>/);
+  assert.match(pass, /Pass<\/p>\n<p class="sc-head">All 11 planned events fired correctly on 4 journeys\.<\/p>/);
   assert.match(pass, /What was checked/);
   // Metrics given by the caller are used as they are.
   const metrics = computeMetrics({ plan: demo.plan, runs: demo.runs, findings: demo.findings, consentScenarios: demo.consentScenarios });
@@ -43,43 +57,56 @@ test("the verdict block states the verdict and a headline without a model, and t
 
 test("priorities link to the finding cards, whose ids are stable and unique", () => {
   const html = render();
-  const ids = [...html.matchAll(/<li class="finding sev-[a-z]+" id="([^"]+)"/g)].map((x) => x[1]);
+  // Finding rows are collapsed <details> cards since the inspector design.
+  const ids = [...html.matchAll(/<details class="card sev-[a-z]+" id="([^"]+)"/g)].map((x) => x[1]);
   assert.deepEqual(ids, ["f-ga4-purchase-missing_params", "f-meta-purchase-missing_params", "f-meta-pageview-before_consent", "f-ga4-add_to_cart-duplicate"]);
-  const overview = html.slice(html.indexOf('id="overview"'), html.indexOf('id="findings"'));
-  for (const id of ids) assert.match(overview, new RegExp(`<ol class="fixlist">(?:(?!</ol>).)*<a href="#${id}">`, "s"));
-  assert.match(overview, /Developer<\/span><span class="n">2<\/span>.*\+60 points when fixed/);
-  assert.match(overview, /Nothing for Marketing in this run\./);
-  // The score card names the deductions and links them too.
-  assert.match(overview, /<span class="v">25<\/span><span class="muted">\/100<\/span>/);
-  assert.match(overview, /<span class="num mono">−30<\/span><span><a href="#f-ga4-purchase-missing_params">/);
-  // The journeys table counts the grouped cards that point at each run.
-  assert.match(overview, /<td><a href="#j3">checkout<\/a><\/td><td>mobile<\/td><td class="num">11<\/td><td class="num">20<\/td><td class="num bad">.*4<\/td>/);
+  const summary = html.slice(html.indexOf('id="summary"'), html.indexOf('id="findings"'));
+  // The priorities list became the score's cost lines: one line per fix (GA4 and Meta purchase are one fix, −60),
+  // each linking the card with the largest deduction, so every card is reached from the Summary or its group.
+  const costs = summary.slice(summary.indexOf('<ul class="sc-costs">'), summary.indexOf("</ul>", summary.indexOf('<ul class="sc-costs">')));
+  assert.deepEqual([...costs.matchAll(/<a href="#([^"]+)">/g)].map((x) => x[1]), ["f-ga4-purchase-missing_params", "f-meta-pageview-before_consent", "f-ga4-add_to_cart-duplicate"]);
+  assert.match(costs, /<li class="sev-broken"><a href="#f-ga4-purchase-missing_params"><span class="pts">−60<\/span>.*?<use href="#p-ga4"\/>.*?<use href="#p-meta"\/>/);
+  // Marketing has nothing to do in this run: the owner filter offers no Marketing chip.
+  assert.doesNotMatch(html.slice(html.indexOf('id="findings"'), html.indexOf('id="journeys"')), /owner=marketing/);
+  // The score card shows the score out of 100.
+  assert.match(summary, /<span class="sc-num">25<\/span><span class="sc-of">\/100<\/span>/);
+  // The Journeys card counts the grouped cards that point at each run (in the matrix cell's screen-reader text).
+  assert.match(summary, /<a href="#j3">.*?<span class="sr">checkout · mobile: completed · 11 steps · 20 hits · 4 problems<\/span><\/a>/);
 });
 
 test("a finding card carries severity, owner, where with page, evidence with missing rows, fix and verify links", () => {
   const html = render();
   const card = html.slice(html.indexOf('id="f-ga4-purchase-missing_params"'), html.indexOf('id="f-meta-pageview-before_consent"'));
-  assert.match(card, /<h4 class="ftitle"><code>purchase<\/code> was sent without <code>currency<\/code>, <code>value<\/code>\.<\/h4>/);
-  assert.match(card, /<span class="chip owner">Developer<\/span><span>checkout · mobile only<\/span>/);
+  // The title is the card's summary line now, not an h4.
+  assert.match(card, /<span class="f-t"><code>purchase<\/code> was sent without <code>currency<\/code>, <code>value<\/code>\.<\/span>/);
+  // Owner and place are chips on the summary line; "checkout · mobile only" is the one run chip.
+  assert.match(card, /<span class="c-owner"><span class="chip chip-owner developer"><span class="dot"><\/span>Developer<\/span><\/span>/);
+  assert.match(card, /<span class="c-where"><span class="chip chip-vp mobile"><svg[^>]*><use href="#ui-mobile"\/><\/svg>checkout · mobile<\/span><\/span>/);
   assert.match(card, /<span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span>/);
-  assert.match(card, /<a href="#j3-s11" class="chip"><span class="chip-step">11<\/span><span>checkout · mobile <span class="muted">· Place the order<\/span> <span class="muted">· <code>\/thanks\.html<\/code><\/span><\/span><\/a>/);
-  assert.match(card, /Also fine on <a href="#j2">checkout · desktop<\/a>\./);
+  // Where links the hit that carried the event (…-h0), not only its step.
+  assert.match(card, /<a class="chip chip-vp mobile" href="#j3-s11-h0"><svg[^>]*><use href="#ui-mobile"\/><\/svg>checkout · mobile<\/a><span class="fnd-step"><span class="muted">step 11 ·<\/span> Place the order <span class="muted">· <code>\/thanks\.html<\/code><\/span><\/span>/);
+  // "Also fine on" is a chip that links the run where the event was fine.
+  assert.match(card, /<a class="chip chip-sev ok" href="#j2"><svg[^>]*><use href="#sev-ok"\/><\/svg>Fine on checkout · desktop/);
   // Evidence: the captured parameters, then the plan's required ones that are missing, marked as such.
   assert.match(card, /<th scope="row">transaction_id<\/th><td>T1792391968794<\/td>/);
-  assert.match(card, /<th scope="row">currency<\/th><td><span class="missing">missing<\/span><\/td><\/tr><tr><th scope="row">value<\/th><td><span class="missing">missing<\/span><\/td>/);
+  assert.match(card, /<th scope="row">currency<\/th><td><span class="chip chip-sev broken">missing<\/span><\/td><\/tr><tr><th scope="row">value<\/th><td><span class="chip chip-sev broken">missing<\/span><\/td>/);
   assert.match(card, /No model explanation in this run\./);
   assert.doesNotMatch(card, /--no-ai/);
   assert.match(card, /<a href="https:\/\/tagassistant\.google\.com\/" target="_blank" rel="noopener noreferrer">Tag Assistant<svg[^>]*><use href="#ui-external"\/><\/svg><span class="sr"> \(opens in a new tab\)<\/span><\/a>/);
-  // A finding without captured evidence shows the hit it points at.
+  // A finding without captured evidence shows the hit it points at (times read "+0.2 s", as in Markdown and CSV).
   const meta = html.slice(html.indexOf('id="f-meta-pageview-before_consent"'), html.indexOf('id="f-ga4-add_to_cart-duplicate"'));
-  assert.match(meta, /<th scope="row">Request<\/th><td><span class="mono">www\.facebook\.com\/tr\/<\/span> · \+0\.\ds<\/td>/);
-  assert.match(meta, /<span>all 4 runs<\/span>/);
+  assert.match(meta, /<th scope="row">Request<\/th><td><span class="mono">www\.facebook\.com\/tr\/<\/span> · \+0\.\d s<\/td>/);
+  // "all 4 runs" is the place chip, naming the runs in its title.
+  assert.match(meta, /<span class="chip plain" title="[^"]+">all 4 runs<\/span>/);
   // AI explanations fill impact, cause and fix; the consequence and fix texts from i18n are used when a language has them.
   const ai = render({ explained: { summary: null, explanations: [{ finding: 0, impact: "No revenue for `purchase`.", likely_cause: "The push lacks it.", fix_steps: ["Add `value`.", "Re-test."] }] } });
-  assert.match(ai, /<span class="impact-l">Impact<\/span>No revenue for <code>purchase<\/code>\./);
+  // The impact strip leads the Evidence tab, with the impact icon in place of the "Impact" label.
+  assert.match(ai, /<p class="fnd-impact"><svg[^>]*><use href="#ui-impact"\/><\/svg><span>No revenue for <code>purchase<\/code>\.<\/span><\/p>/);
   assert.match(ai, /<ol class="fix-steps"><li><span>Add <code>value<\/code>\.<\/span><\/li><li><span>Re-test\.<\/span><\/li><\/ol>/);
-  // The first card of each owner group is open.
-  assert.deepEqual([...html.matchAll(/<li class="finding [^"]+" id="([^"]+)" data-sev="[a-z]+"><details open>/g)].map((x) => x[1]), ["f-ga4-purchase-missing_params", "f-meta-pageview-before_consent"]);
+  // Every card starts collapsed (the design opens a card on a click or a deep link, none by default).
+  const cards = [...html.matchAll(/<details class="card sev-[a-z]+" id="f-[^"]+"([^>]*)>/g)].map((x) => x[1].replace(/"[^"]*"/g, '""'));
+  assert.equal(cards.length, 4);
+  assert.deepEqual(cards.filter((attrs) => /\sopen(\s|$)/.test(attrs)), []);
 });
 
 test("an accepted finding is labelled, and a page the step does not know reads as unknown", () => {
@@ -106,7 +133,8 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   assert.doesNotMatch(CSS, /Google Sans/);
   assert.doesNotMatch(html, /url\("data:image\/svg/);
   const klaviyo = renderHtml({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [{ journeyId: "j", viewport: "desktop", startedAt: 0, completed: true, steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Open", t: 1 }], hits: [{ platform: "klaviyo", name: "Viewed Product", params: {}, url: "https://a.klaviyo.com/x", step: 1, t: 2 }], dataLayerLog: [] }] });
-  assert.match(klaviyo, /<span class="plat-fb s16" aria-hidden="true">K<\/span><span>Klaviyo<\/span>/);
+  // Journeys draws a hit's platform at 14 px (the hit row's icon size), so the initials square is s14.
+  assert.match(klaviyo, /<span class="plat-fb s14" aria-hidden="true">K<\/span><span>Klaviyo<\/span>/);
 });
 
 test("the theme has both dark selectors, the logos come as two images, and brandCss follows the same selectors", () => {
@@ -140,9 +168,15 @@ test("the inline script is allowed by its hash in the page CSP and the MCP serve
 
 test("print rules stack the tabs and open the cards; tips take no focus; every table is named", () => {
   const html = render();
-  assert.match(CSS, /@media print\{[\s\S]*\.tabbar,\.jtabs,\.btn,\.skip,\.print-skip\{display:none!important\}/);
-  assert.match(CSS, /\.panel\{break-before:page;padding:0\}/);
-  assert.match(CSS, /\.badge,\.chip,\.missing,\.consent\{background:none!important;border:1px solid currentColor\}/);
+  // The rail and top bar replaced the tab bar: on paper they are hidden, every section shows and starts a page.
+  assert.match(CSS, /@media print\{[\s\S]*\.top,\.rail,\.skip,\.sec-tools[^{]*\{display:none!important\}/);
+  assert.match(CSS, /@media print\{[\s\S]*main>\.sec\[hidden\][^{]*\{display:block!important\}/);
+  assert.match(CSS, /main>\.sec\+\.sec\{break-before:page\}/);
+  // Cards start collapsed, so print opens the flagged ones by CSS alone (writePdf runs without JavaScript), and
+  // every tab panel prints under its label.
+  assert.match(CSS, /details\.card\[data-print-open\]::details-content\{content-visibility:visible;display:block\}/);
+  assert.match(CSS, /\.tabs \[role=tabpanel\],\.tabs \[role=tabpanel\]\[hidden\]\{display:block\}/);
+  assert.match(CSS, /\.chip,\.badge,\.n\{background:none!important;border:1px solid currentColor\}/);
   assert.doesNotMatch(html, /tabindex="0"/);
   assert.doesNotMatch(html, /role="note"/);
   for (const t of html.match(/<table[^>]*>(?:<caption)?/g)) assert.match(t, /aria-label=|<caption/, t);
@@ -155,39 +189,59 @@ test("the Trend card appears only with a history of at least two runs; a lone ch
   const t = trend(history);
   const changes = { previous: "2026-10-02_0900", mode: "findings", fixed: [], new: [{ platform: "ga4", event: "add_to_cart", check: "duplicate", detail: "twice" }], routes: [] };
   const html = render({ trend: t, changes });
-  assert.match(html, /<div class="card" id="trend"><div class="card-h"><h3>Trend<\/h3>/);
+  // The trend is a collapsed card in the Run section; its title is the summary line.
+  assert.match(html, /<details class="card" id="trend"><summary><span class="t">Trend<\/span>/);
   assert.match(html, /<svg class="spark" viewBox="0 0 280 64"[^>]*role="img" aria-label="Broken: 2, 2, 2; Risk: 1, 1, 1; Warning: 0, 1, 1">/);
   assert.match(html, /<circle class="sev-broken hollow"/);
   assert.match(html, /<strong>Getting worse<\/strong> <span class="muted">over 3 runs, 2026-10-01 to 2026-10-03<\/span>/);
   assert.match(html, /<strong>1 new problem<\/strong>/);
-  assert.match(html, /Open longest<\/h4><ul class="changes"><li><span class="badge sev-broken">.*<a href="#f-ga4-purchase-missing_params">/);
+  // "Open longest" is an h3 under the Run section's h2 now.
+  assert.match(html, /Open longest<\/h3><ul class="tr-list"><li><span class="badge sev-broken">.*<a href="#f-ga4-purchase-missing_params">/);
   assert.match(html, /open since 2026-10-01 · 3 runs · 1 place/);
   assert.doesNotMatch(render({ trend: trend(history.slice(0, 1)) }), /id="trend"/);
   assert.doesNotMatch(render(), /id="trend"/);
-  assert.match(render({ changes }), /<div class="card" id="changes">/);
-  // With a history the diff lives inside the Trend card and keeps the #changes anchor the route line links to.
-  assert.doesNotMatch(html, /<div class="card" id="changes">/);
-  assert.match(html, /<div id="changes"><p class="xs"><strong>1 new problem<\/strong>/);
+  // The changes card is the Findings section's collapsed card.
+  const lone = render({ changes });
+  assert.match(lone, /<details class="card fnd-changes" id="changes">/);
+  assert.equal((lone.match(/id="changes"/g) ?? []).length, 1);
+  // With a history the changes card stays in Findings and the Trend card links to it instead of embedding a copy:
+  // one #changes anchor, the one the route line and the trend link to.
+  assert.equal((html.match(/id="changes"/g) ?? []).length, 1);
+  assert.match(html.slice(html.indexOf('id="findings"'), html.indexOf('id="journeys"')), /<details class="card fnd-changes" id="changes">/);
+  assert.match(html.slice(html.indexOf('id="trend"')), /<a href="#changes"><strong>1 new problem<\/strong><\/a>/);
 });
 
-test("the Journeys and Scope panels carry the consent, funnel, parity, coverage and conversion tables", () => {
+test("the Journeys, Consent and Scope sections carry the consent, funnel, parity, coverage and conversion tables", () => {
   const html = render();
-  const journeys = html.slice(html.indexOf('id="journeys"'), html.indexOf('id="scope"'));
-  assert.match(journeys, /<td class="num bad"><svg[^>]*><use href="#sev-broken"\/><\/svg> 1<span class="sr"> problem:<\/span> <span class="xs">should not have been sent <a href="#f-meta-pageview-before_consent">Finding →<\/a><\/span><\/td>/);
-  assert.match(journeys, /<td class="num">1 <span class="muted xs">cookieless<\/span><\/td>/);
-  assert.match(journeys, /Default set \d+ ms into the first page, before the first Google hit · v2 signals present\./);
-  assert.match(journeys, /<tr id="j3-s11" class="srow flagged sev-broken has-d"><th scope="row"><span class="sidx">11<\/span><\/th><td class="slabel">Place the order<span class="sr"> \(has a broken finding\)<\/span><span class="smeta xs muted"><code>\/thanks\.html<\/code> · click<\/span><\/td>/);
-  assert.match(journeys, /<tr class="drow sev-broken"><td colspan="5"><details open>/);
-  assert.match(journeys, /<h4>Expected vs observed<\/h4><p class="card-d">11 of 11 expected events fired, 9 with every required parameter\./);
-  assert.match(journeys, /<span class="x"><svg[^>]*><use href="#sev-broken"\/><\/svg> without currency, value<\/span>/);
-  assert.match(journeys, /<h4>Platform parity<\/h4>/);
-  assert.match(journeys, /count differs/);
-  const scope = html.slice(html.indexOf('id="scope"'));
-  assert.match(scope, /<p class="card-d">Coverage 9 of 11 \(82%\)<\/p>/);
-  assert.match(scope, /<code>purchase<\/code><span class="muted xs"> · needs transaction_id, currency, value, items<\/span><\/td><td class="c o">–<span class="sr"> not expected<\/span><\/td><td class="c o">.*<td class="c y">✓<span class="sr"> sent<\/span><\/td><td class="c x"><svg[^>]*><use href="#sev-broken"\/><\/svg> params<span class="sr"> without currency, value<\/span><\/td>/);
-  assert.match(scope, /<h3>Conversion integrity<\/h3><p class="card-d">2 of 4 purchases pass every check\./);
-  assert.match(scope, /<span class="badge sev-info"><svg[^>]*><use href="#sev-info"\/><\/svg>Checked, not seen<\/span>/);
-  assert.match(scope, /<dt>Version<\/dt><dd><code>/);
+  // Four tabs became seven sections: Consent is its own section, and Scope split into Coverage, Inventory and Run.
+  const consent = html.slice(html.indexOf('id="consent"'), html.indexOf('id="coverage"'));
+  assert.match(consent, /<td class="cs-bad">.*?<span class="badge sev-risk"><svg[^>]*><use href="#sev-risk"\/><\/svg>Sent<\/span><span class="sr"> problem: should not have been sent<\/span><a href="#f-meta-pageview-before_consent">Finding →<\/a><\/span><\/td>/);
+  assert.match(consent, /<b class="num">1<\/b><span title="cookieless">.*?<\/span><span class="sr"> cookieless<\/span>/);
+  assert.match(consent, /Default set \d+ ms into the first page, before the first Google hit · v2 signals present\./);
+  assert.ok(consent.indexOf('id="consent-mode"') < consent.indexOf("Default set"), "the timing sentence sits in the Consent Mode card");
+  const journeys = html.slice(html.indexOf('id="journeys"'), html.indexOf('id="consent"'));
+  // The step row became the step list item and the step pane, with the label, path and action in its header.
+  assert.match(journeys, /<li class="jr-st sev-broken" data-flagged="broken"><button type="button" data-select-target="#j3-s11"/);
+  assert.match(journeys, /<article class="card jr-pane sev-broken" id="j3-s11" [^>]*data-flagged="broken"[^>]*>\n<header class="jr-ph"><h3 id="j3-s11-t"><span class="jr-n">11<\/span><span>Place the order<\/span><\/h3><span class="jr-ph-e"><span class="badge sev-broken">/);
+  assert.match(journeys, /<p class="jr-ph-m"><span>\/thanks\.html<\/span><span>click<\/span>/);
+  // Cards start collapsed: the flagged step is the selected pane, and its flagged hit prints open.
+  assert.match(journeys, /id="j3-s11" [^>]*data-selected/);
+  assert.match(journeys, /<details class="card jr-hit sev-broken" id="j3-s11-h0" data-flagged="broken" data-print-open>/);
+  assert.match(journeys, /<span class="jr-plan-h">Expected vs observed<\/span><span class="jr-plan-t">.*?11 of 11 expected events fired, 9 with every required parameter\./);
+  assert.match(journeys, /<a class="chip chip-sev broken" href="#j3-s11-h0" title="without currency, value">.*?<code>purchase<\/code><span class="sr"> without currency, value<\/span><\/a>/);
+  const step4 = journeys.slice(journeys.indexOf('id="j3-s4"'), journeys.indexOf("</article>", journeys.indexOf('id="j3-s4"')));
+  assert.match(step4, /<span class="jr-par-h">Platform parity<\/span>/);
+  assert.match(step4, /<b>count differs<\/b>/);
+  const coverage = html.slice(html.indexOf('id="coverage"'), html.indexOf('id="inventory"'));
+  // "Coverage 9 of 11 (82%)" is the plan card's summary: a count chip and the percentage.
+  assert.match(coverage, /<summary><span class="t">Measurement plan coverage<\/span><span class="chip chip-sev warning"><b>9<\/b> of 11<\/span><span class="chip plain mono"><b>82%<\/b><\/span>/);
+  // The purchase row: the parameters it needs as code (missing ones marked), then –, ✓ and params cells with sr text.
+  assert.match(coverage, /<code>purchase<\/code><\/span><\/th><td class="cv-needs"><code>transaction_id<\/code><code class="cv-miss">currency<\/code><code class="cv-miss">value<\/code><code>items<\/code><\/td><td class="cv-c muted">–<span class="sr"> not expected<\/span><\/td><td class="cv-c muted">.*<td class="cv-c"><span class="chip chip-sev ok cv-g"><svg[^>]*><use href="#sev-ok"\/><\/svg><span class="sr"> sent<\/span><\/span><\/td><td class="cv-c"><span class="chip chip-sev broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>params<span class="sr"> without currency, value<\/span><\/span><\/td>/);
+  assert.match(coverage, /<summary><span class="t">Conversion integrity<\/span>/);
+  assert.match(coverage, /2 of 4 purchases pass every check\./);
+  const inventory = html.slice(html.indexOf('id="inventory"'), html.indexOf('id="run"'));
+  assert.match(inventory, /<span class="badge sev-info"><svg[^>]*><use href="#sev-info"\/><\/svg>Checked, not seen<\/span>/);
+  assert.match(html.slice(html.indexOf('id="run"')), /<dt>Version<\/dt><dd><code>/);
 });
 
 test("in a browser the report has one h1, no heading skips, named tables, selected tabs and no horizontal scroll at 390px", async (t) => {
@@ -199,6 +253,9 @@ test("in a browser the report has one h1, no heading skips, named tables, select
     writeFileSync(file, render());
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.goto(`file://${file}`);
+    const visible = () => page.evaluate(() => [...document.querySelectorAll("main > .sec")].filter((s) => getComputedStyle(s).display !== "none").map((s) => s.id));
+    // A hash change routes on the hashchange event, which can fire after goto() or a key press returns.
+    const shown = (id) => page.waitForFunction((x) => !document.getElementById(x).hidden, id, { timeout: 5000 });
     const structure = await page.evaluate(() => {
       const hs = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].map((h) => +h.tagName[1]);
       let prev = 0;
@@ -206,33 +263,50 @@ test("in a browser the report has one h1, no heading skips, named tables, select
       return {
         h1: hs.filter((l) => l === 1).length, skips,
         unnamedTables: [...document.querySelectorAll("table")].filter((x) => !(x.caption || x.hasAttribute("aria-label"))).length,
-        tabs: [...document.querySelectorAll("[role=tab]")].map((x) => x.getAttribute("aria-selected")),
-        active: document.querySelector("#overview").classList.contains("active"),
+        current: [...document.querySelectorAll(".rail a[aria-current]")].map((a) => a.getAttribute("href")),
         skip: document.querySelector("a.skip").getAttribute("href"),
       };
     });
     assert.equal(structure.h1, 1);
     assert.equal(structure.skips, 0);
     assert.equal(structure.unnamedTables, 0);
-    assert.deepEqual(structure.tabs, ["true", "false", "false", "false", "true", "false", "false", "false"]);
-    assert.ok(structure.active && structure.skip === "#main");
-    // A deep link opens its panel, journey and details; arrow keys move between tabs.
+    // The four top tabs became the rail's seven sections: one shows at a time, the Summary first, marked in the rail.
+    assert.deepEqual(await visible(), ["summary"]);
+    assert.deepEqual(structure.current, ["#summary"]);
+    assert.equal(structure.skip, "#main");
+    // A deep link opens its section, journey and step pane; another run's step switches the journey.
     await page.goto(`file://${file}#j3-s11`);
-    assert.ok(await page.evaluate(() => document.querySelector("#journeys").classList.contains("active") && document.querySelector("#j3").classList.contains("active") && document.querySelector("#j3-s11 + tr.drow details").open));
-    await page.focus("#tab-journeys");
+    await shown("journeys");
+    assert.deepEqual(await visible(), ["journeys"]);
+    assert.ok(await page.evaluate(() => {
+      const run = document.querySelector("#j3"), pane = document.querySelector("#j3-s11");
+      return !run.hidden && run.offsetParent !== null && !pane.hidden && pane.offsetParent !== null && document.querySelector('[data-select-target="#j3-s11"]').getAttribute("aria-current") === "true";
+    }));
+    await page.goto(`file://${file}#j2-s4`);
+    await shown("j2");
+    assert.ok(await page.evaluate(() => !document.querySelector("#j2").hidden && document.querySelector("#j3").hidden && document.querySelector("#j2-s4").offsetParent !== null && document.querySelector('[data-select-target="#j2-s4"]').getAttribute("aria-current") === "true"));
+    // Arrow keys move between the tabs of a [data-tabs] box; the digits 1–7 move between the rail's sections.
+    await page.goto(`file://${file}#j3-s11`);
+    await shown("j3");
+    await page.focus('#j3-s11 [role=tab][aria-controls="j3-s11-hits"]');
     await page.keyboard.press("ArrowRight");
-    assert.equal(await page.evaluate(() => document.activeElement.id + ":" + document.querySelector("#tab-scope").getAttribute("aria-selected")), "tab-scope:true");
-    for (const hash of ["", "#findings", "#journeys", "#scope"]) {
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-controls") + ":" + document.activeElement.getAttribute("aria-selected")), "j3-s11-dl:true");
+    await page.focus("#main");
+    await page.keyboard.press("7");
+    await shown("run");
+    assert.deepEqual(await visible(), ["run"]);
+    for (const hash of ["#summary", "#findings", "#journeys", "#consent", "#coverage", "#inventory", "#run"]) {
       await page.setViewportSize({ width: 390, height: 800 });
       await page.goto(`file://${file}${hash}`);
+      await shown(hash.slice(1));
       const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
-      assert.ok(sw <= cw, `${hash || "overview"} scrolls sideways at 390px: ${sw} > ${cw}`);
+      assert.ok(sw <= cw, `${hash} scrolls sideways at 390px: ${sw} > ${cw}`);
     }
-    // Without JavaScript every panel is visible with its heading.
+    // Without JavaScript every section is visible with its heading.
     const noJs = await browser.newContext({ javaScriptEnabled: false });
     const plain = await noJs.newPage();
     await plain.goto(`file://${file}`);
-    assert.equal(await plain.evaluate(() => [...document.querySelectorAll(".panel")].filter((p) => getComputedStyle(p).display !== "none" && getComputedStyle(p.querySelector("h2")).display !== "none").length), 4);
+    assert.equal(await plain.evaluate(() => [...document.querySelectorAll("main > .sec")].filter((p) => getComputedStyle(p).display !== "none" && getComputedStyle(p.querySelector("h2")).display !== "none").length), 7);
     await noJs.close();
   } finally {
     await browser.close();

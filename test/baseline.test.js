@@ -79,8 +79,10 @@ test("the reports label accepted findings, in English and Turkish, and say how m
   assert.match(md, /^### Warning: sent twice/m);
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "en" });
   // The verdict block carries the accepted line under the verdict, and only the accepted card wears the badge.
-  assert.match(html, /<p class="verdict-line">[^\n]*<strong>Needs attention:<\/strong>[^\n]*<\/p>\n<p class="meta accepted-line">1 accepted finding from the baseline is not counted<\/p>/);
-  assert.match(html, /<span class="badge">Accepted<\/span><\/span><\/span>/);
+  // The scorecard puts the line after the five status chips it explains (no verdict-line paragraph since the
+  // inspector design), and the accepted card's title is followed by its owner cell instead of a third </span>.
+  assert.match(html, /<p class="sc-verdict sev-warning">[^\n]*Needs attention<\/p>\n[\s\S]*?<div class="sc-chips[^\n]*<\/div>\n<p class="meta accepted-line">1 accepted finding from the baseline is not counted<\/p>/);
+  assert.match(html, /<span class="badge">Accepted<\/span><\/span><span class="c-owner">/);
   assert.equal((html.match(/<span class="badge">Accepted<\/span><\/span>/g) ?? []).length, 1);
   assert.doesNotMatch(renderHtml({ title: "t", generatedAt: "now", findings: findings.slice(1), explained: null, runs: [run], lang: "en" }), /accepted-line/);
   const tr = renderMarkdown({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
