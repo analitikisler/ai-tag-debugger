@@ -11,10 +11,12 @@ import {
   isProblem, placeKey, uniqPlaces, mdHeadline, platformLabel, safeKey, sortPlatforms, changeLabel, coverageLines, pcSort, planChangeItems,
 } from "./report-shared.js";
 
-// The HTML report lives in src/html/: the 0.17 renderer in legacy.js, the new one in shell.js and its section modules.
+// The HTML report lives in src/html/: shell.js assembles the page from one module per section.
 // Callers keep importing everything from here.
 export { VERSION, escapeHtml, platformLabel, verdictHeadline } from "./report-shared.js";
-export { CSS, SCRIPT, scriptCspSource, renderHtml } from "./html/legacy.js";
+export { renderHtml } from "./html/shell.js";
+export { CSS } from "./html/css.js";
+export { SCRIPT, scriptCspSource } from "./html/script.js";
 export { logo } from "./html/lib.js";
 
 

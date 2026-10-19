@@ -771,6 +771,7 @@ const en = {
     // ---- html.scope: strings of src/html/scope.js, edited only by its builder ----
     scope: {
       ofEvents: (n, total) => `${n} of ${total}`,
+      problemPoints: "Problem points",
       barLabel: (ok, params, missing) => `${ok} complete, ${params} with a missing parameter, ${missing} not sent`,
       missingParams: (n) => `${n} missing params`,
       notSentCount: (n) => `${n} not sent`,
@@ -1536,6 +1537,7 @@ const tr = {
     // ---- html.scope: strings of src/html/scope.js, edited only by its builder ----
     scope: {
       ofEvents: (n, total) => `${total} olaydan ${n}`,
+      problemPoints: "Sorun puanı",
       barLabel: (ok, params, missing) => `${ok} eksiksiz, ${params} olayda zorunlu parametre eksik, ${missing} olay gönderilmedi`,
       missingParams: (n) => `${n} olayda eksik parametre`,
       notSentCount: (n) => `${n} olay gönderilmedi`,

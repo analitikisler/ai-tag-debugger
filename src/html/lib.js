@@ -1,6 +1,6 @@
 // Helpers every section of the HTML report uses: escaping, the icon sprite, platform names and icons, chips and
 // badges, the ids that link Findings, Journeys and Summary to each other, and page titles for steps. The 0.17
-// renderer (legacy.js) imports its icon, logo and id helpers from here, so the two reports cannot drift apart while
+// renderer imports its icon, logo and id helpers from here, so the sections cannot drift apart while
 // both exist; this module imports neither of them. CONTRACT-IMPL.md in the build notes lists what each helper is for.
 import { hitMatchesEvent } from "../checks.js";
 import { LOGOS } from "../brand.js";

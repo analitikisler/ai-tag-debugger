@@ -109,7 +109,7 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
         r.hidden = !ok; if (ok) shown++;
       });
       groups.forEach(function (g) { // with a filter on, a group with matches opens and one without hides; off, back to default
-        var n = $$("[data-text]", g.el).filter(function (r) { return !r.hidden; }).length;
+        var n = $$("[data-text]", g.el).filter(function (r) { return !r.hidden && !r.hasAttribute("data-accepted"); }).length;
         g.el.hidden = active && !n;
         if (g.el.tagName === "DETAILS") g.el.open = active ? n > 0 : g.open;
         $$("[data-group-count]", g.el).forEach(function (c) { c.textContent = n; });

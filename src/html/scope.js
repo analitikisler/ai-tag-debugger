@@ -5,7 +5,7 @@
 import { buildInventory } from "../inventory.js";
 import { providerOf } from "../parsers.js";
 import { siteOf } from "../redact.js";
-import { VERSION, BUCKET_ORDER, coverageLines, pcSort, planChangeItems } from "../report-shared.js";
+import { VERSION, BUCKET_ORDER, coverageLines, pcSort, planChangeItems, routeList } from "../report-shared.js";
 import {
   PLATFORM_ART, badge, chip, detailHtml, esc, n, pathOf, platformLabel, safeKey, sectionBlock, sortPlatforms, use,
 } from "./lib.js";
@@ -327,7 +327,7 @@ function trendCard(ctx) {
   const direction = `<p><strong>${esc(dir)}</strong> <span class="muted">${esc(m.html.trendSpan(t.runs, dateOnly(t.first), dateOnly(t.last)))}</span></p>`;
   // The diff itself is the Findings section's "Changed since last run" card (#changes); the trend links to it.
   const diff = changes?.previous ? `<p class="xs"><a href="#changes"><strong>${esc(m.ui.changesLine(changes))}</strong></a> <span class="muted">${esc(m.ui.changesLead(changes.previous, changes.mode))}</span></p>` : "";
-  const runsTable = `<div class="tscroll"><table class="tbl tr-tbl"><caption class="sr">${esc(m.html.trend)}</caption><thead><tr><th scope="col">${esc(s.runCol)}</th>${SPARK_SERIES.map((k) => `<th scope="col" class="num">${esc(m.severity[k])}</th>`).join("")}<th scope="col" class="num">${esc(m.html.shell.score)}</th></tr></thead><tbody>${[...t.series].reverse().map((p) => `<tr><th scope="row"><span class="mono xs">${esc(p.id)}</span>${p.complete ? "" : ` ${chip("run", "incomplete", `${use("sev-warning", 13)}${esc(m.html.runIncomplete)}`)}`}</th>${SPARK_SERIES.map((k) => `<td class="num${p[k] ? "" : " dim"}">${p[k]}</td>`).join("")}<td class="num">${p.score ?? "–"}</td></tr>`).join("")}</tbody></table></div>`;
+  const runsTable = `<div class="tscroll"><table class="tbl tr-tbl"><caption class="sr">${esc(m.html.trend)}</caption><thead><tr><th scope="col">${esc(s.runCol)}</th>${SPARK_SERIES.map((k) => `<th scope="col" class="num">${esc(m.severity[k])}</th>`).join("")}<th scope="col" class="num">${esc(s.problemPoints)}</th></tr></thead><tbody>${[...t.series].reverse().map((p) => `<tr><th scope="row"><span class="mono xs">${esc(p.id)}</span>${p.complete ? "" : ` ${chip("run", "incomplete", `${use("sev-warning", 13)}${esc(m.html.runIncomplete)}`)}`}</th>${SPARK_SERIES.map((k) => `<td class="num${p[k] ? "" : " dim"}">${p[k]}</td>`).join("")}<td class="num">${p.score ?? "–"}</td></tr>`).join("")}</tbody></table></div>`;
   const list = (items, meta) => `<ul class="tr-list">${items.map((e) => `<li>${badge(e.severity, m.severity[e.severity])} <span>${historyLine(ctx, e)} <span class="muted">· ${esc(meta(e))}</span></span></li>`).join("")}</ul>`;
   const flapping = t.flapping?.length ? `<h3 class="tr-h">${esc(m.html.flapping)}</h3>${list(t.flapping, (e) => m.html.seenIn(e.seenIn, t.runs))}` : "";
   const open = t.openLongest?.length ? `<h3 class="tr-h">${esc(m.html.openLongest)}</h3>${list(t.openLongest, (e) => m.html.openSince(dateOnly(e.openSince), e.runsOpen, e.places.length))}` : "";
@@ -337,8 +337,11 @@ ${runsTable}${flapping}${open}</div></details>`;
 }
 
 function runSection(ctx) {
-  const { m, trend } = ctx;
-  return sectionBlock("run", esc(m.html.shell.sections.run), [runFacts(ctx), timingCard(ctx), trend?.series?.length >= 2 ? trendCard(ctx) : ""].filter(Boolean).join("\n"));
+  const { m, trend, changes } = ctx;
+  // A different route can explain new or fixed findings, so it sits next to the run facts as in 0.17; the route
+  // pairs themselves are listed in the Findings section's "Changed since last run" card.
+  const route = changes?.routes?.length ? `<p class="meta"><a href="#changes">${esc(m.ui.routeChanged(routeList(changes)))}</a></p>` : "";
+  return sectionBlock("run", esc(m.html.shell.sections.run), [runFacts(ctx), route, timingCard(ctx), trend?.series?.length >= 2 ? trendCard(ctx) : ""].filter(Boolean).join("\n"));
 }
 
 /** @param {import("./shell.js").Ctx} ctx */

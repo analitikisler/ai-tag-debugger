@@ -2,7 +2,7 @@
 // granted green and "no signal" grey, all by token through chip("consent", ...).
 import { consentTable } from "../consent.js";
 import { isConsentEntry } from "../report-shared.js";
-import { chip, esc, plat, safeKey, sectionBlock, sortPlatforms, stepTitle, secs, use, badge } from "./lib.js";
+import { chip, esc, platIcon, platformLabel, safeKey, sectionBlock, sortPlatforms, stepTitle, secs, use, badge } from "./lib.js";
 
 // Google tags carry Consent Mode signals on the hit; every other platform sends none, so its state is "none".
 const GOOGLE = new Set(["ga4", "google_ads"]);
@@ -43,7 +43,7 @@ export function render(ctx) {
   const sevChip = (sev, label) => chip("sev", sev, `${use(`sev-${sev}`, 13)}${esc(label)}`);
   const stateWord = (state) => t.state[state];
   const stateChip = (state, label = stateWord(state)) => chip("consent", state, esc(label));
-  const platChip = (key) => chip("plat", key, plat(key, 13));
+  const platChip = (key) => chip("plat", key, `${platIcon(key, 13)}${esc(platformLabel(key))}`);
   const findingLink = (row, cls = "") => (row && ids.get(row) ? `<a${cls ? ` class="${cls}"` : ""} href="#${ids.get(row)}">${esc(m.html.findingLink)}</a>` : "");
 
   /* ---- one status line per platform ---- */
