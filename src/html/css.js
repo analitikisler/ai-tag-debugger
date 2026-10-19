@@ -974,7 +974,6 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 /* journeys.css still has a bare .t (mono time); keep the card titles independent of it */
 #coverage details.card>summary>.t,#inventory details.card>summary>.t,#run details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
 #coverage .card+.card,#run .card{margin-top:var(--s2)}
-#coverage details.card>summary .chip.plain,#run .chip.plain,#inventory .chip.plain{--k-bg:var(--well);border-color:transparent;color:var(--fg)}
 
 /* ----- Coverage ----- */
 #coverage .cv-bar{display:inline-flex;gap:2px;align-items:center;height:14px;padding:0 2px}
@@ -991,9 +990,6 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #coverage .cv-tbl .cv-g>svg:first-child{margin-left:0}
 #coverage .cv-ev{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 #coverage .cv-ev code{white-space:nowrap}
-#coverage .cv-needs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;border-bottom:0}
-#coverage .cv-tbl tbody tr:not(:last-child) .cv-needs{border-bottom:0}
-#coverage .cv-tbl td.cv-needs{display:table-cell}
 #coverage .cv-needs code{margin:0 3px 3px 0;display:inline-block;font-size:11.5px}
 #coverage code.cv-miss{background:var(--sev-broken-bg);color:var(--sev-broken-fg);font-weight:600}
 #coverage .cv-tbl tbody tr[data-st=params]>th{box-shadow:inset 3px 0 0 var(--sev-broken)}
@@ -1004,8 +1000,10 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #coverage .cv-scroll .cv-tbl thead th:first-child{background:var(--well)}
 
 /* ----- Inventory ----- */
-#inventory .inv-rows{display:grid;gap:var(--s2);margin-top:var(--s3)}
-#inventory .inv-rows>.card{margin:0}
+#inventory .inv-rows{list-style:none;display:grid;gap:var(--s2);margin-top:var(--s3)}
+#inventory .inv-rows>li>.card{margin:0}
+#inventory .inv-note{margin-top:var(--s3)}
+#inventory .inv-note+.inv-note{margin-top:var(--s1)}
 #inventory .inv-line{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);min-height:44px;padding:10px var(--s4)}
 #inventory .inv-line .chip-sev{opacity:.95}
 #inventory .inv-m{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -1049,8 +1047,38 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #coverage .cv-tbl td,#coverage .cv-tbl th,#run .tm-tbl td{white-space:nowrap}
 #coverage .cv-tbl td.cv-needs{white-space:normal;min-width:150px}
 #coverage .cv-tbl.cv-conv{min-width:760px}
+#coverage .cv-conv thead th.cv-c{white-space:normal;overflow-wrap:normal;line-height:1.25}
 #run .tm-tbl{min-width:600px}
-#run .tm-s{flex-wrap:nowrap}`;
+#run .tm-s{flex-wrap:nowrap}
+/* ----- additions for the product: search icon, links, plan vs site, trend ----- */
+/* the search field's icon is a sprite symbol laid over the input; CSS may not carry a data URI */
+#coverage .cv-search{position:relative;display:flex;flex:1 1 180px;min-width:0;max-width:320px;margin-left:auto}
+#coverage .cv-search>svg{position:absolute;left:11px;top:50%;margin-top:-7px;width:14px;height:14px;color:var(--muted);pointer-events:none}
+#coverage .cv-search [data-filter-search]{flex:1 1 auto;max-width:none;margin-left:0;width:100%}
+#coverage a.cv-run,#run a.chip-run{text-decoration:none}
+#coverage .cv-ev .badge{height:20px;font-size:11.5px}
+#coverage .cv-lead{margin-bottom:var(--s3)}
+#coverage .cv-none{margin-top:var(--s3)}
+#coverage .pv-tbl td.xs{white-space:normal;min-width:220px}
+#coverage .pv-scroll{margin-top:var(--s3)}
+#coverage .pv-h{margin-top:var(--s4)}
+#coverage .pv-changes{margin:var(--s1) 0 0 var(--s4)}
+#run .run-facts dd>.xs{line-height:1.4}
+#run .tr-body{display:grid;gap:var(--s3)}
+#run .tr-chart{display:grid;gap:var(--s2)}
+#run .spark{display:block;max-width:100%;height:auto}
+#run .spark polyline{fill:none;stroke:var(--sev);stroke-width:1.75;stroke-linejoin:round}
+#run .spark circle{fill:var(--sev);stroke:var(--card);stroke-width:1}
+#run .spark circle.hollow{fill:var(--card);stroke:var(--sev);stroke-width:1.5}
+#run .spark-legend{display:flex;flex-wrap:wrap;gap:4px 12px}
+#run .spark-legend i{display:inline-block;width:10px;height:3px;background:var(--sev);margin-right:5px;vertical-align:middle;border-radius:2px}
+#run .tr-tbl{min-width:420px}
+#run .tr-tbl th[scope=row]{white-space:nowrap}
+#run .tr-h{margin-top:var(--s2)}
+#run .tr-list{list-style:none;display:grid;gap:6px}
+#run .tr-list li{display:flex;align-items:baseline;gap:var(--s2);font-size:13px}
+#run .tr-list li>.badge{flex:none}
+@media print{#run .spark{print-color-adjust:exact;-webkit-print-color-adjust:exact}}`;
 // ---------- end of scope ----------
 
 export const CSS = [TOKENS, COMPONENTS, SHELL, PRODUCT, SUMMARY, FINDINGS, JOURNEYS, CONSENT, SCOPE].join("\n");
