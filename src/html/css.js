@@ -199,6 +199,7 @@ details.card[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
 details.card>summary:hover{background:var(--well)}
 details.card>summary:hover::after{border-color:var(--fg)}
 details.card>summary:focus-visible{outline-offset:-2px}
+details.card:focus-visible,.card:focus-visible{outline-offset:1px;border-radius:var(--r-md)}
 details.card[open]>summary{border-bottom:1px solid var(--border);border-bottom-left-radius:0;border-bottom-right-radius:0}
 details.card>summary .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
 details.card>summary .end{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
@@ -439,7 +440,7 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 .sec:has(>.sec-tools) h2{padding-right:190px}
 .fb-clear{height:28px}
 /* revealed element: a 1.5 s accent outline; the tint fades unless motion is reduced */
-.flash{outline:2px solid var(--accent)!important;outline-offset:2px;border-radius:var(--r-sm);animation:aitd-flash 1.5s ease-out}
+.flash{animation:aitd-flash 1.5s ease-out}
 @keyframes aitd-flash{from{background-color:var(--accent-bg)}}
 
 .footer{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border-top:1px solid var(--border);background:var(--card)}
@@ -682,7 +683,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .card.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-sm)}
 .fnd .card.line .go:hover{color:var(--fg);background:var(--well);text-decoration:none}
 .fnd .card.line .go svg{width:14px;height:14px}
-.fnd .card.line.flash,.fnd .card.flash{outline:2px solid var(--accent);outline-offset:1px}
+.fnd .card.line.flash,.fnd .card.flash{animation:aitd-flash 1.5s ease-out}
 @media (max-width:719px){
   .fnd details.card>summary,.fnd .card.line{display:flex;flex-wrap:wrap;column-gap:8px;padding:8px 36px 8px 12px}
   .fnd .card>summary>.badge,.fnd .card.line>.badge{order:1}
@@ -840,6 +841,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-ph{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px var(--s3);align-items:center;padding:var(--s3) var(--s4) 0}
 #journeys .jr-ph h3{display:flex;align-items:center;gap:10px;font-size:16px;line-height:1.3;min-width:0}
 #journeys .jr-ph h3 .jr-n{width:26px;height:26px;font-size:12px}
+#journeys .jr-pane[class*=sev-]{border-left:1px solid var(--border)}
 #journeys .jr-pane[class*=sev-] .jr-ph .jr-n{background:var(--sev-bg);border-color:var(--sev);color:var(--sev-fg)}
 #journeys .jr-ph-e{display:inline-flex;gap:6px;align-items:center}
 #journeys .jr-ph-m{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:0 var(--s2);padding-left:36px;font:12px/1.5 var(--font-mono);color:var(--muted);min-width:0}

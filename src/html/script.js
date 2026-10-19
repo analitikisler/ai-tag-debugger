@@ -161,7 +161,7 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     });
     var inner = el.querySelector(":scope > details");
     if (inner) inner.open = true;
-    var f = el.tagName === "DETAILS" ? el.querySelector("summary") : el;
+    var f = el;
     if (!f.matches("a[href],button,summary,input,[tabindex]")) f.setAttribute("tabindex", "-1");
     el.scrollIntoView({ block: "start" });
     f.focus({ preventScroll: true });
