@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.0 (unreleased)
+## 0.17.0 (2026-10-19)
 
 - The report opens with a verdict. A deterministic sentence names the lead problem and where it is ("purchase tracking is broken on mobile"), with a data quality score whose weights are printed next to it, so a run without an AI model still says what matters first. The same verdict heads report.md, the CLI output, `summary.json` and the Slack and email alerts.
 - The HTML report was rebuilt: a verdict block with count tiles, "What to fix first" grouped by owner with the points each fix recovers, finding cards with a stable id, impact, cause, evidence, fix, where and how to verify, a journeys view with the hits per step, consent scenarios with a reason per cell, expected-versus-observed and platform parity tables, conversion integrity, plan coverage and a trend card. Severity is never colour alone, platform icons are one inline sprite, system fonts only, light and dark mode, keyboard and screen-reader friendly, no horizontal scroll on phones, and print opens only the flagged steps: the demo report is 22% smaller and prints on 21 pages instead of 55.
@@ -8,6 +8,8 @@
 - `report.md` follows a fixed shape within about 120 lines: verdict, counts, changes since the last run, trend, priorities by owner, the top findings in full, consent, what passed, journeys and flagged steps, inventory. The timeline stays in `timeline.csv`.
 - Trend over runs: each saved run updates `aitd/<domain>/history.json`; the report, the CLI and the alerts show the direction, a sparkline, problems open longest and problems that flap. `aitd history --site <url> [--limit n] [--json]` prints the series.
 - Alerts carry the verdict, the direction with a sparkline, flapping problems and "was: …" for fixed items.
+- `summary.json` names the run folder as `run` and lists file names relative to it, so a summary uploaded as a CI artifact reads the same on any machine. With `--fail-on never`, `junit.xml` no longer marks an unfinished journey as a failure.
+- A baseline written for another site prints a warning, and a problem accepted on some viewports only is reported as partially accepted and still counted.
 - Every completed run saves its steps as `steps.json` in the run folder. `--scripted` replays the last completed run's steps for a journey that has none of its own, so after one run with an AI model the routine CI run needs no model at all.
 - `--concurrency <n>` (config `concurrency`, MCP `run_audit` `concurrency`): journeys and consent scenarios run side by side, each in its own browser, up to 8 at once. Default 1. On the demo shop, 4 runs plus consent scenarios take 17 seconds at 4 instead of 41 at 1.
 - Baseline of accepted findings: `--baseline <file>` (config `baseline`) marks known findings as accepted, so they are listed in the report but left out of the counts and the exit code. `--update-baseline` writes the file. Stale entries are reported, never removed.
