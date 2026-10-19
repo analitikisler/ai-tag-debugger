@@ -72,6 +72,9 @@ export const CONFIG_SCHEMA = z.looseObject({
   consent_scenarios: flag.optional(),
   keep_bodies: flag.optional(),
   branding: flag.optional(),
+  // The range itself is checked by parseConcurrency, which gives the exact message for the CLI flag too.
+  concurrency: z.union([z.number(), text], { error: "must be a whole number from 1 to 8" }).optional(),
+  baseline: text.optional(),
   language: z.enum(Object.keys(LANGUAGES)).optional(),
   report: z.looseObject({ name: text.nullish(), logo: text.nullish(), color: text.nullish(), pdf: flag.optional() }).optional(),
   provider: z.enum(Object.keys(AI_PROVIDERS)).optional(),
