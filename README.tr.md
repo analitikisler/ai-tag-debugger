@@ -313,11 +313,30 @@ aitd/
     plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (dışa aktarımdan sonra)
     runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json, steps.json,
                                     junit.xml, summary.json ve plan-check.json (--against ile)
+    history.json                    kayıtlı her çalıştırmanın küçük bir özeti, eğilim için (aşağıya bakın)
 ```
 
 Bir kimlik, yerel saat `YYYY-MM-DD_HHMM` biçimindedir. O dakika zaten alınmışsa saniye eklenir (`_HHMMSS`). Hiçbir şey değiştirilmez: her taslak, içe aktarma ve çalıştırma yeni bir klasör alır. `aitd/` klasörünü başka bir yerde tutmak için `--data-dir <dir>` kullanın. `replay` ve `--save-site` klasörleri etkilenmez.
 
-Her rapor, çalıştırmayı sitenin `runs/` içindeki bir önceki çalıştırmasıyla karşılaştıran "Son çalıştırmadan bu yana değişenler" bölümüyle açılır, örneğin `2 olay düzeldi, 1 yeni sorun`, ve her birini listeler. İki çalıştırma da `--against` kullandıysa plan kapsamı karşılaştırılır (Eksik iken Uygulanmış olan bir olay düzelmiş sayılır); aksi halde sağlık bulguları karşılaştırılır. Bir sitenin ilk çalıştırmasında karşılaştırılacak bir şey olmadığı yazar. Ayarlanacak bir bayrak yoktur. Karşılaştırma `capture.json` içinde `changes` altında da kaydedilir.
+Her raporda, çalıştırmayı sitenin `runs/` içindeki bir önceki çalıştırmasıyla karşılaştıran bir "Son çalıştırmadan bu yana değişenler" bölümü bulunur, örneğin `2 olay düzeldi, 1 yeni sorun`, ve her birini listeler: neyin düzeldiği (önceki durumuyla birlikte), neyin yeni olduğu ve neyin hâlâ açık olduğu. İki çalıştırma da `--against` kullandıysa plan kapsamı karşılaştırılır (Eksik iken Uygulanmış olan bir olay düzelmiş sayılır); aksi halde sağlık bulguları karşılaştırılır. Bir sitenin ilk çalıştırmasında karşılaştırılacak bir şey olmadığı yazar. Ayarlanacak bir bayrak yoktur. Karşılaştırma `capture.json` içinde `changes` altında da kaydedilir.
+
+### Çalıştırmalar arasında eğilim
+
+İkinci kayıtlı çalıştırmadan itibaren araç, sitenin son 30 çalıştırmasına da birlikte bakar. Sayıların ardından CLI, sonuç satırını ve en fazla üç eğilim satırı yazdırır:
+
+```
+2 bozuk · 1 risk · 1 uyarı · 0 bilgi · 4 sorunsuz
+Sonuç: Kaldı · purchase izlemesi bozuk (mobile) · puan 25/100
+5 çalıştırmada eğilim (2026-10-01 → 2026-10-07): iyileşiyor. Şimdi 0 bozuk · 1 risk · 2 uyarı; 3 çalıştırma önce 2 bozuk · 1 risk · 0 uyarı.
+En uzun süredir açık: Meta PageView before_consent 4 yerde 2026-10-01 tarihinden beri (5 çalıştırma); GA4 add_to_cart duplicate 4 yerde 2026-10-03 tarihinden beri (3 çalıştırma).
+Her seferinde tamamlanmayan yolculuklar: checkout (mobile) 80%.
+```
+
+Aynı satırlar, çalıştırmaların metin biçimindeki bir mini grafiğiyle (sparkline; çalıştırma başına bir karakter, yolculuklarının tümü tamamlanmayan çalıştırma için `·`) `report.md` ve `report.html` içindeki **Eğilim** bölümünü oluşturur. Bir sorun, yolculuğunu tamamlayan son çalıştırma onu hâlâ gösteriyorsa *açık* sayılır; yolculuğu erken duran bir çalıştırma hiçbir şey kanıtlamaz, bu yüzden ne bir şeyi düzeltir ne de geri getirir. *Gelip giden* sorunlar (görüldü, kayboldu, yine görüldü) ayrıca adlandırılır, çünkü bunlar genellikle bir düzeltmeye değil, zamanlamaya ya da yapay zekânın seçtiği ürüne bağlıdır. Yön, tamamlanan son birkaç çalıştırmayı öncekilerle karşılaştırır.
+
+`aitd history --site <url>` eğilimi tek başına yazdırır: her çalıştırma için sayıları ve puanıyla (`3·broken + 2·risk + warning`, düşük olan iyidir) bir satır, mini grafik ve yukarıdaki satırlar. `--limit <n>` yalnızca en yeni `n` çalıştırmayı okur (varsayılan 30), `--lang tr` satırları Türkçeye çevirir ve `--json`, betikler için eğilim serisini, bulgu başına zaman çizelgesini (ilk görülme, son görülme, ne zamandan beri açık, hangi çalıştırmada düzeldi, gelip gidiyor mu) ve yolculuk tamamlanma oranlarını yazdırır.
+
+Özetler `aitd/<alan adı>/history.json` dosyasında durur, çalıştırma başına yaklaşık 2 KB; kayıtlı her çalıştırma `capture.json` dosyasını yazdıktan sonra bu dosyayı günceller. Dosya bir önbellektir: içinde olmayan bir çalıştırma klasörü `capture.json` dosyasından okunur, silinen bir klasör sonraki güncellemede listeden düşer ve dosyayı silmek her zaman güvenlidir. `--out` ile gönderilen çalıştırmalar ve tekrar oynatmalar geçmişin parçası değildir.
 
 ## Ne test edileceğini seçin
 
@@ -387,7 +406,7 @@ ai-tag-debugger run --site https://www.yourshop.com --journey purchase
 ai-tag-debugger run --site https://www.yourshop.com --journey purchase --scripted --no-ai
 ```
 
-Site değiştiğinde ve kayıtlı bir adım artık öğesini bulamadığında yolculuk, o çalıştırmanın adımlarının artık siteye uymadığını söyleyen bir notla tamamlanmamış olarak biter; yolculuğu yapay zekâyla bir kez daha çalıştırın, sonraki tekrar yeni adımları kullanır. Sitede hiç tamamlanmamış bir yolculuk, çalıştırmayı tarayıcı açılmadan durdurur. Yalnızca `aitd/` içine kaydedilen çalıştırmalar tekrar oynatılır: `--out` ile başka bir yere gönderilen ya da MCP üzerinden yapılan bir çalıştırma da `steps.json` yazar, ama sonraki çalıştırma oraya bakmaz.
+Site değiştiğinde ve kayıtlı bir adım artık öğesini bulamadığında yolculuk, o çalıştırmanın adımlarının artık siteye uymadığını söyleyen bir notla tamamlanmamış olarak biter; yolculuğu yapay zekâyla bir kez daha çalıştırın, sonraki tekrar yeni adımları kullanır. Sitede hiç tamamlanmamış bir yolculuk, çalıştırmayı tarayıcı açılmadan durdurur. Yalnızca `aitd/` içine kaydedilen çalıştırmalar tekrar oynatılır: `--out` ile başka bir yere gönderilen ya da MCP üzerinden yapılan bir çalıştırma da `steps.json` yazar, ama sonraki çalıştırma oraya bakmaz. Adımlar atıldıkları gibi, yazılan değerler dahil saklanır (bir forma yazılan e-posta adresi `steps.json` içinde yazıldığı haliyle durur, çünkü tekrar oynatmanın onu yeniden yazması gerekir); bu yüzden yolculuklarda test verisi kullanın ve çalıştırma klasörünü sürüm denetiminin dışında tutun.
 
 Adımları bunun yerine deponuzda tutmak için `--save-steps <dosya>`, bunları bir ayar dosyasının `journeys[].steps` alanına yazar. Dosya yoksa oluşturur; ayar dosyasında plan yoksa çalıştırmanın planını da kaydeder. Aynı ayar dosyası yolculuğu, yapay zekâ modeli ve API anahtarı olmadan tekrarlar:
 
@@ -469,7 +488,18 @@ Kayıtlı her çalıştırmadan sonra `notify`, "Son çalıştırmadan bu yana d
 - **Slack** webhook adresini alır. `"slack": true` ise adresi bunun yerine `SLACK_WEBHOOK_URL` ortam değişkeninden okur; böylece adres dosyada durmaz.
 - **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. Düz `smtp://` adresi giriş bilgisini ve postayı şifresiz gönderir, STARTTLS desteklenmez.
 
-Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Mesaj düzelen ve yeni sorunları listeler; konu satırı sayıları verir. Bir kanal başarısız olursa çalıştırma nedenini yazar ve devam eder. Çıkış kodu yine `--fail-on` ile belirlenir.
+Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Konu satırı önce sonucu, sonra sayıları ve başlığı taşır: `shop.example: Kaldı · 2 yeni sorun · purchase izlemesi bozuk (mobile)`. Gövde sonuç satırını yineler, sonra neyin düzeldiğini (*önceki durumuyla* birlikte) ve neyin yeni olduğunu listeler (her yeni kayıt önem düzeyi ve sorumlusuyla), ardından mini grafikli eğilim satırı, gelip giden sorunlar ve bir sorun 5, 10, 20 çalıştırmadır açık kaldığında (sonra her 10 çalıştırmada bir) "N çalıştırmadır hâlâ açık" satırı gelir; böylece aynı açık liste her mesajda tekrarlanmaz:
+
+```
+shop.example
+Sonuç: Kaldı · purchase izlemesi bozuk (mobile) · puan 25/100
+1 sorun düzeldi, 1 yeni sorun. 2026-10-15_1000 çalıştırmasıyla sağlık bulgularına göre karşılaştırıldı (2026-10-16_1000).
+- Düzeldi: GA4 page_view (önceki durum: Onaydan önce gönderildi)
+- Yeni: Meta Purchase · Bozuk · "Purchase" olayı "value" parametresi olmadan gönderildi. · Yazılımcı
+5 çalıştırmada eğilim (2026-10-12 → 2026-10-16): kötüleşiyor. Şimdi 2 bozuk · 1 risk · 0 uyarı; 3 çalıştırma önce 0 bozuk · 1 risk · 0 uyarı. `▃▃·▅█`
+```
+
+Eğilim tek başına hiçbir zaman uyarı tetiklemez. Bir kanal başarısız olursa çalıştırma nedenini yazar ve devam eder. Çıkış kodu yine `--fail-on` ile belirlenir.
 
 ## CLI
 
@@ -488,6 +518,7 @@ aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network]
 aitd doctor [--site <url>] [--data-dir <dir>]
+aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
 
 `aitd`, `ai-tag-debugger`'ın kısa bir takma adıdır ve aynı komutları ve seçenekleri kabul eder. Her komutun temel seçenekleri için `aitd <komut> --help` çalıştırın.
@@ -496,7 +527,7 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 
 | Seçenek | Komutlar | Anlamı |
 |---|---|---|
-| `--site <url>` | plan, run, doctor | Site. `plan` için zorunludur; `run` için `--against` ya da ayar dosyası siteyi vermiyorsa gereklidir. `doctor` yalnızca adresin http(s) olduğunu ve ana makinesinin çözüldüğünü denetler. |
+| `--site <url>` | plan, run, doctor, history | Site. `plan` ve `history` için zorunludur; `run` için `--against` ya da ayar dosyası siteyi vermiyorsa gereklidir. `doctor` yalnızca adresin http(s) olduğunu ve ana makinesinin çözüldüğünü denetler. |
 | `--against <plan>` | run | Bir plana karşı kontrol: `latest` (ya da `last`), `first`, bir plan kimliği ya da bir plan dosyasının ya da klasörünün yolu. |
 | `--journey <id>` | run | Hazır bir yolculuk (tekrarlanabilir). |
 | `--goal "<metin>"` | run | Sade bir dille bir yolculuk (tekrarlanabilir). |
@@ -506,7 +537,7 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 | `--concurrency <n>` | run | Aynı anda kaç yolculuğun çalışacağı, her biri kendi tarayıcısında: `1` (varsayılan) ile `8` arası. Yan yana çalışırken her yolculuğun günlük satırları `[yolculuk/görünüm]` ile başlar ve `--headed` o kadar tarayıcı penceresi açar. Ayar dosyasındaki `concurrency` ile aynıdır. |
 | `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers`'ın yerine geçer; o da bir minör sürüm daha çalışır. |
 | `--max-steps <n>` | plan, run | Yolculuk başına en fazla yapay zekâ adımı (`plan` için varsayılan 25). |
-| `--lang <kod>` | run | Rapor dili: `en` ya da `tr`. |
+| `--lang <kod>` | run, history | Rapor dili: `en` ya da `tr`. `history` için eğilim satırlarının dili. |
 | `--fail-on <düzey>` | run | Bu düzeyde çıkış kodu 1 olur: `broken` (varsayılan), `risk`, `warning` ya da `never`. |
 | `--baseline <dosya>` | run | Kabul edilen bulguların dosyası. Yine raporlanırlar, ama `--fail-on` için sayılmazlar. Bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin). |
 | `--update-baseline` | run | Bu çalıştırmanın her bulgusunu çalıştırmadan sonra temel dosyaya yaz; dosya yoksa oluştur. |
@@ -516,7 +547,9 @@ aitd doctor [--site <url>] [--data-dir <dir>]
 | `--no-ai` | run | Hiç yapay zekâ modeli yok. `--scripted` anlamına gelir. |
 | `--save-site <dir>` | run | Sitenin yanıtlarını `replay` için kaydet. |
 | `--save-steps <dosya>` | run | Her yolculuğun attığı adımları bir ayar dosyasına yaz. |
-| `--data-dir <dir>` | plan, run, doctor | `aitd/` klasörünün (planlar ve çalıştırmalar) tutulduğu yer. Varsayılan: `./aitd`. `run --out` yerine geçer. |
+| `--data-dir <dir>` | plan, run, doctor, history | `aitd/` klasörünün (planlar ve çalıştırmalar) tutulduğu yer. Varsayılan: `./aitd`. `run --out` yerine geçer. |
+| `--limit <n>` | history | Eğilimin sitenin en yeni kaç çalıştırmasını okuyacağı. Varsayılan: 30. |
+| `--json` | history | Eğilim serisini, bulgu zaman çizelgesini ve yolculuk kararlılığını metin yerine JSON olarak yazdır. |
 | `--format xlsx\|csv` | plan export | Elektronik tablo biçimi. Varsayılan: `xlsx`. |
 | `--update` | replay | Bu tekrarın bulgularını beklenen bulgular yap. |
 | `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
@@ -548,10 +581,11 @@ aitd doctor [--site <url>] [--data-dir <dir>]
           reporter: java-junit
 ```
 
-GitLab'da `artifacts: reports: junit:` ayarını aynı yola yönlendirin. Yanındaki `summary.json`, sayıları, yolculukları, her bulguyu (kontrol, önem düzeyi, platform, event, yolculuk, görünüm, başlık, mesaj) ve diğer dosyaların yollarını tutar; böylece bir betik, `capture.json` dosyasını ayrıştırmadan sonucu okuyabilir:
+GitLab'da `artifacts: reports: junit:` ayarını aynı yola yönlendirin. Yanındaki `summary.json`, sayıları, sonucu (`status`: `fail`, `attention` ya da `pass`, ve `fail_broken` gibi bir `headline` anahtarı), veri kalitesi puanını (`score`, 0 ile 100 arası), kayıtlı çalıştırmalardaki eğilim yönünü (`direction`), yolculukları, her bulguyu (kontrol, önem düzeyi, platform, event, yolculuk, görünüm, başlık, mesaj), çalıştırma klasörünün adını `run` olarak ve diğer dosyaların adlarını o klasöre göre bağıl olarak `files` altında tutar; böylece bir betik, `capture.json` dosyasını ayrıştırmadan sonucu okuyabilir ve dosyadaki hiçbir şey çalıştırmanın yapıldığı makineye bağlı değildir:
 
 ```sh
 jq '.counts.broken' aitd/example.com/runs/*/summary.json
+jq -r '.verdict.status + " " + (.score | tostring)' aitd/example.com/runs/*/summary.json
 ```
 
 **Zamanlanmış çalıştırmalar.** Her dağıtımdan sonra değil de bir zamanlayıcıyla denetlemek için [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) dosyasını kullanın (varsayılan olarak haftalık; cron satırını değiştirebilirsiniz). Geçmişi çalıştırmalar arasında bir önbellekte saklar, böylece "Son çalıştırmadan beri değişenler" yeni bir runner'da da çalışır. Kendi sunucunuzda aynısı için [`examples/cron/`](examples/cron) içinde bir betik ve bir crontab satırı vardır.
@@ -570,11 +604,11 @@ jq '.counts.broken' aitd/example.com/runs/*/summary.json
 
   Event'ler ve istekler kaynağa göre filtrelenebilir. GA4 ürün dizgileri (`pr1`…) ve dataLayer `ecommerce.items` ürün kartları olarak gösterilir; özel ürün parametreleri kendi grubunda yer alır. Raporda betik yoktur: sekmeler ve filtreler düz HTML ve CSS'tir (Chrome 105, Safari 15.4 ya da Firefox 121 ve sonrası gerekir) ve yazdırırken her sekme görünür. Logolar gömülüdür, bu yüzden internetten hiçbir şey yüklenmez. `--no-branding`, Analitik İşler logosunu ve kredi satırını çıkarır.
 - `timeline.csv`: aynı zaman akışı, her isteğe, dataLayer gönderimine ve ağ çağrısına bir satır olarak; Excel ya da Google Sheets için hazır.
-- `report.md`: raporun Markdown hali, örneğin bir çekme isteği yorumu için.
-- `capture.json`: yakalanan her şey, kendi analiziniz için.
+- `report.md`: raporun Markdown hali; bir çekme isteği yorumu, bir Slack mesajı ya da bir e-posta için, dört yolculuklu bir çalıştırmada yaklaşık 100 satır ve 8 KB'ın altında. Başlığı sonuçtur (`# shop.example: purchase izlemesi bozuk (mobile)`), ardından tek bir meta satırı, veri kalitesi puanıyla birlikte durum ve sayılar gelir. Sonra sırasıyla: **Son çalıştırmadan bu yana değişenler** ve **Eğilim** (sitenin önceki çalıştırmaları varsa), **Plan ve site** (`--against` ile), **Öncelikler** (sorumlu başına yapılacaklar listesi: Yazılımcı, Tag Manager, Pazarlama), **Bulgular** (Nerede, Etkisi, Neden, Kanıt, Şurada sorunsuz, Sorumlu, Çözüm, Nasıl doğrulanır ve `report.html` içine bir bağlantıyla en fazla beş tam blok; geri kalanı *Ayrıca* altında birer satır), **Onay** (Consent Mode zamanlama cümlesi ve her hücresinde bir neden bulunan senaryo tablosu), **Sorunsuz olanlar**, **Yolculuklar** (çalıştırma başına bir satır, sonra yalnızca sorun taşıyan adımlar), **Kontrol edilmeyenler** (çalıştırmanın yargılayamadıkları, bunu açan ayar anahtarıyla birlikte) ve **Etiket envanteri**. İstek başına zaman akışı dosyada yoktur; `timeline.csv` içindedir.
+- `capture.json`: yakalanan her şey, kendi analiziniz için; aracın `version` bilgisi, `ai` sağlayıcısı ve hesaplanan `metrics` (sonuç, puan, plan kapsamı, huni, platform tutarlılığı, onay uyumu, dönüşüm bütünlüğü, zamanlama, öncelikler) dahil.
 - `plan-check.json`: `--against` ile, planlanan her event için kovasıyla birlikte bir kayıt.
 - `junit.xml`: bulgular JUnit test sonuçları olarak, yolculuk ve görünüm başına bir paket; CI sistemlerinin test hatası olarak göstermesi için (yukarıya bakın).
-- `summary.json`: çalıştırmanın sayıları, yolculukları, bulguları ve dosya yolları, betikler için tek bir küçük dosyada.
+- `summary.json`: çalıştırmanın sayıları, sonucu, puanı, eğilim yönü, yolculukları, bulguları ve dosya adları, betikler için tek bir küçük dosyada.
 - `plan.html` (planın klasöründe): planın event'lerini, parametrelerini ve kullanıcı özelliklerini gösteren okunabilir bir sayfa.
 
 Raporlar bir kredi satırıyla biter: "Generated by AI Tag Debugger · analitikisler.com"; alan adı düz bir bağlantıdır (görsel yok, takip yok ve yönlendiren bilgisi yok; böylece rapor adresleri sızdırılmaz). `--no-branding`, bunu logosuyla birlikte kaldırır.
@@ -595,7 +629,7 @@ Sunucunun sunduğu araçlar:
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Sayfayı ve o adımın gönderdiği takip isteklerini döndürür. |
 | `get_page` | Geçerli sayfayı gösterir. |
 | `finish_audit` | Her şeyi ölçümleme planınıza (JSON) ya da `against` olarak verilen kayıtlı bir plana (`latest`, `first`, bir plan kimliği ya da yerel bir sunucuda bir yol) ya da hazır yolculuğun event'lerine karşı kontrol eder; isterseniz yalnızca adını verdiğiniz `events` için, ve zaman akışıyla birlikte tam HTML raporunu yazar. Site denetimden alınır. |
-| `run_audit` | Bir ayar dosyasını baştan sona çalıştırır. `against` ile çalıştırmayı kayıtlı bir plana karşı kontrol eder; ayar dosyasında yolculuk yoksa, plandan türetilen yolculukları gezer. Dosya yolları yalnızca yerelde çalışır. |
+| `run_audit` | Bir ayar dosyasını baştan sona çalıştırır. `against` ile çalıştırmayı kayıtlı bir plana karşı kontrol eder; ayar dosyasında yolculuk yoksa, plandan türetilen yolculukları gezer. `concurrency` o kadar yolculuğu aynı anda, her birini kendi tarayıcısında çalıştırır (varsayılan 1); `baseline`, `--update-baseline` ile yazılmış kabul edilen bulgular dosyasını adlandırır (varsayılan: ayar dosyasındaki `baseline`; bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin)). Dosya yolları yalnızca yerelde çalışır. |
 
 `against`, CLI'deki `--against` ile aynı değerleri alır. HTTP üzerinden yalnızca `latest`, `first` ya da bir plan kimliği kabul edilir, asla bir yol değil. Planlar, `aitd plan --site <url>` ya da `make_plan` ile kaydedilmiş olanlardır. Neyin takip edileceğini öğrenmek için plan, sitenin ne gönderdiğini öğrenmek için denetim isteyin.
 
