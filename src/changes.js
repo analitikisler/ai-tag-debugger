@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { messages } from "./i18n.js";
 import { platformLabel } from "./report.js";
+import { ownerOf } from "./verify.js";
 import { PLAN_FILE, listPlanIds, listRunIds, plansDir, runsDir } from "./workspace.js";
 
 const PROBLEMS = new Set(["broken", "risk", "warning"]);
@@ -129,17 +130,22 @@ export async function sinceLastRun(dataDir, site) {
   return { run: latest.id, ...compareRuns(prev, { findings: latest.capture.findings ?? [], planCheck: latest.planCheck, runs: latest.capture.runs }) };
 }
 
-/** The diff as plain lines: a headline, then one line per fixed and new problem. */
+/**
+ * The diff as plain lines: a headline, then one line per fixed and new problem. A fixed item says what
+ * it "was", since its text is the old state; a new one carries its severity (or plan bucket) and owner,
+ * so a lost purchase reads differently from an unplanned event.
+ */
 export function changesLines(ch, lang = "en") {
   const m = messages(lang);
   if (!ch.run) return [m.ui.noSavedRun];
   if (!ch.previous) return [m.ui.noPreviousRun];
   const label = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
   const why = (c, bucket) => (ch.mode === "findings" ? c.detail : m.ui.bucket[bucket]);
+  const tag = (c) => (ch.mode === "findings" ? m.severity[c.severity] ?? "" : m.ui.bucket[c.bucket]);
   return [
     `${m.ui.changesLine(ch)}. ${m.ui.changesLead(ch.previous, ch.mode)} (${ch.run}).`,
-    ...ch.fixed.map((c) => `- ${m.ui.changeFixed}: ${label(c)} (${why(c, c.was)})`),
-    ...ch.new.map((c) => `- ${m.ui.changeNew}: ${label(c)} (${why(c, c.bucket)})`),
+    ...ch.fixed.map((c) => `- ${m.ui.changeFixed}: ${label(c)} (${m.ui.history.fixedWas}: ${why(c, c.was)})`),
+    ...ch.new.map((c) => `- ${m.ui.changeNew}: ${[label(c), tag(c), ch.mode === "findings" ? c.detail : "", c.check ? m.ui.owners[ownerOf(c)] : ""].filter(Boolean).join(" · ")}`),
     ...(ch.routes?.length ? [m.ui.routeChanged(ch.routes.map((r) => `${r.journeyId} (${r.viewport})`).join(", "))] : []),
   ];
 }

@@ -133,7 +133,7 @@ test("structured summaries and explanations render, findings are grouped by seve
   assert.equal((html.match(/<li class="finding [^"]+" data-sev="[a-z]+"><details open>/g) ?? []).length, 1);
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained, runs: [run], lang: "en" });
   assert.match(md, /\*\*begin_checkout never reaches GA4\.\*\*/);
-  assert.match(md, / {3}2\. Add the tag\./);
+  assert.match(md, /- Fix: 1\. Open GTM\.; 2\. Add the tag\./);
   const old = renderHtml({ title: "t", generatedAt: "now", findings: f, explained: { summary: "Plain text summary.", explanations: [{ finding: 0, likely_cause: "c", fix: "Do this." }] }, runs: [run], lang: "en" });
   assert.match(old, /<p class="summary-text">Plain text summary\.<\/p>/);
   assert.match(old, /<ol class="fix-steps"><li><span>Do this\.<\/span><\/li><\/ol>/);

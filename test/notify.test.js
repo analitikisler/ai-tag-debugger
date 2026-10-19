@@ -15,8 +15,49 @@ test("alertMessage puts the site and headline in the subject", () => {
   const { subject, body } = alertMessage({ site: "shop.example", changes, reportPath: "/r/report.html" });
   assert.equal(subject, "shop.example: 1 problem fixed, 1 new problem");
   assert.match(body, /^shop\.example\n1 problem fixed, 1 new problem\./);
-  assert.match(body, /- Fixed: GA4 page_view \(Sent before consent\)\n- New: Meta Purchase \(No value\)/);
+  // A fixed item says what it was; a new one carries its severity and owner.
+  assert.match(body, /- Fixed: GA4 page_view \(was: Sent before consent\)\n- New: Meta Purchase · Broken · No value · Tag Manager/);
   assert.match(body, /\/r\/report\.html$/);
+  assert.doesNotMatch(body, /Verdict:|Trend over/);
+});
+
+const verdict = { status: "fail", statusText: "Fail", headline: "purchase tracking is broken on mobile", score: 25 };
+const point = (id, broken, complete = true) => ({ id, date: null, broken, risk: 1, warning: 0, score: broken * 3 + 2, complete });
+const trend = {
+  runs: 5, first: "2026-10-01_0900", last: "2026-10-05_0900", direction: "worsening",
+  series: [point("2026-10-01_0900", 0), point("2026-10-02_0900", 0), point("2026-10-03_0900", 0, false), point("2026-10-04_0900", 1), point("2026-10-05_0900", 2)],
+  openLongest: [{ check: "before_consent", severity: "risk", platform: "meta", event: "PageView", openSince: "2026-10-01_0900", runsOpen: 5, places: [{ journey: "browse", viewport: "desktop" }, { journey: "checkout", viewport: "mobile" }] }],
+  fixedRecently: [], newRecently: [],
+  flapping: [{ check: "duplicate", severity: "warning", platform: "ga4", event: "add_to_cart", seenIn: 3, runsOpen: 1, places: [{ journey: "browse", viewport: "desktop" }] }],
+};
+
+test("the alert carries the verdict in the subject and body, then the trend with its sparkline, flapping and round-number lines", () => {
+  const { subject, body } = alertMessage({ site: "shop.example", changes, reportPath: "/r/report.html", verdict, trend });
+  assert.equal(subject, "shop.example: Fail · 1 problem fixed, 1 new problem · purchase tracking is broken on mobile");
+  const lines = body.split("\n");
+  assert.equal(lines[0], "shop.example");
+  assert.equal(lines[1], "Verdict: Fail · purchase tracking is broken on mobile · score 25/100");
+  assert.match(lines[2], /^1 problem fixed, 1 new problem\./);
+  assert.equal(lines[5], "Trend over 5 runs (2026-10-01 → 2026-10-05): worsening. Now 2 broken · 1 risk · 0 warning; 3 runs ago 0 broken · 1 risk · 0 warning. `▃▃·▅█`");
+  assert.equal(lines[6], "Flapping (seen, gone, back again): GA4 add_to_cart duplicate in 3 of 5 runs.");
+  assert.equal(lines[7], "Still open after 5 runs: Meta PageView before_consent in 2 places.");
+  assert.equal(lines.at(-1), "/r/report.html");
+  // The open-longest line is not in every alert: only at 5, 10, 20 runs and every ten after that.
+  const six = alertMessage({ site: "s", changes, verdict, trend: { ...trend, runs: 6, openLongest: [{ ...trend.openLongest[0], runsOpen: 6 }] } }).body;
+  assert.doesNotMatch(six, /Still open/);
+  assert.match(alertMessage({ site: "s", changes, verdict, trend: { ...trend, runs: 30, openLongest: [{ ...trend.openLongest[0], runsOpen: 30 }] } }).body, /Still open after 30 runs/);
+  // One saved run has no trend yet, and the Turkish alert follows the report language.
+  assert.doesNotMatch(alertMessage({ site: "s", changes, verdict, trend: { ...trend, runs: 1, series: trend.series.slice(0, 1) } }).body, /Trend|█/);
+  const tr = alertMessage({ site: "s", changes, lang: "tr", verdict: { ...verdict, statusText: "Başarısız" }, trend });
+  assert.match(tr.subject, /^s: Başarısız · 1 sorun düzeldi, 1 yeni sorun · purchase tracking/);
+  assert.match(tr.body, /Sonuç: Başarısız · [^\n]* · puan 25\/100\n/);
+  assert.match(tr.body, /5 çalıştırmada eğilim[^\n]*`▃▃·▅█`\nGelip giden/);
+});
+
+test("the plan-mode diff lines name the bucket instead of a severity and keep the owner out", () => {
+  const plan = { run: "r2", previous: "r1", mode: "plan", fixed: [{ platform: "ga4", event: "purchase", bucket: "implemented", was: "missing" }], new: [{ platform: "meta", event: "Lead", bucket: "missing_params", was: null }] };
+  const { body } = alertMessage({ site: "s", changes: plan });
+  assert.match(body, /- Fixed: GA4 purchase \(was: Missing\)\n- New: Meta Lead · Missing params$/m);
 });
 
 test("sendAlerts posts to Slack only when something changed", async () => {
@@ -30,7 +71,10 @@ test("sendAlerts posts to Slack only when something changed", async () => {
   assert.deepEqual(res, { sent: ["slack"], errors: [] });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://hooks.example/env");
-  assert.match(calls[0].body.text, /New: Meta Purchase/);
+  assert.match(calls[0].body.text, /New: Meta Purchase · Broken/);
+  // The verdict and the trend go through to the channel when the run has them.
+  await sendAlerts({ notify: { slack: "https://hooks.example/x" }, site: "s", changes, verdict, trend, fetchImpl });
+  assert.match(calls[1].body.text, /^s\nVerdict: Fail · purchase tracking is broken on mobile · score 25\/100\n[\s\S]*`▃▃·▅█`/);
 });
 
 test("sendAlerts reports failures instead of throwing", async () => {

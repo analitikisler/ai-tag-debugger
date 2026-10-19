@@ -127,7 +127,7 @@ test("Google Ads remarketing and other ad beacons are answered locally", () => {
 });
 
 test("reports don't let page data run as formulas or raw HTML", () => {
-  const run = { journeyId: "j", viewport: "desktop", completed: true, note: "<img src=x onerror=alert(1)>", startedAt: 0, network: [],
+  const run = { journeyId: "j", viewport: "desktop", completed: false, note: "<img src=x onerror=alert(1)>", startedAt: 0, network: [],
     steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "=HYPERLINK(\"http://evil\")", t: 1 }],
     hits: [{ platform: "ga4", name: "x", params: { a: "<script>" }, step: 1, t: 1 }],
     dataLayerLog: [{ step: 1, t: 1, value: { event: "`x`<b>" } }] };

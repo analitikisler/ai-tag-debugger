@@ -5,6 +5,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { groupFindings } from "./checks.js";
+import { LANGUAGES } from "./i18n.js";
 import { PROVIDERS } from "./parsers.js";
 import { listRunIds, runsDir, siteDir } from "./workspace.js";
 
@@ -239,43 +240,28 @@ export function journeyStability(history) {
     .sort((a, b) => a.completionRate - b.completionRate || a.id.localeCompare(b.id) || String(a.viewport).localeCompare(String(b.viewport)));
 }
 
-// The lines' strings live here until the lead moves them into i18n.js (this module must not edit it).
-const STRINGS = {
-  en: {
-    noRuns: "No saved run for this site yet. Run `aitd run` first; the trend starts with the second run.",
-    oneRun: (id) => `One saved run (${id}); the trend starts with the next one.`,
-    direction: { improving: "improving", worsening: "worsening", flat: "flat" },
-    headline: (t, dir, now, was) => `Trend over ${t.runs} runs (${day(t.first)} → ${day(t.last)}): ${dir}. Now ${now}; ${RECENT} runs ago ${was}.`,
-    headlineShort: (t, dir, now) => `Trend over ${t.runs} runs (${day(t.first)} → ${day(t.last)}): ${dir}. Now ${now}.`,
-    counts: (p) => `${p.broken} broken · ${p.risk} risk · ${p.warning} warning`,
-    openLongest: (items) => `Open longest: ${items.join("; ")}.`,
-    since: (e) => `${label(e)}${places(e, STRINGS.en)} since ${day(e.openSince)} (${e.runsOpen} ${e.runsOpen === 1 ? "run" : "runs"})`,
-    flapping: (items) => `Flapping (seen, gone, back again): ${items.join("; ")}.`,
-    seenIn: (e, runs) => `${label(e)}${places(e, STRINGS.en)} in ${e.seenIn} of ${runs} runs`,
-    places: (n) => ` in ${n} places`,
-    unstable: (items) => `Journeys that do not finish every time: ${items.join("; ")}.`,
-  },
-  tr: {
-    noRuns: "Bu site için henüz kayıtlı çalıştırma yok. Önce `aitd run` çalıştırın; eğilim ikinci çalıştırmayla başlar.",
-    oneRun: (id) => `Tek kayıtlı çalıştırma var (${id}); eğilim bir sonrakiyle başlar.`,
-    direction: { improving: "iyileşiyor", worsening: "kötüleşiyor", flat: "değişmiyor" },
-    headline: (t, dir, now, was) => `${t.runs} çalıştırmada eğilim (${day(t.first)} → ${day(t.last)}): ${dir}. Şimdi ${now}; ${RECENT} çalıştırma önce ${was}.`,
-    headlineShort: (t, dir, now) => `${t.runs} çalıştırmada eğilim (${day(t.first)} → ${day(t.last)}): ${dir}. Şimdi ${now}.`,
-    counts: (p) => `${p.broken} bozuk · ${p.risk} risk · ${p.warning} uyarı`,
-    openLongest: (items) => `En uzun süredir açık: ${items.join("; ")}.`,
-    since: (e) => `${label(e)}${places(e, STRINGS.tr)} ${day(e.openSince)} tarihinden beri (${e.runsOpen} çalıştırma)`,
-    flapping: (items) => `Gelip giden (görüldü, kayboldu, yine görüldü): ${items.join("; ")}.`,
-    seenIn: (e, runs) => `${label(e)}${places(e, STRINGS.tr)} ${runs} çalıştırmanın ${e.seenIn} tanesinde`,
-    places: (n) => ` ${n} yerde`,
-    unstable: (items) => `Her seferinde tamamlanmayan yolculuklar: ${items.join("; ")}.`,
-  },
-};
-
 const day = (id) => (id ? String(id).slice(0, 10) : "");
 const platformLabel = (p) => (p ? PROVIDERS[p] ?? String(p) : "");
 /** "GA4 purchase missing_params" or, for a finding without an event, the check name. */
 const label = (e) => `${platformLabel(e.platform)} ${e.event ?? ""}`.trim().concat(` ${e.check}`).trim();
-const places = (e, s) => (e.places.length > 1 ? s.places(e.places.length) : "");
+/** The strings of ui.history in the report's language; an unknown language falls back to English rather than throwing. */
+const strings = (lang) => (LANGUAGES[lang] ?? LANGUAGES.en).ui.history;
+/** "GA4 purchase missing_params in 4 places": the problem with its place count when it is seen in more than one. */
+export const problemLabel = (e, lang = "en") => `${label(e)}${e.places?.length > 1 ? strings(lang).places(e.places.length) : ""}`;
+
+const SPARK = "▁▂▃▄▅▆▇█";
+
+/**
+ * The trend series as a text sparkline for the CLI and the alert: one character per run, the score
+ * mapped onto eight levels over 0..max, "·" for a run that did not complete (its lower counts are not
+ * a fix). The scale starts at 3 so one warning does not draw a full bar. Empty under two runs.
+ */
+export function sparkline(t) {
+  const series = t?.series ?? [];
+  if (series.length < 2) return "";
+  const max = Math.max(3, ...series.map((p) => p.score));
+  return series.map((p) => (p.complete ? SPARK[Math.min(SPARK.length - 1, Math.round((p.score / max) * (SPARK.length - 1)))] : "·")).join("");
+}
 
 /**
  * The trend as 2-3 plain lines for the CLI after a run and for the alert: the direction with the counts
@@ -283,16 +269,33 @@ const places = (e, s) => (e.places.length > 1 ? s.places(e.places.length) : "");
  * Pass the stability list to add a line on journeys that do not always finish.
  */
 export function historySummaryLines(t, lang = "en", stability = []) {
-  const s = STRINGS[lang] ?? STRINGS.en;
+  const s = strings(lang);
   if (!t.runs) return [s.noRuns];
   if (t.runs === 1) return [s.oneRun(t.last)];
   const now = t.series.at(-1);
   const was = t.series.at(-1 - RECENT);
   const dir = s.direction[t.direction];
-  const lines = [was ? s.headline(t, dir, s.counts(now), s.counts(was)) : s.headlineShort(t, dir, s.counts(now))];
-  if (t.openLongest.length) lines.push(s.openLongest(t.openLongest.slice(0, 3).map(s.since)));
-  if (t.flapping.length) lines.push(s.flapping(t.flapping.slice(0, 3).map((e) => s.seenIn(e, t.runs))));
+  const lines = [was ? s.headline(t.runs, day(t.first), day(t.last), dir, s.counts(now), s.counts(was), RECENT) : s.headlineShort(t.runs, day(t.first), day(t.last), dir, s.counts(now))];
+  if (t.openLongest.length) lines.push(s.openLongest(t.openLongest.slice(0, 3).map((e) => s.since(problemLabel(e, lang), day(e.openSince), e.runsOpen))));
+  if (t.flapping.length) lines.push(s.flapping(t.flapping.slice(0, 3).map((e) => s.seenIn(problemLabel(e, lang), e.seenIn, t.runs))));
   const unstable = stability.filter((j) => j.completionRate < 1);
   if (unstable.length) lines.push(s.unstable(unstable.slice(0, 3).map((j) => `${j.id} (${j.viewport}) ${Math.round(j.completionRate * 100)}%`)));
+  return lines;
+}
+
+/**
+ * The trend as the alert shows it: the direction line with the text sparkline, the flapping line, and
+ * "still open after N runs" only when a problem has just reached a round number of runs (5, 10, 20, …),
+ * so the open-longest list does not repeat in every message and train readers to skip it.
+ */
+export function historyAlertLines(t, lang = "en") {
+  const s = strings(lang);
+  if (!t || t.runs < 2) return [];
+  const lines = [`${historySummaryLines(t, lang)[0]} \`${sparkline(t)}\``];
+  if (t.flapping.length) lines.push(s.flapping(t.flapping.slice(0, 3).map((e) => s.seenIn(problemLabel(e, lang), e.seenIn, t.runs))));
+  // A round number of runs open (5, 10, 20, then every 10) is worth one line; every other week it is noise.
+  const milestone = (n) => [5, 10, 20].includes(n) || (n > 20 && n % 10 === 0);
+  const ages = [...new Set(t.openLongest.filter((e) => milestone(e.runsOpen)).map((e) => e.runsOpen))].sort((a, b) => b - a);
+  for (const n of ages) lines.push(s.stillOpen(n, t.openLongest.filter((e) => e.runsOpen === n).map((e) => problemLabel(e, lang))));
   return lines;
 }

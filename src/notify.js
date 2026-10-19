@@ -7,6 +7,7 @@
 import { connect as tlsConnect } from "node:tls";
 import { connect as netConnect } from "node:net";
 import { changesLines } from "./changes.js";
+import { historyAlertLines } from "./history.js";
 import { messages } from "./i18n.js";
 
 /** True when there is an earlier run and something was fixed, broke or took a new route since. */
@@ -14,23 +15,36 @@ export const hasChanges = (ch) => Boolean(ch?.previous && (ch.fixed.length || ch
 
 const list = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 
-/** The alert's subject and plain-text body. changes carries the run id as `run` (see sinceLastRun). */
-export function alertMessage({ site, changes, lang = "en", reportPath = null }) {
-  const subject = `${site}: ${messages(lang).ui.changesLine(changes)}`;
-  const body = [`${site}`, ...changesLines(changes, lang), ...(reportPath ? ["", reportPath] : [])].join("\n");
+/**
+ * The alert's subject and plain-text body. changes carries the run id as `run` (see sinceLastRun).
+ * verdict is { status, statusText, headline, score } from verdictHeadline (report.js) and trend the
+ * site's trend (history.js); both are optional, so an alert built from the diff alone still reads.
+ * The subject carries the verdict first ("site: Fail · 2 new problems · purchase tracking is broken on
+ * mobile"), which is what should wake someone up; the trend lines come after the diff.
+ */
+export function alertMessage({ site, changes, lang = "en", reportPath = null, verdict = null, trend = null }) {
+  const m = messages(lang);
+  const subject = `${site}: ${[verdict?.statusText, m.ui.changesLine(changes), verdict?.headline].filter(Boolean).join(" · ")}`;
+  const body = [
+    `${site}`,
+    ...(verdict ? [m.ui.cli.verdict(verdict.statusText, verdict.headline, verdict.score ?? null)] : []),
+    ...changesLines(changes, lang),
+    ...historyAlertLines(trend, lang),
+    ...(reportPath ? ["", reportPath] : []),
+  ].join("\n");
   return { subject, body };
 }
 
 /**
  * Sends the diff to every channel in `notify`. Never throws: returns { sent: [...], errors: [...] }.
- * @param {{ notify: any, site: string, changes: any, lang?: string, reportPath?: string,
+ * @param {{ notify: any, site: string, changes: any, lang?: string, reportPath?: string, verdict?: any, trend?: any,
  *   env?: Record<string, string | undefined>, fetchImpl?: typeof fetch, smtp?: (url: string, mail: any) => Promise<void> }} opts
  */
-export async function sendAlerts({ notify, site, changes, lang = "en", reportPath = null, env = process.env, fetchImpl = fetch, smtp = sendSmtp }) {
+export async function sendAlerts({ notify, site, changes, lang = "en", reportPath = null, verdict = null, trend = null, env = process.env, fetchImpl = fetch, smtp = sendSmtp }) {
   const sent = [];
   const errors = [];
   if (!notify || !hasChanges(changes)) return { sent, errors };
-  const { subject, body } = alertMessage({ site, changes, lang, reportPath });
+  const { subject, body } = alertMessage({ site, changes, lang, reportPath, verdict, trend });
   const slack = notify.slack === true ? env.SLACK_WEBHOOK_URL : notify.slack;
   if (slack) {
     try {

@@ -56,6 +56,8 @@ async function main(args = process.argv.slice(2)) {
       from: { type: "string" },
       topic: { type: "string" },
       format: { type: "string" },
+      limit: { type: "string" },
+      json: { type: "boolean", default: false },
       force: { type: "boolean", default: false },
       yes: { type: "boolean", short: "y", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -132,6 +134,10 @@ async function main(args = process.argv.slice(2)) {
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
+    return;
+  }
+  if (command === "history" && !values.help) {
+    await showHistory(values);
     return;
   }
   if (command === "doctor" && !values.help) {
@@ -223,8 +229,15 @@ async function main(args = process.argv.slice(2)) {
     log: (msg) => console.log(msg),
   });
 
-  console.log(`\n${messages(result.lang).ui.counts(result.counts)}`);
+  const m = messages(result.lang);
+  console.log(`\n${m.ui.counts(result.counts)}`);
   if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
+  if (result.verdict) console.log(m.ui.cli.verdict(result.verdict.statusText, result.verdict.headline, result.verdict.score));
+  // The trend needs two saved runs; with one there is nothing to say yet.
+  if (result.trend?.runs >= 2) {
+    const { historySummaryLines } = await import("./history.js");
+    for (const line of historySummaryLines(result.trend, result.lang, result.stability ?? []).slice(0, 3)) console.log(line);
+  }
   const shown = (p) => (path.relative(process.cwd(), p).startsWith("..") ? p : path.relative(process.cwd(), p));
   console.log(`Report: ${shown(result.reportPath)}`);
   console.log(`Summary: ${shown(result.summaryPath)} (junit.xml next to it)`);
@@ -250,6 +263,39 @@ async function main(args = process.argv.slice(2)) {
       process.exitCode = 1;
     }
   }
+}
+
+// aitd history --site <url>: the trend of the site's saved runs as a small table, the text sparkline and the summary lines.
+async function showHistory(values) {
+  if (!values.site) throw new Error("history needs --site <url>: aitd history --site https://www.example.com");
+  const limit = values.limit ? Number(values.limit) : 30;
+  if (!(Number.isInteger(limit) && limit > 0)) throw new Error("--limit must be a positive whole number.");
+  const lang = values.lang ?? "en";
+  const m = messages(lang);
+  const { domainOf } = await import("./workspace.js");
+  domainOf(values.site);
+  const { findingTimeline, historySummaryLines, journeyStability, loadHistory, sparkline, trend } = await import("./history.js");
+  const history = await loadHistory(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site, { limit });
+  const t = trend(history);
+  const stability = journeyStability(history);
+  if (values.json) {
+    console.log(JSON.stringify({ site: values.site, runs: history.length, trend: t, timeline: findingTimeline(history), stability }, null, 2));
+    return;
+  }
+  if (!history.length) {
+    console.log(m.ui.history.noRuns);
+    return;
+  }
+  const cols = [m.ui.cli.runCol, m.severity.broken, m.severity.risk, m.severity.warning, m.ui.cli.scoreCol, m.ui.cli.completeCol];
+  const rows = t.series.map((p) => [p.id, p.broken, p.risk, p.warning, p.score, p.complete ? m.ui.md.yes : m.ui.md.no].map(String));
+  const widths = cols.map((c, i) => Math.max(c.length, ...rows.map((r) => r[i].length)));
+  const line = (cells) => cells.map((c, i) => (i ? c.padStart(widths[i]) : c.padEnd(widths[i]))).join("  ");
+  console.log(line(cols));
+  for (const r of rows) console.log(line(r));
+  console.log("");
+  const s = m.ui.history;
+  if (t.runs >= 2) console.log(s.sparkline(sparkline(t), s.direction[t.direction], t.runs, t.first.slice(0, 10), t.last.slice(0, 10)));
+  for (const l of historySummaryLines(t, lang, stability)) console.log(l);
 }
 
 // The first run of a site with no plan: offer what it already tracks as its plan.

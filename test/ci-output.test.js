@@ -91,13 +91,21 @@ test("the summary has the counts, the journeys, each finding and the file list",
   assert.deepEqual(s.changes, { fixed: [{ check: "pii" }], new: [] });
   assert.equal(s.dir, "/out/run");
   assert.deepEqual(s.files, { html: "report.html", md: "report.md", csv: "timeline.csv", capture: "capture.json", planCheck: "plan-check.json", junit: "junit.xml", summary: "summary.json" });
+  assert.equal(s.verdict, null);
+  assert.equal(s.score, null);
+  assert.equal(s.trend, null);
+  const judged = buildSummary({ runs, findings, reportPath: "/out/run/report.html", outDir: "/out/run", metrics: { verdict: { status: "fail", headline: "fail_broken", counts: {} }, score: { score: 25, deductions: [] } }, trend: { direction: "improving", runs: 4, series: [] } });
+  assert.deepEqual(judged.verdict, { status: "fail", headline: "fail_broken" });
+  assert.equal(judged.score, 25);
+  assert.deepEqual(judged.trend, { direction: "improving", runs: 4 });
   const plain = buildSummary({ runs, findings: [{ ...findings[0], accepted: true }], reportPath: "/out/run/report.html", outDir: "/out/run" });
   assert.deepEqual(plain.plan, { id: null, events: [] });
   assert.equal(plain.ai, null);
   assert.equal(plain.changes, null);
   assert.equal(plain.findings[0].accepted, true);
   assert.equal("planCheck" in plain.files, false);
-  assert.deepEqual(plain.counts, { broken: 1, risk: 0, warning: 0, info: 0, ok: 0 });
+  // An accepted (baselined) finding is reported but not counted, as the CLI counts line and README say.
+  assert.deepEqual(plain.counts, { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 });
 });
 
 test("a finding's title is short and names the platform and event when it has them", () => {
