@@ -67,8 +67,9 @@ export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "b
 
 /** The run in one small object: counts, journeys, findings and where the other files are. */
 export function buildSummary({ runs = [], findings = [], counts, plan = null, against = null, ai = null, lang = "en", reportPath, outDir, changes = null, version = "", site = "" }) {
+  // File names are relative to the run folder, so a summary uploaded as a CI artifact still makes sense on another machine.
   const dir = outDir ?? (reportPath ? path.dirname(reportPath) : ".");
-  const file = (name) => path.join(dir, name);
+  const file = (name) => name;
   return {
     version,
     site,
@@ -91,6 +92,7 @@ export function buildSummary({ runs = [], findings = [], counts, plan = null, ag
       ...(f.accepted === true ? { accepted: true } : {}),
     })),
     changes: changes ? { fixed: changes.fixed ?? [], new: changes.new ?? [] } : null,
-    files: { html: reportPath ?? file("report.html"), md: file("report.md"), csv: file("timeline.csv"), capture: file("capture.json"), ...(against ? { planCheck: file("plan-check.json") } : {}), junit: file("junit.xml"), summary: file("summary.json") },
+    dir,
+    files: { html: file("report.html"), md: file("report.md"), csv: file("timeline.csv"), capture: file("capture.json"), ...(against ? { planCheck: file("plan-check.json") } : {}), junit: file("junit.xml"), summary: file("summary.json") },
   };
 }

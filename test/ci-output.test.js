@@ -89,7 +89,8 @@ test("the summary has the counts, the journeys, each finding and the file list",
   assert.deepEqual(s.findings[0], { check: "missing_params", severity: "broken", platform: "ga4", event: "add_to_cart", journey: "checkout", viewport: "desktop", title: 'GA4 add_to_cart: "add_to_cart" was sent without "value".', message: '"add_to_cart" was sent without "value".', key: "ga4:add_to_cart" });
   assert.equal("key" in s.findings[2], false);
   assert.deepEqual(s.changes, { fixed: [{ check: "pii" }], new: [] });
-  assert.deepEqual(s.files, { html: "/out/run/report.html", md: "/out/run/report.md", csv: "/out/run/timeline.csv", capture: "/out/run/capture.json", planCheck: "/out/run/plan-check.json", junit: "/out/run/junit.xml", summary: "/out/run/summary.json" });
+  assert.equal(s.dir, "/out/run");
+  assert.deepEqual(s.files, { html: "report.html", md: "report.md", csv: "timeline.csv", capture: "capture.json", planCheck: "plan-check.json", junit: "junit.xml", summary: "summary.json" });
   const plain = buildSummary({ runs, findings: [{ ...findings[0], accepted: true }], reportPath: "/out/run/report.html", outDir: "/out/run" });
   assert.deepEqual(plain.plan, { id: null, events: [] });
   assert.equal(plain.ai, null);
