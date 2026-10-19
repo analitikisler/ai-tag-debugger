@@ -96,7 +96,7 @@ function hitsByStep(run) {
  * deterministic report is still written.
  */
 export async function explainFindings({ findings, plan, runs, gtmContainer, provider, providerName, client, model, lang = "en", log = () => {} }) {
-  const actionable = groupFindings(findings).map((f, i) => ({ index: i, ...f })).filter((f) => ["broken", "risk", "warning"].includes(f.severity));
+  const actionable = groupFindings(findings).map((f, i) => ({ index: i, ...f })).filter((f) => ["broken", "risk", "warning"].includes(f.severity) && !f.accepted);
   if (actionable.length === 0) return { summary: { headline: messages(lang).ui.allGood, points: [], also_check: [] }, explanations: [] };
   try {
     const input = {
@@ -159,7 +159,8 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   const m = messages(lang);
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
-  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), ...(planChanges ? [mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : [])] : []), ...(changes?.routes?.length ? [mdText(m.ui.routeChanged(routeList(changes))), ""] : []), `**${m.ui.counts(counts)}**`, ""];
+  const accepted = rows.filter((f) => f.accepted).length;
+  const lines = [`# ${mdText(title)}`, "", m.ui.generated(generatedAt), "", ...(against ? [mdText(m.ui.checkedAgainst(against)), ""] : []), ...(planChanges ? [mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : [])] : []), ...(changes?.routes?.length ? [mdText(m.ui.routeChanged(routeList(changes))), ""] : []), `**${m.ui.counts(counts)}**`, "", ...(accepted ? [mdText(m.ui.acceptedLine(accepted)), ""] : [])];
   if (changes) lines.push(...changesMd(m, changes));
   if (planCheck) lines.push(...planVsSiteMd(m, planCheck));
   lines.push(...inventoryMd(m, runs));
@@ -178,7 +179,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
   }
   lines.push(`## ${m.ui.findings}`, "");
   for (const f of rows.filter((r) => r.severity !== "ok")) {
-    lines.push(`### ${m.severity[f.severity]}: ${mdText(f.detail)}`, "");
+    lines.push(`### ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${mdText(f.detail)}`, "");
     lines.push(`- ${m.ui.where}: ${mdText(f.where.map((w) => m.ui.whereStep(w.journey, w.viewport, w.step)).join("; "))}`);
     lines.push(`- ${m.ui.owners[ownerOf(f)]}`);
     const vl = verifyLinks(f);
@@ -636,7 +637,7 @@ function findingCard(m, runs, f, open, aiRan) {
   return `<li class="finding sev-${f.severity}" data-sev="${f.severity}"><details${open ? " open" : ""}><summary>
 <span class="sev-icon">${ic(sevIcon(f.severity), 18)}</span>
 <span class="fhead"><span class="ftitle">${detailHtml(f.detail)}</span><span class="fmeta">${f.platform ? `<span class="ptag p-${safeKey(f.platform)}">${escapeHtml(platformLabel(f.platform))}</span>` : ""}<span>${escapeHtml(m.ui.spread(journeysN, stepsN))}</span></span></span>
-${badge(f.severity, m.severity[f.severity])}${icon.chevron}</summary>
+${badge(f.severity, m.severity[f.severity])}${f.accepted ? badge("muted", m.ui.accepted) : ""}${icon.chevron}</summary>
 <div class="fbody">${e?.impact ? `<div class="impact">${ic(ICON.impact, 16)}<div><span class="impact-l">${m.ui.impact}</span>${fmt(e.impact)}</div></div>` : ""}
 <div class="fcols"><div class="fcol">${e?.likely_cause ? `${sec("cause", m.ui.likelyCause)}<p>${fmt(e.likely_cause)}</p>` : aiRan || f.severity === "info" ? "" : `${sec("cause", m.ui.likelyCause)}<p class="muted">${m.ui.noExplanation}</p>`}${evidence ? `${sec("evidence", m.ui.evidence)}${evidence}` : ""}${gtmHtml(m, f.gtm)}</div>
 <div class="fcol">${steps.length ? `${sec("fix", m.ui.fixSteps)}<ol class="fix-steps">${steps.map((t) => `<li><span>${fmt(t)}</span></li>`).join("")}</ol>` : ""}${sec("where", m.ui.where)}<div class="where">${chips}</div>${verifyHtml(m, f)}</div></div></div></details></li>`;
@@ -659,7 +660,7 @@ function findingsTab(m, runs, rows, aiRan) {
     const mine = FINDING_SEVERITIES.flatMap((s) => problems.filter((f) => f.severity === s && ownerOf(f) === o));
     if (!mine.length) return "";
     const cards = mine.map((f) => {
-      const open = first && f.severity !== "info";
+      const open = first && f.severity !== "info" && !f.accepted;
       if (open) first = false;
       return findingCard(m, runs, f, open, aiRan);
     }).join("");
@@ -1149,6 +1150,7 @@ export function renderHtml({ title, site = null, ai = null, generatedAt, finding
   const rows = attachExplanations(findings, explained);
   const counts = summarize(rows);
   const problems = rows.filter((f) => f.severity !== "ok").length;
+  const accepted = rows.filter((f) => f.accepted).length;
   const flagged = flaggedSteps(runs, rows);
   const atd = `<a class="f-atd" href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer"><img src="${LOGOS["atd-icon"]}" alt="" height="16">AI Tag Debugger</a>`;
   // A custom name or logo takes the place of the Analitik İşler branding. The AI Tag Debugger logo and credit stay, smaller, as with branding false.
@@ -1172,7 +1174,7 @@ ${navCss(runs)}${brandCss(brand?.color)}</style></head><body>
 <div class="topbar"><div class="wrap"><span class="product-logo">${productLogo}</span>${atdByline}${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 18, "logo-h")}</a>` : ""}</div></div>
 <header class="wrap title">
 <h1 class="site"><span class="k">${m.ui.site}</span><span class="v">${escapeHtml(site ?? title)}</span></h1>
-<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${planChanges ? `\n<div class="meta plan-changes">${escapeHtml(m.ui.planChangesLine(planChanges))}${planChangeItems(planChanges).length ? `<ul>${planChangeItems(planChanges).map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>` : ""}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
+<div class="meta">${escapeHtml(generatedAt)} · ${escapeHtml(m.ui.headerMeta(runs.length, checkedProviders(runs).length))} · ai-tag-debugger ${VERSION}</div>${against ? `\n<div class="meta">${escapeHtml(m.ui.checkedAgainst(against))}</div>` : ""}${accepted ? `\n<div class="meta accepted-line">${escapeHtml(m.ui.acceptedLine(accepted))}</div>` : ""}${planChanges ? `\n<div class="meta plan-changes">${escapeHtml(m.ui.planChangesLine(planChanges))}${planChangeItems(planChanges).length ? `<ul>${planChangeItems(planChanges).map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>` : ""}</div>` : ""}${changes?.routes?.length ? `\n<div class="meta"><a href="#changes">${escapeHtml(m.ui.routeChanged(routeList(changes)))}</a></div>` : ""}
 </header>
 <nav class="toptabs" aria-label="${m.ui.sections}"><div class="wrap">
 <a href="#overview">${m.ui.tabOverview}</a><a href="#findings">${m.ui.findings} <span class="n">${problems}</span></a><a href="#journeys">${m.ui.tabJourneys} <span class="n">${runs.length}</span></a><a href="#scope">${m.ui.tabScope}</a></div></nav>

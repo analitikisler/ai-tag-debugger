@@ -40,6 +40,8 @@ Options:
   --lang <code>        Report language: ${Object.keys(LANGUAGES).join(" or ")}
   --headed             Show the browser window
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
+  --baseline <file>    Known findings to accept; they don't count toward --fail-on
+  --update-baseline    Write the baseline file after the run (creates it)
 
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 

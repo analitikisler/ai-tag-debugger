@@ -6,6 +6,7 @@ import { loadConfig, runAudit } from "./audit.js";
 import { messages } from "./i18n.js";
 import { helpText } from "./help.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
+import { readBaseline, writeBaseline } from "./baseline.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
 import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
@@ -36,6 +37,8 @@ async function main(args = process.argv.slice(2)) {
       "base-url": { type: "string" },
       lang: { type: "string" },
       "fail-on": { type: "string", default: "broken" },
+      baseline: { type: "string" },
+      "update-baseline": { type: "boolean", default: false },
       headed: { type: "boolean", default: false },
       "no-branding": { type: "boolean", default: false },
       "keep-bodies": { type: "boolean", default: false },
@@ -178,6 +181,15 @@ async function main(args = process.argv.slice(2)) {
   if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
   // run --out is a hidden alias kept for one minor version; --data-dir replaces it.
   if (values.out) console.log("Note: run --out will be removed in a later version. Runs are saved in aitd/<domain>/runs/<id>/; use --data-dir <dir> to keep them elsewhere.");
+  const baselineFile = values.baseline ?? loaded.baselineFile ?? null;
+  if (values["update-baseline"] && !baselineFile) throw new Error('--update-baseline needs --baseline <file> or "baseline" in the config.');
+  // A baseline that doesn't exist yet is fine when this run writes it.
+  const baseline = baselineFile
+    ? await readBaseline(baselineFile).catch((err) => {
+        if (values["update-baseline"] && err.code === "ENOENT") return null;
+        throw err;
+      })
+    : null;
   const result = await runAudit({
     ...loaded,
     journeys: values.journey,
@@ -198,12 +210,18 @@ async function main(args = process.argv.slice(2)) {
     dataDir: values["data-dir"],
     saveSite: values["save-site"],
     against,
+    baseline,
     log: (msg) => console.log(msg),
   });
 
   console.log(`\n${messages(result.lang).ui.counts(result.counts)}`);
+  if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
   const rel = path.relative(process.cwd(), result.reportPath);
   console.log(`Report: ${rel.startsWith("..") ? result.reportPath : rel}`);
+  if (values["update-baseline"]) {
+    const n = await writeBaseline(baselineFile, { site: loaded.config.site, findings: result.findings });
+    console.log(`Baseline ${baselineFile} now holds ${n} ${n === 1 ? "finding" : "findings"}. Later runs with --baseline fail only on new ones.`);
+  }
 
   if (!against && !values.out) await offerLearnedPlan(result, loaded.config.site, values);
 
