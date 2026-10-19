@@ -52,6 +52,8 @@ test("answers each choice through the consent platform's API", async () => {
     assert.deepEqual(result.states.reject.after, {});
     assert.ok(result.states.analytics.after.ga4);
     assert.equal(result.states.analytics.after.meta, undefined);
+    // Each choice has its own browser, so the ones after the first can run side by side with the same outcome.
+    assert.deepEqual(await runConsentScenarios({ site }, { concurrency: 3 }), result);
   } finally {
     server.close();
   }

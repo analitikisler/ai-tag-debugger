@@ -44,7 +44,7 @@ Options:
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
 Advanced:
-  --max-steps <n>   --platforms <list>   --viewport <name>   --data-dir <dir>
+  --max-steps <n>   --platforms <list>   --viewport <name>   --concurrency <n>   --data-dir <dir>
   --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)`;
 
 const PLAN = `Usage: aitd plan --site <url>

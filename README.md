@@ -362,6 +362,8 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
 
+Running time is another matter: `--concurrency 3` runs up to three journeys at once, each in its own browser, so a run with several journeys and viewports finishes much sooner. It makes the same model calls, only closer together, so stay at `1` or `2` when the provider rate-limits you.
+
 ### Check a new version against saved sites
 
 `--save-site <dir>` also saves every response the site sent and the steps taken. `replay` then audits the same pages again offline, with no network and no AI model, so it costs nothing. It lists findings that are new or gone compared with the saved run:
@@ -411,6 +413,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `plan` | Measurement plan: a file path or an inline object (below). Optional with ready-made journeys. A run with `--against` uses that plan instead. |
 | `gtm_container` | Optional GTM container export (Admin → Export container). Each broken event then names the tag that sends it and the trigger it fires on (or says no tag sends it), even without an AI model. |
 | `viewports` | `desktop` and/or `mobile`. |
+| `concurrency` | Default `1`. How many journeys (and consent scenarios) run at once, each in its own browser, up to `8`. Same as `--concurrency`. |
 | `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
 | `journeys[].start` | Optional start path (default `/`). |
@@ -453,7 +456,7 @@ aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
 aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--config <file>] [--events <names>]
-         [--max-steps <n>] [--viewport desktop|mobile] [--platforms <list>] [--data-dir <dir>]
+         [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <list>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>]
 aitd replay <dir>... [--update] [--out <dir>]
@@ -474,6 +477,7 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 | `--config <file>` | run | Take the site, journeys and plan from a config file. |
 | `--events <names>` | run | Only check these events, e.g. `purchase,add_to_cart`. |
 | `--viewport <name>` | run | `desktop` or `mobile` (repeatable). |
+| `--concurrency <n>` | run | How many journeys to run at once, each in its own browser: `1` (default) to `8`. Side by side, each journey's log lines start with `[journey/viewport]`, and `--headed` opens that many browser windows. Same as `concurrency` in the config. |
 | `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. Replaces `--providers`, which still works for one more minor version. |
 | `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
 | `--lang <code>` | run | Report language: `en` or `tr`. |
