@@ -19,6 +19,7 @@ import { annotateFindings } from "./gtm.js";
 import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
 import { validateConfig, validatePlan } from "./schema.js";
+import { applyBaseline } from "./baseline.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -44,7 +45,9 @@ export async function loadConfig(configFile, { log = console.error } = {}) {
   for (const w of warnings) log(w);
   const gtmContainer = config.gtm_container ? await readJson(config.gtm_container, configDir) : null;
   const brand = await loadReportBrand(config.report, configDir);
-  return { config, plan, gtmContainer, brand, validated: true };
+  // The baseline is only resolved here, not read: --update-baseline may create it on this run.
+  const baselineFile = typeof config.baseline === "string" ? path.resolve(configDir, config.baseline) : null;
+  return { config, plan, gtmContainer, brand, baselineFile, validated: true };
 }
 
 
@@ -98,6 +101,8 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
+ *   baseline: a baseline read with readBaseline (see baseline.js). The findings it accepts are flagged
+ *     accepted and left out of the counts; the result then has baseline: { accepted, stale }.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
@@ -179,6 +184,8 @@ export async function runAudit(opts) {
     : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
   const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer, runs, { lang });
+  // Applied before anything reads the findings, so the explanation, the reports, the alerts and the counts all skip accepted ones.
+  const applied = opts.baseline ? applyBaseline(findings, opts.baseline) : null;
   let saveError = null;
   if (opts.saveSite) {
     try {
@@ -206,6 +213,9 @@ export async function runAudit(opts) {
     if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
     for (const e of errors) log(`\nCould not send an alert. ${e}`);
   }
-  const counts = summarize(groupFindings(findings));
-  return { journeys, plan, runs, findings, explained, counts, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(saveError ? { saveError } : {}) };
+  const grouped = groupFindings(findings);
+  const counts = summarize(grouped);
+  // Accepted is counted on the grouped findings, like the counts shown next to it.
+  const baseline = applied ? { accepted: grouped.filter((f) => f.accepted).length, stale: applied.stale } : null;
+  return { journeys, plan, runs, findings, explained, counts, reportPath, summaryPath, outDir, lang, consentScenarios, ...(against ? { againstId: against.id } : {}), ...(baseline ? { baseline } : {}), ...(saveError ? { saveError } : {}) };
 }

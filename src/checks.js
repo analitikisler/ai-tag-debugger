@@ -198,6 +198,8 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
         platform: hit.platform,
         event: hit.name,
         step: stepLabel(hit.step),
+        // The parameter names are kept apart from the detail text, so a baseline can match them in any language.
+        params: missing,
         detail: d.missingParams(hit.name, missing),
         evidence: JSON.stringify(hit.params),
       });
@@ -508,9 +510,10 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   return findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
+/** Counts per severity. Findings a baseline accepted are left out, so the counts say what is new. */
 export function summarize(findings) {
   const counts = { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 };
-  for (const f of findings) counts[f.severity] += 1;
+  for (const f of findings) if (!f.accepted) counts[f.severity] += 1;
   return counts;
 }
 
@@ -523,8 +526,12 @@ export function groupFindings(findings) {
   for (const f of findings) {
     const k = f.severity === "ok" ? `ok|${f.journey}|${f.viewport}` : [f.severity, f.check, f.platform, f.event, f.detail].join("|");
     const where = { journey: f.journey, viewport: f.viewport, step: f.step };
-    if (groups.has(k)) groups.get(k).where.push(where);
-    else groups.set(k, { severity: f.severity, check: f.check, platform: f.platform, event: f.event, detail: f.detail, evidence: f.evidence, ...(f.gtm ? { gtm: f.gtm } : {}), where: [where] });
+    // A problem counts as accepted only when the baseline accepts it in every place it was seen.
+    if (groups.has(k)) {
+      const group = groups.get(k);
+      group.where.push(where);
+      if (!f.accepted) delete group.accepted;
+    } else groups.set(k, { severity: f.severity, check: f.check, platform: f.platform, event: f.event, detail: f.detail, evidence: f.evidence, ...(f.gtm ? { gtm: f.gtm } : {}), ...(f.accepted ? { accepted: true } : {}), where: [where] });
   }
   return [...groups.values()].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
