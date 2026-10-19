@@ -361,6 +361,7 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
 - **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
+- **Transient failures don't cost a run.** A rate limit, an overloaded answer or a dropped connection from the model API (429, 529, 5xx and the like) is tried again up to 3 times with a growing wait, honoring `retry-after`, and a page load the network dropped or that timed out is tried once more after 2 seconds. Other errors, such as a bad key or a refused page, fail at once.
 
 ### Check a new version against saved sites
 

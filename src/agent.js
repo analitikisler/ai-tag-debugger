@@ -120,7 +120,7 @@ function withTimeout(promise, ms, message) {
  *   timeouts: milliseconds for one model answer, one browser action and one read of the page.
  */
 export async function runAgentJourney(session, journey, opts = {}) {
-  const provider = opts.provider ?? (await createProvider({ name: opts.providerName, model: opts.model, client: opts.client }));
+  const provider = opts.provider ?? (await createProvider({ name: opts.providerName, model: opts.model, client: opts.client, log: opts.log }));
   const maxSteps = opts.maxSteps ?? 30;
   const log = opts.log ?? (() => {});
   const limit = { ...TIMEOUTS, ...opts.timeouts };
@@ -197,7 +197,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
   const session = new AuditSession({
     viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
-    blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite),
+    blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
   });
   try {
     await session.start();
