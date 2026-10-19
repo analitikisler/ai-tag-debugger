@@ -20,6 +20,7 @@ import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, writeSavedSite } fr
 import { runConsentScenarios } from "./consent.js";
 import { validateConfig, validatePlan } from "./schema.js";
 import { applyBaseline } from "./baseline.js";
+import { parseConcurrency, runPool, taggedLog } from "./pool.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -90,7 +91,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
 /**
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
- *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, log?: (m: string) => void }} opts
+ *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, concurrency?: number | string, log?: (m: string) => void }} opts
  *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok plus
@@ -98,6 +99,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   saveSite: record the site's responses and the steps taken into this folder, for replaySite (see replay.js).
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
  *   failOn: the --fail-on level (default "broken"), which decides what junit.xml marks as failed.
+ *   concurrency: how many journeys (and consent scenarios) run at once, each in its own browser. Default 1, at most 8.
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
@@ -129,6 +131,7 @@ export async function runAudit(opts) {
   if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);
   const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
   if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
+  const concurrency = parseConcurrency(opts.concurrency ?? config.concurrency);
   if (!journeys.length) throw new Error(`No journeys to run. A run needs one of:\n  --journey <name>   one of: ${Object.keys(JOURNEY_PRESETS).join(", ")} (or a journey id from your config)\n  --goal "<text>"    describe what to do in your own words\n  --config <file>    a config file with "journeys"\nNot sure what to test? "aitd plan --site ${config.site}" drafts a measurement plan.`);
   // A journey without fixed steps of its own repeats the steps of the site's last completed run, which every run saves.
   const replayed = new Map();
@@ -160,28 +163,30 @@ export async function runAudit(opts) {
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   // Repeat runs start from the route the last completed run took. Not with --out or a replay, which have no history to learn from.
   const hints = provider && !opts.outDir && !opts.replaySite ? await routeHints(opts.dataDir, config.site).catch(() => new Map()) : new Map();
-  const runs = [];
-  for (const journey of journeys) {
-    for (const viewport of viewports) {
-      log(`\n▶ ${journey.id} (${viewport})`);
-      const hint = hints.get(`${journey.id}|${viewport}`);
-      const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
-      if (routeHint) log(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
-      const last = replayed.get(`${journey.id}|${viewport}`);
-      if (last) log(`  Replaying the steps of run ${last.runId}${last.viewport === viewport ? "" : ` (${last.viewport})`}`);
-      const fixed = last ? { ...journey, ...(last.start ? { start: last.start } : {}), steps: last.steps, stepsFrom: last.runId } : journey;
-      // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
-      // so one journey can't cost the report of the others.
-      const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
-      log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
-      runs.push(run);
-    }
-  }
+  // Every journey × viewport pair has its own browser, so they can run side by side. The runs keep the pairs'
+  // order whatever finishes first: the report and the comparison with the last run count on it.
+  const jobs = journeys.flatMap((journey) => viewports.map((viewport) => ({ journey, viewport })));
+  const runs = await runPool(jobs, concurrency, async ({ journey, viewport }) => {
+    // Side by side, each job's lines start with its name, so the interleaved output stays readable.
+    const jobLog = concurrency > 1 ? taggedLog(log, `[${journey.id}/${viewport}]`) : log;
+    jobLog(`\n▶ ${journey.id} (${viewport})`);
+    const hint = hints.get(`${journey.id}|${viewport}`);
+    const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
+    if (routeHint) jobLog(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
+    const last = replayed.get(`${journey.id}|${viewport}`);
+    if (last) jobLog(`  Replaying the steps of run ${last.runId}${last.viewport === viewport ? "" : ` (${last.viewport})`}`);
+    const fixed = last ? { ...journey, ...(last.start ? { start: last.start } : {}), steps: last.steps, stepsFrom: last.runId } : journey;
+    // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
+    // so one journey can't cost the report of the others.
+    const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log: jobLog, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
+    jobLog(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
+    return run;
+  });
 
   // Consent scenarios need the live site, so a replay from a saved site skips them. "consent_scenarios": false turns them off.
   const consentScenarios = opts.replaySite || config.consent_scenarios === false
     ? null
-    : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
+    : await runConsentScenarios(config, { headed: opts.headed, log, concurrency }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
   const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer, runs, { lang });
   // Applied before anything reads the findings, so the explanation, the reports, the alerts and the counts all skip accepted ones.

@@ -47,7 +47,7 @@ Options:
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
 Advanced:
-  --max-steps <n>   --platforms <list>   --viewport <name>   --data-dir <dir>
+  --max-steps <n>   --platforms <list>   --viewport <name>   --concurrency <n>   --data-dir <dir>
   --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)
   --scripted replays each journey's fixed steps; a journey without any repeats the steps
   of its last completed run, which every run saves in its folder as steps.json.`;

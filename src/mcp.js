@@ -21,6 +21,7 @@ import { checkRun, groupFindings, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { readBaseline } from "./baseline.js";
+import { MAX_CONCURRENCY } from "./pool.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
@@ -388,6 +389,7 @@ export function buildServer(opts) {
           scripted: z.boolean().optional().describe("Replay fixed steps instead of browsing with an AI model. Default true."),
           language: z.enum(Object.keys(LANGUAGES)).optional(),
           branding: z.boolean().optional().describe("Set false to leave the Analitik İşler logo and credit line out of the report."),
+          concurrency: z.number().int().min(1).max(MAX_CONCURRENCY).optional().describe("How many journeys to run at once, each in its own browser. Default 1."),
           providers: z
             .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
             .optional()
@@ -395,7 +397,7 @@ export function buildServer(opts) {
           baseline: z.string().optional().describe('Path to a baseline file of accepted findings, written by the CLI with --update-baseline. Default: the config\'s "baseline". Accepted findings are listed but not counted.'),
         },
       },
-      async ({ config: configFile, against, scripted, language, branding, providers, baseline: baselineFile }) => {
+      async ({ config: configFile, against, scripted, language, branding, concurrency, providers, baseline: baselineFile }) => {
         const loaded = await loadConfig(configFile);
         let baseline = null;
         if (baselineFile ?? loaded.baselineFile) {
@@ -422,7 +424,7 @@ export function buildServer(opts) {
         const replay = scripted !== false;
         let result;
         try {
-          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, providers, against: againstPlan, baseline, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
+          result = await runAudit({ ...loaded, scripted: replay, ai: !replay, lang: language, branding, concurrency, providers, against: againstPlan, baseline, outDir: path.join(opts.reportsDir, new Date().toISOString().replace(/[:.]/g, "-")) });
         } catch (err) {
           // The CLI wording (--scripted --no-ai) means nothing to a chat app, so say it in this tool's terms.
           if (err.code !== "NO_API_KEY") throw err;

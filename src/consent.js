@@ -2,6 +2,7 @@
 // (accept all, reject all, analytics only), to show which tags each choice lets through.
 // Runs on its own with every audit when the page shows a consent banner.
 import { AuditSession, CMP_BANNER_SELECTORS } from "./browser.js";
+import { runPool } from "./pool.js";
 
 export const CONSENT_STATES = ["accept", "reject", "analytics"];
 // Tags that are advertising, so an "analytics only" choice should keep them quiet.
@@ -110,6 +111,7 @@ async function runState(config, state, opts) {
 /**
  * Runs every consent scenario on the site's start page. Returns null when the page has no consent
  * banner the tool can answer (the first choice found nothing to click), so the report leaves the section out.
+ * opts.concurrency runs the other choices side by side, each in its own browser; default 1.
  * @returns {Promise<null | { cmp: string, before: object, states: Record<string, { via: string|null, after?: object, error?: string }> }>}
  */
 export async function runConsentScenarios(config, opts = {}) {
@@ -117,8 +119,8 @@ export async function runConsentScenarios(config, opts = {}) {
   const first = await runState(config, "accept", opts);
   if (!first.via) return null;
   log(`\n▶ consent scenarios (${first.via})`);
-  const results = [first];
-  for (const state of CONSENT_STATES.slice(1)) results.push(await runState(config, state, opts));
+  // The first choice shows whether there is a banner to answer at all; the others don't depend on each other.
+  const results = [first, ...(await runPool(CONSENT_STATES.slice(1), opts.concurrency ?? 1, (state) => runState(config, state, opts)))];
   const states = {};
   for (const r of results) {
     states[r.state] = r.error ? { via: null, error: r.error } : { via: r.via, ...(r.after ? { after: r.after } : {}) };
