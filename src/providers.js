@@ -118,7 +118,8 @@ const MODEL_TIMEOUT_MS = 300_000;
  * and retry-after), so they only get the attempt count and a timeout; withRetry is not stacked on them.
  */
 function sdkOptions(extra = {}) {
-  return { maxRetries: MODEL_ATTEMPTS, timeout: MODEL_TIMEOUT_MS, ...extra };
+  // maxRetries counts retries, not attempts, so this gives the SDKs the same total as withRetry.
+  return { maxRetries: MODEL_ATTEMPTS - 1, timeout: MODEL_TIMEOUT_MS, ...extra };
 }
 
 const TRANSIENT_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);

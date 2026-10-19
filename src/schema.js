@@ -36,7 +36,8 @@ export const JOURNEY_SCHEMA = z.looseObject({
 });
 
 export const PLAN_EVENT_SCHEMA = z.looseObject({
-  platform: z.enum(Object.keys(PLATFORMS)),
+  // The checks lowercase the platform, so "GA4" and "Meta" in a plan keep working as they did.
+  platform: z.string().transform((v) => v.toLowerCase()).pipe(z.enum(Object.keys(PLATFORMS))),
   name: text.min(1),
   aliases: names.optional(),
   required_params: names.optional(),
@@ -44,7 +45,8 @@ export const PLAN_EVENT_SCHEMA = z.looseObject({
   allow_multiple: flag.optional(),
   custom: flag.optional(),
   description: text.nullish(),
-  trigger: z.looseObject({ page: text.nullish(), element: text.nullish() }).optional(),
+  // Documentation fields the checks ignore: a sentence or an object are both fine.
+  trigger: z.union([text, z.looseObject({ page: text.nullish(), element: text.nullish() })]).nullish(),
   parameters: z.record(text, z.looseObject({ custom: flag.optional(), description: text.nullish(), example: z.unknown().optional() })).optional(),
   seen: flag.optional(),
 });
@@ -60,8 +62,9 @@ export const PLAN_SCHEMA = z.looseObject({
 
 export const CONFIG_SCHEMA = z.looseObject({
   site: text.optional(),
-  plan: z.union([text, z.looseObject({})], { error: "must be a file path or a plan object" }).optional(),
-  gtm_container: text.optional(),
+  // Null means "not set" for these, as it always did: the loaders treat null and absent alike.
+  plan: z.union([text, z.looseObject({})], { error: "must be a file path or a plan object" }).nullish(),
+  gtm_container: text.nullish(),
   viewports: z.array(z.enum(Object.keys(VIEWPORTS))).optional(),
   journeys: z.array(JOURNEY_SCHEMA).optional(),
   allowed_hosts: names.optional(),
@@ -75,8 +78,8 @@ export const CONFIG_SCHEMA = z.looseObject({
   // The range itself is checked by parseConcurrency, which gives the exact message for the CLI flag too.
   concurrency: z.union([z.number(), text], { error: "must be a whole number from 1 to 8" }).optional(),
   baseline: text.optional(),
-  language: z.enum(Object.keys(LANGUAGES)).optional(),
-  report: z.looseObject({ name: text.nullish(), logo: text.nullish(), color: text.nullish(), pdf: flag.optional() }).optional(),
+  language: z.enum(Object.keys(LANGUAGES)).nullish(),
+  report: z.looseObject({ name: text.nullish(), logo: text.nullish(), color: text.nullish(), pdf: flag.optional() }).nullish(),
   provider: z.enum(Object.keys(AI_PROVIDERS)).optional(),
   model: text.optional(),
   base_url: text.optional(),

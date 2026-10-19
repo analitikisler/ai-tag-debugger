@@ -119,7 +119,7 @@ test("the Anthropic and OpenAI SDK clients are built with 3 retries and a bounde
     (await createProvider({}, { ANTHROPIC_API_KEY: "k", AI_GATEWAY_URL: "https://gateway.ai.cloudflare.com/v1/acc/default" })).client,
   ];
   for (const client of clients) {
-    assert.equal(client.maxRetries, 3);
+    assert.equal(client.maxRetries, 2);
     assert.equal(client.timeout, 300_000);
   }
 });
