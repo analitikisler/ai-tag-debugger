@@ -1049,5 +1049,8 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 
 export const CSS = [TOKENS, COMPONENTS, SHELL, PRODUCT, SUMMARY, FINDINGS, JOURNEYS, CONSENT, SCOPE].join("\n");
 
+/** The shared parts on their own, for pages that are not the report (plan.html loads tokens, components and product, not the shell). */
+export { TOKENS, COMPONENTS, SHELL, PRODUCT };
+
 /** The white label's accent colour, written for the light theme and under both dark selectors (whitelabel.js). */
 export { brandCss };
