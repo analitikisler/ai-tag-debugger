@@ -48,8 +48,10 @@ Plans and runs go under `aitd/` in the working directory unless `--data-dir` say
 aitd/
   example.com/                  domainOf(site): the host without www.
     plans/2026-10-16_0900/      measurement-plan.json, plan.html, plan.xlsx after an export
-    runs/2026-10-16_0912/       report.html, report.md, timeline.csv, capture.json,
-                                plan-check.json with --against, report.pdf with pdf: true
+    runs/2026-10-16_0912/       report.html, report.md, timeline.csv, capture.json, steps.json,
+                                junit.xml, summary.json, plan-check.json with --against,
+                                report.pdf with pdf: true
+    history.json                a small index of the saved runs, rebuilt from capture.json when missing
 ```
 
 IDs are local time, `YYYY-MM-DD_HHMM`, with seconds added when the minute is taken (`newId`). Folders are never overwritten. `resolvePlan` turns `latest`, `first`, a plan ID or a path into a plan file. The MCP server writes reports to `~/ai-tag-debugger-reports` unless `--reports` is given. `aitd/`, `reports/` and `saved/` are gitignored.

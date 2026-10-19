@@ -1,5 +1,7 @@
 # UX audit of the current report
 
+> Screenshot names below refer to captures of the 0.16.0 demo report taken during the review. They are not kept in the repository: run `npm run demo:serve` and `npm run demo`, then open the report to see the same screens.
+
 Artifact under review: the report generated from the demo shop (`report.html`, 665 KB, 13,845 DOM nodes, 482 `<details>`, 209 tables, 406 "?" tips; `report.md`, 20.7 KB; `timeline.csv`, 189 rows). Browser: Chromium via Playwright, 1280×800 desktop, 640×400 as the 200 % zoom proxy, 390×844 mobile, dark scheme and print media. Screenshots are in `docs/design/ux-audit/`.
 
 The sample run has no AI explanations (`explained: null`), no measurement plan check and no GTM container, which is the common case for a first run and the worst case for the report: every "Likely cause" slot says "Run without --no-ai for an explanation", and the finding card has to carry the reader on evidence alone.

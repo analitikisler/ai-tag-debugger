@@ -1,5 +1,7 @@
 # Accessibility checklist for the report (WCAG 2.2 AA, static HTML)
 
+> Screenshot names below refer to captures of the 0.16.0 demo report taken during the review. They are not kept in the repository: run `npm run demo:serve` and `npm run demo`, then open the report to see the same screens.
+
 Run before shipping a change to `src/report.js`. Each item has the exact test and, where a DOM query can decide it, a Playwright snippet. axe is not available offline, so the automated checks are plain `page.evaluate` queries; the manual ones take a minute each with the sample report.
 
 Setup used by every snippet:

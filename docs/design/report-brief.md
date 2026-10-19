@@ -1,5 +1,7 @@
 # Report brief
 
+> Screenshot names below refer to captures of the 0.16.0 demo report taken during the review. They are not kept in the repository: run `npm run demo:serve` and `npm run demo`, then open the report to see the same screens.
+
 What the ai-tag-debugger report is for, who reads it, what it must say first, and what the next release should build. The Art Director, UX Designer and front-end engineer build against this document. The copy rules are in `copy-guide.md`.
 
 The artifact under review is the demo-shop run (`report.html`, `report.md`, `capture.json`, `timeline.csv`, version 0.16.0, no AI model). Screenshots of it are in `current/`:
