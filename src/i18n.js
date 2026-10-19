@@ -607,6 +607,55 @@ const en = {
     medianFirstHit: "Median first hit",
     slowestHit: "Slowest hit",
     planChanges: "Plan changes",
+
+    // ---- html.shell: top bar, rail, section tools and footer of src/html/shell.js ----
+    shell: {
+      skip: "Skip to the report",
+      eyebrow: "Tracking audit",
+      heading: (site) => `Tracking audit of ${site}`,
+      railLabel: "Report sections",
+      sections: { summary: "Summary", findings: "Findings", journeys: "Journeys", consent: "Consent", coverage: "Coverage", inventory: "Inventory", run: "Run" },
+      railTip: (label, token) => `${label} · ${token}`,
+      collapse: "Collapse sidebar",
+      expand: "Expand sidebar",
+      expandAll: "Expand all",
+      collapseAll: "Collapse all",
+      clear: "Clear",
+      filterCount: (shown, total) => `${shown} of ${total}`,
+      score: "Score",
+      outOf: "/100",
+      scoreLabel: (score, verdict) => `Score ${score} of 100, verdict ${verdict}`,
+      noScore: (verdict) => `No score, verdict ${verdict}`,
+      themeAuto: "Theme: follows your system",
+      themeLight: "Theme: light",
+      themeDark: "Theme: dark",
+    },
+    // ---- end of html.shell ----
+
+    // ---- html.summary: strings of src/html/summary.js, edited only by its builder ----
+    summary: {
+    },
+    // ---- end of html.summary ----
+
+    // ---- html.findings: strings of src/html/findings.js, edited only by its builder ----
+    findings: {
+    },
+    // ---- end of html.findings ----
+
+    // ---- html.journeys: strings of src/html/journeys.js, edited only by its builder ----
+    journeys: {
+    },
+    // ---- end of html.journeys ----
+
+    // ---- html.consent: strings of src/html/consent.js, edited only by its builder ----
+    consent: {
+    },
+    // ---- end of html.consent ----
+
+    // ---- html.scope: strings of src/html/scope.js, edited only by its builder ----
+    scope: {
+    },
+    // ---- end of html.scope ----
   },
 };
 
@@ -1185,6 +1234,55 @@ const tr = {
     medianFirstHit: "Ortanca ilk istek",
     slowestHit: "En yavaş istek",
     planChanges: "Plan değişiklikleri",
+
+    // ---- html.shell: top bar, rail, section tools and footer of src/html/shell.js ----
+    shell: {
+      skip: "Rapora atla",
+      eyebrow: "İzleme denetimi",
+      heading: (site) => `${site} izleme denetimi`,
+      railLabel: "Rapor bölümleri",
+      sections: { summary: "Özet", findings: "Bulgular", journeys: "Yolculuklar", consent: "Onay", coverage: "Kapsam", inventory: "Envanter", run: "Çalıştırma" },
+      railTip: (label, token) => `${label} · ${token}`,
+      collapse: "Kenar çubuğunu daralt",
+      expand: "Kenar çubuğunu genişlet",
+      expandAll: "Tümünü aç",
+      collapseAll: "Tümünü kapat",
+      clear: "Temizle",
+      filterCount: (shown, total) => `${shown} / ${total} gösteriliyor`,
+      score: "Puan",
+      outOf: "/100",
+      scoreLabel: (score, verdict) => `Puan 100 üzerinden ${score}, sonuç: ${verdict}`,
+      noScore: (verdict) => `Puan yok, sonuç: ${verdict}`,
+      themeAuto: "Tema: sistemi izler",
+      themeLight: "Tema: açık",
+      themeDark: "Tema: koyu",
+    },
+    // ---- end of html.shell ----
+
+    // ---- html.summary: strings of src/html/summary.js, edited only by its builder ----
+    summary: {
+    },
+    // ---- end of html.summary ----
+
+    // ---- html.findings: strings of src/html/findings.js, edited only by its builder ----
+    findings: {
+    },
+    // ---- end of html.findings ----
+
+    // ---- html.journeys: strings of src/html/journeys.js, edited only by its builder ----
+    journeys: {
+    },
+    // ---- end of html.journeys ----
+
+    // ---- html.consent: strings of src/html/consent.js, edited only by its builder ----
+    consent: {
+    },
+    // ---- end of html.consent ----
+
+    // ---- html.scope: strings of src/html/scope.js, edited only by its builder ----
+    scope: {
+    },
+    // ---- end of html.scope ----
   },
 };
 
