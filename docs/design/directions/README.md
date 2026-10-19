@@ -33,8 +33,8 @@ every card collapsed except Summary, less text and more distinct colours. `d-ins
 is that report, built by a second team (UX spec, visual system, shell, five section builders, a
 reviewer) from the same demo data. Measured at 1280 px with the rail open: Summary 684 px, Findings
 426 px with rows closed, Journeys 658 px with one step selected; the nine reader tasks take 10 clicks
-and no manual scrolling. `d-inspector/rationale.md` maps the eight points to the mockup and lists
-what the implementation needs.
+and no manual scrolling. `d-inspector/rationale.md` maps the eight points to the mockup. Direction D is the report the product
+renders since 0.17.0 (`src/html/`).
 
 ## Recommendation: one report, three screens
 

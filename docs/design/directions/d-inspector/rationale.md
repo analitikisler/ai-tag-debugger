@@ -1,5 +1,9 @@
 # Direction D: the inspector, simplified
 
+**Status: implemented.** This is the report `src/html/` renders since 0.17.0; the mockup stays as the design
+reference. Differences from the mockup are product data the mockup did not have (GTM tags, plan checks,
+changes, trend, the AI summary card, white label) and the square outlined chips the owner asked for.
+
 `mockup.html` beside this file is a working single-file mockup of the 0.17.0 demo report built from the
 real `capture.json`, following the owner's feedback on directions A, B and C. It loads nothing from the
 network, works with JavaScript off (sections stacked, rail as a table of contents), has light and dark
