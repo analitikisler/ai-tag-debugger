@@ -56,7 +56,7 @@ Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları
 
 GA4 istekleri başka bir ana makinedeki bir sunucu konteynerine gidiyorsa ya da yükleyicisi oradan sunuluyorsa, rapor bir bilgi bulgusu ekler: konteynerin ad platformlarına ilettiği event'ler tarayıcıdan geçmez, bu yüzden burada görülemez.
 
-`gtm_container` dışa aktarımı verildiğinde, her hatalı event onu gönderen GTM etiketini ve tetiklendiği tetikleyiciyi adlandırır (ya da hiçbir etiketin göndermediğini söyler). Yapay zekâ modeli gerekmez.
+`gtm_container` dışa aktarımı verildiğinde, her hatalı event onu gönderen GTM etiketini ve tetiklendiği tetikleyiciyi adlandırır (ya da hiçbir etiketin göndermediğini söyler). Her etiket ardından tetikleyicisinin o yolculukta tetiklenip tetiklenmediğini, tetiklenmediyse nedenini söyler: etiket duraklatılmış, hiçbir dataLayer gönderimi tetikleyicinin event'ini taşımamış, bir tetikleyici koşulu sağlanmamış (gönderimdeki değerle birlikte; değer, GTM'in Data Layer Variable'larının okuduğu gibi birikimli dataLayer'dan okunur), bir istisna tetikleyicisi engellemiş ya da event tetiklendiğinde etiketin gerektirdiği onay reddedilmiş. Her şey tetiklendiği hâlde istek yine de hatalıysa bunu söyler ve etiketin kendi kurulumunu işaret eder. Tıklama, form, görünürlük ve zamanlayıcı tetikleyicilerini GTM sayfada değerlendirdiği için, bunlar `gtm.click` türü event'leri dataLayer'a ulaşmadıkça değerlendirilemez olarak raporlanır. Bunların tümü yakalanan dataLayer'dan, yapay zekâ modeli olmadan değerlendirilir.
 
 ### Kontrol edilecek platformları seçin
 
@@ -71,7 +71,7 @@ Her denetim ayrıca başlangıç sayfasını her çerez onay seçimi için bir k
 ## Nasıl çalışır
 
 1. **Gezinme:** Yapay zekâ modeli, sade bir dille yazılmış bir hedef ("sepete herhangi bir ürün ekle ve test ödeme yöntemiyle siparişi tamamla") ve sayfanın metin görünümünü alır. İki araçla çalışır: `browser_action` (goto, click, fill, select, scroll, wait) ve `finish`. Playwright ile her seferinde bir adım atar.
-2. **Yakalama:** Bir takip uç noktasına giden her istek normalleştirilmiş isteklere ayrıştırılır ve isteği tetikleyen adımla etiketlenir. Her dataLayer gönderimi, bir başlatma betiği aracılığıyla kaydedilir; `gtag('consent', ...)` komutları da buna dahildir. Varsayılan olarak GA4, Google Ads, Meta, TikTok, Microsoft Ads, LinkedIn, Pinterest, Snapchat ve X'in toplama istekleri yerelde yanıtlanır, bu yüzden **test trafiği bu gerçek hesaplara ulaşmaz**. Diğer satıcıların etiketleri isteklerini göndermeye devam eder; zaman akışının ağ bölümü her çağrıyı ve yerelde yanıtlanıp yanıtlanmadığını gösterir.
+2. **Yakalama:** Bir takip uç noktasına giden her istek normalleştirilmiş isteklere ayrıştırılır ve isteği tetikleyen adımla etiketlenir. Her dataLayer gönderimi, bir başlatma betiği aracılığıyla kaydedilir; `gtag('consent', ...)` komutları da buna dahildir. Varsayılan olarak aracın ayrıştırabildiği her platformun (GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo ve Piwik PRO) toplama istekleri ile Google'ın dönüşüm, yeniden pazarlama ve onay ping'leri yerelde yanıtlanır, bu yüzden **test trafiği bu gerçek hesaplara ulaşmaz**. Aracın yalnızca ana makinesinden tanıdığı satıcıların (Clarity ve Hotjar gibi) etiket yüklemeleri ve istekleri dışarı gitmeye devam eder; zaman akışının ağ bölümü her çağrıyı ve yerelde yanıtlanıp yanıtlanmadığını gösterir.
 3. **Kontrol:** Deterministik kurallar, yakalanan istekleri ölçümleme planınızla karşılaştırır. Bu bölüm yapay zekâ çağrısı gerektirmez, bu yüzden sonuçlar tekrarlanabilirdir.
 4. **Açıklama:** Model bulguları, adım başına istekleri ve (isteğe bağlı olarak) GTM konteyner dışa aktarımınızı okur. Her sorun için olası nedeni ve düzeltmeyi yazar, ilgili etiket ve tetikleyicileri adlandırarak.
 
@@ -164,7 +164,7 @@ Genel kurulum, kısa bir takma ad olan `aitd`'yi de ekler: `aitd run --site … 
 
 Ya da kurmadan çalıştırın: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Komutları görmek için `aitd --help`, her komutun seçenekleri için `aitd run --help` (ya da `plan`, `replay`, `mcp`) çalıştırın.
+Komutları görmek için `aitd --help`, her komutun seçenekleri için `aitd run --help` (ya da `plan`, `replay`, `mcp`) çalıştırın. Bir şey çalışmıyorsa `aitd doctor`, Node'u, Chromium'u, yapay zekâ anahtarınızı ve veri klasörünü denetler ve neyin düzeltileceğini söyler.
 
 ### Demo mağazayı deneyin (kaynak koddan)
 
@@ -311,8 +311,8 @@ Planlar ve çalıştırmalar, aracı çalıştırdığınız klasördeki `aitd/`
 aitd/
   example.com/                      sitenin ana makinesi, www. olmadan
     plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (dışa aktarımdan sonra)
-    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json
-                                    ve plan-check.json (--against ile)
+    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json, steps.json,
+                                    junit.xml, summary.json ve plan-check.json (--against ile)
 ```
 
 Bir kimlik, yerel saat `YYYY-MM-DD_HHMM` biçimindedir. O dakika zaten alınmışsa saniye eklenir (`_HHMMSS`). Hiçbir şey değiştirilmez: her taslak, içe aktarma ve çalıştırma yeni bir klasör alır. `aitd/` klasörünü başka bir yerde tutmak için `--data-dir <dir>` kullanın. `replay` ve `--save-site` klasörleri etkilenmez.
@@ -359,8 +359,11 @@ Gezinmenin her adımı bir model çağrısıdır; bu yüzden kullanım **yolculu
 - **Büyük sayfaların daha pahalı olmasını bekleyin.** Her adım, sayfa görünümünü (en fazla 250 öğe ve 3.000 karakter metin) modele gönderir; bu yüzden yoğun sayfalar basit sayfalardan adım başına daha fazla token kullanır.
 - **Tekrar çalıştırmalar son yolu baştan kullanır.** Bir yolculuk sitede bir kez tamamlandıktan sonra, bir sonraki çalıştırma yapay zekâya o çalıştırmanın geçtiği sayfaları sırasıyla verir; böylece keşfetmek yerine doğrudan hedefe gider. Yalnızca aynı hedef için kullanılır, yalnızca 0.14.0 ve sonrasıyla kaydedilen çalıştırmalardan alınır ve yalnızca yapay zekâlı çalıştırmalarda kullanılır. `--out` ya da `replay` ile kullanılmaz. Site değiştiyse ve yol artık uymuyorsa yapay zekâ başka bir yol izler.
 - **Raporu odaklı tutmak için `--events` kullanın.** Gezinmeyi kısaltmaz, bu yüzden kullanımı pek değiştirmez.
-- **Yapay zekâsız tekrar oynatın.** Bir yapay zekâlı çalıştırmadan sonra adımları kaydetmek için `--save-steps <dosya>` ekleyin; sonra o ayar dosyasını her dağıtımda `--scripted --no-ai` ile çalıştırın. Bkz. [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın).
+- **Yapay zekâsız tekrar oynatın.** Tamamlanan her çalıştırma attığı adımları çalıştırma klasörüne `steps.json` olarak kaydeder; `--scripted --no-ai`, kendi sabit adımları olmayan bir yolculuk için son tamamlanan çalıştırmanın adımlarını tekrarlar. Bir yolculuğu yapay zekâyla bir kez çalıştırın, sonra her dağıtımda tekrar oynatın. Bkz. [Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın](#adımları-kaydedin-ve-yapay-zekâ-olmadan-tekrar-oynatın).
 - **Bir sohbet uygulaması kullanın.** MCP üzerinden gezinmeyi sohbet uygulamasının kendi modeli yapar, bu yüzden hiç API anahtarı kullanılmaz.
+- **Geçici hatalar bir çalıştırmaya mal olmaz.** Model API'sinden gelen bir hız sınırı, aşırı yük yanıtı ya da kopan bağlantı (429, 529, 5xx ve benzerleri) `retry-after` başlığına uyularak, artan bir bekleme süresiyle en fazla 3 kez yeniden denenir; ağın düşürdüğü ya da zaman aşımına uğrayan bir sayfa yüklemesi de 2 saniye sonra bir kez daha denenir. Hatalı bir anahtar ya da reddedilen bir sayfa gibi diğer hatalar hemen başarısız olur.
+
+Çalışma süresi ayrı bir konudur: `--concurrency 3`, her biri kendi tarayıcısında olmak üzere aynı anda en fazla üç yolculuk çalıştırır; böylece birkaç yolculuk ve görünüm içeren bir çalıştırma çok daha erken biter. Aynı model çağrılarını yapar, yalnızca daha sık aralıklarla; bu yüzden sağlayıcı size hız sınırı uyguluyorsa `1` ya da `2` ile kalın.
 
 ### Yeni bir sürümü kayıtlı sitelere karşı kontrol edin
 
@@ -377,14 +380,34 @@ npx @analitikisler/ai-tag-debugger replay saved/*
 
 ### Adımları kaydedin ve yapay zekâ olmadan tekrar oynatın
 
-`--save-steps <dosya>`, her yolculuğun attığı adımları bir ayar dosyasının `journeys[].steps` alanına yazar. Dosya yoksa oluşturur; ayar dosyasında plan yoksa çalıştırmanın planını da kaydeder. Aynı ayar dosyası yolculuğu, yapay zekâ modeli ve API anahtarı olmadan tekrarlar:
+Tamamlanan her çalıştırma, her yolculuğun attığı adımları çalıştırma klasörüne, `aitd/<alan adı>/runs/<id>/steps.json` dosyasına kaydeder. Bir `--scripted --no-ai` çalıştırması, kendi `steps` alanı olmayan her yolculuk için bu adımları tekrarlar: sitenin o yolculuğu tamamlayan en yeni çalıştırmasını alır (varsa aynı görünümdekini, yoksa diğer görünümdekini) ve hangi çalıştırmayı tekrar oynattığını yolculuğun `▶` satırının altında söyler. Böylece yapay zekâ her yolculuk için bir kez gerekir; sonraki her çalıştırmanın maliyeti sıfırdır:
+
+```bash
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase --scripted --no-ai
+```
+
+Site değiştiğinde ve kayıtlı bir adım artık öğesini bulamadığında yolculuk, o çalıştırmanın adımlarının artık siteye uymadığını söyleyen bir notla tamamlanmamış olarak biter; yolculuğu yapay zekâyla bir kez daha çalıştırın, sonraki tekrar yeni adımları kullanır. Sitede hiç tamamlanmamış bir yolculuk, çalıştırmayı tarayıcı açılmadan durdurur. Yalnızca `aitd/` içine kaydedilen çalıştırmalar tekrar oynatılır: `--out` ile başka bir yere gönderilen ya da MCP üzerinden yapılan bir çalıştırma da `steps.json` yazar, ama sonraki çalıştırma oraya bakmaz.
+
+Adımları bunun yerine deponuzda tutmak için `--save-steps <dosya>`, bunları bir ayar dosyasının `journeys[].steps` alanına yazar. Dosya yoksa oluşturur; ayar dosyasında plan yoksa çalıştırmanın planını da kaydeder. Aynı ayar dosyası yolculuğu, yapay zekâ modeli ve API anahtarı olmadan tekrarlar:
 
 ```bash
 ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-steps ai-tag-debugger.config.json
 ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
 ```
 
-Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün adımları tutulur. Ayar dosyasını depoda tutun ve ikinci komutu her dağıtımda çalıştırarak aynı yolculuğu hiçbir model çağrısı yapmadan kontrol edin.
+Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün adımları tutulur. İkinci komutu her dağıtımda çalıştırarak aynı yolculuğu hiçbir model çağrısı yapmadan kontrol edin.
+
+### Bilinen bulguları kabul edin
+
+`--fail-on`, bir düzeydeki her bulguda CI işini başarısız yapar. Bir bulgu biliniyorsa ve yakında düzeltilmeyecekse, örneğin onaydan önce tetiklenen bir satıcı pikseli, bir temel dosya (baseline) sonraki çalıştırmaların yalnızca yeni bulgularda başarısız olmasını sağlar. Mevcut her bulguyu bir dosyaya yazmak için bir kez `--update-baseline` ile çalıştırın, dosyayı gözden geçirin ve depoya ekleyin:
+
+```bash
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai --baseline baseline.json --update-baseline
+ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai --baseline baseline.json --fail-on warning
+```
+
+Dosyada her bulgu için bir kayıt bulunur: çalıştırmanın eşleştirme yaptığı bir `key` (kontrol, platform, event, yolculuk, görünüm ve eksik parametreler için hangileri olduğu) ve dosyayı okuyan kişi için geri kalanı. Bir bulguda yeniden başarısız olmaya başlamak için kaydını silin, ya da neden kabul edildiğini söyleyen bir `"note"` ekleyin; notlar bir sonraki `--update-baseline` çalıştırmasında korunur. Kabul edilen bir bulgu raporda "Kabul edildi" etiketiyle kalır, sayılara ve yapay zekâ açıklamasına alınmaz ve `--fail-on` için sayılmaz. Sayıların ardından çalıştırma, kaç bulgunun kabul edildiğini ve temel dosyadaki kaç kaydın bayatladığını, yani artık görülmediğini yazdırır; böylece dosya sadeleştirilebilir. Ayar dosyasındaki, ayar dosyasına göre bağıl `"baseline": "baseline.json"`, seçeneği her seferinde vermekten kurtarır; MCP `run_audit` aracı da `baseline` alır.
 
 ## Sitenizi yapılandırın
 
@@ -409,17 +432,19 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 |---|---|
 | `site` | Temel URL. Mümkünse staging kullanın. |
 | `plan` | Ölçümleme planı: bir dosya yolu ya da satır içi bir nesne (aşağıya bakın). Hazır yolculuklarla isteğe bağlıdır. `--against` ile çalışan bir çalıştırma bunun yerine o planı kullanır. |
-| `gtm_container` | İsteğe bağlı GTM konteyner dışa aktarımı (Yönetici → Konteyneri dışa aktar). Her hatalı event, onu gönderen etiketi ve tetikleyicisini adlandırır (ya da hiçbir etiketin göndermediğini söyler), yapay zekâ modeli olmadan da. |
+| `gtm_container` | İsteğe bağlı GTM konteyner dışa aktarımı (Yönetici → Konteyneri dışa aktar). Her hatalı event, onu gönderen etiketi ve tetikleyicisini adlandırır (ya da hiçbir etiketin göndermediğini söyler) ve o tetikleyicinin yolculukta tetiklenip tetiklenmediğini, tetiklenmediyse nedenini söyler (duraklatılmış etiket, event'i taşıyan gönderim yok, görülen değerle birlikte sağlanmayan bir koşul, engelleyen bir tetikleyici, reddedilen onay); yakalanan dataLayer'dan, yapay zekâ modeli olmadan değerlendirilir. |
 | `viewports` | `desktop` ve/veya `mobile`. |
+| `concurrency` | Varsayılan `1`. Aynı anda kaç yolculuğun (ve onay senaryosunun) çalışacağı, her biri kendi tarayıcısında, en fazla `8`. `--concurrency` ile aynıdır. |
 | `journeys` | `--journey` ile hazır yolculuk seçtiğinizde, `--goal` ile bir yolculuk tarif ettiğinizde ya da `--against` ile bir plana karşı kontrol ettiğinizde isteğe bağlıdır. |
 | `journeys[].goal` | Yapay zekânın sade bir dille ne yapacağı. |
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
-| `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. |
+| `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. Bunlar yoksa `--scripted`, sitenin o yolculuğu son tamamlayan çalıştırmasının adımlarını tekrarlar. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `campaign_checks` | Varsayılan `true`. Her çalıştırma ilk sayfayı bir reklam tıklaması gibi açar (UTM parametreleri, `gclid`, `fbclid` ya da başlangıç adresinde zaten olanlar) ve bunların yönlendirmelerden geçip isteklere ulaştığını denetler. Düz adresi açmak için `false` yapın. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
 | `consent_scenarios` | Varsayılan `true`. [Onay senaryolarını](#onay-senaryoları) atlamak için `false` yapın; her onay seçimi için başlangıç sayfasını bir kez ziyaret ederler. |
+| `baseline` | İsteğe bağlı: kabul edilen bulguların temel dosyasının, ayar dosyasına göre bağıl yolu. `--baseline` ile aynıdır. Bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin). |
 | `language` | Rapor dili, `en` (varsayılan) ya da `tr`. `--lang` ile aynıdır. |
 | `keep_bodies` | Varsayılan `false`. Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden saklamak için `true` yapın. `--keep-bodies` ile aynıdır. |
 | `branding` | Varsayılan `true`. Analitik İşler logosunu ve "Generated by AI Tag Debugger · analitikisler.com" satırını raporlardan çıkarmak için `false` yapın. `--no-branding` ile aynıdır, ya da MCP `finish_audit` ve `run_audit` araçlarında `branding: false`. |
@@ -427,6 +452,8 @@ Bir yolculuk her iki görünümde de çalıştıysa yalnızca ilk görünümün 
 | `provider` | İsteğe bağlı: `anthropic`, `openai`, `gemini`, `vercel`, `cloudflare` ya da `openai-compatible`. `--provider` ile aynıdır. |
 | `base_url`, `model` | İsteğe bağlı: API adresi ve model kimliği, örneğin `openai-compatible` için. `--base-url` ve `--model` ile aynıdır. |
 | `notify` | İsteğe bağlı uyarılar, kayıtlı her çalıştırmadan sonra: `slack` (bir webhook adresi ya da `SLACK_WEBHOOK_URL` değişkenini okumak için `true`) ve `email` (bir adres ya da liste). Bkz. [Uyarılar](#uyarılar). |
+
+Ayar dosyası ve plan, okunur okunmaz, tarayıcı başlamadan önce denetlenir. Bir hata, alanı ve sabit bir seçim için izin verilen değerleri adlandırır, örneğin `viewports[1]: must be one of desktop, mobile (got "tablet")` ya da `journeys[0].steps[2].action: must be one of goto, click, fill, select, scroll, wait`. Aracın tanımadığı bir anahtar, en yakın olanı öneren bir uyarıyla yok sayılır (`Unknown key "viewport" ... Did you mean "viewports"?`); böylece dosyadaki fazladan bir not çalıştırmayı durdurmaz. `aitd plan` ile kaydedilen ve elektronik tablodan içe aktarılan planlar da aynı denetimden geçer.
 
 ### Uyarılar
 
@@ -446,8 +473,6 @@ Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gö
 
 ## CLI
 
-## CLI
-
 ```
 aitd "<cümle>" [-y]
 aitd plan --site <url> [--topic <ad>] [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
@@ -455,12 +480,14 @@ aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <dosya> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
 aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--config <dosya>] [--events <adlar>]
-         [--max-steps <n>] [--viewport desktop|mobile] [--platforms <liste>] [--data-dir <dir>]
+         [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <liste>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
-         [--fail-on broken|risk|warning|never] [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>]
+         [--fail-on broken|risk|warning|never] [--baseline <dosya>] [--update-baseline]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network]
+aitd doctor [--site <url>] [--data-dir <dir>]
 ```
 
 `aitd`, `ai-tag-debugger`'ın kısa bir takma adıdır ve aynı komutları ve seçenekleri kabul eder. Her komutun temel seçenekleri için `aitd <komut> --help` çalıştırın.
@@ -469,24 +496,27 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 
 | Seçenek | Komutlar | Anlamı |
 |---|---|---|
-| `--site <url>` | plan, run | Site. `plan` için zorunludur; `run` için `--against` ya da ayar dosyası siteyi vermiyorsa gereklidir. |
+| `--site <url>` | plan, run, doctor | Site. `plan` için zorunludur; `run` için `--against` ya da ayar dosyası siteyi vermiyorsa gereklidir. `doctor` yalnızca adresin http(s) olduğunu ve ana makinesinin çözüldüğünü denetler. |
 | `--against <plan>` | run | Bir plana karşı kontrol: `latest` (ya da `last`), `first`, bir plan kimliği ya da bir plan dosyasının ya da klasörünün yolu. |
 | `--journey <id>` | run | Hazır bir yolculuk (tekrarlanabilir). |
 | `--goal "<metin>"` | run | Sade bir dille bir yolculuk (tekrarlanabilir). |
 | `--config <dosya>` | run | Siteyi, yolculukları ve planı bir ayar dosyasından al. |
 | `--events <adlar>` | run | Yalnızca bu event'leri kontrol et, örneğin `purchase,add_to_cart`. |
 | `--viewport <ad>` | run | `desktop` ya da `mobile` (tekrarlanabilir). |
+| `--concurrency <n>` | run | Aynı anda kaç yolculuğun çalışacağı, her biri kendi tarayıcısında: `1` (varsayılan) ile `8` arası. Yan yana çalışırken her yolculuğun günlük satırları `[yolculuk/görünüm]` ile başlar ve `--headed` o kadar tarayıcı penceresi açar. Ayar dosyasındaki `concurrency` ile aynıdır. |
 | `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers`'ın yerine geçer; o da bir minör sürüm daha çalışır. |
 | `--max-steps <n>` | plan, run | Yolculuk başına en fazla yapay zekâ adımı (`plan` için varsayılan 25). |
 | `--lang <kod>` | run | Rapor dili: `en` ya da `tr`. |
 | `--fail-on <düzey>` | run | Bu düzeyde çıkış kodu 1 olur: `broken` (varsayılan), `risk`, `warning` ya da `never`. |
+| `--baseline <dosya>` | run | Kabul edilen bulguların dosyası. Yine raporlanırlar, ama `--fail-on` için sayılmazlar. Bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin). |
+| `--update-baseline` | run | Bu çalıştırmanın her bulgusunu çalıştırmadan sonra temel dosyaya yaz; dosya yoksa oluştur. |
 | `--headed` | plan, run | Tarayıcı penceresini göster. |
 | `--provider <ad>`, `--model <id>` | plan, run | Yapay zekâ sağlayıcısı ve modeli. Varsayılan: ayarlı olan API anahtarı. |
-| `--scripted` | run | Her yolculuğun sabit adımlarını, yapay zekâ gezintisi olmadan tekrar oynat. |
+| `--scripted` | run | Her yolculuğun sabit adımlarını, yapay zekâ gezintisi olmadan tekrar oynat. Adımı olmayan bir yolculuk, sitenin son tamamlanan çalıştırmasının adımlarını tekrarlar. |
 | `--no-ai` | run | Hiç yapay zekâ modeli yok. `--scripted` anlamına gelir. |
 | `--save-site <dir>` | run | Sitenin yanıtlarını `replay` için kaydet. |
 | `--save-steps <dosya>` | run | Her yolculuğun attığı adımları bir ayar dosyasına yaz. |
-| `--data-dir <dir>` | plan, run | `aitd/` klasörünün (planlar ve çalıştırmalar) tutulduğu yer. Varsayılan: `./aitd`. `run --out` yerine geçer. |
+| `--data-dir <dir>` | plan, run, doctor | `aitd/` klasörünün (planlar ve çalıştırmalar) tutulduğu yer. Varsayılan: `./aitd`. `run --out` yerine geçer. |
 | `--format xlsx\|csv` | plan export | Elektronik tablo biçimi. Varsayılan: `xlsx`. |
 | `--update` | replay | Bu tekrarın bulgularını beklenen bulgular yap. |
 | `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
@@ -498,7 +528,31 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 
 0.10.0 sürümünde kaldırıldı: `plan --from`, `plan --out` ve `plan --force`. Plan taslağı her zaman yeni bir klasör kaydeder; kaldırılmış bir bayrak ne çalıştırılacağını yazdırır.
 
-Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
+Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Bir [temel dosyada](#bilinen-bulguları-kabul-edin) kabul edilen bulgular sayılmaz. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
+
+**CI'da test sonuçları.** Her çalıştırma ayrıca `junit.xml` yazar: her yolculuk bir test paketi, her bulgu bir test vakasıdır ve `--fail-on` düzeyine ulaşan bulgu başarısız sayılır; böylece GitHub Actions, GitLab ve Jenkins bulguları test hataları olarak gösterir. GitHub Actions'ta dosyayı yükleyin ve bir JUnit raporlayıcı action'a verin:
+
+```yaml
+      - run: aitd run --config ai-tag-debugger.config.json --data-dir tracking-report
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: junit
+          path: tracking-report/**/junit.xml
+      # İsteğe bağlı: herhangi bir JUnit raporlayıcı action dosyayı çalıştırma üzerinde açıklamalara dönüştürür.
+      - uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: tracking
+          path: tracking-report/**/junit.xml
+          reporter: java-junit
+```
+
+GitLab'da `artifacts: reports: junit:` ayarını aynı yola yönlendirin. Yanındaki `summary.json`, sayıları, yolculukları, her bulguyu (kontrol, önem düzeyi, platform, event, yolculuk, görünüm, başlık, mesaj) ve diğer dosyaların yollarını tutar; böylece bir betik, `capture.json` dosyasını ayrıştırmadan sonucu okuyabilir:
+
+```sh
+jq '.counts.broken' aitd/example.com/runs/*/summary.json
+```
 
 **Zamanlanmış çalıştırmalar.** Her dağıtımdan sonra değil de bir zamanlayıcıyla denetlemek için [`examples/github-actions/scheduled-run.yml`](examples/github-actions/scheduled-run.yml) dosyasını kullanın (varsayılan olarak haftalık; cron satırını değiştirebilirsiniz). Geçmişi çalıştırmalar arasında bir önbellekte saklar, böylece "Son çalıştırmadan beri değişenler" yeni bir runner'da da çalışır. Kendi sunucunuzda aynısı için [`examples/cron/`](examples/cron) içinde bir betik ve bir crontab satırı vardır.
 
@@ -519,6 +573,8 @@ aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url 
 - `report.md`: raporun Markdown hali, örneğin bir çekme isteği yorumu için.
 - `capture.json`: yakalanan her şey, kendi analiziniz için.
 - `plan-check.json`: `--against` ile, planlanan her event için kovasıyla birlikte bir kayıt.
+- `junit.xml`: bulgular JUnit test sonuçları olarak, yolculuk ve görünüm başına bir paket; CI sistemlerinin test hatası olarak göstermesi için (yukarıya bakın).
+- `summary.json`: çalıştırmanın sayıları, yolculukları, bulguları ve dosya yolları, betikler için tek bir küçük dosyada.
 - `plan.html` (planın klasöründe): planın event'lerini, parametrelerini ve kullanıcı özelliklerini gösteren okunabilir bir sayfa.
 
 Raporlar bir kredi satırıyla biter: "Generated by AI Tag Debugger · analitikisler.com"; alan adı düz bir bağlantıdır (görsel yok, takip yok ve yönlendiren bilgisi yok; böylece rapor adresleri sızdırılmaz). `--no-branding`, bunu logosuyla birlikte kaldırır.
@@ -615,6 +671,8 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 ```bash
 npm run setup   # Node'u denetler, bağımlılıkları ve Chromium'u kurar, bir AI sağlayıcı anahtarının ayarlı olup olmadığını söyler
 npm test        # ayrıştırıcılar, kontroller, her AI sağlayıcısı ve MCP sunucusu; demo mağazaya karşı uçtan uca
+npm run test:unit   # yalnızca tarayıcı gerektirmeyen testler, yaklaşık on saniyede
+npm run lint    # ESLint, yalnızca önerilen kurallar: tanımsız adlar, kullanılmayan import'lar ve benzerleri
 ```
 
 Depoda ayrıca bir geliştirme konteyneri (`.devcontainer/devcontainer.json`) vardır. VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açın; Chromium'un sistem kütüphaneleri dahil `npm run setup`'ı sizin yerinize çalıştırır. Oradaki bir AI modelini kullanmak için anahtarınızı bir Codespaces sırrı olarak ekleyin ya da konteynerin terminalinde dışa aktarın.
