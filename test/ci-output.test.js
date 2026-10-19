@@ -97,7 +97,8 @@ test("the summary has the counts, the journeys, each finding and the file list",
   assert.equal(plain.changes, null);
   assert.equal(plain.findings[0].accepted, true);
   assert.equal("planCheck" in plain.files, false);
-  assert.deepEqual(plain.counts, { broken: 1, risk: 0, warning: 0, info: 0, ok: 0 });
+  // An accepted finding is listed but not counted, so a baseline keeps the exit code and the summary in step.
+  assert.deepEqual(plain.counts, { broken: 0, risk: 0, warning: 0, info: 0, ok: 0 });
 });
 
 test("a finding's title is short and names the platform and event when it has them", () => {
