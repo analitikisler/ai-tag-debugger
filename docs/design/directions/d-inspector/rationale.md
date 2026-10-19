@@ -1,6 +1,6 @@
 # Direction D: the inspector, simplified
 
-**Status: implemented.** This is the report `src/html/` renders since 0.17.0; the mockup stays as the design
+**Status: implemented.** This is the report `src/html/` renders since 0.18.0; the mockup stays as the design
 reference. Differences from the mockup are product data the mockup did not have (GTM tags, plan checks,
 changes, trend, the AI summary card, white label) and the square outlined chips the owner asked for.
 

@@ -1,6 +1,6 @@
 # Report information architecture and interaction spec
 
-_Superseded by `directions/d-inspector/` (the report since 0.17.0). Kept as the record of the four-tab report's design._
+_Superseded by `directions/d-inspector/` (the report since 0.18.0). Kept as the record of the four-tab report's design._
 
 This is the next report's structure, decided against the tasks in `ux-audit.md`. Where a choice trades something away, the trade is named. Assumptions that the Creative Director's brief (`report-brief.md`, written in parallel) may contradict are marked **CD assumption**.
 
