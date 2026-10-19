@@ -1,5 +1,6 @@
 // Accepted findings: keys that stay the same between runs, the file they are kept in, and runs that
 // fail only on new findings.
+import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -86,7 +87,7 @@ test("the reports label accepted findings, in English and Turkish, and say how m
 });
 
 // The demo shop, replayed without AI: a run that writes the baseline still fails, the next one passes.
-const PORT = 4396;
+const PORT = await freePort();
 const cli = (args, cwd) => {
   try {
     return { status: 0, stdout: execFileSync(process.execPath, [path.resolve("src/cli.js"), ...args], { cwd, encoding: "utf8", stdio: "pipe" }) };

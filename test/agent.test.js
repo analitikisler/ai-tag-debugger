@@ -1,5 +1,6 @@
 // Drives the real browser against the demo shop with a fake Claude client,
 // to test the agent loop, tool plumbing and capture end to end without an API key.
+import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -12,7 +13,7 @@ import { runAudit } from "../src/audit.js";
 import { explainFindings, renderCsv, renderHtml } from "../src/report.js";
 import { checkRun } from "../src/checks.js";
 
-const PORT = 4399;
+const PORT = await freePort();
 let server;
 before(async () => {
   server = spawn(process.execPath, ["examples/serve.js"], { env: { ...process.env, PORT: String(PORT) }, stdio: "pipe" });
