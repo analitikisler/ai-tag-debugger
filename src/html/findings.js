@@ -388,16 +388,21 @@ function passedLines(ctx) {
 /* ---------- filter bar ---------- */
 
 /** One row's tokens for the static chip counts: what the chip alone would show, as the script filters. */
-const rowTokens = (sev, owner, plats, places) => ({ sev: [sev], owner: owner ? [owner] : [], plat: uniq(plats).map(safeKey), journey: uniq(places.map((p) => safeKey(p.journey))), vp: uniq(places.map((p) => safeKey(p.viewport))) });
+const rowTokens = (sev, owner, plats, places, accepted = false) => ({ sev: [sev], owner: owner ? [owner] : [], plat: uniq(plats).map(safeKey), journey: uniq(places.map((p) => safeKey(p.journey))), vp: uniq(places.map((p) => safeKey(p.viewport))), accepted });
 
 function filterBar(ctx, items) {
   const { m, runs } = ctx;
   const t = m.html.findings;
-  const count = (key, val) => items.filter((it) => it[key].includes(val)).length;
+  // Accepted rows are listed but not counted, as the tally behind Summary, the rail and the group headings; a chip
+  // that only accepted rows match still filters to them, so it stays enabled with its 0.
+  const counted = items.filter((it) => !it.accepted);
+  const count = (key, val) => counted.filter((it) => it[key].includes(val)).length;
+  const any = (key, val) => items.some((it) => it[key].includes(val));
   const button = (key, val, label, cls, zeroShown = false) => {
     const c = count(key, val);
-    if (!c && !zeroShown) return "";
-    return `<button type="button" data-filter="${key}=${esc(val)}" aria-pressed="false" class="${cls}${c ? "" : " zero"}"${c ? "" : " disabled"}>${label}<span class="n">${c}</span></button>`;
+    const off = !any(key, val);
+    if (off && !zeroShown) return "";
+    return `<button type="button" data-filter="${key}=${esc(val)}" aria-pressed="false" class="${cls}${off ? " zero" : ""}"${off ? " disabled" : ""}>${label}<span class="n">${c}</span></button>`;
   };
   const sev = SEVERITIES.map((s) => button("sev", s, `<span class="dot"></span>${esc(m.severity[s])}`, `chip-sev ${s}`, true)).join("");
   const owner = OWNERS.map((o) => button("owner", o, `<span class="dot"></span>${esc(m.ui.owners[o])}`, `chip-owner ${o}`)).join("");
@@ -413,7 +418,7 @@ function filterBar(ctx, items) {
 <label class="fb-search">${use("ui-search", 14)}<input type="search" data-filter-search placeholder="${esc(t.search)}" aria-label="${esc(t.searchLabel)}"></label>
 <button type="button" class="fb-clear" data-filter-clear>${esc(m.html.shell.clear)}</button>
 <input type="checkbox" class="fb-fold" aria-label="${esc(t.filters)}" data-label="${esc(t.filters)}" aria-controls="fb-groups">
-<p data-filter-count aria-live="polite">${esc(m.html.shell.filterCount(items.length, items.length))}</p></div>`;
+<p data-filter-count aria-live="polite">${esc(m.html.shell.filterCount(counted.length, counted.length))}</p></div>`;
 }
 
 /* ---------- changed since last run ---------- */
@@ -463,8 +468,8 @@ export function render(ctx) {
   const passed = passedLines(ctx);
   // The tokens of every row, in list order, for the chip counts and "n of m".
   const items = [
-    ...failedRows.map((f) => rowTokens(f.severity, ownerOf(f), [f.platform], placesOf(f.where))),
-    ...infoRows.map((f) => rowTokens("info", ownerOf(f), [f.platform], placesOf(f.where))),
+    ...failedRows.map((f) => rowTokens(f.severity, ownerOf(f), [f.platform], placesOf(f.where), f.accepted === true)),
+    ...infoRows.map((f) => rowTokens("info", ownerOf(f), [f.platform], placesOf(f.where), f.accepted === true)),
     ...passed.map((p) => p.tokens),
   ];
   const head = (kind, label, count) => `<h3><span class="chip lg chip-group ${kind}"><b data-group-count>${count}</b> ${esc(label)}</span></h3>`;

@@ -291,6 +291,26 @@ test("in a browser the report has one h1, no heading skips, named tables, select
     await page.focus('#j3-s11 [role=tab][aria-controls="j3-s11-hits"]');
     await page.keyboard.press("ArrowRight");
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute("aria-controls") + ":" + document.activeElement.getAttribute("aria-selected")), "j3-s11-dl:true");
+    // [ folds the rail, also where [ is AltGr+8 (Turkish Q, German: Ctrl+Alt on Windows) or where the [ key types ğ;
+    // a modifier that is not part of typing it, or focus in a text field, leaves the rail alone.
+    const rail = () => page.evaluate(() => document.documentElement.getAttribute("data-rail"));
+    const key = (init, target = "body") => page.evaluate(([i, sel]) => document.querySelector(sel).dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...i })), [init, target]);
+    const before = await rail();
+    const flip = before === "collapsed" ? "expanded" : "collapsed";
+    await key({ key: "[", code: "Digit8", ctrlKey: true, altKey: true });
+    assert.equal(await rail(), flip, "AltGr+8");
+    await key({ key: "ğ", code: "BracketLeft" });
+    assert.equal(await rail(), before, "the [ key on Turkish Q");
+    await key({ key: "[", code: "Digit5", altKey: true });
+    assert.equal(await rail(), flip, "Option+5 on a Mac German layout");
+    for (const init of [{ key: "[", code: "BracketLeft", metaKey: true }, { key: "[", code: "BracketLeft", ctrlKey: true }, { key: "ğ", code: "BracketLeft", altKey: true }]) {
+      await key(init);
+      assert.equal(await rail(), flip, JSON.stringify(init));
+    }
+    await key({ key: "[", code: "BracketLeft" }, "#findings [data-filter-search]");
+    assert.equal(await rail(), flip, "typing [ in the search box");
+    await key({ key: "[", code: "BracketLeft" });
+    assert.equal(await rail(), before);
     await page.focus("#main");
     await page.keyboard.press("7");
     await shown("run");

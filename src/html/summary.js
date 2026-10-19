@@ -33,10 +33,13 @@ const runChip = (journey, viewport) => {
 };
 const runsChip = (t, n) => `<span class="chip plain">${use("ui-journeys", 13)}${esc(t.runs(n))}</span>`;
 
-/** The step every unfinished run stopped at (its last step; step 0 is the start), or null when they differ. */
+/**
+ * The step every unfinished run stopped at (its last step), or null when they differ or none got past the start: step 0
+ * is the start and a run that threw has no steps, neither a step a reader can find (Findings' stoppedStep, the same rule).
+ */
 function stopStep(runs) {
   const stops = [...new Set(runs.filter((r) => !r.completed).map((r) => (r.steps ?? []).length - 1))];
-  return stops.length === 1 ? stops[0] : null;
+  return stops.length === 1 && stops[0] > 0 ? stops[0] : null;
 }
 
 /**
@@ -245,7 +248,7 @@ function consentCard(ctx) {
   const ms = (cm.runs ?? []).map((r) => r.ms).filter((x) => typeof x === "number");
   const range = ms.length ? (Math.min(...ms) === Math.max(...ms) ? `${ms[0]}` : `${Math.min(...ms)}–${Math.max(...ms)}`) : null;
   const state = defaultState(runs);
-  const stateChip = state ? ` ${chip("consent", state === "mixed" ? "none" : state, esc(state === "mixed" ? t.mixed : state))}` : "";
+  const stateChip = state ? ` ${chip("consent", state === "mixed" ? "none" : state, esc(state === "mixed" ? t.mixed : m.html.consent.state[state]))}` : "";
   const val = cm.defaultPresent ? t.defaultAt(stateChip, range) : esc(t.noDefault);
   // Scenarios: no choice, then each state the banner reached (accept, reject), as the Consent section lists them.
   const sc = consentScenarios;

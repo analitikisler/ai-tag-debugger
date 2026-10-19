@@ -96,26 +96,30 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     if (!clear) { clear = document.createElement("button"); clear.type = "button"; clear.className = "btn fb-clear"; clear.setAttribute("data-filter-clear", ""); clear.textContent = bar.getAttribute("data-clear-label") || (main && main.getAttribute("data-clear-label")) || "×"; bar.insertBefore(clear, count); }
     var kv = function (c) { var s = c.getAttribute("data-filter"), i = s.indexOf("="); return [s.slice(0, i), s.slice(i + 1)]; };
     var has = function (row, k, vals) { var toks = (row.getAttribute("data-" + k) || "").split(/\\s+/); return vals.some(function (v) { return toks.indexOf(v) >= 0; }); };
+    // A row the baseline accepted is listed but not counted, as the tally behind Summary, the rail and the headings.
+    var counted = function (r) { return !r.hasAttribute("data-accepted"); }, total = rows.filter(counted).length;
     chips.forEach(function (c) { // static count of the rows this chip alone would show
       if (!c.hasAttribute("data-count-for")) return;
       var p = kv(c), n = c.querySelector(".n") || c.appendChild(document.createElement("span"));
-      n.className = "n"; n.textContent = rows.filter(function (r) { return has(r, p[0], [p[1]]); }).length;
+      n.className = "n"; n.textContent = rows.filter(function (r) { return counted(r) && has(r, p[0], [p[1]]); }).length;
     });
     function pressed() { var o = {}; chips.forEach(function (c) { if (on(c, "aria-pressed")) { var p = kv(c); (o[p[0]] = o[p[0]] || []).push(p[1]); } }); return o; }
     function apply(write) {
-      var o = pressed(), keys = Object.keys(o), q = search ? search.value.trim() : "", ql = q.toLowerCase(), shown = 0, active = keys.length > 0 || !!q;
+      var o = pressed(), keys = Object.keys(o), q = search ? search.value.trim() : "", ql = q.toLowerCase(), shown = 0, visible = 0, active = keys.length > 0 || !!q;
       rows.forEach(function (r) {
         var ok = (!ql || (r.getAttribute("data-text") || "").toLowerCase().indexOf(ql) >= 0) && keys.every(function (k) { return has(r, k, o[k]); });
-        r.hidden = !ok; if (ok) shown++;
+        r.hidden = !ok; if (ok) { visible++; if (counted(r)) shown++; }
       });
-      groups.forEach(function (g) { // with a filter on, a group with matches opens and one without hides; off, back to default
-        var n = $$("[data-text]", g.el).filter(function (r) { return !r.hidden && !r.hasAttribute("data-accepted"); }).length;
-        g.el.hidden = active && !n;
-        if (g.el.tagName === "DETAILS") g.el.open = active ? n > 0 : g.open;
-        $$("[data-group-count]", g.el).forEach(function (c) { c.textContent = n; });
+      // With a filter on, a group with visible rows opens and one without hides; off, back to default. Visible rows
+      // include accepted ones, so a filter that matches only those still shows them; the heading counts as the tally.
+      groups.forEach(function (g) {
+        var vis = $$("[data-text]", g.el).filter(function (r) { return !r.hidden; });
+        g.el.hidden = active && !vis.length;
+        if (g.el.tagName === "DETAILS") g.el.open = active ? vis.length > 0 : g.open;
+        $$("[data-group-count]", g.el).forEach(function (c) { c.textContent = vis.filter(counted).length; });
       });
-      if (count) count.textContent = tpl.replace("{n}", shown).replace("{m}", rows.length);
-      $$("[data-filter-empty]", list).forEach(function (e) { e.hidden = shown > 0; });
+      if (count) count.textContent = tpl.replace("{n}", shown).replace("{m}", total);
+      $$("[data-filter-empty]", list).forEach(function (e) { e.hidden = visible > 0; });
       clear.hidden = !active;
       var sec = bar.closest("main > .sec");
       if (write && sec) history.replaceState(null, "", "#" + sec.id + (active ? "?" + keys.map(function (k) { return k + "=" + o[k].join(","); }).concat(q ? ["q=" + encodeURIComponent(q)] : []).join("&") : ""));
@@ -219,7 +223,11 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
   }
   document.addEventListener("keydown", function (e) {
     var t = e.target, x, n;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // "[" is AltGr+8 on Turkish Q and German layouts (Ctrl+Alt on Windows, Option+5 on a Mac), and on Turkish Q the
+    // "[" key itself types "ğ": either folds the rail. Any other modifier means the key is not ours.
+    var rail = e.key === "[" || (e.code === "BracketLeft" && !e.shiftKey);
+    var altGr = e.key === "[" && e.altKey || (e.getModifierState && e.getModifierState("AltGraph"));
+    if (e.metaKey || ((e.ctrlKey || e.altKey) && !(rail && altGr))) return;
     if ((x = t.closest && t.closest("[data-tabs] [role=tab]"))) {
       n = step(tabsOf(x.closest("[data-tabs]")).filter(enabled), tabsOf(x.closest("[data-tabs]")).filter(enabled).indexOf(x), e.key, "ArrowLeft", "ArrowRight");
       if (n) { e.preventDefault(); return selectTab(n, true); }
@@ -231,7 +239,7 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     }
     if (typing(t)) return;
     var state = body.getAttribute("data-state") === "failed" ? "failed-" : "";
-    if (e.key === "[") { e.preventDefault(); setRail(html.getAttribute("data-rail") !== "collapsed", true); }
+    if (rail) { e.preventDefault(); setRail(html.getAttribute("data-rail") !== "collapsed", true); }
     else if (/^[1-7]$/.test(e.key)) {
       var a = $$('.rail ul:not([hidden]) > li > a')[+e.key - 1];
       if (a && a.getAttribute("href")) { e.preventDefault(); go(a.getAttribute("href")); }

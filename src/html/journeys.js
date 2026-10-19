@@ -200,12 +200,16 @@ function flaggedSteps(rows, runs, run) {
 
 /** Everything a run's markup needs about its findings: the step severities, the run's worst, the step opened on load. */
 function runState(ctx, rows, run) {
-  const steps = (run.steps ?? []).filter((s) => s.index > 0);
+  // Hits before the first listed step (browser.js's "start" step) get a step 0 pane of their own, only when there are
+  // any: simpler than folding them into step 1, since every id (stepAnchor, hitId) stays keyed by the hit's own step,
+  // so the plan line's link to j<r>-s0 and the hit numbering need no remapping.
+  const start = hitsOf(run, 0).length ? [{ ...(run.steps ?? []).find((s) => s.index === 0), index: 0, label: ctx.m.html.journeys.startStep }] : [];
+  const steps = [...start, ...(run.steps ?? []).filter((s) => s.index > 0)];
   const flagged = flaggedSteps(rows, ctx.runs, run);
   const sevOf = new Map(steps.map((s) => [s.index, worstOf([flagged.get(s.index), ...hitsOf(run, s.index).map((h) => hitFinding(rows, run, s, h)?.severity)])]));
   // A run-level problem (journey incomplete, no consent default) has no step but still marks the run.
   const runSev = worstOf([...sevOf.values(), ...rows.filter((f) => f.where.some((w) => w.journey === run.journeyId && w.viewport === run.viewport)).map((f) => f.severity)]);
-  const selected = steps.reduce((best, s) => (sevOf.get(s.index) && (!best || rankOf(sevOf.get(s.index)) < rankOf(sevOf.get(best.index))) ? s : best), null) ?? steps[0] ?? null;
+  const selected = steps.reduce((best, s) => (sevOf.get(s.index) && (!best || rankOf(sevOf.get(s.index)) < rankOf(sevOf.get(best.index))) ? s : best), null) ?? steps.find((s) => s.index > 0) ?? steps[0] ?? null;
   return { steps, sevOf, runSev, selected };
 }
 
@@ -403,7 +407,7 @@ function runPanel(ctx, t, rows, run, ri, state) {
   const runChip = run.completed
     ? `<span title="${esc(run.note ?? "")}">${chip("run", "completed", `${use("sev-ok", 13)}${esc(m.ui.completed)}`)}</span>`
     : chip("run", "incomplete", `${use("sev-warning", 13)}${esc(m.ui.notCompleted)}`);
-  const status = `<p class="jr-status"><span class="jr-runh">${vpChip(run.viewport, `${run.journeyId} · ${run.viewport}`)}</span>${runChip}<span class="jr-nums">${esc(t.stats(steps.length, (run.hits ?? []).length, ms === null ? null : (ms / 1000).toFixed(1)))}</span>${run.goal ? `<span class="jr-goal" title="${esc(run.goal)}">${esc(run.goal)}</span>` : ""}</p>`;
+  const status = `<p class="jr-status"><span class="jr-runh">${vpChip(run.viewport, `${run.journeyId} · ${run.viewport}`)}</span>${runChip}<span class="jr-nums">${esc(t.stats(steps.filter((s) => s.index > 0).length, (run.hits ?? []).length, ms === null ? null : (ms / 1000).toFixed(1)))}</span>${run.goal ? `<span class="jr-goal" title="${esc(run.goal)}">${esc(run.goal)}</span>` : ""}</p>`;
   // Why an incomplete run stopped is the first thing to read about it, so it gets its own line.
   const note = !run.completed && run.note ? `<p class="jr-stop">${use("sev-warning", 14)}<span>${esc(run.note)}</span></p>` : "";
   const inspector = steps.length

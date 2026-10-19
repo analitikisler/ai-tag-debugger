@@ -151,6 +151,16 @@ test("Run: the Trend card appears only with two or more saved runs and links the
   assert.match(html, /<h3 class="tr-h">Open longest<\/h3><ul class="tr-list"><li><span class="badge sev-broken">.*<a href="#f-ga4-purchase-missing_params">/);
   assert.match(html, /open since 2026-10-01 · 3 runs · 1 place/);
   assert.doesNotMatch(scope(reportInput({ trend: trend(history.slice(0, 1)) })), /id="trend"/);
+  // Every value from history.json and the timing goes through esc, numbers included.
+  const t = trend(history);
+  t.series = t.series.map((p) => ({ ...p, broken: "<b>2</b>", score: "<i>9</i>" }));
+  const input = reportInput({ trend: t });
+  input.metrics = { ...input.metrics, timing: input.metrics.timing.map((r) => ({ ...r, slowest: [{ ...r.slowest[0], step: "<u>4</u>" }] })) };
+  const odd = slice(scope(input), "run");
+  assert.doesNotMatch(odd, /<b>2<\/b>|<i>9<\/i>|<u>4<\/u>/);
+  assert.match(odd, /&lt;b&gt;2&lt;\/b&gt;/);
+  assert.match(odd, /&lt;i&gt;9&lt;\/i&gt;/);
+  assert.match(odd, /&lt;u&gt;4&lt;\/u&gt;/);
 });
 
 test("the failed run and an empty report render every section", () => {

@@ -6,9 +6,10 @@ import { messages } from "./i18n.js";
 import { buildInventory } from "./inventory.js";
 import { computeMetrics } from "./metrics.js";
 import { historySummaryLines, sparkline } from "./history.js";
+import { cardIds } from "./html/lib.js";
 import {
   VERSION, SEVERITIES, summaryParts, fixSteps, attachExplanations, SEVERITY_RANK, SEVERITY_ORDER_MD, seconds, isConsentEntry, routeList,
-  isProblem, placeKey, uniqPlaces, mdHeadline, platformLabel, safeKey, sortPlatforms, changeLabel, coverageLines, pcSort, planChangeItems,
+  isProblem, placeKey, uniqPlaces, mdHeadline, platformLabel, sortPlatforms, changeLabel, coverageLines, pcSort, planChangeItems,
 } from "./report-shared.js";
 
 // The HTML report lives in src/html/: shell.js assembles the page from one module per section.
@@ -159,7 +160,6 @@ const runFor = (runs, w) => runs.find((r) => r.journeyId === w.journey && r.view
 const mdPlace = (w) => `${mdText(w.journey)} · ${mdText(w.viewport)}`;
 /** "GA4 `purchase`", or the check name for a finding without an event. */
 const mdTitle = (f) => [f.platform ? mdText(platformLabel(f.platform)) : "", f.event ? `\`${mdCode(f.event)}\`` : ""].filter(Boolean).join(" ") || mdText(f.check);
-const mdAnchor = (f) => ["f", f.platform, f.event, f.check].filter(Boolean).map(safeKey).join("-");
 
 /**
  * A text from one of the per-check tables (consequence, fix, verdict headline) that other parts of
@@ -255,7 +255,7 @@ function mdPriorities(m, runs, metrics) {
 }
 
 /** One finding as the fixed field list; the AI's impact, cause and fix steps replace the per-check templates when it ran. */
-function mdFinding(m, runs, f) {
+function mdFinding(m, runs, f, ids) {
   const e = f.explanation;
   const lines = [`### ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${mdDetail(f.detail)}`, `- ${m.ui.where}: ${mdWhere(m, runs, f.where)}`];
   const impact = e?.impact ?? mdTemplate(m.consequence, f.check, f);
@@ -274,7 +274,8 @@ function mdFinding(m, runs, f) {
   if (fix) lines.push(`- ${m.ui.fix}: ${fix}`);
   const vl = verifyLinks(f);
   if (vl.length) lines.push(`- ${m.ui.verify}: ${vl.map((l) => `[${l.name}](${l.url})`).join(", ")}`);
-  lines.push(`- ${m.ui.md.link}: report.html#${mdAnchor(f)}`, "");
+  // The HTML card's own id (cardIds): a site-level finding is f-site-…, and a repeated one ends in -2.
+  lines.push(`- ${m.ui.md.link}: report.html#${ids.get(f)}`, "");
   return lines;
 }
 
@@ -405,7 +406,10 @@ function mdTrend(m, trend, lang) {
  */
 export function renderMarkdown({ title, site = null, generatedAt, findings, explained, runs, plan = null, lang = "en", branding = true, against = null, planCheck = null, changes = null, planChanges = null, consentScenarios = null, brand = null, metrics = null, trend = null }) {
   const m = messages(lang);
-  const rows = attachExplanations(findings, explained).sort((a, b) => SEVERITY_ORDER_MD[a.severity] - SEVERITY_ORDER_MD[b.severity] || b.where.length - a.where.length);
+  const grouped = attachExplanations(findings, explained);
+  // Ids are given in the HTML report's row order, before the sort, so a counter suffix lands on the same card.
+  const ids = cardIds(grouped);
+  const rows = [...grouped].sort((a, b) => SEVERITY_ORDER_MD[a.severity] - SEVERITY_ORDER_MD[b.severity] || b.where.length - a.where.length);
   const counts = summarize(rows);
   const accepted = rows.filter((f) => f.accepted).length;
   metrics ??= computeMetrics({ plan, runs, findings, consentScenarios });
@@ -429,7 +433,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   lines.push(`## ${m.ui.findings}`, "");
   const problems = rows.filter((f) => f.severity !== "ok");
   if (!problems.length) lines.push(m.ui.noProblems, "");
-  for (const f of problems.slice(0, MD_BLOCKS)) lines.push(...mdFinding(m, runs, f));
+  for (const f of problems.slice(0, MD_BLOCKS)) lines.push(...mdFinding(m, runs, f, ids));
   const rest = problems.slice(MD_BLOCKS);
   if (rest.length) lines.push(`### ${m.ui.md.also}`, ...rest.map((f) => `- **${m.severity[f.severity]}** ${mdDetail(f.detail).replace(/\.$/, "")} · ${mdWhere(m, runs, f.where, { full: false })}`), "");
   lines.push(...mdConsent(m, metrics, consentScenarios));

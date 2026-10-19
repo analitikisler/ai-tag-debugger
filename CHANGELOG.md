@@ -20,6 +20,7 @@
 - `aitd doctor` checks Node, the Chromium build Playwright expects, the AI keys, the data folder and, with `--site`, that the host resolves.
 - Run history: `src/history.js` reads the site's run folders (and a small `history.json` index kept per site) into a finding timeline, a trend series, open-longest and flapping lists, and journey stability. Report metrics: `src/metrics.js` computes a deterministic verdict, a quality score with documented weights, plan coverage, journey funnels, platform parity, consent compliance, conversion integrity and timing from the captured data.
 - Fixed: a CSV plan import without a `user_properties.csv` beside it crashed with a ReferenceError instead of warning.
+- Fixed: in `report.md`, the link under a finding with no platform (a journey that did not finish, no Consent Mode default) or under a second finding with the same platform, event and check now opens its card in `report.html` instead of the Summary.
 - Development: `npm run lint` (ESLint, also in CI), `npm run test:unit` for the browser-free tests, an i18n parity test, a prompt-injection regression test, CONTRIBUTING.md, SECURITY.md and CLAUDE.md. Design review of the report under `docs/design/`: brief, copy guide, UX audit, IA spec, accessibility checklist, Markdown spec, visual system and a single-file prototype.
 
 ## 0.16.0 (2026-10-17)

@@ -207,6 +207,20 @@ test("Turkish strings, the failed run and a report with no runs", () => {
   assert.equal(empty, '<section class="sec" id="journeys" aria-labelledby="journeys-h"><h2 id="journeys-h">Journeys</h2>\n<p class="muted">No journey was run.</p>\n</section>');
 });
 
+test("hits recorded before the first listed step get a step 0 pane of their own, only in the run that has them", () => {
+  const input = reportInput();
+  const runs = input.runs.map((r, i) => (i === 0 ? { ...r, hits: [{ ...r.hits[0], step: 0, t: r.steps[0].t }, ...r.hits] } : r));
+  const html = render(context({ ...input, runs }));
+  assert.match(html, /<button type="button" data-select-target="#j0-s0" data-step="0" aria-controls="j0-s0"><span class="jr-n">0<\/span><span class="jr-t">Before the first step<\/span>/);
+  assert.match(pane(html, "j0-s0"), new RegExp(`id="${hitId(0, 0, 0)}"`));
+  assert.doesNotMatch(html, /id="j1-s0"/);
+  // The stats line still counts the journey's own steps, and the run still opens on a listed step.
+  assert.match(html, /<span class="jr-nums">4 steps · 10 hits · /);
+  assert.doesNotMatch(html, /id="j0-s0" data-select-pane[^>]*data-selected/);
+  assert.match(render(context({ ...reportInput({ lang: "tr" }), runs })), /<span class="jr-t">İlk adımdan önce<\/span>/);
+  assert.doesNotMatch(section(), /id="j\d+-s0"/);
+});
+
 test("tables are named, header cells have a scope, headings do not skip a level", () => {
   for (const html of [section(), render(context(failedInput()))]) {
     for (const table of html.match(/<table[^>]*>/g) ?? []) assert.match(table, /aria-label="[^"]+"/);

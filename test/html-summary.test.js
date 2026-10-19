@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { context } from "../src/html/shell.js";
 import { render } from "../src/html/summary.js";
 import { VERSION } from "../src/report-shared.js";
-import { failedInput, reportInput } from "./helpers/demo-capture.js";
+import { failedCapture, failedInput, reportInput } from "./helpers/demo-capture.js";
 
 const summary = (input) => render(context(input));
 const strip = (html) => html.replace(/<svg[^>]*>.*?<\/svg>/g, "");
@@ -82,7 +82,9 @@ test("the Summary reads in Turkish", () => {
   assert.match(html, /<span class="sub">Görülen: 2 \/ 4<\/span>/);
   assert.match(html, /<span class="sub">4\/4 tamamlandı · 30 adım · 58 istek<\/span>/);
   assert.match(html, /%82 gerekli parametreleriyle/);
-  assert.match(html, /Varsayılan <span class="chip chip-consent denied">denied<\/span> <small>27–53 ms&#39;de<\/small>|Varsayılan <span class="chip chip-consent denied">denied<\/span> <small>27–53 ms'de<\/small>/);
+  // The state reads as the Consent section says it, not as the raw Consent Mode value.
+  assert.match(html, /Varsayılan <span class="chip chip-consent denied">reddedildi<\/span> <small>27–53 ms(&#39;|')de<\/small>/);
+  assert.doesNotMatch(html, />denied</);
   assert.match(html, /Banner · 3 senaryo/);
   assert.match(html, /Betikle, model olmadan/);
   assert.match(html, /18\.5 sn · v/);
@@ -102,6 +104,12 @@ test("a run whose site never opened has no score, lines without points and the u
   assert.equal((html.match(/<span class="chip chip-run incomplete">/g) ?? []).length, 4);
   assert.deepEqual(cardOf(html, "consent").slice(1), ["No default seen", "Banner not reached"]);
   assert.match(html, /<span class="sub">1\.4 s · v/);
+  // Runs that threw before their first step (agent.js: steps []) stopped at no step a reader can find: no "step -1".
+  const threw = summary(failedInput({ runs: failedCapture().runs.map((r) => ({ ...r, steps: [], hits: [] })) }));
+  assert.doesNotMatch(threw, /step -1|step 0\b/);
+  assert.equal(costs(threw)[0].what, "Journeys stopped early");
+  assert.match(threw, /<span class="sub">0 of 4 completed<\/span>/);
+  assert.doesNotMatch(summary(failedInput({ lang: "tr", runs: failedCapture().runs.map((r) => ({ ...r, steps: [] })) })), /-1\. adımda/);
 });
 
 test("the ring is banded by score, the word by verdict, and the cost lines follow the score", () => {

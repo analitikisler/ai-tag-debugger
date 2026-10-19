@@ -131,8 +131,11 @@ test("an accepted row keeps its place with a muted Accepted badge and the baseli
   assert.match(row, /2 times per action <span class="badge">Accepted<\/span><\/span><span class="c-owner">/);
   assert.equal((accepted.match(/<span class="badge">Accepted<\/span><\/span>/g) ?? []).length, 1);
   assert.match(row, /<p class="note xs"><span class="badge"><svg[^>]*><use href="#sev-ok"\/><\/svg>Accepted<\/span> This finding is in the baseline/);
-  // The group count is the tally's, which leaves accepted rows out.
+  // The group count is the tally's, which leaves accepted rows out; so do the chips and "n of m", as Summary and the rail do.
   assert.match(accepted, /<b data-group-count>3<\/b> Failed/);
+  assert.match(accepted, /data-filter="sev=warning" aria-pressed="false" class="chip-sev warning">[^]*?<span class="n">0<\/span>/);
+  assert.match(accepted, /data-filter="sev=broken" aria-pressed="false" class="chip-sev broken">[^]*?<span class="n">2<\/span>/);
+  assert.match(accepted, /<p data-filter-count aria-live="polite">8 of 8<\/p>/);
   assert.doesNotMatch(demo, /Accepted|data-accepted/);
   let first = true;
   const mixed = section(reportInput({ findings: findings.map((f) => (f.check === "duplicate" && first ? ((first = false), { ...f, accepted: true }) : f)) }));
@@ -250,6 +253,37 @@ test("in the page: the section measures at most 700 px with rows closed, filters
     await narrow.goto(`file://${file}#f-ga4-purchase-missing_params`);
     assert.equal(await narrow.evaluate(() => document.documentElement.scrollWidth), 390);
     assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("in the page: a filter that matches only accepted rows shows them in an open group, and every count leaves them out", async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch { return t.skip("Chromium is not installed"); }
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-findings-"));
+  try {
+    const file = path.join(dir, "report.html");
+    const { findings } = demoCapture();
+    writeFileSync(file, renderHtmlNext(reportInput({ findings: findings.map((f) => (f.platform === "ga4" && f.check === "missing_params" ? { ...f, accepted: true } : f)) })));
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const state = () => page.evaluate(() => ({
+      count: document.querySelector("#findings p[data-filter-count]").textContent,
+      broken: document.querySelector('[data-filter="sev=broken"] .n').textContent,
+      failedHidden: document.querySelector("#f-failed").hidden,
+      groupCount: document.querySelector("#f-failed [data-group-count]").textContent,
+      rowHidden: document.querySelector("#f-ga4-purchase-missing_params").hidden,
+      empty: !document.querySelector("#findings [data-filter-empty]").hidden,
+    }));
+    await page.goto(`file://${file}#findings`);
+    assert.deepEqual(await state(), { count: "8 of 8", broken: "1", failedHidden: false, groupCount: "3", rowHidden: false, empty: false });
+    await page.goto(`file://${file}#findings?sev=broken&plat=ga4`);
+    await page.waitForFunction(() => document.querySelector('[data-filter="plat=ga4"]').getAttribute("aria-pressed") === "true");
+    assert.deepEqual(await state(), { count: "0 of 8", broken: "1", failedHidden: false, groupCount: "0", rowHidden: false, empty: false });
+    await page.fill("[data-filter-search]", "no such thing");
+    await page.waitForFunction(() => !document.querySelector("#findings [data-filter-empty]").hidden);
+    assert.equal(await page.evaluate(() => document.querySelector("#f-failed").hidden), true);
   } finally {
     await browser.close();
     rmSync(dir, { recursive: true, force: true });
