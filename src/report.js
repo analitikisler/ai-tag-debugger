@@ -18,7 +18,7 @@ For each finding with severity broken, risk or warning, give:
 - impact: one sentence on what this does to the data, the reports or ad spend;
 - likely_cause: the most likely cause, in plain language a marketing manager can follow and an analyst can act on;
 - fix_steps: the fix as short, ordered steps.
-When a GTM container is provided, name the specific tags, triggers or variables involved. Only state causes the evidence supports; when the cause is uncertain, say what to check.
+When a GTM container is provided, name the specific tags, triggers or variables involved. Only state causes the evidence supports; when the cause is uncertain, say what to check. When a finding's gtm[].evaluation.why is present, it is a deterministic evaluation of that tag's triggers and consent against the captured dataLayer: rely on it for the likely cause instead of guessing.
 
 Then write the summary:
 - headline: one sentence naming what matters most for data quality and ad spend;
@@ -185,6 +185,7 @@ export function renderMarkdown({ title, generatedAt, findings, explained, runs, 
     if (vl.length) lines.push(`- ${m.ui.verify}: ${vl.map((l) => `[${l.name}](${l.url})`).join(", ")}`);
     if (f.evidence) lines.push(`- ${m.ui.captured}: \`${mdCode(f.evidence)}\``);
     if (f.gtm) lines.push(`- ${m.ui.gtmTags}: ${f.gtm.length ? f.gtm.map((t) => `${t.name}${t.paused ? ` (${m.ui.gtmPaused})` : ""}, ${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map((x) => x.name).join(", ")}` : m.ui.gtmNoTrigger}`).join("; ") : m.ui.gtmNoTag}`);
+    for (const t of (f.gtm ?? []).filter((x) => x.evaluation)) lines.push(`- ${mdText(m.ui.gtmWhy(t.name, m.ui.gtmVerdict[t.evaluation.fired], t.evaluation.why))}`);
     if (f.explanation) {
       if (f.explanation.impact) lines.push(`- ${m.ui.impact}: ${mdText(f.explanation.impact)}`);
       lines.push(`- ${m.ui.likelyCause}: ${mdText(f.explanation.likely_cause)}`, `- ${m.ui.fix}:`, ...fixSteps(f.explanation).map((t, i) => `   ${i + 1}. ${mdText(t)}`));
@@ -605,7 +606,8 @@ function gtmHtml(m, tags) {
   const trig = (t) => `${escapeHtml(t.name)}${t.event ? ` <span class="muted">(${escapeHtml(t.event)})</span>` : ""}`;
   const rows = tags.map((t) => {
     const notes = [t.paused ? m.ui.gtmPaused : "", t.consent.length ? m.ui.gtmConsent(t.consent.join(", ")) : ""].filter(Boolean);
-    return `<tr><th>${escapeHtml(t.name)}${notes.length ? `<div class="muted xs">${escapeHtml(notes.join(" · "))}</div>` : ""}</th><td>${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map(trig).join(", ")}` : `<span class="missing">${m.ui.gtmNoTrigger}</span>`}${t.blocking.length ? `<div class="muted xs">${m.ui.gtmBlockedBy} ${t.blocking.map(trig).join(", ")}</div>` : ""}</td></tr>`;
+    const why = t.evaluation ? `<div class="xs gtm-why">${escapeHtml(m.ui.gtmWhy(t.name, m.ui.gtmVerdict[t.evaluation.fired], t.evaluation.why))}</div>` : "";
+    return `<tr><th>${escapeHtml(t.name)}${notes.length ? `<div class="muted xs">${escapeHtml(notes.join(" · "))}</div>` : ""}</th><td>${t.triggers.length ? `${m.ui.gtmFiresOn} ${t.triggers.map(trig).join(", ")}` : `<span class="missing">${m.ui.gtmNoTrigger}</span>`}${t.blocking.length ? `<div class="muted xs">${m.ui.gtmBlockedBy} ${t.blocking.map(trig).join(", ")}</div>` : ""}${why}</td></tr>`;
   });
   return `${sec("gtm", m.ui.gtmTags)}<table class="ptable ev-table gtm-tags"><tbody>${rows.join("")}</tbody></table>`;
 }

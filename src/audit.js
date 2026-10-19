@@ -145,7 +145,7 @@ export async function runAudit(opts) {
     ? null
     : await runConsentScenarios(config, { headed: opts.headed, log }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
 
-  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer);
+  const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer, runs, { lang });
   let saveError = null;
   if (opts.saveSite) {
     try {
