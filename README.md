@@ -311,7 +311,7 @@ Plans and runs are kept in `aitd/` in the folder you run the tool from:
 aitd/
   example.com/                      the site's host, without www.
     plans/2026-10-16_0900/          measurement-plan.json, plan.html, plan.xlsx (after an export)
-    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json
+    runs/2026-10-16_0912/           report.html, report.md, timeline.csv, capture.json, steps.json
                                     and plan-check.json (with --against)
 ```
 
@@ -359,7 +359,7 @@ Each browsing step is one model call, so usage grows with **journeys × viewport
 - **Expect bigger pages to cost more.** Each step sends the page view (up to 250 elements and 3,000 characters of text) to the model, so busy pages use more tokens per step than simple ones.
 - **Repeat runs start from the last route.** Once a journey has completed on a site, the next run gives the AI the pages that run went through, in order, so it goes straight to the goal instead of exploring. The route is reused only for the same goal, from runs made with 0.14.0 or later, and only for AI runs. It isn't used with `--out` or `replay`. If the site changed and the route no longer fits, the AI takes another path.
 - **Use `--events`** to keep the report focused. It doesn't shorten browsing, so it barely changes usage.
-- **Replay without AI.** After one AI run, add `--save-steps <file>` to save its steps, then run that config with `--scripted --no-ai` on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
+- **Replay without AI.** Every completed run saves the steps it took as `steps.json` in its run folder, and `--scripted --no-ai` repeats the last completed run's steps for a journey that has no fixed steps of its own. Run a journey once with the AI, then replay it on every deploy. See [Save the steps and replay them without AI](#save-the-steps-and-replay-them-without-ai).
 - **Use a chat app.** Over MCP, the chat app's own model does the browsing, so no API key is used at all.
 
 ### Check a new version against saved sites
@@ -377,14 +377,23 @@ The first run's findings become the expected ones. When a change is right, for e
 
 ### Save the steps and replay them without AI
 
-`--save-steps <file>` writes the steps each journey took into `journeys[].steps` of a config file. It creates the file if it's missing, and it also saves the run's plan when the config has none. The same config then repeats the journey with no AI model and no API key:
+Every completed run saves the steps each journey took in its run folder, `aitd/<domain>/runs/<id>/steps.json`. A `--scripted --no-ai` run then repeats them for every journey that has no `steps` of its own: it takes the site's newest run that completed the journey, on the same viewport when there is one and on another otherwise, and says which run it is replaying under the journey's `▶` line. So the AI is needed once per journey, and every run after that costs nothing:
+
+```bash
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase
+ai-tag-debugger run --site https://www.yourshop.com --journey purchase --scripted --no-ai
+```
+
+When the site changes and a saved step no longer finds its element, the journey ends as incomplete with a note that says the steps of that run no longer fit; run it with the AI once more and the next replay uses the new steps. A journey that has never completed on the site stops the run before the browser starts. Only runs saved in `aitd/` are replayed from: a run sent elsewhere with `--out` or made over MCP still writes `steps.json`, but the next run doesn't look there.
+
+To keep the steps in your repository instead, `--save-steps <file>` writes them into `journeys[].steps` of a config file. It creates the file if it's missing, and it also saves the run's plan when the config has none. The same config then repeats the journey with no AI model and no API key:
 
 ```bash
 ai-tag-debugger run --site https://www.yourshop.com --journey purchase --save-steps ai-tag-debugger.config.json
 ai-tag-debugger run --config ai-tag-debugger.config.json --scripted --no-ai
 ```
 
-When a journey ran on both viewports, only the first viewport's steps are kept. Keep the config in your repository and run the second command on every deploy to check the same journey without any model calls.
+When a journey ran on both viewports, only the first viewport's steps are kept. Run the second command on every deploy to check the same journey without any model calls.
 
 ## Configure your site
 
@@ -414,7 +423,7 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `journeys` | Optional when you pick ready-made journeys with `--journey`, describe one with `--goal`, or check against a plan with `--against`. |
 | `journeys[].goal` | What the AI should do, in plain language. |
 | `journeys[].start` | Optional start path (default `/`). |
-| `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. |
+| `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
 | `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
@@ -480,7 +489,7 @@ aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url 
 | `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
 | `--headed` | plan, run | Show the browser window. |
 | `--provider <name>`, `--model <id>` | plan, run | The AI provider and model. Default: whichever API key is set. |
-| `--scripted` | run | Replay each journey's fixed steps, with no AI navigation. |
+| `--scripted` | run | Replay each journey's fixed steps, with no AI navigation. A journey without steps repeats those of the site's last completed run. |
 | `--no-ai` | run | No AI model at all. Implies `--scripted`. |
 | `--save-site <dir>` | run | Save the site's responses for `replay`. |
 | `--save-steps <file>` | run | Write the steps each journey took into a config file. |

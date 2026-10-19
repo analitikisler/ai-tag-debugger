@@ -15,7 +15,7 @@ import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
 import { annotateFindings } from "./gtm.js";
-import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
+import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
 
 export async function readJson(file, baseDir = ".") {
@@ -41,7 +41,7 @@ export async function loadConfig(configFile) {
 
 
 /**
- * Writes report.md, report.html, timeline.csv and capture.json, plus plan-check.json with --against.
+ * Writes report.md, report.html, timeline.csv, capture.json and steps.json, plus plan-check.json with --against.
  * previous: the site's last saved run (see previousRun), null when there is none, or undefined to skip
  * the "Changed since last run" section. Returns { reportPath, changes }.
  */
@@ -58,6 +58,8 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   await writeFile(path.join(outDir, "timeline.csv"), renderCsv(report));
   if (check) await writeFile(path.join(outDir, "plan-check.json"), JSON.stringify(check, null, 2));
   await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  // The steps taken, so the next --scripted run can repeat them without a model (see lastSteps).
+  await writeFile(path.join(outDir, STEPS_FILE), JSON.stringify(savedSteps({ site: config.site, runs }), null, 2));
   const reportPath = path.join(outDir, "report.html");
   if (brand?.pdf) {
     try {
@@ -105,9 +107,18 @@ export async function runAudit(opts) {
   const unknown = viewports.filter((v) => !Object.hasOwn(VIEWPORTS, v));
   if (unknown.length) throw new Error(`Unknown viewport ${unknown.map((v) => `"${v}"`).join(", ")}. Use: ${allowed}.`);
   if (!journeys.length) throw new Error(`No journeys to run. A run needs one of:\n  --journey <name>   one of: ${Object.keys(JOURNEY_PRESETS).join(", ")} (or a journey id from your config)\n  --goal "<text>"    describe what to do in your own words\n  --config <file>    a config file with "journeys"\nNot sure what to test? "aitd plan --site ${config.site}" drafts a measurement plan.`);
+  // A journey without fixed steps of its own repeats the steps of the site's last completed run, which every run saves.
+  const replayed = new Map();
   if (opts.scripted) {
-    const unscripted = journeys.filter((j) => !j.steps?.length && !j.incomplete).map((j) => j.id);
-    if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}.`);
+    const unscripted = [];
+    for (const j of journeys.filter((j) => !j.steps?.length && !j.incomplete)) {
+      for (const viewport of viewports) {
+        const last = await lastSteps(opts.dataDir, config.site, { journeyId: j.id, viewport }).catch(() => null);
+        if (last) replayed.set(`${j.id}|${viewport}`, last);
+        else if (!unscripted.includes(j.id)) unscripted.push(j.id);
+      }
+    }
+    if (unscripted.length) throw new Error(`Journeys without fixed steps can't be replayed with --scripted: ${unscripted.join(", ")}. Run them once with an AI model first; every completed run saves its steps.`);
   }
 
   if (against) {
@@ -132,9 +143,12 @@ export async function runAudit(opts) {
       const hint = hints.get(`${journey.id}|${viewport}`);
       const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
       if (routeHint) log(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
+      const last = replayed.get(`${journey.id}|${viewport}`);
+      if (last) log(`  Replaying the steps of run ${last.runId}${last.viewport === viewport ? "" : ` (${last.viewport})`}`);
+      const fixed = last ? { ...journey, ...(last.start ? { start: last.start } : {}), steps: last.steps, stepsFrom: last.runId } : journey;
       // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
       // so one journey can't cost the report of the others.
-      const run = await runJourney(config, journey, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
+      const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
       log(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
       runs.push(run);
     }

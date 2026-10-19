@@ -170,14 +170,21 @@ export async function runAgentJourney(session, journey, opts = {}) {
   return { completed: false, note: `Stopped after ${maxSteps} steps without reaching the goal.` };
 }
 
-/** Replays fixed steps from the config, without calling an AI model. */
+/**
+ * Replays fixed steps from the config, without calling an AI model. journey.stepsFrom names the earlier
+ * run the steps were taken from when the journey has none of its own (see lastSteps in replay.js).
+ */
 export async function runScriptedJourney(session, journey, opts = {}) {
   const log = opts.log ?? (() => {});
   if (!journey.steps?.length && !journey.incomplete) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
   for (const step of journey.steps ?? []) {
     log(`  ${step.reason ?? `${step.action} ${step.selector ?? step.url ?? ""}`}`);
     const error = await session.act(step);
-    if (error && !step.optional) return { completed: false, note: `Step "${step.reason ?? step.action}" failed: ${error}` };
+    if (error && !step.optional) {
+      const failed = `Step "${step.reason ?? step.action}" failed: ${error}`;
+      // Saved steps stop fitting when the site changes; only a model can find the new way through.
+      return { completed: false, note: journey.stepsFrom ? `${failed} The steps saved by run ${journey.stepsFrom} no longer fit the site. Run the journey with an AI model once to save new ones.` : failed };
+    }
   }
   // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
   // while the model answers; a scripted run would otherwise close the browser first.
