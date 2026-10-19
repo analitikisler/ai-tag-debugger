@@ -5,12 +5,15 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { harName } from "./agent.js";
 import { runAudit } from "./audit.js";
+import { listRunIds, runsDir } from "./workspace.js";
 
 export const SAVED_SITE_FILE = "site.json";
+/** The steps every run leaves in its folder, so the next run can repeat them without a model. */
+export const STEPS_FILE = "steps.json";
 
 /** The steps a run took, as fixed steps a scripted run can repeat. */
 export function replayableJourney(run) {
-  const steps = run.steps.filter((s) => s.index > 0);
+  const steps = (run.steps ?? []).filter((s) => s.index > 0);
   const start = steps[0]?.replay?.action === "goto" ? steps[0].replay.url : undefined;
   return {
     id: run.journeyId,
@@ -22,6 +25,30 @@ export function replayableJourney(run) {
       .filter((s) => s.replay)
       .map((s) => ({ ...s.replay, reason: s.label, ...(s.acceptsConsent ? { accepts_consent: true } : {}), ...(s.rejectsConsent ? { rejects_consent: true } : {}), ...(s.error ? { optional: true } : {}) })),
   };
+}
+
+/** What a run folder's steps.json holds: one entry per journey and viewport, leaving out journeys that took no repeatable step. */
+export function savedSteps({ site, runs }) {
+  return { site, journeys: runs.map(replayableJourney).filter((j) => j.steps.length || j.start) };
+}
+
+/**
+ * The steps of the site's newest completed run of a journey, read from the steps.json each run leaves
+ * behind: { runId, viewport, start, steps } or null. The same viewport is preferred; when no run completed
+ * the journey on it, the newest completed run on another viewport is used, since most sites take the
+ * same path on both. Runs that did not complete the journey are skipped, since their steps led nowhere.
+ */
+export async function lastSteps(dataDir, site, { journeyId, viewport }) {
+  let other = null;
+  for (const runId of (await listRunIds(dataDir, site)).reverse()) {
+    const saved = await readFile(path.join(runsDir(dataDir, site), runId, STEPS_FILE), "utf8").then(JSON.parse).catch(() => null);
+    const done = (saved?.journeys ?? []).filter((j) => j.id === journeyId && !j.incomplete && (j.steps?.length || j.start));
+    const pick = (j) => ({ runId, viewport: j.viewport, start: j.start, steps: j.steps ?? [] });
+    const same = done.find((j) => j.viewport === viewport);
+    if (same) return pick(same);
+    if (done.length && !other) other = pick(done[0]);
+  }
+  return other;
 }
 
 /**

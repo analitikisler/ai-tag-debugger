@@ -45,7 +45,9 @@ AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set
 
 Advanced:
   --max-steps <n>   --platforms <list>   --viewport <name>   --data-dir <dir>
-  --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)`;
+  --scripted   --no-ai   --save-site <dir>   --save-steps <file>   (see the README)
+  --scripted replays each journey's fixed steps; a journey without any repeats the steps
+  of its last completed run, which every run saves in its folder as steps.json.`;
 
 const PLAN = `Usage: aitd plan --site <url>
        aitd plan list --site <url>
