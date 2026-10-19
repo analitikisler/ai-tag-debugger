@@ -649,6 +649,23 @@ const en = {
 
     // ---- html.consent: strings of src/html/consent.js, edited only by its builder ----
     consent: {
+      statusLabel: "Consent status per platform",
+      cols: { before: "No choice", accept: "Accept", reject: "Reject", analytics: "Analytics only" },
+      state: { denied: "denied", granted: "granted", none: "no signal" },
+      tally: (n, state) => `${n} · ${state}`,
+      scenarios: "Scenarios",
+      notSupported: "not supported",
+      sent: "Sent",
+      problems: (n) => `${n} ${n === 1 ? "problem" : "problems"}`,
+      noProblems: "No problems",
+      defaultFirst: "Default first",
+      defaultLate: "Default late",
+      noDefault: "No default",
+      v2: "v2",
+      v2Missing: "v2 missing",
+      timing: (lo, hi) => (lo === hi ? `${lo} ms` : `${lo}–${hi} ms`),
+      runsWith: (k, n) => (k === n ? `${n} ${n === 1 ? "run" : "runs"}` : `${k} of ${n} runs`),
+      resent: (n) => `Sent again on ${n} more page ${n === 1 ? "load" : "loads"}`,
     },
     // ---- end of html.consent ----
 
@@ -1276,6 +1293,23 @@ const tr = {
 
     // ---- html.consent: strings of src/html/consent.js, edited only by its builder ----
     consent: {
+      statusLabel: "Platform başına onay durumu",
+      cols: { before: "Seçim yok", accept: "Kabul", reject: "Reddet", analytics: "Yalnızca analitik" },
+      state: { denied: "reddedildi", granted: "verildi", none: "sinyal yok" },
+      tally: (n, state) => `${n} · ${state}`,
+      scenarios: "Senaryolar",
+      notSupported: "desteklenmiyor",
+      sent: "Gönderildi",
+      problems: (n) => `${n} sorun`,
+      noProblems: "Sorun yok",
+      defaultFirst: "Varsayılan önce",
+      defaultLate: "Varsayılan geç",
+      noDefault: "Varsayılan yok",
+      v2: "v2",
+      v2Missing: "v2 eksik",
+      timing: (lo, hi) => (lo === hi ? `${lo} ms` : `${lo}–${hi} ms`),
+      runsWith: (k, n) => (k === n ? `${n} çalıştırma` : `${n} çalıştırmadan ${k} tanesi`),
+      resent: (n) => `${n} sayfa yüklemesinde daha yeniden gönderildi`,
     },
     // ---- end of html.consent ----
 
