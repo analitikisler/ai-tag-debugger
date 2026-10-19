@@ -17,6 +17,7 @@ import { resolveProviders } from "./parsers.js";
 import { annotateFindings } from "./gtm.js";
 import { SAVED_SITE_FILE, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
+import { validateConfig, validatePlan } from "./schema.js";
 
 export async function readJson(file, baseDir = ".") {
   const full = path.resolve(baseDir, file);
@@ -27,16 +28,22 @@ export async function readJson(file, baseDir = ".") {
   }
 }
 
-/** Reads a config file and everything it points to. */
-export async function loadConfig(configFile) {
+/**
+ * Reads a config file and everything it points to. The config and the plan are checked against their
+ * schema first, so a typo fails here with the field named; unknown keys are only warned about, through
+ * log (default: stderr). The result carries validated: true, which tells runAudit not to check again.
+ */
+export async function loadConfig(configFile, { log = console.error } = {}) {
   const configPath = path.resolve(configFile);
   const configDir = path.dirname(configPath);
   const config = await readJson(configPath);
+  const { warnings } = validateConfig(config, { file: configFile });
   const plan = typeof config.plan === "string" ? await readJson(config.plan, configDir) : config.plan;
-  if (plan && !Array.isArray(plan.events)) throw new Error('The "plan" needs an "events" list.');
+  if (plan) warnings.push(...validatePlan(plan, typeof config.plan === "string" ? { file: config.plan } : { file: configFile, at: "plan" }).warnings);
+  for (const w of warnings) log(w);
   const gtmContainer = config.gtm_container ? await readJson(config.gtm_container, configDir) : null;
   const brand = await loadReportBrand(config.report, configDir);
-  return { config, plan, gtmContainer, brand };
+  return { config, plan, gtmContainer, brand, validated: true };
 }
 
 
@@ -82,13 +89,18 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   replaySite: answer every request from a folder saved with saveSite, without the network.
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
+ *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
  */
 export async function runAudit(opts) {
   const { gtmContainer } = opts;
   let config = opts.config;
   const events = opts.events ?? [];
-  if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
   const log = opts.log ?? (() => {});
+  if (!opts.validated) {
+    const checked = [validateConfig(config), ...(opts.plan ? [validatePlan(opts.plan)] : [])];
+    for (const w of checked.flatMap((c) => c.warnings)) log(w);
+  }
+  if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
   const lang = opts.lang ?? config.language ?? "en";
   if (!LANGUAGES[lang]) throw new Error(`Language must be one of ${Object.keys(LANGUAGES).join(", ")}.`);
   const useAi = opts.ai !== false;

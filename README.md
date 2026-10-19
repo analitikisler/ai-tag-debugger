@@ -428,6 +428,8 @@ When a journey ran on both viewports, only the first viewport's steps are kept. 
 | `base_url`, `model` | Optional: the API address and model id, e.g. for `openai-compatible`. Same as `--base-url` and `--model`. |
 | `notify` | Optional alerts after each saved run: `slack` (a webhook URL, or `true` to read `SLACK_WEBHOOK_URL`) and `email` (an address or a list). See [Alerts](#alerts). |
 
+The config and the plan are checked as soon as they are read, before the browser starts. An error names the field and, for a fixed choice, the allowed values, for example `viewports[1]: must be one of desktop, mobile (got "tablet")` or `journeys[0].steps[2].action: must be one of goto, click, fill, select, scroll, wait`. A key the tool does not know is ignored with a warning that suggests the closest one (`Unknown key "viewport" ... Did you mean "viewports"?`), so an extra note in the file does not stop a run. Plans saved by `aitd plan` and imported from a spreadsheet get the same check.
+
 ### Alerts
 
 After each saved run, `notify` sends the "Changed since last run" diff to your team, so a change on the site reaches you without opening a report:
