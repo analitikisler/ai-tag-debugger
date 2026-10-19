@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { annotateFindings, containerTags, evaluateTrigger, explainTags, tagsForEvent } from "../src/gtm.js";
 import { groupFindings } from "../src/checks.js";
-import { renderMarkdown } from "../src/report.js";
+import { renderHtml, renderMarkdown } from "../src/report.js";
 
 const container = {
   containerVersion: {

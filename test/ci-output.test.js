@@ -55,8 +55,8 @@ test("the fail-on level decides which findings are failures", () => {
 
 test("an incomplete journey is a failing 'journey completed' case, and special characters are escaped", () => {
   const xml = renderJunit({ runs, findings });
-  assert.match(xml, /<testsuite name="checkout \(mobile\)"[^>]*>\n    <testcase classname="journey" name="journey completed" time="2.5"><failure message="Step &quot;Pay&quot; failed: &lt;button&gt; not found &amp; gone" type="incomplete">Step &quot;Pay&quot; failed: &lt;button&gt; not found &amp; gone<\/failure><\/testcase>/);
-  assert.match(xml, /<testsuite name="checkout \(desktop\)"[^>]*>\n    <testcase classname="journey" name="journey completed" time="2.5"><system-out>All scripted steps completed.<\/system-out><\/testcase>/);
+  assert.match(xml, /<testsuite name="checkout \(mobile\)"[^>]*>\n {4}<testcase classname="journey" name="journey completed" time="2.5"><failure message="Step &quot;Pay&quot; failed: &lt;button&gt; not found &amp; gone" type="incomplete">Step &quot;Pay&quot; failed: &lt;button&gt; not found &amp; gone<\/failure><\/testcase>/);
+  assert.match(xml, /<testsuite name="checkout \(desktop\)"[^>]*>\n {4}<testcase classname="journey" name="journey completed" time="2.5"><system-out>All scripted steps completed.<\/system-out><\/testcase>/);
   assert.doesNotMatch(xml, /[^&]<button>|&(?!lt;|gt;|amp;|quot;|apos;)/);
   const control = renderJunit({ runs: [run()], findings: [{ ...findings[0], detail: "bad\u0000char" }] });
   assert.match(control, /badchar/);

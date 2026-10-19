@@ -31,14 +31,14 @@ test("a wrong value fails with the file, the path, the allowed values and what w
     message(() => validateConfig(bad, { file: "ai-tag-debugger.config.json" })),
     'Invalid config in ai-tag-debugger.config.json:\n  viewports[1]: must be one of desktop, mobile (got "tablet")\n  journeys[0].steps[1].action: must be one of goto, click, fill, select, scroll, wait (got "tap")',
   );
-  assert.match(message(() => validateConfig({ journeys: { id: "checkout" } })), /^Invalid config:\n  journeys: must be a list \(got \{"id":"checkout"\}\)$/);
+  assert.match(message(() => validateConfig({ journeys: { id: "checkout" } })), /^Invalid config:\n {2}journeys: must be a list \(got \{"id":"checkout"\}\)$/);
   assert.match(message(() => validateConfig({ notify: { slack: 5 } })), /notify\.slack: must be a webhook URL, or true to read SLACK_WEBHOOK_URL \(got 5\)/);
-  assert.match(message(() => validateConfig({ language: "de", provider: "claude", block_hits: "no" })), /block_hits: must be true or false \(got "no"\)\n  language: must be one of en, tr \(got "de"\)\n  provider: must be one of anthropic, openai, gemini, vercel, cloudflare, openai-compatible \(got "claude"\)/);
-  assert.match(message(() => validatePlan({ events: [{ platform: "ga4" }, { platform: "GA4", name: "x" }] }, { file: "plan.json" })), /^Invalid plan in plan\.json:\n  events\[0\]\.name: is required\n  events\[1\]\.platform: must be one of ga4, google_ads, meta, tiktok, .* \(got "GA4"\)$/);
+  assert.match(message(() => validateConfig({ language: "de", provider: "claude", block_hits: "no" })), /block_hits: must be true or false \(got "no"\)\n {2}language: must be one of en, tr \(got "de"\)\n {2}provider: must be one of anthropic, openai, gemini, vercel, cloudflare, openai-compatible \(got "claude"\)/);
+  assert.match(message(() => validatePlan({ events: [{ platform: "ga4" }, { platform: "GA4", name: "x" }] }, { file: "plan.json" })), /^Invalid plan in plan\.json:\n {2}events\[0\]\.name: is required\n {2}events\[1\]\.platform: must be one of ga4, google_ads, meta, tiktok, .* \(got "GA4"\)$/);
   assert.match(message(() => validatePlan({ events: [{ platform: "ga4", name: "" }] })), /events\[0\]\.name: must not be empty/);
-  assert.match(message(() => validatePlan({})), /^Invalid plan:\n  events: is required$/);
+  assert.match(message(() => validatePlan({})), /^Invalid plan:\n {2}events: is required$/);
   // A plan written inline in the config is reported at its place in that file.
-  assert.match(message(() => validatePlan({ events: "purchase" }, { file: "c.json", at: "plan" })), /^Invalid plan in c\.json:\n  plan\.events: must be a list \(got "purchase"\)$/);
+  assert.match(message(() => validatePlan({ events: "purchase" }, { file: "c.json", at: "plan" })), /^Invalid plan in c\.json:\n {2}plan\.events: must be a list \(got "purchase"\)$/);
   // Long values are cut so one line stays readable.
   assert.match(message(() => validateConfig({ site: Array.from({ length: 50 }, () => "x") })), /got \["x","x".{40,60}…\)$/);
 });

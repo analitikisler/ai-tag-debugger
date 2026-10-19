@@ -49,7 +49,7 @@ test("Gemini: the agent conversation retries too, and a network error counts as 
   const chat = provider.conversation({ system: "s", tools: [], firstMessage: "go" });
   assert.deepEqual(await chat.next(), { toolCalls: [], stop: "end" });
   assert.equal(client.calls, 2);
-  assert.match(lines[0], /^  Model request failed \(ECONNRESET\); retrying in \d+s \(attempt 2 of 3\)$/);
+  assert.match(lines[0], /^ {2}Model request failed \(ECONNRESET\); retrying in \d+s \(attempt 2 of 3\)$/);
 });
 
 test("a 401 is thrown at once, without a retry", async () => {

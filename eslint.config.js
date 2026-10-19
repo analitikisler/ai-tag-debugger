@@ -5,14 +5,14 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: ["node_modules/", "reports/", "aitd/", "saved/"] },
+  { ignores: [".claude/", "node_modules/", "reports/", "aitd/", "saved/"] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: "module", globals: { ...globals.node, ...globals.browser } },
     rules: {
       // An argument named _x is unused on purpose, a caught error is often not needed, and
       // `const { dropped, ...rest } = obj` names a field only to leave it out.
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true }],
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true }],
     },
   },
   // The demo shop's page script is a classic script that uses the gtag snippet its HTML defines inline.

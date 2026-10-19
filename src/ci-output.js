@@ -31,6 +31,7 @@ export function findingTitle(f) {
 
 const escapeXml = (s) => String(s ?? "").replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c]);
 // Control characters are not allowed in XML 1.0 at all, so they are dropped rather than escaped.
+// eslint-disable-next-line no-control-regex
 const xmlText = (s) => escapeXml(String(s ?? "").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ""));
 const attrs = (o) => Object.entries(o).map(([k, v]) => ` ${k}="${xmlText(v)}"`).join("");
 
@@ -62,7 +63,7 @@ export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "b
   const loose = findings.filter((f) => !runs.some((run) => belongsTo(f, run)));
   if (loose.length) suites.push(suite(m.junitSite, loose.map((f) => findingCase(f, failOn)), 0));
   const totals = { tests: suites.reduce((n, s) => n + s.tests, 0), failures: suites.reduce((n, s) => n + s.failures, 0), time: runs.reduce((n, r) => n + runSeconds(r), 0) };
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites${attrs({ name: `ai-tag-debugger ${site}`.trim(), ...totals })}>\n${suites.map((s) => s.xml).join("\n")}\n</testsuites>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites${attrs({ name: `ai-tag-debugger ${site}`.trim(), ...(version ? { version } : {}), ...totals })}>\n${suites.map((s) => s.xml).join("\n")}\n</testsuites>\n`;
 }
 
 /** The run in one small object: counts, journeys, findings and where the other files are. */
