@@ -5,33 +5,44 @@
 // mockup drew as a data URI in the filter bar is the sprite's ui-search, placed by the filter bar's markup.
 import { brandCss } from "../whitelabel.js";
 
-// ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts ----------
-const TOKENS = `/* Direction D tokens. Light on :root; dark twice (OS preference unless the page forces light, and the forced dark theme),
-   so <html data-theme> beats the OS both ways. Every -fg passes 4.5:1 on --card, --page and its own -bg in both modes;
-   every base passes 3:1 on --card (VISUAL.md has the table). Builders reference these names only, never a hex. */
+// ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts, motion ----------
+const TOKENS = `/* Tally design system tokens, under the names the builders already use. Light on :root; dark twice
+   (OS preference unless the page forces light, and the forced dark theme), so <html data-theme> beats the OS both ways.
+   Which Tally token each name follows: --page bg, --card surface, --card-2 surface-2, --well well, --fg text,
+   --fg-strong text-strong, --muted muted, --border border, --border-strong border-strong, --accent and --accent-fg accent,
+   --accent-bg accent-soft, --selection selection, --shadow-overlay the overlay shadow (popovers and tooltips only).
+   Severity: broken bad, warning warn, ok ok, info accent (its value, not var(--accent), so a white label never moves it).
+   Risk keeps a hue of its own, a plum (allowed by Tally when risk and broken sit side by side): the report puts them next
+   to each other in the score lines, the filter dots, the rail and the card rules, where a dot or a 3 px rule has no room
+   for the glyph. Risk still carries its diamond glyph and its word everywhere it has room.
+   Each status is one colour for text and marks (-fg = solid); its -bg tint is the colour mixed into --card, 10% light
+   and 16% dark. Categories (owners, platforms, viewports, consent) keep their hues, retuned for the navy grounds; GA4 is
+   Tally's orange (mark, mark-ink). Every -fg passes 4.5:1 on --page, --card, --card-2, --well and its own -bg, every
+   solid 3:1 on --page, --card and --well, in both modes (docs/design/visual-system.md has the table). Builders reference
+   these names only, never a hex. */
 :root{
 color-scheme:light dark;
---page:#F6F7F9;--card:#FFFFFF;--well:#EEF1F6;--fg:#111827;--muted:#4B5567;--border:#D9DEE8;--border-strong:#C3CAD8;
---accent:#2E6CDB;--accent-fg:#2459C0;--accent-bg:#EBF1FE;
---shadow-sm:0 1px 2px rgb(16 24 40 / 6%);--shadow-md:0 1px 2px rgb(16 24 40 / 5%),0 4px 16px -4px rgb(16 24 40 / 10%);
---sev-broken:#D92D20;--sev-broken-fg:#B42318;--sev-broken-bg:#FEE4E2;
---sev-risk:#9B3B9A;--sev-risk-fg:#86338A;--sev-risk-bg:#F7E8F7;
---sev-warning:#C07B03;--sev-warning-fg:#7A5A00;--sev-warning-bg:#FBF0D0;
---sev-info:#5B6B8C;--sev-info-fg:#3F4D6B;--sev-info-bg:#E9EDF5;
---sev-ok:#17805A;--sev-ok-fg:#167A55;--sev-ok-bg:#E1F3EA;
---owner-developer:#5550C0;--owner-developer-fg:#5A58C2;--owner-developer-bg:#EDEFFE;
---owner-gtm:#0593BF;--owner-gtm-fg:#026F90;--owner-gtm-bg:#DFF4FE;
---owner-marketing:#A72A6A;--owner-marketing-fg:#AE3A72;--owner-marketing-bg:#FEEAF1;
---plat-ga4:#D17102;--plat-ga4-fg:#9C5301;--plat-ga4-bg:#FEECE0;
---plat-meta:#3F87FE;--plat-meta-fg:#105FD9;--plat-meta-bg:#E8F1FE;
---plat-google_ads:#299E48;--plat-google_ads-fg:#02782E;--plat-google_ads-bg:#DFF8E1;
---vp-desktop:#08908C;--vp-desktop-fg:#097376;--vp-desktop-bg:#D2F9FA;
---vp-mobile:#799506;--vp-mobile-fg:#596F01;--vp-mobile-bg:#EBF5D8;
---consent-granted:#019F68;--consent-granted-fg:#167A55;--consent-granted-bg:#E1F3EA;
---consent-denied:#B1011B;--consent-denied-fg:#B1011B;--consent-denied-bg:#FFEFEF;
---consent-none:#5F636C;--consent-none-fg:#555963;--consent-none-bg:#EEF0F4;
---plat-tiktok:#1F2433;--plat-tiktok-fg:#252B3B;--plat-tiktok-bg:#E9EBF0;
-/* Aliases: a semantic family that means the same as a status wears its colours, defined once so dark mode follows. */
+--page:#f4f6fa;--card:#ffffff;--card-2:#ecf1f8;--well:#e9eef5;--fg:#142338;--fg-strong:#071529;--muted:#566479;--border:#d5dde8;--border-strong:#78869a;
+--accent:#1161bb;--accent-fg:#1161bb;--accent-bg:#deedff;--selection:#c6defc;
+--shadow-overlay:0 16px 48px rgb(7 21 41 / 14%);
+--sev-broken:#c12d30;--sev-broken-fg:#c12d30;--sev-broken-bg:#f9eaea;
+--sev-risk:#964799;--sev-risk-fg:#964799;--sev-risk-bg:#f5edf5;
+--sev-warning:#8b6200;--sev-warning-fg:#8b6200;--sev-warning-bg:#f3efe6;
+--sev-info:#1161bb;--sev-info-fg:#1161bb;--sev-info-bg:#e7eff8;
+--sev-ok:#197746;--sev-ok-fg:#197746;--sev-ok-bg:#e8f1ed;
+--owner-developer:#7b7ee4;--owner-developer-fg:#5b5bbd;--owner-developer-bg:#f2f2fc;
+--owner-gtm:#2194b9;--owner-gtm-fg:#086f8d;--owner-gtm-bg:#e9f4f8;
+--owner-marketing:#d85f92;--owner-marketing-fg:#af3a6f;--owner-marketing-bg:#fbeff4;
+--plat-ga4:#d46700;--plat-ga4-fg:#b14c00;--plat-ga4-bg:#fbf0e6;
+--plat-meta:#4b85f6;--plat-meta-fg:#2960ce;--plat-meta-bg:#edf3fe;
+--plat-google_ads:#379b55;--plat-google_ads-fg:#027634;--plat-google_ads-bg:#ebf5ee;
+--vp-desktop:#1e9895;--vp-desktop-fg:#08726f;--vp-desktop-bg:#e9f5f4;
+--vp-mobile:#7a922c;--vp-mobile-fg:#596e01;--vp-mobile-bg:#f2f4ea;
+--consent-denied:#a8162c;--consent-denied-fg:#a8162c;--consent-denied-bg:#f6e8ea;
+/* Aliases: a semantic family that means the same as a status or a ground wears its colours, defined once so dark mode follows. */
+--plat-tiktok:var(--fg);--plat-tiktok-fg:var(--fg);--plat-tiktok-bg:var(--card-2);
+--consent-granted:var(--sev-ok);--consent-granted-fg:var(--sev-ok-fg);--consent-granted-bg:var(--sev-ok-bg);
+--consent-none:var(--border-strong);--consent-none-fg:var(--muted);--consent-none-bg:var(--card-2);
 --run-completed:var(--sev-ok);--run-completed-fg:var(--sev-ok-fg);--run-completed-bg:var(--sev-ok-bg);
 --run-incomplete:var(--sev-warning);--run-incomplete-fg:var(--sev-warning-fg);--run-incomplete-bg:var(--sev-warning-bg);
 --group-failed:var(--sev-broken);--group-failed-fg:var(--sev-broken-fg);--group-failed-bg:var(--sev-broken-bg);
@@ -41,53 +52,51 @@ color-scheme:light dark;
 --score-mid:var(--sev-warning);--score-mid-fg:var(--sev-warning-fg);--score-mid-bg:var(--sev-warning-bg);
 --score-pass:var(--sev-ok);--score-pass-fg:var(--sev-ok-fg);--score-pass-bg:var(--sev-ok-bg);
 --score-track:var(--well);
+/* 4 px base. Radii: cells 1, chips, badges and code 2, buttons and inputs 4, cards and panels 6; no pills. */
 --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
---r-sm:4px;--r-md:8px;--r-lg:12px;--r-pill:999px;
---font-sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
---font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+--r-cell:1px;--r-sm:2px;--r-ctl:4px;--r-md:6px;
+/* The report is one file and ships no fonts: the families are named first and the system stands in where they are not installed. */
+--font-sans:"Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+--font-display:"Google Sans Flex","Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+--font-mono:"Google Sans Code",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+--t-fast:160ms;--t-base:220ms;--ease:cubic-bezier(.2,0,0,1);
 --rail:200px;--top:48px}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
---page:#0B0F19;--card:#141927;--well:#1B2235;--fg:#EEF2FF;--muted:#9AA4BD;--border:#263050;--border-strong:#34406A;
---accent:#4F8EF7;--accent-fg:#8CBBFF;--accent-bg:#1A2F5C;
---shadow-sm:none;--shadow-md:none;
---sev-broken:#F04438;--sev-broken-fg:#FDA29B;--sev-broken-bg:#3D1D1D;
---sev-risk:#D78AD6;--sev-risk-fg:#E3A6E0;--sev-risk-bg:#34203A;
---sev-warning:#E8B44A;--sev-warning-fg:#F5C451;--sev-warning-bg:#352B10;
---sev-info:#8191B8;--sev-info-fg:#B4C0DC;--sev-info-bg:#1E2536;
---sev-ok:#3FB98A;--sev-ok-fg:#5BD39A;--sev-ok-bg:#113128;
---owner-developer:#6967E1;--owner-developer-fg:#A2A8FE;--owner-developer-bg:#262748;
---owner-gtm:#059AC7;--owner-gtm-fg:#3CBFF0;--owner-gtm-bg:#013041;
---owner-marketing:#C64082;--owner-marketing-fg:#F490BA;--owner-marketing-bg:#421E2D;
---plat-ga4:#B76300;--plat-ga4-fg:#F09C59;--plat-ga4-bg:#412308;
---plat-meta:#2974F0;--plat-meta-fg:#83B2FE;--plat-meta-bg:#192B49;
---plat-google_ads:#078C38;--plat-google_ads-fg:#70C47E;--plat-google_ads-bg:#133319;
---vp-desktop:#029394;--vp-desktop-fg:#0FC6CB;--vp-desktop-bg:#023234;
---vp-mobile:#728D05;--vp-mobile-fg:#A2BC59;--vp-mobile-bg:#263009;
---consent-granted:#0AB074;--consent-granted-fg:#5BD39A;--consent-granted-bg:#113128;
---consent-denied:#D01C29;--consent-denied-fg:#FF8A85;--consent-denied-bg:#4A1418;
---consent-none:#747982;--consent-none-fg:#ABB0B9;--consent-none-bg:#282B31;
---plat-tiktok:#E4E8F1;--plat-tiktok-fg:#E4E8F1;--plat-tiktok-bg:#272C3A;}}
+--page:#071529;--card:#0e1e34;--card-2:#15263f;--well:#040e1f;--fg:#e1e8f3;--fg-strong:#f9fbff;--muted:#a2b1c6;--border:#22354e;--border-strong:#607695;
+--accent:#69b1ff;--accent-fg:#69b1ff;--accent-bg:#0c325b;--selection:#123f6f;
+--shadow-overlay:0 16px 48px rgb(2 8 18 / 55%);
+--sev-broken:#fa6b6d;--sev-broken-fg:#fa6b6d;--sev-broken-bg:#342a3d;
+--sev-risk:#dc86de;--sev-risk-fg:#dc86de;--sev-risk-bg:#2f2f4f;
+--sev-warning:#f4cf5a;--sev-warning-fg:#f4cf5a;--sev-warning-bg:#333a3a;
+--sev-info:#69b1ff;--sev-info-fg:#69b1ff;--sev-info-bg:#1d3654;
+--sev-ok:#5ad093;--sev-ok-fg:#5ad093;--sev-ok-bg:#1a3a43;
+--owner-developer:#7679de;--owner-developer-fg:#a5abff;--owner-developer-bg:#1f2d4f;
+--owner-gtm:#148eb2;--owner-gtm-fg:#54bde3;--owner-gtm-bg:#0f3048;
+--owner-marketing:#d1598d;--owner-marketing-fg:#ff88b7;--owner-marketing-bg:#2d2742;
+--plat-ga4:#fa8c31;--plat-ga4-fg:#fa8c31;--plat-ga4-bg:#343034;
+--plat-meta:#457fef;--plat-meta-fg:#88b1fe;--plat-meta-bg:#172e52;
+--plat-google_ads:#2f954f;--plat-google_ads-fg:#63c47b;--plat-google_ads-bg:#133138;
+--vp-desktop:#0f928f;--vp-desktop-fg:#53c1bd;--vp-desktop-bg:#0e3143;
+--vp-mobile:#748d25;--vp-mobile-fg:#9fba56;--vp-mobile-bg:#1e3032;
+--consent-denied:#ff5c69;--consent-denied-fg:#ff5c69;--consent-denied-bg:#35283c;}}
 :root[data-theme="dark"]{
---page:#0B0F19;--card:#141927;--well:#1B2235;--fg:#EEF2FF;--muted:#9AA4BD;--border:#263050;--border-strong:#34406A;
---accent:#4F8EF7;--accent-fg:#8CBBFF;--accent-bg:#1A2F5C;
---shadow-sm:none;--shadow-md:none;
---sev-broken:#F04438;--sev-broken-fg:#FDA29B;--sev-broken-bg:#3D1D1D;
---sev-risk:#D78AD6;--sev-risk-fg:#E3A6E0;--sev-risk-bg:#34203A;
---sev-warning:#E8B44A;--sev-warning-fg:#F5C451;--sev-warning-bg:#352B10;
---sev-info:#8191B8;--sev-info-fg:#B4C0DC;--sev-info-bg:#1E2536;
---sev-ok:#3FB98A;--sev-ok-fg:#5BD39A;--sev-ok-bg:#113128;
---owner-developer:#6967E1;--owner-developer-fg:#A2A8FE;--owner-developer-bg:#262748;
---owner-gtm:#059AC7;--owner-gtm-fg:#3CBFF0;--owner-gtm-bg:#013041;
---owner-marketing:#C64082;--owner-marketing-fg:#F490BA;--owner-marketing-bg:#421E2D;
---plat-ga4:#B76300;--plat-ga4-fg:#F09C59;--plat-ga4-bg:#412308;
---plat-meta:#2974F0;--plat-meta-fg:#83B2FE;--plat-meta-bg:#192B49;
---plat-google_ads:#078C38;--plat-google_ads-fg:#70C47E;--plat-google_ads-bg:#133319;
---vp-desktop:#029394;--vp-desktop-fg:#0FC6CB;--vp-desktop-bg:#023234;
---vp-mobile:#728D05;--vp-mobile-fg:#A2BC59;--vp-mobile-bg:#263009;
---consent-granted:#0AB074;--consent-granted-fg:#5BD39A;--consent-granted-bg:#113128;
---consent-denied:#D01C29;--consent-denied-fg:#FF8A85;--consent-denied-bg:#4A1418;
---consent-none:#747982;--consent-none-fg:#ABB0B9;--consent-none-bg:#282B31;
---plat-tiktok:#E4E8F1;--plat-tiktok-fg:#E4E8F1;--plat-tiktok-bg:#272C3A;}`;
+--page:#071529;--card:#0e1e34;--card-2:#15263f;--well:#040e1f;--fg:#e1e8f3;--fg-strong:#f9fbff;--muted:#a2b1c6;--border:#22354e;--border-strong:#607695;
+--accent:#69b1ff;--accent-fg:#69b1ff;--accent-bg:#0c325b;--selection:#123f6f;
+--shadow-overlay:0 16px 48px rgb(2 8 18 / 55%);
+--sev-broken:#fa6b6d;--sev-broken-fg:#fa6b6d;--sev-broken-bg:#342a3d;
+--sev-risk:#dc86de;--sev-risk-fg:#dc86de;--sev-risk-bg:#2f2f4f;
+--sev-warning:#f4cf5a;--sev-warning-fg:#f4cf5a;--sev-warning-bg:#333a3a;
+--sev-info:#69b1ff;--sev-info-fg:#69b1ff;--sev-info-bg:#1d3654;
+--sev-ok:#5ad093;--sev-ok-fg:#5ad093;--sev-ok-bg:#1a3a43;
+--owner-developer:#7679de;--owner-developer-fg:#a5abff;--owner-developer-bg:#1f2d4f;
+--owner-gtm:#148eb2;--owner-gtm-fg:#54bde3;--owner-gtm-bg:#0f3048;
+--owner-marketing:#d1598d;--owner-marketing-fg:#ff88b7;--owner-marketing-bg:#2d2742;
+--plat-ga4:#fa8c31;--plat-ga4-fg:#fa8c31;--plat-ga4-bg:#343034;
+--plat-meta:#457fef;--plat-meta-fg:#88b1fe;--plat-meta-bg:#172e52;
+--plat-google_ads:#2f954f;--plat-google_ads-fg:#63c47b;--plat-google_ads-bg:#133138;
+--vp-desktop:#0f928f;--vp-desktop-fg:#53c1bd;--vp-desktop-bg:#0e3143;
+--vp-mobile:#748d25;--vp-mobile-fg:#9fba56;--vp-mobile-bg:#1e3032;
+--consent-denied:#ff5c69;--consent-denied-fg:#ff5c69;--consent-denied-bg:#35283c;}`;
 // ---------- end of tokens ----------
 
 // ---------- components: chips, badges, cards, tabs, filter bar, tables, scorecard ----------
@@ -119,7 +128,7 @@ svg{flex:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:var(--r-sm);background:var(--well);color:var(--muted);font:500 11px/17px var(--font-mono);text-align:center;font-variant-numeric:tabular-nums}
-.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--fg);font:500 12.5px var(--font-sans);cursor:pointer}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:500 12.5px var(--font-sans);cursor:pointer}
 .btn:hover{background:var(--well)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 
@@ -187,14 +196,14 @@ a.chip:hover{text-decoration:none;border-color:var(--k)}
 /* ---------- cards ----------
    <details class="card [sev-x]"><summary>…</summary><div class="body">…</div></details>, collapsed unless [open].
    A plain <div class="card"> is the Summary's static card. */
-.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm);min-width:0}
+.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);min-width:0}
 .card+.card{margin-top:var(--s2)}
 .card[class*=sev-]{border-left:3px solid var(--sev)}
 .card>.body{padding:var(--s3) var(--s4) var(--s4)}
 div.card>.body{padding-top:var(--s4)}
 details.card>summary{display:flex;align-items:center;gap:var(--s2) var(--s3);flex-wrap:wrap;min-height:44px;padding:10px 40px 10px var(--s4);position:relative;cursor:pointer;list-style:none;border-radius:calc(var(--r-md) - 1px);user-select:none}
 details.card>summary::-webkit-details-marker{display:none}
-details.card>summary::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
+details.card>summary::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
 details.card[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
 details.card>summary:hover{background:var(--well)}
 details.card>summary:hover::after{border-color:var(--fg)}
@@ -203,8 +212,6 @@ details.card>summary:focus-visible{outline-offset:-2px}
 details.card[open]>summary{border-bottom:1px solid var(--border);border-bottom-left-radius:0;border-bottom-right-radius:0}
 details.card>summary .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
 details.card>summary .end{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
-/* nested cards sit inside a body: hairline only, no second shadow */
-.card .card{box-shadow:none}
 .card .card>summary{min-height:38px;padding-top:7px;padding-bottom:7px}
 
 /* ---------- tabs ----------
@@ -213,7 +220,7 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .tabs{min-width:0}
 .tabs [role=tablist]{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;position:relative}
 .tabs [role=tablist]::-webkit-scrollbar{display:none}
-.tabs [role=tab]{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;color:var(--muted);font:500 13px/1.3 var(--font-sans);white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:color .15s,border-color .15s}
+.tabs [role=tab]{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;color:var(--muted);font:500 13px/1.3 var(--font-sans);white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
 .tabs [role=tab]:hover{color:var(--fg)}
 .tabs [role=tab][aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent)}
 .tabs [role=tab][aria-selected=true] .n{background:var(--accent-bg);color:var(--accent-fg)}
@@ -230,7 +237,7 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
    <div class="filterbar" data-filterbar="#LIST"><span class="fl">Severity</span><button data-filter="sev=broken"
    aria-pressed="false" class="chip-sev broken"><span class="dot"></span>Broken <span class="n">2</span></button>…
    <input type="search" data-filter-search placeholder="Search"><p data-filter-count>4 of 4</p></div> */
-.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm)}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md)}
 .filterbar .fl{font:600 11px/1 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 2px 0 6px}
 .filterbar .fl:first-child{margin-left:0}
 .filterbar .sep{width:1px;align-self:stretch;margin:2px 4px;background:var(--border)}
@@ -239,7 +246,7 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .filterbar [data-filter][aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-fg)}
 .filterbar [data-filter][aria-pressed=true]::before{content:"";width:8px;height:4px;margin:-3px 0 0 -1px;border-left:1.75px solid currentColor;border-bottom:1.75px solid currentColor;transform:rotate(-45deg)}
 .filterbar [data-filter] svg{width:14px;height:14px}
-.filterbar [data-filter-search]{flex:1 1 180px;min-width:0;max-width:320px;height:30px;margin-left:auto;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page) no-repeat 11px 50%/14px 14px;color:var(--fg);font:400 13px var(--font-sans);}
+.filterbar [data-filter-search]{flex:1 1 180px;min-width:0;max-width:320px;height:30px;margin-left:auto;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--page) no-repeat 11px 50%/14px 14px;color:var(--fg);font:400 13px var(--font-sans);}
 .filterbar [data-filter-search]::placeholder{color:var(--muted)}
 .filterbar [data-filter-search]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
 .filterbar [data-filter-count]{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -264,7 +271,7 @@ html:not(.js) .filterbar{display:none}
    <div class="grid"><div class="info"><span class="ic-plate"><svg/></span><span class="lbl">Vendors</span>
    <span class="val">2 of 4</span><span class="sub">GA4 · Meta</span></div></div> */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--s3)}
-.grid>.info{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ic lbl" "val val" "sub sub";align-items:center;gap:6px var(--s2);padding:14px var(--s4);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm);min-width:0}
+.grid>.info{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ic lbl" "val val" "sub sub";align-items:center;gap:6px var(--s2);padding:14px var(--s4);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);min-width:0}
 .info .ic-plate{grid-area:ic;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--r-sm);background:var(--well);color:var(--muted)}
 .info .ic-plate svg{width:15px;height:15px}
 .info .lbl{grid-area:lbl;font-size:12.5px;font-weight:500;color:var(--muted)}
@@ -288,11 +295,11 @@ html:not(.js) .filterbar{display:none}
 .band-fail{--band:var(--score-fail);--band-fg:var(--score-fail-fg);--band-bg:var(--score-fail-bg)}
 .band-mid{--band:var(--score-mid);--band-fg:var(--score-mid-fg);--band-bg:var(--score-mid-bg)}
 .band-pass{--band:var(--score-pass);--band-fg:var(--score-pass-fg);--band-bg:var(--score-pass-bg)}
-.scorecard{display:grid;grid-template-columns:120px minmax(0,1fr);grid-template-areas:"ring verdict" "ring head" "ring costs" "chips chips";column-gap:var(--s6);align-items:start;padding:var(--s5) var(--s6);background:var(--card);border:1px solid var(--border);border-top:4px solid var(--band);border-radius:var(--r-lg);box-shadow:var(--shadow-md)}
+.scorecard{display:grid;grid-template-columns:120px minmax(0,1fr);grid-template-areas:"ring verdict" "ring head" "ring costs" "chips chips";column-gap:var(--s6);align-items:start;padding:var(--s5) var(--s6);background:var(--card);border:1px solid var(--border);border-top:3px solid var(--band);border-radius:var(--r-md)}
 .sc-ring{grid-area:ring;position:relative;width:120px;height:120px;display:grid;place-items:center;align-self:center}
 .sc-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .sc-ring .trk{fill:none;stroke:var(--score-track);stroke-width:10}
-.sc-ring .arc{fill:none;stroke:var(--band);stroke-width:10;stroke-linecap:round;stroke-dasharray:var(--score) 100}
+.sc-ring .arc{fill:none;stroke:var(--band);stroke-width:10;stroke-linecap:butt;stroke-dasharray:var(--score) 100}
 .sc-num{position:relative;font:700 44px/1 var(--font-sans);letter-spacing:-.03em;color:var(--fg);margin-top:-8px}
 .sc-of{position:absolute;left:0;right:0;top:calc(50% + 18px);text-align:center;font:500 12px/1 var(--font-mono);color:var(--muted)}
 .sc-verdict{grid-area:verdict;align-self:end;display:flex;align-items:center;gap:8px;font:700 30px/1.1 var(--font-sans);letter-spacing:-.02em;color:var(--sev,var(--band))}
@@ -323,7 +330,6 @@ html:not(.js) .filterbar{display:none}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 @media print{
   body{background:#fff;font-size:12.5px}
-  .card,.grid>.info,.scorecard,.filterbar{box-shadow:none}
   .chip,.badge,.n{background:none!important;border:1px solid currentColor}
   .chip.zero{border-color:var(--border)}
   .tbl thead th{background:none;border-bottom:1px solid #000}
@@ -336,7 +342,7 @@ html:not(.js) .filterbar{display:none}
   details.card[data-print-open]::details-content{content-visibility:visible;display:block}
   details.card[data-print-open]>summary{border-bottom:1px solid var(--border)}
   .card,.grid>.info,.scorecard,.tbl tr{break-inside:avoid}
-  .scorecard{border-top-width:4px}
+  .scorecard{border-top-width:3px}
 }`;
 // ---------- end of components ----------
 
@@ -361,7 +367,7 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .mock-note{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2) var(--s3);margin:var(--s3) 0 var(--s4);border:1px dashed var(--sev-info);border-radius:var(--r-sm);color:var(--sev-info-fg);font-size:12.5px}
 .mock-note .ic{margin-top:2px}
 
-.skip{position:absolute;left:var(--s4);top:-48px;z-index:50;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--fg)}
+.skip{position:absolute;left:var(--s4);top:-48px;z-index:50;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--fg)}
 .skip:focus{top:var(--s2)}
 
 /* ---------- top bar ---------- */
@@ -381,27 +387,27 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .v-pass{--v:var(--score-pass);--v-fg:var(--score-pass-fg);--v-bg:var(--score-pass-bg)}
 .top-end{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
 .byline{display:inline-flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted);margin-right:var(--s2)}
-.mock-switch{align-items:center;gap:.3em;height:28px;padding:0 10px;border:1px dashed var(--border-strong);border-radius:var(--r-sm);background:none;color:var(--muted);font:500 12px var(--font-sans);cursor:pointer}
+.mock-switch{align-items:center;gap:.3em;height:28px;padding:0 10px;border:1px dashed var(--border-strong);border-radius:var(--r-ctl);background:none;color:var(--muted);font:500 12px var(--font-sans);cursor:pointer}
 .mock-switch:hover{color:var(--fg);border-color:var(--muted)}
 .mock-switch[aria-pressed=true]{border-color:var(--sev-info);color:var(--sev-info-fg);background:var(--sev-info-bg)}
-.icon-btn{align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--r-sm);background:none;color:var(--muted);cursor:pointer}
+.icon-btn{align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--r-ctl);background:none;color:var(--muted);cursor:pointer}
 .icon-btn:hover{background:var(--well);color:var(--fg)}
 
 /* ---------- shell and rail ---------- */
 .shell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start}
 .rail{position:sticky;top:var(--top);z-index:20;width:var(--rail);height:calc(100vh - var(--top));overflow:hidden auto;padding:var(--s2) 4px;border-right:1px solid var(--border);background:var(--card)}
-html.rail-anim .rail{transition:width .2s ease}
+html.rail-anim .rail{transition:width var(--t-base) var(--ease)}
 .rail ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .r-head{display:flex;margin-bottom:var(--s2);padding-bottom:var(--s2);border-bottom:1px solid var(--border)}
-.r-toggle,.rail a{position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 11px;border-radius:var(--r-sm);color:var(--fg);font-size:13.5px;white-space:nowrap}
+.r-toggle,.rail a{position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 11px;border-radius:var(--r-ctl);color:var(--fg);font-size:13.5px;white-space:nowrap}
 .r-toggle{width:40px;border:0;background:none;color:var(--muted);cursor:pointer}
-.r-toggle .ic{transform:rotate(180deg);transition:transform .2s}
+.r-toggle .ic{transform:rotate(180deg);transition:transform var(--t-base) var(--ease)}
 .r-toggle:hover,.rail a[href]:hover{background:var(--well);text-decoration:none}
 .rail a[aria-disabled]{color:var(--muted);opacity:.6}
 .rail a[aria-current]{background:var(--accent-bg);color:var(--accent-fg);font-weight:600;box-shadow:inset 3px 0 var(--accent)}
 .rail .ic{width:18px;height:18px}
-.r-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity .15s}
-.r-t{display:inline-flex;align-items:center;min-width:20px;justify-content:center;padding:0 6px;border-radius:var(--r-pill);background:var(--t-bg);color:var(--t-fg);font:500 11.5px/18px var(--font-mono);font-variant-numeric:tabular-nums}
+.r-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity var(--t-fast) var(--ease)}
+.r-t{display:inline-flex;align-items:center;min-width:20px;justify-content:center;padding:0 6px;border-radius:var(--r-sm);background:var(--t-bg);color:var(--t-fg);font:500 11.5px/18px var(--font-mono);font-variant-numeric:tabular-nums}
 .r-t .ic{width:14px;height:14px;color:var(--t)}
 .r-t:has(.ic){background:none;padding:0}
 .r-d{display:none;position:absolute;left:26px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--t);box-shadow:0 0 0 2px var(--card)}
@@ -414,7 +420,7 @@ html.rail-anim .rail{transition:width .2s ease}
 [data-tone=incomplete]{--t:var(--run-incomplete);--t-fg:var(--run-incomplete-fg);--t-bg:var(--run-incomplete-bg)}
 [data-tone=neutral]{--t:var(--muted);--t-fg:var(--muted);--t-bg:var(--well)}
 /* tooltip from data-tip: always on the toggle, on the links only when collapsed */
-.rail [data-tip]::after{content:attr(data-tip);position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);padding:4px 8px;border-radius:var(--r-sm);background:var(--fg);color:var(--card);font:500 12px/1.4 var(--font-sans);white-space:nowrap;pointer-events:none;opacity:0;visibility:hidden;z-index:40;box-shadow:var(--shadow-md)}
+.rail [data-tip]::after{content:attr(data-tip);position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);padding:4px 8px;border-radius:var(--r-ctl);background:var(--fg);color:var(--card);font:500 12px/1.4 var(--font-sans);white-space:nowrap;pointer-events:none;opacity:0;visibility:hidden;z-index:40;box-shadow:var(--shadow-overlay)}
 .r-toggle:is(:hover,:focus-visible)::after{opacity:1;visibility:visible}
 @media (min-width:720px){
   html[data-rail=collapsed] .rail{width:48px;overflow:visible}
@@ -521,7 +527,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 /* explanation lines: one subgrid so points, text, platform chips and the where chip line up across lines */
 .sm .sc-costs{grid-template-columns:44px auto auto auto minmax(0,1fr);column-gap:var(--s3);row-gap:0;margin-top:var(--s3)}
 .sm .sc-costs li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;font-size:14px}
-.sm .sc-costs li>a{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;min-height:32px;padding:3px var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-sm);color:var(--fg)}
+.sm .sc-costs li>a{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;min-height:32px;padding:3px var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-ctl);color:var(--fg)}
 .sm .sc-costs li>a:hover{background:var(--well);text-decoration:none}
 .sm .sc-costs .pts{grid-column:1;font-size:14px}
 .sm .sc-costs .what{grid-column:2;min-width:0}
@@ -555,7 +561,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm-matrix th,.sm-matrix td{padding:0}
 .sm-matrix thead th{padding:0 0 4px 9px;text-align:left;color:var(--muted)}
 .sm-matrix tbody th{padding-right:var(--s2);text-align:left;font-weight:500;color:var(--fg)}
-.sm-matrix td a{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:var(--r-sm);color:var(--fg)}
+.sm-matrix td a{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:var(--r-ctl);color:var(--fg)}
 .sm-matrix td a:hover{background:var(--well);text-decoration:none}
 .sm-matrix .chip{width:20px;height:20px;padding:0;justify-content:center}
 .sm-matrix .chip>svg:first-child{margin:0}
@@ -615,7 +621,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .fb-search{order:6;position:relative;display:flex;align-items:center;flex:1 1 120px;min-width:100px;max-width:260px;margin-left:auto}
 .fnd .fb-search>svg{position:absolute;left:11px;width:14px;height:14px;color:var(--muted);pointer-events:none}
 .fnd .filterbar [data-filter-search]{flex:1 1 auto;width:100%;max-width:none;margin-left:0;height:28px}
-.fnd .fb-clear{order:2;margin-left:auto;height:28px;padding:0 10px;border:0;border-radius:var(--r-pill);background:none;color:var(--accent-fg);font:500 12.5px var(--font-sans);cursor:pointer}
+.fnd .fb-clear{order:2;margin-left:auto;height:28px;padding:0 10px;border:0;border-radius:var(--r-ctl);background:none;color:var(--accent-fg);font:500 12.5px var(--font-sans);cursor:pointer}
 .fnd .fb-clear:hover{background:var(--accent-bg)}
 .fnd .fb-clear[hidden]~[data-filter-count]{margin-left:auto}
 .fnd .filterbar [data-filter-count]{order:3;flex:none;margin:0 0 0 -4px;min-width:46px;text-align:right;font:500 12px var(--font-mono);color:var(--muted);white-space:nowrap}
@@ -624,7 +630,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 @media (max-width:719px){
   .fnd .filterbar{padding:8px}
   .fnd .fb-search{order:1;flex:1 1 100px;min-width:100px;max-width:none;margin-left:0}
-  .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
+  .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
   .fnd .fb-fold::after{content:attr(data-label)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-fg)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold::after{content:attr(data-label) " (" counter(fc) ")"}
@@ -652,7 +658,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .group>h3{margin-bottom:var(--s2)}
 .fnd details.group>summary{display:flex;align-items:center;position:relative;padding:2px 28px var(--s2) 0;cursor:pointer;list-style:none;user-select:none}
 .fnd details.group>summary::-webkit-details-marker{display:none}
-.fnd details.group>summary::after{content:"";position:absolute;right:16px;top:50%;width:7px;height:7px;margin-top:-6px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
+.fnd details.group>summary::after{content:"";position:absolute;right:16px;top:50%;width:7px;height:7px;margin-top:-6px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
 .fnd details.group[open]>summary::after{transform:rotate(45deg);margin-top:-7px}
 .fnd details.group>summary:hover::after{border-color:var(--fg)}
 .fnd details.group>summary:focus-visible{outline-offset:2px;border-radius:var(--r-sm)}
@@ -680,7 +686,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .run-multi .vp-mobile{color:var(--vp-mobile-fg)}
 .fnd .run-multi{gap:3px}
 .fnd .card .f-t code{font-size:12px}
-.fnd .card.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-sm)}
+.fnd .card.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-ctl)}
 .fnd .card.line .go:hover{color:var(--fg);background:var(--well);text-decoration:none}
 .fnd .card.line .go svg{width:14px;height:14px}
 .fnd .card.line.flash,.fnd .card.flash{animation:aitd-flash 1.5s ease-out}
@@ -712,7 +718,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd-raw{margin-top:var(--s2);font-size:12.5px}
 .fnd-raw>summary{cursor:pointer;color:var(--accent-fg);list-style:none;display:inline-flex;align-items:center;gap:4px}
 .fnd-raw>summary::-webkit-details-marker{display:none}
-.fnd-raw>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.fnd-raw>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
 .fnd-raw[open]>summary::before{transform:rotate(45deg)}
 .fnd-raw pre{margin-top:var(--s2);max-height:240px;overflow:auto}
 .fnd-fix{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13.5px}
@@ -736,7 +742,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
   .fnd .filterbar{display:none}
   .fnd details.group[data-filter-group]::details-content{content-visibility:visible;display:block}
   .fnd details.group>summary::after{display:none}
-  .fnd .card{break-inside:avoid;box-shadow:none}
+  .fnd .card{break-inside:avoid}
   .fnd-impact{background:none!important;border:1px solid currentColor}
   .fnd-recipe{background:none;border:1px solid var(--border)}
 }
@@ -782,10 +788,10 @@ const JOURNEYS = `/* Journeys (Direction D): journey tabs + viewport switch, ste
 #journeys .jr-g{display:inline-flex;color:var(--sev-fg)}
 #journeys .jr-g .ic{width:13px;height:13px;vertical-align:0}
 /* the viewport switch ([data-vp-switch]): a two-segment control; the pressed segment takes its viewport hue (identity, not status) */
-#journeys .jr-vp{display:inline-flex;gap:0;padding:2px;border:1px solid var(--border);border-radius:var(--r-pill);background:var(--well);margin:var(--s3) 0 var(--s2)}
+#journeys .jr-vp{display:inline-flex;gap:0;padding:2px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--well);margin:var(--s3) 0 var(--s2)}
 #journeys .jr-pick.js .jr-vp{position:absolute;top:3px;right:0;margin:0}
 html:not(.js) #journeys .jr-vp{display:none}
-#journeys .jr-vpb{--k:var(--vp-desktop);--k-fg:var(--vp-desktop-fg);--k-bg:var(--vp-desktop-bg);appearance:none;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border:0;border-radius:var(--r-pill);background:none;color:var(--muted);font:500 12.5px/1 var(--font-sans);white-space:nowrap;cursor:pointer}
+#journeys .jr-vpb{--k:var(--vp-desktop);--k-fg:var(--vp-desktop-fg);--k-bg:var(--vp-desktop-bg);appearance:none;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border:0;border-radius:var(--r-sm);background:none;color:var(--muted);font:500 12.5px/1 var(--font-sans);white-space:nowrap;cursor:pointer}
 #journeys .jr-vpb.mobile{--k:var(--vp-mobile);--k-fg:var(--vp-mobile-fg);--k-bg:var(--vp-mobile-bg)}
 #journeys .jr-vpb:hover{color:var(--fg)}
 #journeys .jr-vpb .ic{width:14px;height:14px}
@@ -804,7 +810,7 @@ html.js #journeys .jr-runh{display:none}
 #journeys .jr-insp{display:grid;grid-template-columns:clamp(296px,22vw,380px) minmax(0,1fr);gap:var(--s4);align-items:start}
 html:not(.js) #journeys .jr-insp{grid-template-columns:minmax(0,1fr)}
 html:not(.js) #journeys .jr-steps{display:none}
-#journeys .jr-steps{position:sticky;top:calc(var(--top) + var(--s3));max-height:calc(100vh - var(--top) - var(--s5));overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm);padding:var(--s1) 0 var(--s2);scrollbar-width:thin}
+#journeys .jr-steps{position:sticky;top:calc(var(--top) + var(--s3));max-height:calc(100vh - var(--top) - var(--s5));overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s1) 0 var(--s2);scrollbar-width:thin}
 #journeys .jr-steps ul{list-style:none;margin:0;padding:0}
 /* the timeline: one 2px line through the number column, from the first page to the last step */
 #journeys .jr-steps li{position:relative}
@@ -823,7 +829,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-st>button:focus-visible{outline-offset:-2px}
 #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent)}
 #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected)>.jr-t{font-weight:600}
-#journeys .jr-n{position:relative;z-index:1;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--card);border:1.5px solid var(--border-strong);color:var(--fg);font:600 11px/1 var(--font-mono);font-variant-numeric:tabular-nums}
+#journeys .jr-n{position:relative;z-index:1;display:grid;place-items:center;width:24px;height:24px;border-radius:var(--r-sm);background:var(--card);border:1.5px solid var(--border-strong);color:var(--fg);font:600 11px/1 var(--font-mono);font-variant-numeric:tabular-nums}
 #journeys .jr-st.zero .jr-n{border-style:dashed;color:var(--muted)}
 #journeys .jr-st.zero .jr-t{color:var(--muted)}
 #journeys .jr-st[class*=sev-] .jr-n{background:var(--sev-bg);border-color:var(--sev);color:var(--sev-fg)}
@@ -946,7 +952,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 /* platform chips carry plat(): icon and name side by side; glossary tips on parameter names */
 #journeys .chip .plat{display:inline-flex;align-items:center;gap:5px}
 #journeys .chip .plat>svg{width:13px;height:13px}
-#journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:50%;font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
+#journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:var(--r-sm);font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
 #journeys .q:hover{border-color:var(--accent);color:var(--accent-fg)}
 #journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-sm);white-space:normal;text-align:left;text-transform:none;letter-spacing:0}
 #journeys .jr-kvt .pk{font-family:var(--font-mono)}
@@ -983,7 +989,7 @@ html:not(.js) #journeys .jr-steps{display:none}
   #journeys .jr-pg{display:block;width:1px;align-self:stretch;margin:4px 4px!important;padding:0;background:var(--border)}
   #journeys .jr-pg:first-child{display:none}
   #journeys .jr-pg>*{display:none}
-  #journeys .jr-st>button{display:flex;gap:3px;width:auto;min-height:36px;padding:4px 6px;border-radius:var(--r-sm)}
+  #journeys .jr-st>button{display:flex;gap:3px;width:auto;min-height:36px;padding:4px 6px;border-radius:var(--r-ctl)}
   #journeys .jr-st>button>.jr-t,#journeys .jr-hc{display:none}
   #journeys .jr-gs:empty{display:none}
   #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){box-shadow:inset 0 -3px 0 var(--accent)}
@@ -1000,7 +1006,7 @@ html:not(.js) #journeys .jr-steps{display:none}
   #journeys .jr-pane,#journeys .jr-pick [role=tabpanel]{display:block!important}
   #journeys .jr-pane:not([data-flagged])>.tabs,#journeys .jr-pane:not([data-flagged])>p.jr-empty{display:none}
   #journeys .jr-pane:not([data-flagged]) .jr-ph{padding-bottom:var(--s2)}
-  #journeys .jr-pane{break-inside:avoid;box-shadow:none}
+  #journeys .jr-pane{break-inside:avoid}
   /* on paper a step is its hits; the dataLayer and the requests stay in the HTML and capture.json */
   #journeys .jr-pane [role=tabpanel][id$="-dl"],#journeys .jr-pane [role=tabpanel][id$="-req"]{display:none!important}
   #journeys .jr-pane:not([data-flagged]){padding-bottom:0}
@@ -1050,7 +1056,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent .cs-go{margin-left:0}
 }
 @media print{
-#consent .cs-row{box-shadow:none;break-inside:avoid}
+#consent .cs-row{break-inside:avoid}
 }
 /* journeys.css still has a bare .t (mono time); keep the card title independent of it */
 #consent details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
@@ -1066,13 +1072,13 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 
 /* ----- Coverage ----- */
 #coverage .cv-bar{display:inline-flex;gap:2px;align-items:center;height:14px;padding:0 2px}
-#coverage .cv-bar i{width:7px;height:14px;border-radius:2px;background:var(--sev-ok)}
+#coverage .cv-bar i{width:7px;height:14px;border-radius:var(--r-cell);background:var(--sev-ok)}
 #coverage .cv-bar i.params{background:var(--sev-broken)}
 #coverage .cv-bar i.missing{background:var(--sev-warning)}
 #coverage .cv-pcs{gap:6px}
 #coverage .cv-pc .chip{gap:4px}
 #coverage .cv-pc .chip b{font-family:var(--font-mono);font-size:11px}
-#coverage .filterbar{margin-bottom:var(--s3);box-shadow:none}
+#coverage .filterbar{margin-bottom:var(--s3)}
 #coverage .cv-tbl .cv-c{text-align:center;white-space:nowrap}
 #coverage .cv-tbl thead .cv-c{text-align:center}
 #coverage .cv-tbl .cv-g{padding:0 5px;height:22px}
@@ -1106,7 +1112,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #inventory .inv-list .chip.plain{height:20px;font-size:11.5px}
 
 /* ----- Run ----- */
-#run .run-facts{margin:var(--s3) 0 var(--s2);padding:var(--s2) var(--s4);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--s5);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-sm)}
+#run .run-facts{margin:var(--s3) 0 var(--s2);padding:var(--s2) var(--s4);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 var(--s5);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md)}
 #run .run-facts>div{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:var(--s2);min-height:38px;padding:5px 0;border-bottom:1px solid var(--border)}
 #run .run-facts>div.wide{grid-column:1/-1}
 #run .run-facts>div:nth-last-child(-n+1){border-bottom:0}
@@ -1115,8 +1121,8 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .run-facts code{margin:0}
 #run>p.meta{margin:0 0 var(--s2);font-size:12.5px;color:var(--muted)}
 #run .run-facts code.file{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
-#run .tm-tbl .tm-d{display:inline-block;width:80px;height:6px;margin-right:var(--s2);vertical-align:middle;border-radius:3px;background:var(--well);overflow:hidden;text-align:left}
-#run .tm-tbl .tm-bar{display:block;height:100%;border-radius:3px;background:var(--muted)}
+#run .tm-tbl .tm-d{display:inline-block;width:80px;height:6px;margin-right:var(--s2);vertical-align:middle;border-radius:var(--r-cell);background:var(--well);overflow:hidden;text-align:left}
+#run .tm-tbl .tm-bar{display:block;height:100%;border-radius:var(--r-cell);background:var(--muted)}
 #run .tm-tbl .tm-bar.desktop{background:var(--vp-desktop)}
 #run .tm-tbl .tm-bar.mobile{background:var(--vp-mobile)}
 #run .tm-s{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -1127,8 +1133,8 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .run-facts>div:nth-last-child(2).wide{border-bottom:1px solid var(--border)}
 }
 @media print{
-#run .run-facts{box-shadow:none;break-inside:avoid}
-#inventory .inv-line{box-shadow:none;break-inside:avoid}
+#run .run-facts{break-inside:avoid}
+#inventory .inv-line{break-inside:avoid}
 }
 /* tables keep their shape and scroll inside .tscroll on a phone */
 #coverage .cv-tbl{min-width:640px}
@@ -1161,7 +1167,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .spark circle{fill:var(--sev);stroke:var(--card);stroke-width:1}
 #run .spark circle.hollow{fill:var(--card);stroke:var(--sev);stroke-width:1.5}
 #run .spark-legend{display:flex;flex-wrap:wrap;gap:4px 12px}
-#run .spark-legend i{display:inline-block;width:10px;height:3px;background:var(--sev);margin-right:5px;vertical-align:middle;border-radius:2px}
+#run .spark-legend i{display:inline-block;width:10px;height:3px;background:var(--sev);margin-right:5px;vertical-align:middle;border-radius:var(--r-cell)}
 #run .tr-tbl{min-width:420px}
 #run .tr-tbl th[scope=row]{white-space:nowrap}
 #run .tr-h{margin-top:var(--s2)}

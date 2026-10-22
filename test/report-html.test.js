@@ -130,7 +130,10 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   for (const id of ["sev-broken", "sev-risk", "sev-warning", "sev-info", "sev-ok", "ui-chevron", "p-ga4", "p-meta", "p-google_ads", "p-tiktok"]) assert.match(sprite, new RegExp(`<symbol id="${id}"`));
   assert.doesNotMatch(sprite, /p-pinterest/, "only the platforms the page shows");
   assert.doesNotMatch(CSS, /data:image/);
-  assert.doesNotMatch(CSS, /Google Sans/);
+  // The design system's families are named first with the system behind them; the report ships no font files.
+  assert.match(CSS, /--font-sans:"Google Sans",system-ui,/);
+  assert.match(CSS, /--font-mono:"Google Sans Code",ui-monospace,/);
+  assert.doesNotMatch(CSS, /@font-face|url\(/);
   assert.doesNotMatch(html, /url\("data:image\/svg/);
   const klaviyo = renderHtml({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [{ journeyId: "j", viewport: "desktop", startedAt: 0, completed: true, steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Open", t: 1 }], hits: [{ platform: "klaviyo", name: "Viewed Product", params: {}, url: "https://a.klaviyo.com/x", step: 1, t: 2 }], dataLayerLog: [] }] });
   // Journeys draws a hit's platform at 14 px (the hit row's icon size), so the initials square is s14.
@@ -140,7 +143,7 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
 test("the theme has both dark selectors, the logos come as two images, and brandCss follows the same selectors", () => {
   assert.match(CSS, /@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
   assert.match(CSS, /:root\[data-theme="dark"\]\{/);
-  assert.match(CSS, /--sev-risk:#9B3B9A/);
+  assert.match(CSS, /--sev-risk:#964799/);
   assert.match(logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd"), /^<span class="logo logo-atd"><img class="l-light" src="data:[^"]+" alt="AI Tag Debugger" height="26"><img class="l-dark" src="data:[^"]+" alt="AI Tag Debugger" height="26"><\/span>$/);
   const css = brandCss("#0a7d5a");
   assert.match(css, /^:root\{--accent:#0a7d5a;--accent-fg:#[0-9a-f]{6};--accent-bg:#[0-9a-f]{6}\}@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{--accent:/);
