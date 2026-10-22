@@ -336,3 +336,44 @@ test("in a browser the report has one h1, no heading skips, named tables, select
     rmSync(dir, { recursive: true });
   }
 });
+
+test("without Google Sans the score sits in the middle of its ring and each score line's points stay beside its first line", async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch { return t.skip("Chromium is not installed"); }
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-fonts-"));
+  try {
+    const file = path.join(dir, "report.html");
+    writeFileSync(file, render());
+    // Most readers have none of the Google Sans family: the report then lays out in whatever the stacks fall back to.
+    // Two very different stand-ins (the system face, and a monospace face with its own tall metrics) must give the same geometry.
+    const strip = (name) => CSS.match(new RegExp(`--font-${name}:([^;]+);`))[1].split(",").filter((f) => !/google sans/i.test(f)).join(",");
+    const stacks = [`${strip("sans")}|${strip("display")}|${strip("mono")}`, "monospace|monospace|monospace"];
+    for (const stack of stacks) {
+      const [sans, display, mono] = stack.split("|");
+      for (const width of [1280, 1024, 390, 340]) {
+        const page = await browser.newPage({ viewport: { width, height: 900 } });
+        await page.goto(`file://${file}#summary`);
+        await page.addStyleTag({ content: `:root{--font-sans:${sans};--font-display:${display};--font-mono:${mono}}` });
+        const m = await page.evaluate(() => {
+          const box = (el) => el.getBoundingClientRect();
+          const ring = box(document.querySelector("#summary .sc-ring"));
+          const num = box(document.querySelector("#summary .sc-num")), of = box(document.querySelector("#summary .sc-of"));
+          const lines = [...document.querySelectorAll("#summary .sc-costs li>a")].map((a) => {
+            const pts = box(a.querySelector(".pts")), what = a.querySelector(".what");
+            const lh = parseFloat(getComputedStyle(what).lineHeight);
+            return { pts: (pts.top + pts.bottom) / 2, first: box(what).top + lh / 2, lh, lines: Math.round(box(what).height / lh) };
+          });
+          return { ring: (ring.top + ring.bottom) / 2, group: (num.top + of.bottom) / 2, lines };
+        });
+        const where = `${stack.split("|")[0].slice(0, 20)} at ${width}px`;
+        assert.ok(Math.abs(m.group - m.ring) <= 1, `${where}: the score group is centred ${m.group - m.ring}px off the ring's middle`);
+        for (const l of m.lines) assert.ok(Math.abs(l.pts - l.first) <= l.lh / 4, `${where}: the points sit ${l.pts - l.first}px from the first line of a ${l.lines}-line text`);
+        if (width === 1024 || width === 340) assert.ok(m.lines.some((l) => l.lines > 1), `${where}: no score line wraps, so the check above proves nothing`);
+        await page.close();
+      }
+    }
+  } finally {
+    await browser.close();
+    rmSync(dir, { recursive: true });
+  }
+});

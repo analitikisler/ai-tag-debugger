@@ -99,6 +99,26 @@ Tally's families, named first, with the system behind them. The report is one fi
 
 Weights are 400, 500 and 600, and 570 for the display face. Numbers in tables use `tabular-nums` everywhere. No uppercase and no letter-spaced caps anywhere: every label is set as it is written, in sentence case. The journey tabs keep `text-transform: capitalize` on the journey's id (`browse` shows as "Browse").
 
+### Without Google Sans
+
+Most readers have none of the three families, so the report is checked with them taken out of the stacks: Summary, Findings with a card open, Journeys and `plan.html`, light and dark, at 1280 and 390px, rendered in Chromium on macOS. What the stacks fall back to:
+
+| System | Text and display | Mono | 500 | 570 (display) | 600 |
+|---|---|---|---|---|---|
+| macOS | SF Pro (`system-ui`), variable | Menlo in Chrome and Firefox (only Safari knows `ui-monospace`) | 500 | 570 | 600 |
+| Windows | Segoe UI: 300, 350, 400, 600, 700, 900 | Cascadia Mono where installed, else Consolas | 400 | 600 | 600 |
+| Linux | the desktop's UI face: DejaVu Sans (400, 700), Ubuntu (300 to 700), Noto Sans, Cantarell (variable) | the `monospace` default, often DejaVu Sans Mono | 400 in DejaVu Sans | 700 in DejaVu Sans and Ubuntu, 600 in Noto Sans | 700 |
+| Android | Roboto (100 to 900) | Roboto Mono or Droid Sans Mono | 500 | 700 | 700 |
+
+Only the macOS row was rendered; the others follow from the faces each system ships and from how browsers pick a weight, and are expected rather than seen. No weight is ever faked: Chromium only draws a synthetic bold when the weight asked for is more than 200 above the face it found, and the heaviest the report asks for is 600, which every face above has. So 570 always lands on a real face, a step heavier than designed where the family has no semibold. Where the family is static, Chromium on macOS rounds 570 down instead (a static Google Sans without Flex gives Medium); SF is variable, so that never shows with the system face.
+
+Two rules keep the geometry the same whatever face the system lends:
+
+- The score and "/100" are trimmed to their cap height and baseline (`text-box: trim-both cap alphabetic`) and stacked as one group in the middle of the ring. Untrimmed, the font's own ascent and descent moved the same digits by up to 4px: Google Sans sat 2.4px below the middle, SF 4.1px. Browsers without `text-box` (Firefox today) keep the margins tuned for Google Sans.
+- In the Summary's score lines the points sit on the text's first baseline and the chips at the top of the row, so a line that wraps (SF and Segoe UI are wider than Google Sans, DejaVu Sans wider still) keeps them beside its first line instead of halfway down.
+
+Known risks with the system faces: Segoe UI has no 500, so on Windows the labels, chips, tabs, filters, badges and table heads set at 500 show at 400 and their weight no longer sets them apart (size and colour still do). Segoe UI Variable, on Windows 11, has every weight, but `system-ui` gives the static Segoe UI and the design system fixes the fallback stack, so naming it is a decision for the design system. DejaVu Sans is the widest face likely: with Verdana standing in for it (both keep Bitstream Vera's proportions) nothing scrolls sideways at 390px, and long step labels in the Journeys list are cut with an ellipsis sooner.
+
 ## 3. Platform icons
 
 Today `src/report.js` embeds each platform icon as a base64 SVG in the `CSS` constant and paints it as a `background` on `.ptag::before` / `.dot`. That has two costs: browsers drop background images when "print background graphics" is off (the default in Chrome's print dialog), and a CSS background cannot take `currentColor`. The system keeps the same artwork and moves it into an inline `<svg hidden>` sprite of `<symbol id="p-ga4">` elements referenced with `<use href="#p-ga4">`. Sizes: **14px** inline in text and chips, **16px** in table rows and event lists, **20px** in finding-card headers and the run-facts row. Always `aria-hidden="true"` with the platform name as visible text beside it (or `<title>` when the name is not shown, as in step-row hit chips, where the event name is shown and the platform is in the `title` tooltip and `aria-label`).

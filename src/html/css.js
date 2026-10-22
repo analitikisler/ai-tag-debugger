@@ -525,15 +525,17 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .scorecard>p.meta{grid-area:acc;margin-top:var(--s2);font-size:12.5px;color:var(--muted)}
 .sm .info .val .sm-note{font-size:14px;font-weight:500;color:var(--muted)}
 
-/* explanation lines: one subgrid so points, text, platform chips and the where chip line up across lines */
+/* explanation lines: one subgrid so points, text, platform chips and the where chip line up across lines. The points
+   sit on the text's first baseline and the chips at the top of the row, so a line that wraps (a wider system font, a
+   longer language) keeps them beside its first line instead of halfway down; a one-line row stays centred in its 32px. */
 .sm .sc-costs{grid-template-columns:44px auto auto auto minmax(0,1fr);column-gap:var(--s3);row-gap:0;margin-top:var(--s3)}
 .sm .sc-costs li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;font-size:14px}
-.sm .sc-costs li>a{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;min-height:32px;padding:3px var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-ctl);color:var(--fg)}
+.sm .sc-costs li>a{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:baseline;align-content:center;min-height:32px;padding:3px var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-ctl);color:var(--fg)}
 .sm .sc-costs li>a:hover{background:var(--card-2);text-decoration:none}
 .sm .sc-costs .pts{grid-column:1;font-size:14px}
 .sm .sc-costs .what{grid-column:2;min-width:0}
-.sm .sc-costs .pl{grid-column:3;display:flex;gap:4px}
-.sm .sc-costs .wh{grid-column:4;display:flex;gap:4px}
+.sm .sc-costs .pl{grid-column:3;display:flex;gap:4px;align-self:start}
+.sm .sc-costs .wh{grid-column:4;display:flex;gap:4px;align-self:start}
 .sm .sc-costs.nopts{grid-template-columns:auto auto auto minmax(0,1fr)}
 .sm .sc-costs.nopts .what{grid-column:1}
 .sm .sc-costs.nopts .pl{grid-column:2}
@@ -574,7 +576,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 @media (max-width:900px){
 .sm .sc-costs,.sm .sc-costs.nopts{display:grid;grid-template-columns:minmax(0,1fr)}
 .sm .sc-costs li,.sm .sc-costs li>a{grid-column:auto;grid-template-columns:none}
-.sm .sc-costs li>a{display:flex;flex-wrap:wrap;align-items:center;gap:4px var(--s2);padding:var(--s1) var(--s2)}
+.sm .sc-costs li>a{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px var(--s2);padding:var(--s1) var(--s2)}
 .sm .sc-costs .pts{flex:0 0 36px}
 .sm .sc-costs .what{flex:1 1 calc(100% - 52px)}
 .sm .sc-costs:not(.nopts) .pl{margin-left:44px}
@@ -587,6 +589,15 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-of{top:calc(50% + 13px)}
 }
 @media (max-width:599px){.sm .sm-about{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}}
+/* The score and "/100" as one group centred in the ring, whatever font the system lends: trimmed to the figures' cap
+   height and baseline, their boxes no longer carry the font's own ascent and descent, which left the group 2.4px below
+   the middle in Google Sans and 4.1px in SF. A browser without text-box keeps the margins above. */
+@supports (text-box:trim-both cap alphabetic){
+.sm .sc-ring:has(.sc-of){align-content:center;row-gap:10px}
+.sm .sc-ring .sc-num:not(.sm-none),.sm .sc-ring .sc-of{text-box:trim-both cap alphabetic;margin-top:0}
+.sm .sc-ring .sc-of{position:static}
+@media (max-width:640px){.sm .sc-ring:has(.sc-of){row-gap:5px}}
+}
 @media print{
 .sm .sc-ai{white-space:normal}
 .sm .sc-costs li>a{padding-left:0;padding-right:0;margin:0}
