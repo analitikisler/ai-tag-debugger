@@ -81,7 +81,7 @@ export function brandCss(color) {
 }
 
 // A forwarded PDF loses its file name, so every page carries the document title and the page number (Chromium fills the spans).
-const PDF_FOOTER = '<div style="width:100%;font:9px system-ui,sans-serif;color:#4b5567;padding:0 10mm;display:flex;justify-content:space-between"><span class="title"></span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>';
+const PDF_FOOTER = '<div style="width:100%;font:9px \'Google Sans\',system-ui,sans-serif;color:#566479;padding:0 10mm;display:flex;justify-content:space-between"><span class="title"></span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>';
 
 /** Prints an HTML report to a PDF with Chromium. The print styles stack every tab and open every details, so the PDF holds the whole report. */
 export async function writePdf(htmlPath, pdfPath) {
