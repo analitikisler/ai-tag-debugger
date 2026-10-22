@@ -174,7 +174,9 @@ test("a page load the network dropped is tried once more; a load the guard refus
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${server.address().port}/`;
   const lines = [];
-  const session = new AuditSession({ viewport: "desktop", site: url, log: (l) => lines.push(l), navigationRetryMs: 50 });
+  // No delay: the retry is ready before Chromium has shown its error page for the dropped load, which is when a
+  // retry that did not wait for that page was cancelled by it (and failed now and then on a busy machine with 50 ms).
+  const session = new AuditSession({ viewport: "desktop", site: url, log: (l) => lines.push(l), navigationRetryMs: 0 });
   await session.start();
   try {
     assert.equal(await session.act({ action: "goto", url }), null);

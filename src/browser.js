@@ -352,6 +352,8 @@ function pagePath(href) {
 }
 
 const NAVIGATION_RETRY_MS = 2000;
+// How long a retry waits at most for Chromium to show its error page for the failed attempt (see navigate()).
+const ERROR_PAGE_WAIT_MS = 5000;
 
 // Chromium network errors that a second try can get past: the connection dropped, the network changed,
 // a lookup or the server took too long. Blocked, refused-by-proxy, certificate and protocol errors are not here.
@@ -404,6 +406,7 @@ export class AuditSession {
     this.skipped = {}; // step index -> { vendor label: requests }
     this.loadedIn = new Map(); // page address -> the last step whose main-frame navigation reached it
     this.leaving = null; // the page address being navigated away from, until the next page commits
+    this.errorPages = 0; // how many times the main frame has shown Chromium's error page (chrome-error://)
     this.bodyBytes = 0;
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
     this.startedAt = Date.now();
@@ -442,6 +445,7 @@ export class AuditSession {
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
     this.page.on("framenavigated", (frame) => {
       if (frame !== this.page.mainFrame()) return;
+      if (frame.url().startsWith("chrome-error:")) this.errorPages++;
       this.loadedIn.set(pageKey(frame.url()), this.currentStep);
       this.leaving = null;
       // Script redirects on the first page move where it ends up.
@@ -659,15 +663,38 @@ export class AuditSession {
    */
   async navigate(url) {
     const options = { waitUntil: "domcontentloaded", timeout: 30000 };
+    const errorPagesBefore = this.errorPages;
     try {
       return await this.page.goto(url, options);
     } catch (err) {
       if (this.blocked?.step === this.currentStep || !isTransientNavigationError(err)) throw err;
       const delay = this.opts.navigationRetryMs ?? NAVIGATION_RETRY_MS;
-      this.log(`  Opening ${url} failed (${navigationErrorCode(err)}); trying once more in ${Math.round(delay / 1000)}s`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      const code = navigationErrorCode(err);
+      this.log(`  Opening ${url} failed (${code}); trying once more in ${Math.round(delay / 1000)}s`);
+      // Playwright rejects as soon as the request fails, but Chromium commits its error page for that failure a
+      // moment later (tens of milliseconds, more on a busy machine). A second goto started before that commit is
+      // cancelled by it ("interrupted by another navigation to chrome-error://"), so the retry waits for the error
+      // page as well as the delay. A timeout leaves the first navigation pending with no error page; the retry replaces it.
+      const errorPage = code.startsWith("net::") ? this.errorPageAfter(errorPagesBefore, ERROR_PAGE_WAIT_MS) : null;
+      await Promise.all([new Promise((resolve) => setTimeout(resolve, delay)), errorPage]);
       return this.page.goto(url, options);
     }
+  }
+
+  /** Resolves once the main frame has shown Chromium's error page more than `seen` times, or after `ms`. */
+  errorPageAfter(seen, ms) {
+    if (this.errorPages > seen) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.page.off("framenavigated", check);
+        resolve();
+      };
+      // Registered after the counting listener in start(), so the count is already up to date here.
+      const check = () => this.errorPages > seen && done();
+      const timer = setTimeout(done, ms);
+      this.page.on("framenavigated", check);
+    });
   }
 
   /** Error message when the browser may not be on this URL, or null. */
