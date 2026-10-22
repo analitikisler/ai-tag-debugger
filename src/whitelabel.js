@@ -53,9 +53,11 @@ export const contrast = (a, b) => {
   return (h + 0.05) / (l + 0.05);
 };
 const MIN_TEXT_CONTRAST = 4.5;
-// The card surfaces of visual-system.md §1, which the link colour must read on.
+// The card surfaces of visual-system.md §1 (Tally's surface), which the link colour must read on.
 const LIGHT_CARD = "#ffffff";
-const DARK_CARD = "#141927";
+const DARK_CARD = "#0e1e34";
+// The dark tint is the brand colour laid on that navy card, as the default --accent-bg is.
+const DARK_CARD_RGB = [14, 30, 52];
 
 /** The colour mixed step by step towards `toward` until it reads at 4.5:1 on `surface`; the input when it already does. */
 function readable(hex, toward, surface) {
@@ -74,7 +76,7 @@ export function brandCss(color) {
   if (!color) return "";
   const black = [0, 0, 0], white = [255, 255, 255];
   const light = `--accent:${color};--accent-fg:${readable(mix(color, black, 0.2), black, LIGHT_CARD)};--accent-bg:${mix(color, white, 0.9)}`;
-  const dark = `--accent:${mix(color, white, 0.2)};--accent-fg:${readable(mix(color, white, 0.5), white, DARK_CARD)};--accent-bg:${mix(color, [10, 14, 26], 0.75)}`;
+  const dark = `--accent:${mix(color, white, 0.2)};--accent-fg:${readable(mix(color, white, 0.5), white, DARK_CARD)};--accent-bg:${mix(color, DARK_CARD_RGB, 0.75)}`;
   return `:root{${light}}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
 }
 
