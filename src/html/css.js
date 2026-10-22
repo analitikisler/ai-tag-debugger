@@ -110,10 +110,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--page);color:var(--fg);font:400 14px/1.5 var(--font-sans);-webkit-font-smoothing:antialiased}
 h1,h2,h3,h4,h5,h6,p,ul,ol,figure{margin:0}
 ul,ol{padding:0}
-h1{font-size:24px;line-height:1.2;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
-h2{font-size:17px;line-height:1.3;font-weight:600}
-h3,h4{font-size:14px;line-height:1.4;font-weight:600}
-h5,h6{font-size:12px;line-height:1.4;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+h1{font:570 24px/1.2 var(--font-display);letter-spacing:-.012em;color:var(--fg-strong);overflow-wrap:anywhere}
+h2{font-size:17px;line-height:1.3;font-weight:600;color:var(--fg-strong)}
+h3,h4{font-size:14px;line-height:1.4;font-weight:600;color:var(--fg-strong)}
+h5,h6{font-size:12px;line-height:1.4;font-weight:500;color:var(--muted)}
 b,strong{font-weight:600}
 a{color:var(--accent-fg);text-decoration:none}
 a:hover{text-decoration:underline}
@@ -126,10 +126,11 @@ svg{flex:none}
 .xs{font-size:12.5px}
 .num,.tnum{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+::selection{background:var(--selection);color:var(--fg)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:var(--r-sm);background:var(--well);color:var(--muted);font:500 11px/17px var(--font-mono);text-align:center;font-variant-numeric:tabular-nums}
-.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:500 12.5px var(--font-sans);cursor:pointer}
-.btn:hover{background:var(--well)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:500 12.5px var(--font-sans);cursor:pointer}
+.btn:hover{background:var(--card-2)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 
 /* ---------- chips ----------
@@ -142,7 +143,7 @@ svg{flex:none}
 .chip>svg{color:var(--k)}
 .chip>svg{width:13px;height:13px}
 .chip>svg:first-child{margin-left:-3px}
-.chip b{font-weight:700}
+.chip b{font-weight:600}
 .chip .k{color:var(--fg);font-weight:400}
 .chip.mono{font-family:var(--font-mono);font-size:11.5px}
 .chip .dot,.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--k,var(--muted));flex:none}
@@ -178,9 +179,9 @@ a.chip:hover{text-decoration:none;border-color:var(--k)}
 /* Denied shares broken's red on purpose; it is told apart by weight: a deeper red, an outline and a bold value,
    in the mono key/value form, never with the octagon. Broken is a filled tint with the octagon glyph. */
 .chip-consent{font-family:var(--font-mono);font-size:11.5px}
-.chip-consent.denied{border-color:var(--k);font-weight:700}
-.chip-consent.granted{font-weight:600}
-.chip-consent.none{font-weight:500}
+.chip-consent.denied{border-color:var(--k);font-weight:600}
+.chip-consent.granted{font-weight:500}
+.chip-consent.none{font-weight:400}
 
 /* ---------- severity badge (C's, unchanged in shape) ---------- */
 .sev-broken{--sev:var(--sev-broken);--sev-fg:var(--sev-broken-fg);--sev-bg:var(--sev-broken-bg)}
@@ -205,7 +206,7 @@ details.card>summary{display:flex;align-items:center;gap:var(--s2) var(--s3);fle
 details.card>summary::-webkit-details-marker{display:none}
 details.card>summary::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
 details.card[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
-details.card>summary:hover{background:var(--well)}
+details.card>summary:hover{background:var(--card-2)}
 details.card>summary:hover::after{border-color:var(--fg)}
 details.card>summary:focus-visible{outline-offset:-2px}
 .revealed:focus,.revealed:focus-visible{outline:none}
@@ -222,7 +223,7 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .tabs [role=tablist]::-webkit-scrollbar{display:none}
 .tabs [role=tab]{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;color:var(--muted);font:500 13px/1.3 var(--font-sans);white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
 .tabs [role=tab]:hover{color:var(--fg)}
-.tabs [role=tab][aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent)}
+.tabs [role=tab][aria-selected=true]{color:var(--fg-strong);border-bottom-color:var(--accent)}
 .tabs [role=tab][aria-selected=true] .n{background:var(--accent-bg);color:var(--accent-fg)}
 .tabs [role=tab]:focus-visible{outline-offset:-2px}
 .tabs [role=tabpanel]{padding-top:var(--s3);min-width:0}
@@ -231,24 +232,24 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .tabs:not(.js) [role=tablist]{display:none}
 .tabs:not(.js) [role=tabpanel]{display:block}
 .tabs:not(.js) [role=tabpanel]+[role=tabpanel]{margin-top:var(--s3);border-top:1px solid var(--border)}
-.tabs:not(.js) [role=tabpanel][data-label]::before{content:attr(data-label);display:block;margin-bottom:var(--s2);font:600 12px/1.4 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tabs:not(.js) [role=tabpanel][data-label]::before{content:attr(data-label);display:block;margin-bottom:var(--s2);font:500 12px/1.4 var(--font-sans);color:var(--muted)}
 
 /* ---------- filter bar ----------
    <div class="filterbar" data-filterbar="#LIST"><span class="fl">Severity</span><button data-filter="sev=broken"
    aria-pressed="false" class="chip-sev broken"><span class="dot"></span>Broken <span class="n">2</span></button>…
    <input type="search" data-filter-search placeholder="Search"><p data-filter-count>4 of 4</p></div> */
 .filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-md)}
-.filterbar .fl{font:600 11px/1 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 2px 0 6px}
+.filterbar .fl{font:500 12px/1 var(--font-sans);color:var(--muted);margin:0 2px 0 6px}
 .filterbar .fl:first-child{margin-left:0}
 .filterbar .sep{width:1px;align-self:stretch;margin:2px 4px;background:var(--border)}
 .filterbar [data-filter]{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--fg);font:500 12.5px/1 var(--font-sans);white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
-.filterbar [data-filter]:hover{border-color:var(--border-strong);background:var(--well)}
+.filterbar [data-filter]:hover{border-color:var(--border-strong);background:var(--card-2)}
 .filterbar [data-filter][aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-fg)}
 .filterbar [data-filter][aria-pressed=true]::before{content:"";width:8px;height:4px;margin:-3px 0 0 -1px;border-left:1.75px solid currentColor;border-bottom:1.75px solid currentColor;transform:rotate(-45deg)}
 .filterbar [data-filter] svg{width:14px;height:14px}
-.filterbar [data-filter-search]{flex:1 1 180px;min-width:0;max-width:320px;height:30px;margin-left:auto;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--page) no-repeat 11px 50%/14px 14px;color:var(--fg);font:400 13px var(--font-sans);}
+.filterbar [data-filter-search]{flex:1 1 180px;min-width:0;max-width:320px;height:30px;margin-left:auto;padding:0 12px 0 32px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:400 13px var(--font-sans);}
 .filterbar [data-filter-search]::placeholder{color:var(--muted)}
-.filterbar [data-filter-search]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.filterbar [data-filter-search]:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
 .filterbar [data-filter-count]{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .filterbar [data-filter-count]:empty{display:none}
 html:not(.js) .filterbar{display:none}
@@ -257,12 +258,12 @@ html:not(.js) .filterbar{display:none}
 .tscroll{overflow-x:auto;position:relative;border:1px solid var(--border);border-radius:var(--r-md);background:var(--card)}
 .tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .tbl th,.tbl td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;overflow-wrap:anywhere}
-.tbl thead th{font-weight:500;font-size:12px;color:var(--muted);background:var(--well);white-space:nowrap}
+.tbl thead th{font-weight:500;font-size:12px;color:var(--muted);border-bottom-color:var(--border-strong);white-space:nowrap}
 .tbl tbody th{font-weight:500}
 .tbl th:first-child,.tbl td:first-child{padding-left:var(--s4)}
 .tbl th:last-child,.tbl td:last-child{padding-right:var(--s4)}
 .tbl tbody tr:last-child>*{border-bottom:0}
-.tbl tbody tr:hover>*{background:color-mix(in srgb,var(--well) 55%,transparent)}
+.tbl tbody tr:hover>*{background:var(--card-2)}
 .tbl .num{text-align:right;font-family:var(--font-mono);white-space:nowrap}
 .tbl .bad{color:var(--sev-broken-fg);font-weight:600}
 .tbl .dim{color:var(--muted)}
@@ -275,7 +276,7 @@ html:not(.js) .filterbar{display:none}
 .info .ic-plate{grid-area:ic;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--r-sm);background:var(--well);color:var(--muted)}
 .info .ic-plate svg{width:15px;height:15px}
 .info .lbl{grid-area:lbl;font-size:12.5px;font-weight:500;color:var(--muted)}
-.info .val{grid-area:val;margin-top:4px;font-size:20px;line-height:1.2;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.info .val{grid-area:val;margin-top:4px;font-size:20px;line-height:1.2;font-weight:600;color:var(--fg-strong);letter-spacing:-.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .info .val small{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0}
 .info .sub{grid-area:sub;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
 .grid>.info.wide{grid-column:span 2}
@@ -300,9 +301,9 @@ html:not(.js) .filterbar{display:none}
 .sc-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .sc-ring .trk{fill:none;stroke:var(--score-track);stroke-width:10}
 .sc-ring .arc{fill:none;stroke:var(--band);stroke-width:10;stroke-linecap:butt;stroke-dasharray:var(--score) 100}
-.sc-num{position:relative;font:700 44px/1 var(--font-sans);letter-spacing:-.03em;color:var(--fg);margin-top:-8px}
+.sc-num{position:relative;font:570 44px/1 var(--font-display);letter-spacing:-.02em;color:var(--fg-strong);font-variant-numeric:tabular-nums;margin-top:-8px}
 .sc-of{position:absolute;left:0;right:0;top:calc(50% + 18px);text-align:center;font:500 12px/1 var(--font-mono);color:var(--muted)}
-.sc-verdict{grid-area:verdict;align-self:end;display:flex;align-items:center;gap:8px;font:700 30px/1.1 var(--font-sans);letter-spacing:-.02em;color:var(--sev,var(--band))}
+.sc-verdict{grid-area:verdict;align-self:end;display:flex;align-items:center;gap:8px;font:570 30px/1.1 var(--font-display);letter-spacing:-.012em;color:var(--sev,var(--band))}
 /* the verdict is large text (24–30px bold), where 3:1 is the bar; the solid band colour clears it in both modes
    and keeps the amber of "Needs attention" from turning brown, as the 4.5:1 text step would */
 .sc-verdict .ic{width:26px;height:26px}
@@ -337,7 +338,7 @@ html:not(.js) .filterbar{display:none}
   details.card>summary:hover{background:none}
   details.card>summary::after,.filterbar,.tabs [role=tablist]{display:none}
   .tabs [role=tabpanel],.tabs [role=tabpanel][hidden]{display:block}
-  .tabs [role=tabpanel][data-label]::before{content:attr(data-label);display:block;margin:var(--s2) 0;font:600 11px/1.4 var(--font-sans);text-transform:uppercase;letter-spacing:.04em}
+  .tabs [role=tabpanel][data-label]::before{content:attr(data-label);display:block;margin:var(--s2) 0;font:500 12px/1.4 var(--font-sans)}
   /* writePdf prints with JavaScript off, so a card marked data-print-open is opened by CSS alone */
   details.card[data-print-open]::details-content{content-visibility:visible;display:block}
   details.card[data-print-open]>summary{border-bottom:1px solid var(--border)}
@@ -363,7 +364,7 @@ html.js .sec-tools.js-only{display:flex!important}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .logo .l-light{display:none}html:not([data-theme="light"]) .logo .l-dark{display:inline}}
-.eyebrow{font:600 11px/1.4 var(--font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.eyebrow{font:500 12px/1.4 var(--font-sans);color:var(--muted)}
 .mock-note{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2) var(--s3);margin:var(--s3) 0 var(--s4);border:1px dashed var(--sev-info);border-radius:var(--r-sm);color:var(--sev-info-fg);font-size:12.5px}
 .mock-note .ic{margin-top:2px}
 
@@ -378,9 +379,9 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .top-site b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .top-date{font-size:12.5px;font-variant-numeric:tabular-nums}
 .top-verdict{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border:1px solid var(--border);border-color:color-mix(in srgb,var(--v) 45%,var(--border));border-radius:var(--r-sm);background:var(--card);color:var(--v-fg);font:500 12.5px/1 var(--font-sans);font-variant-numeric:tabular-nums;flex:none}
-.top-verdict b{font-weight:700;font-size:14px}
+.top-verdict b{font-weight:600;font-size:14px}
 .top-verdict .sc-l{color:var(--muted)}
-.top-verdict:hover{text-decoration:none;filter:brightness(.97)}
+.top-verdict:hover{text-decoration:none;background:var(--card-2)}
 .top-verdict .sc{font-weight:500;color:var(--muted)}
 .v-fail{--v:var(--score-fail);--v-fg:var(--score-fail-fg);--v-bg:var(--score-fail-bg)}
 .v-mid{--v:var(--score-mid);--v-fg:var(--score-mid-fg);--v-bg:var(--score-mid-bg)}
@@ -391,7 +392,7 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .mock-switch:hover{color:var(--fg);border-color:var(--muted)}
 .mock-switch[aria-pressed=true]{border-color:var(--sev-info);color:var(--sev-info-fg);background:var(--sev-info-bg)}
 .icon-btn{align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--r-ctl);background:none;color:var(--muted);cursor:pointer}
-.icon-btn:hover{background:var(--well);color:var(--fg)}
+.icon-btn:hover{background:var(--card-2);color:var(--fg)}
 
 /* ---------- shell and rail ---------- */
 .shell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start}
@@ -402,9 +403,9 @@ html.rail-anim .rail{transition:width var(--t-base) var(--ease)}
 .r-toggle,.rail a{position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px 0 11px;border-radius:var(--r-ctl);color:var(--fg);font-size:13.5px;white-space:nowrap}
 .r-toggle{width:40px;border:0;background:none;color:var(--muted);cursor:pointer}
 .r-toggle .ic{transform:rotate(180deg);transition:transform var(--t-base) var(--ease)}
-.r-toggle:hover,.rail a[href]:hover{background:var(--well);text-decoration:none}
+.r-toggle:hover,.rail a[href]:hover{background:var(--card-2);text-decoration:none}
 .rail a[aria-disabled]{color:var(--muted);opacity:.6}
-.rail a[aria-current]{background:var(--accent-bg);color:var(--accent-fg);font-weight:600;box-shadow:inset 3px 0 var(--accent)}
+.rail a[aria-current]{background:var(--accent-bg);color:var(--accent-fg);font-weight:600;box-shadow:inset 2px 0 var(--accent)}
 .rail .ic{width:18px;height:18px}
 .r-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity var(--t-fast) var(--ease)}
 .r-t{display:inline-flex;align-items:center;min-width:20px;justify-content:center;padding:0 6px;border-radius:var(--r-sm);background:var(--t-bg);color:var(--t-fg);font:500 11.5px/18px var(--font-mono);font-variant-numeric:tabular-nums}
@@ -462,7 +463,7 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
   .shell{display:block}
   .rail{top:var(--top);width:auto;height:auto;padding:0;border-right:0;border-bottom:1px solid var(--border);overflow:visible}
   .r-head{display:none}
-  .rail ul{display:flex;gap:0;padding:0 var(--s2);overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,black calc(100% - 28px),transparent);mask-image:linear-gradient(to right,black calc(100% - 28px),transparent)}
+  .rail ul{display:flex;gap:0;padding:0 var(--s2);overflow-x:auto;scrollbar-width:none}
   .rail ul::-webkit-scrollbar{display:none}
   .rail a{height:40px;gap:6px;padding:0 10px;border-radius:0;font-size:13px;border-bottom:2px solid transparent}
   .rail a>.ic{display:none}
@@ -520,7 +521,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
    a page holds it only when a finding was accepted. */
 .sm .scorecard{grid-template-areas:"ring verdict" "ring head" "ring ai" "ring costs" "chips chips" "acc acc"}
 .sm .sc-ai{grid-area:ai;margin-top:var(--s1);max-width:72ch;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sm .sc-ai .ai-l{margin-right:4px;font:600 11px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.04em}
+.sm .sc-ai .ai-l{margin-right:4px;font:600 12px/1 var(--font-sans)}
 .sm .scorecard>p.meta{grid-area:acc;margin-top:var(--s2);font-size:12.5px;color:var(--muted)}
 .sm .info .val .sm-note{font-size:14px;font-weight:500;color:var(--muted)}
 
@@ -528,7 +529,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-costs{grid-template-columns:44px auto auto auto minmax(0,1fr);column-gap:var(--s3);row-gap:0;margin-top:var(--s3)}
 .sm .sc-costs li{grid-column:1/-1;display:grid;grid-template-columns:subgrid;font-size:14px}
 .sm .sc-costs li>a{grid-column:1/-1;display:grid;grid-template-columns:subgrid;align-items:center;min-height:32px;padding:3px var(--s2);margin:0 calc(-1 * var(--s2));border-radius:var(--r-ctl);color:var(--fg)}
-.sm .sc-costs li>a:hover{background:var(--well);text-decoration:none}
+.sm .sc-costs li>a:hover{background:var(--card-2);text-decoration:none}
 .sm .sc-costs .pts{grid-column:1;font-size:14px}
 .sm .sc-costs .what{grid-column:2;min-width:0}
 .sm .sc-costs .pl{grid-column:3;display:flex;gap:4px}
@@ -562,7 +563,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm-matrix thead th{padding:0 0 4px 9px;text-align:left;color:var(--muted)}
 .sm-matrix tbody th{padding-right:var(--s2);text-align:left;font-weight:500;color:var(--fg)}
 .sm-matrix td a{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:var(--r-ctl);color:var(--fg)}
-.sm-matrix td a:hover{background:var(--well);text-decoration:none}
+.sm-matrix td a:hover{background:var(--card-2);text-decoration:none}
 .sm-matrix .chip{width:20px;height:20px;padding:0;justify-content:center}
 .sm-matrix .chip>svg:first-child{margin:0}
 .sm-logo{display:inline-flex}
@@ -608,7 +609,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .fb-rest{order:5;display:flex;flex-wrap:wrap;align-items:center;gap:6px 0;min-width:0}
 .fnd .fg{display:inline-flex;align-items:center;gap:4px;flex:none}
 .fnd .fg+.fg,.fnd .fb-rest .fg+.fg{margin-left:8px;padding-left:8px;border-left:1px solid var(--border)}
-.fnd .filterbar .fl{margin:0 4px 0 0;font-size:10.5px;letter-spacing:.06em}
+.fnd .filterbar .fl{margin:0 4px 0 0;font-size:12px}
 .fnd .filterbar [data-filter]{height:26px;padding:0 8px;gap:5px;font-size:12px}
 .fnd .filterbar [data-filter] .n{min-width:0;padding:0;background:none;font-size:11px;line-height:1;color:var(--muted)}
 .fnd .filterbar [data-filter][aria-pressed=true] .n{color:var(--accent-fg)}
@@ -630,7 +631,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 @media (max-width:719px){
   .fnd .filterbar{padding:8px}
   .fnd .fb-search{order:1;flex:1 1 100px;min-width:100px;max-width:none;margin-left:0}
-  .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
+  .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
   .fnd .fb-fold::after{content:attr(data-label)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-fg)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold::after{content:attr(data-label) " (" counter(fc) ")"}
@@ -662,7 +663,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd details.group[open]>summary::after{transform:rotate(45deg);margin-top:-7px}
 .fnd details.group>summary:hover::after{border-color:var(--fg)}
 .fnd details.group>summary:focus-visible{outline-offset:2px;border-radius:var(--r-sm)}
-.fnd .chip.lg b{font-weight:700}
+.fnd .chip.lg b{font-weight:600}
 .fnd .g-rows>.card+.card{margin-top:6px}
 .fnd [hidden]{display:none!important}
 
@@ -687,7 +688,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .run-multi{gap:3px}
 .fnd .card .f-t code{font-size:12px}
 .fnd .card.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-ctl)}
-.fnd .card.line .go:hover{color:var(--fg);background:var(--well);text-decoration:none}
+.fnd .card.line .go:hover{color:var(--fg);background:var(--card-2);text-decoration:none}
 .fnd .card.line .go svg{width:14px;height:14px}
 .fnd .card.line.flash,.fnd .card.flash{animation:aitd-flash 1.5s ease-out}
 @media (max-width:719px){
@@ -727,8 +728,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd-where{list-style:none;display:grid;gap:6px}
 .fnd-where li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px}
 .fnd-step{min-width:0}
-.fnd .fnd-h{margin:var(--s4) 0 var(--s2);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.fnd .fnd-h .chip{text-transform:none;letter-spacing:0}
+.fnd .fnd-h{margin:var(--s4) 0 var(--s2);display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--muted)}
 .fnd .fnd-h>svg{width:14px;height:14px}
 .fnd-fix>span{min-width:0}
 .fnd-recipe{list-style:none;counter-reset:rc;display:grid;gap:2px;margin:0;padding:var(--s2) var(--s3);background:var(--well);border-radius:var(--r-sm)}
@@ -825,9 +825,9 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-pg-p{justify-self:start;background:none;padding:0;font-size:11.5px;line-height:1.3;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #journeys .jr-st>button{appearance:none;position:relative;width:100%;display:grid;grid-template-columns:24px minmax(0,1fr) repeat(var(--jr-plats,2),30px) 14px;column-gap:6px;align-items:center;min-height:32px;padding:3px 12px 3px 13px;border:0;background:none;color:var(--fg);font:13px/1.3 var(--font-sans);text-align:left;cursor:pointer}
 #journeys .jr-st>button>.jr-t{margin-left:4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#journeys .jr-st>button:hover{background:var(--well)}
+#journeys .jr-st>button:hover{background:var(--card-2)}
 #journeys .jr-st>button:focus-visible{outline-offset:-2px}
-#journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent)}
+#journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){background:var(--accent-bg);box-shadow:inset 2px 0 0 var(--accent)}
 #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected)>.jr-t{font-weight:600}
 #journeys .jr-n{position:relative;z-index:1;display:grid;place-items:center;width:24px;height:24px;border-radius:var(--r-sm);background:var(--card);border:1.5px solid var(--border-strong);color:var(--fg);font:600 11px/1 var(--font-mono);font-variant-numeric:tabular-nums}
 #journeys .jr-st.zero .jr-n{border-style:dashed;color:var(--muted)}
@@ -899,7 +899,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-flag .ic{margin-top:2px}
 #journeys .jr-flag>span{flex:1 1 200px;min-width:0}
 #journeys .jr-hb{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s3) var(--s4)}
-#journeys .jr-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;line-height:1.4;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+#journeys .jr-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;line-height:1.4;font-weight:500;color:var(--muted)}
 #journeys .jr-hb .tbl{font-size:12.5px;border:1px solid var(--border);border-radius:var(--r-sm);border-collapse:separate;border-spacing:0}
 #journeys .jr-hb .tbl th,#journeys .jr-hb .tbl td{padding:4px 8px}
 #journeys .jr-kvt tbody th{width:38%;font:11.5px var(--font-mono);color:var(--muted);vertical-align:top}
@@ -933,7 +933,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 
 /* the plan line under the status: the funnel sentence, then a chip per planned event that failed */
 #journeys .jr-plan{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s2);margin:calc(-1 * var(--s1)) 0 var(--s3);font-size:12.5px;min-width:0}
-#journeys .jr-plan-h{font:600 11px/1.4 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+#journeys .jr-plan-h{font:500 12px/1.4 var(--font-sans);color:var(--muted);white-space:nowrap}
 #journeys .jr-plan-t{display:inline-flex;align-items:center;gap:5px;min-width:0}
 #journeys .jr-plan-t .jr-bad{color:var(--sev-broken)}
 #journeys .jr-plan-t .jr-good{color:var(--sev-ok)}
@@ -954,7 +954,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .chip .plat>svg{width:13px;height:13px}
 #journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:var(--r-sm);font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
 #journeys .q:hover{border-color:var(--accent);color:var(--accent-fg)}
-#journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-sm);white-space:normal;text-align:left;text-transform:none;letter-spacing:0}
+#journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-ctl);box-shadow:var(--shadow-overlay);white-space:normal;text-align:left}
 #journeys .jr-kvt .pk{font-family:var(--font-mono)}
 #journeys .jr-kvt tr.pr td{font-family:var(--font-sans)}
 #journeys .jr-batch{margin-bottom:6px}
@@ -992,7 +992,7 @@ html:not(.js) #journeys .jr-steps{display:none}
   #journeys .jr-st>button{display:flex;gap:3px;width:auto;min-height:36px;padding:4px 6px;border-radius:var(--r-ctl)}
   #journeys .jr-st>button>.jr-t,#journeys .jr-hc{display:none}
   #journeys .jr-gs:empty{display:none}
-  #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){box-shadow:inset 0 -3px 0 var(--accent)}
+  #journeys .jr-st>button:is([aria-selected=true],[aria-current=true],[aria-current=step],[aria-pressed=true],.selected){box-shadow:inset 0 -2px 0 var(--accent)}
   #journeys .jr-ph{padding:var(--s3) var(--s3) 0}
   #journeys .jr-ph-m{padding-left:0}
   #journeys .jr-pane>.tabs{padding:0 var(--s3) var(--s3)}
@@ -1092,7 +1092,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #coverage .cv-key{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);margin-top:var(--s3)}
 /* first column stays put while the run columns scroll at 390 */
 #coverage .cv-scroll .cv-tbl th:first-child{position:sticky;left:0;z-index:1;background:var(--card)}
-#coverage .cv-scroll .cv-tbl thead th:first-child{background:var(--well)}
+#coverage .cv-scroll .cv-tbl thead th:first-child{background:var(--card)}
 
 /* ----- Inventory ----- */
 #inventory .inv-rows{list-style:none;display:grid;gap:var(--s2);margin-top:var(--s3)}
@@ -1116,7 +1116,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .run-facts>div{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:var(--s2);min-height:38px;padding:5px 0;border-bottom:1px solid var(--border)}
 #run .run-facts>div.wide{grid-column:1/-1}
 #run .run-facts>div:nth-last-child(-n+1){border-bottom:0}
-#run .run-facts dt{font:600 11px/1.2 var(--font-sans);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+#run .run-facts dt{font:500 12px/1.3 var(--font-sans);color:var(--muted)}
 #run .run-facts dd{margin:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 #run .run-facts code{margin:0}
 #run>p.meta{margin:0 0 var(--s2);font-size:12.5px;color:var(--muted)}
