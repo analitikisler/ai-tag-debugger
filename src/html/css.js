@@ -56,8 +56,8 @@ color-scheme:light dark;
 --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
 --r-cell:1px;--r-sm:2px;--r-ctl:4px;--r-md:6px;
 /* The report is one file and ships no fonts: the families are named first and the system stands in where they are not installed. */
---font-sans:"Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
---font-display:"Google Sans Flex","Google Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+--font-sans:"Google Sans","Segoe UI Variable Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+--font-display:"Google Sans Flex","Google Sans","Segoe UI Variable Display",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 --font-mono:"Google Sans Code",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
 --t-fast:160ms;--t-base:220ms;--ease:cubic-bezier(.2,0,0,1);
 --rail:200px;--top:48px}
@@ -563,7 +563,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm-matrix{border-collapse:collapse;font-size:13px;line-height:1}
 .sm-matrix th,.sm-matrix td{padding:0}
 .sm-matrix thead th{padding:0 0 4px 9px;text-align:left;color:var(--muted)}
-.sm-matrix tbody th{padding-right:var(--s2);text-align:left;font-weight:500;color:var(--fg)}
+.sm-matrix tbody th{padding-right:var(--s2);text-align:left;font-weight:500;color:var(--fg);overflow-wrap:break-word}
 .sm-matrix td a{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 6px;border-radius:var(--r-ctl);color:var(--fg)}
 .sm-matrix td a:hover{background:var(--card-2);text-decoration:none}
 .sm-matrix .chip{width:20px;height:20px;padding:0;justify-content:center}
@@ -573,7 +573,9 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 /* four vendor chips wrap 3 + 1 in a third-width card; two by two reads as a set */
 @media (min-width:1024px){.sm .sm-chipval .val .chips{display:grid;grid-template-columns:repeat(2,max-content)}}
 @media (max-width:1023px){.sm .sm-about{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:900px){
+/* The score lines stack below 1100px: between 900 and 1100 with the rail open, the three chip columns left the text
+   column too narrow to keep an event name on one line. */
+@media (max-width:1099px){
 .sm .sc-costs,.sm .sc-costs.nopts{display:grid;grid-template-columns:minmax(0,1fr)}
 .sm .sc-costs li,.sm .sc-costs li>a{grid-column:auto;grid-template-columns:none}
 .sm .sc-costs li>a{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px var(--s2);padding:var(--s1) var(--s2)}

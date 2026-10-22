@@ -80,8 +80,8 @@ Transitions are 160ms (`--t-fast`) or 220ms (`--t-base`) on `cubic-bezier(.2,0,0
 Tally's families, named first, with the system behind them. The report is one file and ships no font files (no `@font-face`, no `url(`), so a machine without the Google Sans family shows the system face; one that has them installed shows the design system's.
 
 ```
---font-sans: "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
---font-display: "Google Sans Flex", "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+--font-sans: "Google Sans", "Segoe UI Variable Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+--font-display: "Google Sans Flex", "Google Sans", "Segoe UI Variable Display", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 --font-mono: "Google Sans Code", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 ```
 
@@ -106,7 +106,8 @@ Most readers have none of the three families, so the report is checked with them
 | System | Text and display | Mono | 500 | 570 (display) | 600 |
 |---|---|---|---|---|---|
 | macOS | SF Pro (`system-ui`), variable | Menlo in Chrome and Firefox (only Safari knows `ui-monospace`) | 500 | 570 | 600 |
-| Windows | Segoe UI: 300, 350, 400, 600, 700, 900 | Cascadia Mono where installed, else Consolas | 400 | 600 | 600 |
+| Windows 11 | Segoe UI Variable (Text for text, Display for display), variable | Cascadia Mono where installed, else Consolas | 500 | 570 | 600 |
+| Windows 10 | Segoe UI: 300, 350, 400, 600, 700, 900 | Cascadia Mono where installed, else Consolas | 400 | 600 | 600 |
 | Linux | the desktop's UI face: DejaVu Sans (400, 700), Ubuntu (300 to 700), Noto Sans, Cantarell (variable) | the `monospace` default, often DejaVu Sans Mono | 400 in DejaVu Sans | 700 in DejaVu Sans and Ubuntu, 600 in Noto Sans | 700 |
 | Android | Roboto (100 to 900) | Roboto Mono or Droid Sans Mono | 500 | 700 | 700 |
 
@@ -117,7 +118,7 @@ Two rules keep the geometry the same whatever face the system lends:
 - The score and "/100" are trimmed to their cap height and baseline (`text-box: trim-both cap alphabetic`) and stacked as one group in the middle of the ring. Untrimmed, the font's own ascent and descent moved the same digits by up to 4px: Google Sans sat 2.4px below the middle, SF 4.1px. Browsers without `text-box` (Firefox today) keep the margins tuned for Google Sans.
 - In the Summary's score lines the points sit on the text's first baseline and the chips at the top of the row, so a line that wraps (SF and Segoe UI are wider than Google Sans, DejaVu Sans wider still) keeps them beside its first line instead of halfway down.
 
-Known risks with the system faces: Segoe UI has no 500, so on Windows the labels, chips, tabs, filters, badges and table heads set at 500 show at 400 and their weight no longer sets them apart (size and colour still do). Segoe UI Variable, on Windows 11, has every weight, but `system-ui` gives the static Segoe UI and the design system fixes the fallback stack, so naming it is a decision for the design system. DejaVu Sans is the widest face likely: with Verdana standing in for it (both keep Bitstream Vera's proportions) nothing scrolls sideways at 390px, and long step labels in the Journeys list are cut with an ellipsis sooner.
+Known risks with the system faces: `system-ui` gives Windows the static Segoe UI, which has no 500, so the stacks name Segoe UI Variable first (Text for text, Display for display): on Windows 11 every weight is there. On Windows 10, which has only the static face, the labels, chips, tabs, filters, badges and table heads set at 500 show at 400 and their weight no longer sets them apart (size and colour still do). DejaVu Sans is the widest face likely: with Verdana standing in for it (both keep Bitstream Vera's proportions) nothing scrolls sideways at 390px, and long step labels in the Journeys list are cut with an ellipsis sooner.
 
 ## 3. Platform icons
 

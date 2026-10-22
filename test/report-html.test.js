@@ -131,7 +131,8 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   assert.doesNotMatch(sprite, /p-pinterest/, "only the platforms the page shows");
   assert.doesNotMatch(CSS, /data:image/);
   // The design system's families are named first with the system behind them; the report ships no font files.
-  assert.match(CSS, /--font-sans:"Google Sans",system-ui,/);
+  assert.match(CSS, /--font-sans:"Google Sans","Segoe UI Variable Text",system-ui,/);
+  assert.match(CSS, /--font-display:"Google Sans Flex","Google Sans","Segoe UI Variable Display",system-ui,/);
   assert.match(CSS, /--font-mono:"Google Sans Code",ui-monospace,/);
   assert.doesNotMatch(CSS, /@font-face|url\(/);
   assert.doesNotMatch(html, /url\("data:image\/svg/);
@@ -350,10 +351,12 @@ test("without Google Sans the score sits in the middle of its ring and each scor
     const stacks = [`${strip("sans")}|${strip("display")}|${strip("mono")}`, "monospace|monospace|monospace"];
     for (const stack of stacks) {
       const [sans, display, mono] = stack.split("|");
-      for (const width of [1280, 1024, 390, 340]) {
+      // The score lines sit side by side from 1100px and stack below it. Neither layout wraps a line of the demo at its
+      // natural width above 340px, so the side-by-side one is also checked with its column narrowed until lines wrap.
+      for (const [width, narrow] of [[1280, false], [1280, true], [1024, false], [390, false], [340, false]]) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
         await page.goto(`file://${file}#summary`);
-        await page.addStyleTag({ content: `:root{--font-sans:${sans};--font-display:${display};--font-mono:${mono}}` });
+        await page.addStyleTag({ content: `:root{--font-sans:${sans};--font-display:${display};--font-mono:${mono}}${narrow ? "#summary .sc-costs{max-width:540px}" : ""}` });
         const m = await page.evaluate(() => {
           const box = (el) => el.getBoundingClientRect();
           const ring = box(document.querySelector("#summary .sc-ring"));
@@ -365,10 +368,10 @@ test("without Google Sans the score sits in the middle of its ring and each scor
           });
           return { ring: (ring.top + ring.bottom) / 2, group: (num.top + of.bottom) / 2, lines };
         });
-        const where = `${stack.split("|")[0].slice(0, 20)} at ${width}px`;
+        const where = `${stack.split("|")[0].slice(0, 20)} at ${width}px${narrow ? ", narrowed" : ""}`;
         assert.ok(Math.abs(m.group - m.ring) <= 1, `${where}: the score group is centred ${m.group - m.ring}px off the ring's middle`);
         for (const l of m.lines) assert.ok(Math.abs(l.pts - l.first) <= l.lh / 4, `${where}: the points sit ${l.pts - l.first}px from the first line of a ${l.lines}-line text`);
-        if (width === 1024 || width === 340) assert.ok(m.lines.some((l) => l.lines > 1), `${where}: no score line wraps, so the check above proves nothing`);
+        if (narrow || width === 340) assert.ok(m.lines.some((l) => l.lines > 1), `${where}: no score line wraps, so the check above proves nothing`);
         await page.close();
       }
     }
