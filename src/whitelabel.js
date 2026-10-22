@@ -53,31 +53,62 @@ export const contrast = (a, b) => {
   return (h + 0.05) / (l + 0.05);
 };
 const MIN_TEXT_CONTRAST = 4.5;
-// The card surfaces of visual-system.md §1 (Tally's surface), which the link colour must read on.
-const LIGHT_CARD = "#ffffff";
-const DARK_CARD = "#0e1e34";
-// The dark tint is the brand colour laid on that navy card, as the default --accent-bg is.
-const DARK_CARD_RGB = [14, 30, 52];
+const MIN_MARK_CONTRAST = 3;
+// The grounds of visual-system.md §1 the accent is drawn on, in each theme: card (Tally's surface), page (bg), card-2
+// (surface-2: hovered and selected rows, hovered controls) and well. Links sit on all four; the tint is added per colour.
+const GROUNDS = {
+  light: ["#ffffff", "#f4f6fa", "#ecf1f8", "#e9eef5"],
+  dark: ["#0e1e34", "#071529", "#15263f", "#040e1f"],
+};
+const BLACK = [0, 0, 0];
+const WHITE = [255, 255, 255];
+// The dark tint is the brand colour laid on the navy card, as the default --accent-bg is.
+const DARK_CARD_RGB = rgb(GROUNDS.dark[0]);
 
-/** The colour mixed step by step towards `toward` until it reads at 4.5:1 on `surface`; the input when it already does. */
-function readable(hex, toward, surface) {
+/**
+ * The colour mixed step by step towards `toward` until it reads at `min`:1 on every ground; the input when it already
+ * does. Mixing towards black or white keeps the hue, so a brand colour only gets darker or lighter, never another colour.
+ */
+function readable(hex, toward, grounds, min) {
   let c = hex;
-  for (let i = 0; i < 20 && contrast(c, surface) < MIN_TEXT_CONTRAST; i++) c = mix(c, toward, 0.1);
+  while (grounds.some((g) => contrast(c, g) < min)) {
+    const next = mix(c, toward, 0.1);
+    if (next === c) break; // as far as rounding goes: black and white pass every ground long before this
+    c = next;
+  }
   return c;
 }
 
 /**
- * CSS that recolors the report's accent: the active tab rule, focus rings, links and the step plates (visual-system.md §9).
- * The light theme gets a link colour darkened until it reads on a white card, the dark theme one lightened until it
- * reads on the dark card, so a pale brand colour never gives unreadable links. The dark set is written under both dark
- * selectors the report uses, so a forced light theme on a dark OS keeps the light accent.
+ * The three accent tokens for a brand colour, per theme. The tint (--accent-bg) is the brand colour on the card: 10% on
+ * white in light, 25% on the navy in dark. The link colour (--accent-fg) is darkened (light) or lightened (dark) until it
+ * reads at 4.5:1 on the card, the page, card-2, the well and that tint; the colour for marks (--accent: the active tab
+ * and rail rule, focus rings, pressed filter edges) until it reaches 3:1 on the same grounds. A colour that already
+ * passes is left as it is.
+ * @returns {{ light: { accent: string, fg: string, bg: string }, dark: { accent: string, fg: string, bg: string } }}
+ */
+export function brandTokens(color) {
+  const lightBg = mix(color, WHITE, 0.9);
+  const darkBg = mix(color, DARK_CARD_RGB, 0.75);
+  const light = [...GROUNDS.light, lightBg];
+  const dark = [...GROUNDS.dark, darkBg];
+  return {
+    light: { accent: readable(color, BLACK, light, MIN_MARK_CONTRAST), fg: readable(mix(color, BLACK, 0.2), BLACK, light, MIN_TEXT_CONTRAST), bg: lightBg },
+    dark: { accent: readable(mix(color, WHITE, 0.2), WHITE, dark, MIN_MARK_CONTRAST), fg: readable(mix(color, WHITE, 0.5), WHITE, dark, MIN_TEXT_CONTRAST), bg: darkBg },
+  };
+}
+
+/**
+ * CSS that recolors the report's accent: the active tab rule, focus rings, links and the step plates (visual-system.md §9),
+ * from brandTokens(), so a pale or a very dark brand colour never gives unreadable links or invisible focus rings in either
+ * theme. The dark set is written under both dark selectors the report uses, so a forced light theme on a dark OS keeps
+ * the light accent.
  */
 export function brandCss(color) {
   if (!color) return "";
-  const black = [0, 0, 0], white = [255, 255, 255];
-  const light = `--accent:${color};--accent-fg:${readable(mix(color, black, 0.2), black, LIGHT_CARD)};--accent-bg:${mix(color, white, 0.9)}`;
-  const dark = `--accent:${mix(color, white, 0.2)};--accent-fg:${readable(mix(color, white, 0.5), white, DARK_CARD)};--accent-bg:${mix(color, DARK_CARD_RGB, 0.75)}`;
-  return `:root{${light}}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${dark}}}:root[data-theme="dark"]{${dark}}`;
+  const { light, dark } = brandTokens(color);
+  const set = (t) => `--accent:${t.accent};--accent-fg:${t.fg};--accent-bg:${t.bg}`;
+  return `:root{${set(light)}}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${set(dark)}}}:root[data-theme="dark"]{${set(dark)}}`;
 }
 
 // A forwarded PDF loses its file name, so every page carries the document title and the page number (Chromium fills the spans).

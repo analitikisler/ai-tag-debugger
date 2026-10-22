@@ -168,7 +168,26 @@ Owner chip: outline chip, 12px, text "Developer" / "Tag Manager" / "Marketing", 
 
 ## 9. White label
 
-A customer can set `report.color` (one hex) and `report.logo`/`report.name`. `brandCss(color)` writes `--accent`, `--accent-fg`, `--accent-bg`. The system draws from those three tokens only the things that say "this document belongs to the brand": the active tab rule, focus rings, link colour, the step index plate, and the fix-step numerals. Severity, platform icons, text and surfaces never change. `brandCss` emits its dark set under both dark selectors of §1 and mixes `--accent-fg` toward black (light) or white (dark) until it reads at 4.5:1 on the card: `#ffffff` in light, Tally's navy `#0e1e34` in dark. The dark `--accent-bg` is the brand colour laid 25% on that navy, as the default `--accent-bg` sits on it.
+A customer can set `report.color` (one hex) and `report.logo`/`report.name`. `brandCss(color)` writes `--accent`, `--accent-fg`, `--accent-bg`. The system draws from those three tokens only the things that say "this document belongs to the brand": the active tab rule, focus rings, link colour, the step index plate, and the fix-step numerals. Severity, platform icons, text and surfaces never change. `brandCss` emits its dark set under both dark selectors of §1.
+
+`brandTokens(color)` in `src/whitelabel.js` derives the three tokens per theme, and both themes follow the same rule:
+
+- `--accent-bg`, the tint, is the brand colour laid on the card: 10% on white in light, 25% on Tally's navy `#0e1e34` in dark, as the default `--accent-bg` sits on it.
+- `--accent-fg`, the link colour, starts at the brand colour mixed 20% toward black (light) or 50% toward white (dark) and is mixed further in 10% steps until it reads at 4.5:1 on every ground a link sits on (card, page, card-2 and well) and on that tint.
+- `--accent`, the colour of marks (the tab and rail rules, focus rings, pressed filter edges), starts at the brand colour itself (light) or mixed 20% toward white (dark) and is moved the same way until it reaches 3:1 on the same grounds and the tint.
+
+Mixing toward black or white keeps the brand's hue: a pale yellow becomes a darker gold, never another colour. A colour that already passes is left as it is.
+
+| Brand | Light accent · link · tint | Lowest link · mark, light | Dark accent · link · tint | Lowest link · mark, dark |
+|---|---|---|---|---|
+| `#0a7d5a` (unchanged) | `#0a7d5a` · `#086448` · `#e7f2ef` | 6.15 · 4.40 | `#3b977b` · `#85bead` · `#0d363e` | 6.17 · 3.65 |
+| `#ffe066` pale yellow | `#96853d` · `#796a31` · `#fffcf0` | 4.60 · 3.15 | `#ffe685` · `#fff0b3` · `#4a4f41` | 7.39 · 6.80 |
+| `#a0f0ff` pale cyan | `#5f8e96` · `#4d7179` · `#f6feff` | 4.56 · 3.11 | `#b3f3ff` · `#d0f8ff` · `#335367` | 7.21 · 6.68 |
+| `#fafafa` near-white | `#868686` · `#6a6a6a` · `#ffffff` | 4.64 · 3.12 | `#fbfbfb` · `#fdfdfd` · `#495566` | 7.44 · 7.31 |
+| `#ff0000` red | `#ff0000` · `#cc0000` · `#ffe6e6` | 4.97 · 3.37 | `#ff3333` · `#ff8080` · `#4a1727` | 6.00 · 4.00 |
+| `#0b1f3a` dark navy | `#0b1f3a` · `#09192e` · `#e7e9eb` | 14.50 · 13.57 | `#727d8c` · `#858f9d` · `#0d1e36` | 4.64 · 3.64 |
+
+The lowest ratio is over card, page, card-2, well and the tint; `test/whitelabel.test.js` checks these colours and a few more in both themes, reading the grounds from `TOKENS`. A near-white brand in light and a navy or black brand in dark get a tint that is all but the card itself; the selected rail item, step and filter then show through the accent rule, the edge and the weight, which pass 3:1.
 
 Logo slots: the top-left product slot (26px high; brand logo or `brand-name` text), the "by Analitik İşler" byline (18px) which a white-label run drops, and the footer (56px stacked logo or the customer's). The AI Tag Debugger emblem stays in the credit line at 16px in every case. All logos remain `<picture>` with light/dark sources (`logo()` in `src/report.js`); a customer logo has one source and sits on `--card`, so the topbar and footer backgrounds must stay `--card` in dark mode rather than `--page`.
 
