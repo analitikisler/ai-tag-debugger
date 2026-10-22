@@ -4,72 +4,106 @@ The HTML report is one self-contained file: inline CSS, inline SVG, images only 
 
 ## 1. Tokens
 
+The values are those of Tally, the Analitik İşler design system that analitikisler.com uses, so the report, `plan.html` and the site read as one family: navy grounds, one action blue, the Google Sans family, sharp corners, 1px rules and no decoration. The report keeps its own token names; the comment at the top of `TOKENS` says which Tally token each one follows. The AI Tag Debugger orange (`#D9531E` light, `#FF6D33` dark) stays in the logo and the emblem only.
+
 All tokens live on `:root`. Dark mode redefines the same names, twice: once under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`, and once under `:root[data-theme="dark"]`, so a theme toggle (`<html data-theme="light|dark">`) wins over the OS and the absence of the attribute means "follow the OS". `brandCss()` in `src/whitelabel.js` must emit its dark set under the same two selectors, or a forced light theme on a dark OS gets the dark accent (see §9).
+
+Contrast is measured with WCAG 2.1 relative luminance. Text needs 4.5:1, control edges, focus rings and meaningful marks 3:1. Every pair below was computed from the `TOKENS` constant in both themes: 174 pairs per theme, all pass. Lowest text pair: `--plat-ga4-fg` on `--well` 4.61 (light), `--consent-denied-fg` on its own tint 4.60 (dark). Lowest non-text pair: a category solid on `--well` 3.00 (light), `--border-strong` on `--card-2` 3.28 (dark).
 
 ### Surfaces and text
 
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--page` | `#F6F7F9` | `#0B0F19` | page background |
-| `--card` | `#FFFFFF` | `#141927` | cards, tables, header, footer |
-| `--well` | `#EEF1F6` | `#1B2235` | code chips, inset blocks, table heads |
-| `--fg` | `#111827` | `#EEF2FF` | text (17.7:1 / 15.7:1 on card) |
-| `--muted` | `#4B5567` | `#9AA4BD` | secondary text (7.5:1 / 7.0:1 on card, 7.0:1 / 7.7:1 on page) |
-| `--border` | `#D9DEE8` | `#263050` | hairlines, 1px only |
-| `--accent` | `#2E6CDB` | `#4F8EF7` | active tab rule, focus ring, step index (4.9:1 / 5.5:1 as a mark) |
-| `--accent-fg` | `#2459C0` | `#8CBBFF` | links, link-like text (6.4:1 / 8.9:1 on card) |
-| `--accent-bg` | `#EBF1FE` | `#1A2F5C` | selected row, step number plate |
+| Token | Tally | Light | Dark | Use |
+|---|---|---|---|---|
+| `--page` | `bg` | `#f4f6fa` | `#071529` | page background |
+| `--card` | `surface` | `#ffffff` | `#0e1e34` | cards, tables, header, footer |
+| `--card-2` | `surface-2` | `#ecf1f8` | `#15263f` | hover and selected rows, hovered controls |
+| `--well` | `well` | `#e9eef5` | `#040e1f` | sunken: code, counts, icon plates, tracks |
+| `--fg` | `text` | `#142338` | `#e1e8f3` | text (15.82 / 13.59 on card) |
+| `--fg-strong` | `text-strong` | `#071529` | `#f9fbff` | headings, the score, key figures |
+| `--muted` | `muted` | `#566479` | `#a2b1c6` | metadata (6.01 / 7.69 on card, 5.15 / 8.86 on well) |
+| `--border` | `border` | `#d5dde8` | `#22354e` | hairlines, 1px only |
+| `--border-strong` | `border-strong` | `#78869a` | `#607695` | control edges, the rule under a table head (3.26 / 3.28 at the lowest, on card-2) |
+| `--accent` | `accent` | `#1161bb` | `#69b1ff` | active tab and rail rule, focus ring, pressed filters (6.08 / 7.44 on card) |
+| `--accent-fg` | `accent` | `#1161bb` | `#69b1ff` | links, link-like text (6.08 / 7.44 on card, 5.12 / 5.75 on `--accent-bg`) |
+| `--accent-bg` | `accent-soft` | `#deedff` | `#0c325b` | selected rail item and step, pressed filter, tab count |
+| `--selection` | `selection` | `#c6defc` | `#123f6f` | text selection (`--fg` 11.49 / 8.67 on it) |
+| `--shadow-overlay` | overlay shadow | `0 16px 48px rgb(7 21 41 / 14%)` | `0 16px 48px rgb(2 8 18 / 55%)` | tooltips only; nothing else casts a shadow |
 
-The three `--accent*` names are the white-label entry point and keep the names `brandCss()` already writes. Nothing else may be derived from a brand color (§9).
+The three `--accent*` names are the white-label entry point and keep the names `brandCss()` already writes. Nothing else may be derived from a brand color (§9). Blue means measured or actionable: links, focus, selected tabs and filters, never decoration.
 
 ### Severity
 
-Five severities, three tokens each: `--sev-<name>-fg` (text, icon), `--sev-<name>-bg` (tint), `--sev-<name>` (solid: left rule, dot, bar segment). Contrast is measured with WCAG 2.1 relative luminance; "card" is `--card`, "tint" is the severity's own `-bg`. Text needs 4.5:1, solid marks 3:1.
+Five severities, three tokens each: `--sev-<name>` (solid: left rule, dot, ring, bar), `--sev-<name>-fg` (text, icon) and `--sev-<name>-bg` (tint). As in Tally, a status is one colour for text and marks, so `-fg` equals the solid; the tint is the colour mixed into `--card`, 10% in light and 16% in dark.
 
-| Severity | Light fg / bg / solid | fg on card · page · tint; solid on card | Dark fg / bg / solid | fg on card · page · tint; solid on card |
+| Severity | Tally | Light | fg on card · page · card-2 · well · tint | Dark | fg on card · page · card-2 · well · tint |
+|---|---|---|---|---|---|
+| broken | `bad` | `#c12d30` / tint `#f9eaea` | 5.70 · 5.27 · 5.02 · 4.89 · 4.88 | `#fa6b6d` / `#342a3d` | 5.89 · 6.43 · 5.35 · 6.79 · 4.78 |
+| risk | own hue | `#964799` / `#f5edf5` | 5.74 · 5.31 · 5.06 · 4.92 · 5.01 | `#dc86de` / `#2f2f4f` | 6.78 · 7.41 · 6.16 · 7.82 · 5.19 |
+| warning | `warn` | `#8b6200` / `#f3efe6` | 5.46 · 5.05 · 4.81 · 4.68 · 4.76 | `#f4cf5a` / `#333a3a` | 11.10 · 12.12 · 10.08 · 12.80 · 7.70 |
+| info | `accent` | `#1161bb` / `#e7eff8` | 6.08 · 5.62 · 5.36 · 5.22 · 5.24 | `#69b1ff` / `#1d3654` | 7.44 · 8.13 · 6.76 · 8.58 · 5.46 |
+| ok | `ok` | `#197746` / `#e8f1ed` | 5.57 · 5.15 · 4.91 · 4.78 · 4.84 | `#5ad093` / `#1a3a43` | 8.68 · 9.47 · 7.88 · 10.00 · 6.29 |
+
+**Risk keeps a hue of its own.** Tally makes risk red, told apart from broken by its diamond glyph and its word, and lets a product keep a separate risk hue when its screens put the two side by side. The report does: the score lines, the filter dots, the rail and the 3px card rules show broken and risk next to each other, and a dot or a rule has no room for a glyph. The plum passes the same contrast as the statuses and stays apart from broken under deuteranopia and protanopia simulated with Machado et al. (2009) at full severity (OKLab ΔE 16.9 and 16.7 light, 15.6 and 16.5 dark). Risk still carries its diamond and its word wherever it has room.
+
+**Info is the accent's value, not the accent.** `--sev-info` is written as Tally's accent hex rather than `var(--accent)`, so a white label with a red accent never turns info findings red next to broken ones. Severity colours never move with the brand. No status is orange: orange is GA4's category colour and Tally's mark.
+
+### Categories
+
+Owners, platforms, viewports and consent states each keep their own hue, retuned to sit on the navy grounds. `-fg` is the text colour, the solid colours dots, icons and bars, the tint is mixed into `--card` like the severity tints. Every `-fg` passes 4.5:1 on card, page, card-2, well and its own tint; every solid 3:1 on card, page and well.
+
+| Token | Light solid / fg | Dark solid / fg | Lowest fg ratio light · dark | Solid on well light · dark |
 |---|---|---|---|---|
-| broken | `#B42318` / `#FEE4E2` / `#D92D20` | 6.6 · 6.1 · 5.5; 4.8 | `#FDA29B` / `#3D1D1D` / `#F04438` | 9.0 · 9.9 · 7.8; 4.7 |
-| risk | `#86338A` / `#F7E8F7` / `#9B3B9A` | 7.4 · 6.9 · 6.3; 6.0 | `#E3A6E0` / `#34203A` / `#D78AD6` | 9.0 · 9.9 · 7.6; 7.1 |
-| warning | `#7A5A00` / `#FBF0D0` / `#B7791F` | 6.4 · 6.0 · 5.6; 3.6 | `#F5C451` / `#352B10` / `#E8B44A` | 10.8 · 11.8 · 8.6; 9.2 |
-| info | `#3F4D6B` / `#E9EDF5` / `#5B6B8C` | 8.5 · 7.9 · 7.2; 5.4 | `#B4C0DC` / `#1E2536` / `#8191B8` | 9.6 · 10.5 · 8.4; 5.6 |
-| ok | `#167A55` / `#E1F3EA` / `#17805A` | 5.3 · 5.0 · 4.6; 4.9 | `#5BD39A` / `#113128` / `#3FB98A` | 9.4 · 10.2 · 7.5; 7.1 |
+| `--owner-developer` | `#7b7ee4` / `#5b5bbd` | `#7679de` / `#a5abff` | 4.90 · 6.38 | 3.03 · 5.11 |
+| `--owner-gtm` | `#2194b9` / `#086f8d` | `#148eb2` / `#54bde3` | 4.91 · 6.35 | 3.00 · 5.09 |
+| `--owner-marketing` | `#d85f92` / `#af3a6f` | `#d1598d` / `#ff88b7` | 4.92 · 6.39 | 3.02 · 5.08 |
+| `--plat-ga4` | `#d46700` / `#b14c00` (Tally `mark` / `mark-ink`) | `#fa8c31` / `#fa8c31` | 4.61 · 5.47 | 3.14 · 8.15 |
+| `--plat-meta` | `#4b85f6` / `#2960ce` | `#457fef` / `#88b1fe` | 4.92 · 6.30 | 3.01 · 5.09 |
+| `--plat-google_ads` | `#379b55` / `#027634` | `#2f954f` / `#63c47b` | 4.94 · 6.37 | 3.01 · 5.09 |
+| `--plat-tiktok` | `var(--fg)` | `var(--fg)` | 13.57 · 12.34 | 13.57 · 15.66 |
+| `--vp-desktop` | `#1e9895` / `#08726f` | `#0f928f` / `#53c1bd` | 4.94 · 6.32 | 3.01 · 5.08 |
+| `--vp-mobile` | `#7a922c` / `#596e01` | `#748d25` / `#9fba56` | 4.93 · 6.32 | 3.01 · 5.13 |
+| `--consent-granted` | `var(--sev-ok)` | `var(--sev-ok)` | 4.78 · 6.29 | 4.78 · 10.00 |
+| `--consent-denied` | `#a8162c` | `#ff5c69` | 6.27 · 4.60 | 6.40 · 6.42 |
+| `--consent-none` | `var(--border-strong)` / `var(--muted)` | same | 5.15 · 6.98 | 3.17 · 4.16 |
 
-Two deliberate changes from 0.16.0: **risk is plum, not orange.** Red, orange and amber are one ramp; under deuteranopia the old broken/risk pair measured ΔE 0.8 and even full-colour readers got 6.3 (the dataviz validator's floor is 15). Red / plum / amber / slate / green pass as four adjacent pairs in both modes. **Info is slate, not the accent.** A white-label customer with a red accent must not get red info findings next to red broken ones. Severity colours never move with the brand.
+Denied shares broken's red on purpose and is told apart by weight: a deeper red in light, a full-colour outline, a 600 value in the mono key/value form, never the octagon. The run, group and score families are aliases of the severities (`--run-completed` is ok, `--score-mid` is warning, and so on), so dark mode follows them.
 
 ### Spacing, radii, shadows, motion
 
-`--s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px`. Card padding `--s4` (`--s5` on ≥768px). Dense tables: `6px 10px` cells. Grid gaps `--s3`/`--s4`.
-`--r-sm: 4px` (badges, chips, code, step index), `--r-md: 8px` (cards, tables, details). No pill shapes; the only circles are severity icons and the timeline dots.
-`--shadow-sm: 0 1px 2px rgb(16 24 40 / 6%)` on cards in light mode, `none` in dark (borders carry the edge). Sticky bars get `0 1px 0 var(--border)`.
-Transitions ≤ 150ms, only on `details` chevrons and tab underlines; all off under `prefers-reduced-motion`.
+`--s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px`, Tally's 4px base. Card padding `--s4` (`--s5` on ≥768px). Dense tables: `7px 10px` cells. Grid gaps `--s3`/`--s4`.
+`--r-cell: 1px` (bar segments, timing bars), `--r-sm: 2px` (chips, badges, code, counts, icon plates, step numbers), `--r-ctl: 4px` (buttons, the search field, the filters fold, rail items, tooltips), `--r-md: 6px` (cards, tables, the filter bar, the scorecard). No pill shapes: the only round marks are the status dots and the score ring.
+No shadows on cards, panels or bars: depth comes from the grounds (`--well` < `--page` < `--card` < `--card-2`) and 1px borders. `--shadow-overlay` is for the rail and parameter tooltips.
+Transitions are 160ms (`--t-fast`) or 220ms (`--t-base`) on `cubic-bezier(.2,0,0,1)` (`--ease`), only on chevrons, tab rules and the rail; the 1.5s flash that marks a revealed element is kept because it is how a jump shows where it landed. All motion is off under `prefers-reduced-motion`.
 
 ## 2. Typography
 
-System fonts only; the file must look the same on the machine that generated it and the one it is opened on, offline. Drop `'Google Sans'`/`'Google Sans Code'` from the stacks: they only apply on machines that have them installed, so the same report looked different on the author's and the client's machines.
+Tally's families, named first, with the system behind them. The report is one file and ships no font files (no `@font-face`, no `url(`), so a machine without the Google Sans family shows the system face; one that has them installed shows the design system's.
 
 ```
---font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
---font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+--font-sans: "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+--font-display: "Google Sans Flex", "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+--font-mono: "Google Sans Code", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 ```
 
 | Role | Size / line | Weight | Notes |
 |---|---|---|---|
-| Verdict headline | 20 / 1.3 | 600 | one sentence, `letter-spacing: -.01em` |
-| Site (h1) | 24 / 1.2 | 700 | `overflow-wrap: anywhere` |
-| Section (h2) | 17 / 1.3 | 600 | one per tab; `break-before: page` in print |
-| Card / group (h3) | 14 / 1.4 | 600 | |
-| Body | 14 / 1.55 | 400 | base; 15 on ≥1024px is not used: density matters more than comfort here |
+| Score figure | 44 / 1 (48 in the Summary) | 570, display | `--fg-strong`, tabular |
+| Verdict word | 30 / 1.1 | 570, display | in the band's colour |
+| Page title (h1) | 24 / 1.2 | 570, display | `--fg-strong`, `letter-spacing: -.012em`, `overflow-wrap: anywhere`; screen-reader only in the report, visible on `plan.html` |
+| Section (h2) | 17 / 1.3 | 600 | `--fg-strong`; one per tab; `break-before: page` in print |
+| Card / group (h3) | 14 / 1.4 | 600 | `--fg-strong` |
+| Body | 14 / 1.5 | 400 | base; density matters more than comfort here |
+| Labels | 12 / 1.4 | 500 | filter group names, run facts, panel headings (Parameters, Items, Source), the no-JS tab labels, the eyebrow; `--muted`, sentence case |
 | Small | 12.5 / 1.45 | 400 | meta lines, table heads, chips |
-| Count numerals | 24 / 1 | 600, mono | `font-variant-numeric: tabular-nums` |
-| Mono | 12.5 / 1.5 | 400 | event names, parameter names and values, URLs, times. Event names always in `<code>`; parameter keys in `<th>` of a `.ptable` |
+| Mono | 12.5 / 1.5 | 400 | event names, parameter names and values, URLs, times. Event names always in `<code>` |
 
-Numbers in tables use `tabular-nums` everywhere. Uppercase is used once: the "SITE"/"TRACKING AUDIT" eyebrow, mono 11px, `letter-spacing: .06em`.
+Weights are 400, 500 and 600, and 570 for the display face. Numbers in tables use `tabular-nums` everywhere. No uppercase and no letter-spaced caps anywhere: every label is set as it is written, in sentence case. The journey tabs keep `text-transform: capitalize` on the journey's id (`browse` shows as "Browse").
 
 ## 3. Platform icons
 
 Today `src/report.js` embeds each platform icon as a base64 SVG in the `CSS` constant and paints it as a `background` on `.ptag::before` / `.dot`. That has two costs: browsers drop background images when "print background graphics" is off (the default in Chrome's print dialog), and a CSS background cannot take `currentColor`. The system keeps the same artwork and moves it into an inline `<svg hidden>` sprite of `<symbol id="p-ga4">` elements referenced with `<use href="#p-ga4">`. Sizes: **14px** inline in text and chips, **16px** in table rows and event lists, **20px** in finding-card headers and the run-facts row. Always `aria-hidden="true"` with the platform name as visible text beside it (or `<title>` when the name is not shown, as in step-row hit chips, where the event name is shown and the platform is in the `title` tooltip and `aria-label`).
 
-Fallback for a platform with no artwork (new providers, white-label vendors): a 16px rounded square (`--r-sm`) filled `--well` with the platform's first letter in mono 10px `--muted`, e.g. **K** for Klaviyo, **PW** for Piwik PRO when two words. Never a coloured square: colour would read as a severity.
+Fallback for a platform with no artwork (new providers, white-label vendors): a 16px square with 2px corners (`--r-sm`) filled `--well` with the platform's first letter in mono 10px `--muted`, e.g. **K** for Klaviyo, **PW** for Piwik PRO when two words. Never a coloured square: colour would read as a severity.
 
 Dark mode: the TikTok glyph uses `#111` and the X glyph `#000`; both get a `.plate` 2px white backing in dark mode (`<rect>` in the symbol with `fill: var(--card)` and a 1px `--border`), so no icon disappears. In print all icons render because they are inline SVG.
 
@@ -85,13 +119,13 @@ A badge is **icon + word**, never colour alone, so the five severities survive c
 | info | circle | i |
 | ok | circle | ✓ |
 
-Badge: `display:inline-flex; gap:4px; padding:2px 8px 2px 6px; border-radius: var(--r-sm); font: 500 12px/16px var(--font-sans); background: var(--sev-*-bg); color: var(--sev-*-fg)`; icon 14px, stroke 1.75. In print the tint is dropped and the badge gets a 1px `currentColor` border (§8). The same symbols are used at 18px as the finding-card marker and at 12px as the flag beside a hit in a step row. Severity order is fixed everywhere: broken, risk, warning, info, ok.
+Badge: `display:inline-flex; gap:4px; padding:2px 8px 2px 6px; border-radius: var(--r-sm); font: 500 12px/16px var(--font-sans); background: var(--card); color: var(--sev-*-fg)` with a 1px border mixed from the severity colour and `--border`: an outline tag, never a filled pill; icon 14px, stroke 1.75. In print the badge gets a 1px `currentColor` border (§8). The same symbols are used at 18px as the finding-card marker and at 12px as the flag beside a hit in a step row. Severity order is fixed everywhere: broken, risk, warning, info, ok.
 
 ## 5. Tables
 
 Two table kinds, both real `<table>`s with `<thead>`/`<th scope="col">`:
 
-- **`.dt` data tables** (journeys, consent scenarios, inventory, plan coverage): 13px, cells `8px 10px`, head row in `--well` with 12px `--muted` labels, hairline rows, no zebra. Numbers right-aligned and tabular. A problem cell is `--sev-broken-fg` **and** carries the broken glyph before the number (`1 ×`), so the consent table reads in greyscale. "Not run" cells are `–` in `--muted`.
+- **`.dt` data tables** (journeys, consent scenarios, inventory, plan coverage): 13px, cells `7px 10px`, head row on the card with 12px weight 500 `--muted` labels in sentence case over a 1px `--border-strong` rule, hairline rows, hovered rows in `--card-2`, no zebra. Numbers right-aligned and tabular. A problem cell is `--sev-broken-fg` **and** carries the broken glyph before the number (`1 ×`), so the consent table reads in greyscale. "Not run" cells are `–` in `--muted`.
 - **`.steps` tables** (hits per step): one row per step: `#` plate · step label · `+t` · hits (a wrapped row of `event` chips, each icon + mono name, flagged ones with the severity glyph and a tinted border) · dataLayer count. Rows with a problem get a 3px left rule in the worst severity's solid. Under 640px the row becomes a two-line block (number, label and time on line one; hits on line two) via `display:grid`, with `<th>`s kept but visually hidden.
 
 Every table sits in a `.tscroll` (`overflow-x:auto`) so a long URL never widens the page at 390px. Cell text uses `overflow-wrap:anywhere`.
@@ -134,10 +168,10 @@ Owner chip: outline chip, 12px, text "Developer" / "Tag Manager" / "Marketing", 
 
 ## 9. White label
 
-A customer can set `report.color` (one hex) and `report.logo`/`report.name`. `brandCss(color)` writes `--accent`, `--accent-fg`, `--accent-bg`. The system draws from those three tokens only the things that say "this document belongs to the brand": the active tab rule, focus rings, link colour, the step index plate, and the fix-step numerals. Severity, platform icons, text and surfaces never change. `brandCss` should also emit its dark set under both dark selectors of §1 and should refuse (or auto-darken) an accent whose `--accent-fg` falls under 4.5:1 on `--card`, computing the ratio instead of the fixed 20% mix; today a yellow accent gives unreadable links.
+A customer can set `report.color` (one hex) and `report.logo`/`report.name`. `brandCss(color)` writes `--accent`, `--accent-fg`, `--accent-bg`. The system draws from those three tokens only the things that say "this document belongs to the brand": the active tab rule, focus rings, link colour, the step index plate, and the fix-step numerals. Severity, platform icons, text and surfaces never change. `brandCss` emits its dark set under both dark selectors of §1 and mixes `--accent-fg` toward black (light) or white (dark) until it reads at 4.5:1 on the card: `#ffffff` in light, Tally's navy `#0e1e34` in dark. The dark `--accent-bg` is the brand colour laid 25% on that navy, as the default `--accent-bg` sits on it.
 
 Logo slots: the top-left product slot (26px high; brand logo or `brand-name` text), the "by Analitik İşler" byline (18px) which a white-label run drops, and the footer (56px stacked logo or the customer's). The AI Tag Debugger emblem stays in the credit line at 16px in every case. All logos remain `<picture>` with light/dark sources (`logo()` in `src/report.js`); a customer logo has one source and sits on `--card`, so the topbar and footer backgrounds must stay `--card` in dark mode rather than `--page`.
 
 ## 10. Dark mode
 
-Dark mode is a second palette, not an inversion: surfaces are navy-black (`--page #0B0F19`, `--card #141927`), tints are deep versions of their hue, text on tints is the light `-fg`. Order of precedence: `data-theme="dark"` > `data-theme="light"` > `prefers-color-scheme`. The toggle is a `<button aria-pressed>` cycling auto → light → dark, stored in `localStorage` inside `try/catch` (file:// and the MCP viewer may deny it); without JS the attribute is absent and the OS decides. `color-scheme: light dark` is set on `:root` so form controls and scrollbars follow. Logos switch through `<picture>` sources, which follow `prefers-color-scheme` only; a forced theme must therefore also toggle a `.theme-dark` class the CSS uses to swap the two `<img>`s (the prototype does this).
+Dark mode is a second palette, not an inversion: surfaces are Tally's navy (`--page #071529`, `--card #0e1e34`, `--well #040e1f` below them and `--card-2 #15263f` above), tints are the hue mixed 16% into the card, text on tints is the light `-fg`. Order of precedence: `data-theme="dark"` > `data-theme="light"` > `prefers-color-scheme`. The toggle is a `<button aria-pressed>` cycling auto → light → dark, stored in `localStorage` inside `try/catch` (file:// and the MCP viewer may deny it); without JS the attribute is absent and the OS decides. `color-scheme: light dark` is set on `:root` so form controls and scrollbars follow. Logos switch through `<picture>` sources, which follow `prefers-color-scheme` only; a forced theme must therefore also toggle a `.theme-dark` class the CSS uses to swap the two `<img>`s (the prototype does this).
