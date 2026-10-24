@@ -32,6 +32,8 @@ npm run demo         # another: a scripted run with no AI model, saved under ait
 
 There is a dev container in `.devcontainer/devcontainer.json`. Open the repository in VS Code with the Dev Containers extension or in GitHub Codespaces: it runs `npm run setup -- --with-deps`, which also installs Chromium's system libraries, and forwards port 4321 for the demo shop. API keys are not set there; add one as a Codespaces secret or export it in the container's terminal.
 
+`.oss-scanner/` holds the Dockerfile and threat model for Anthropic's OSS Scanner, a free periodic vulnerability scan for enrolled open-source projects; its README says how to enrol. Keep the Dockerfile in step with `scripts/setup.js` and CI when the install steps change.
+
 ## Project layout
 
 One module per concern in `src/`, in the order a run goes through them.

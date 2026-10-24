@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Development: `.oss-scanner/` holds the Dockerfile and threat model for enrolling the repository in Anthropic's OSS Scanner, which audits opted-in open-source projects for vulnerabilities at no cost.
+
 ## 0.18.0 (2026-10-19)
 
 - The HTML report was rebuilt as an inspector: a collapsible rail with seven sections (Summary, Findings, Journeys, Consent, Coverage, Inventory, Run), one screen at a time. The Summary is a score ring banded red, amber and green, the verdict, up to three lines saying what cost the points, status chips that open the findings pre-filtered, and six cards about the run. Findings have a filter bar (severity, owner, platform, journey, viewport, search) over failed, unverified and passed groups, every row collapsed and opening into Evidence, Fix, Where and Verify tabs. Journeys show the steps by page title on the left and the selected step's Hits, Data Layer and Requests tabs on the right, with a consent chip on every hit. Every card starts collapsed except the Summary; every section, filter and card has its own URL. With a model, the Summary shows its one-line headline and an AI summary card in Findings keeps its points and its "worth checking" list; a route that differs from the last run is named under the Run facts. Severity is never colour alone, one hue per kind of chip, light and dark mode, keyboard (`[` folds the rail, `1`–`7` jump), no horizontal scroll on phones, and the stacked no-JavaScript document is the print layout. Design notes and the mockups it was built from are under `docs/design/directions/`.
