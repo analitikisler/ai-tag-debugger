@@ -1,7 +1,7 @@
 # Runs a tracking audit after every deploy and fails the job if tracking broke.
 # Copy to .github/workflows/ai-tag-debugger.yml and add your AI provider's API key as a repository secret.
 # The example uses ANTHROPIC_API_KEY; for OpenAI or Gemini, pass OPENAI_API_KEY or GEMINI_API_KEY instead.
-name: AI Tag Debugger
+name: ai tag debugger
 on:
   deployment_status:
   workflow_dispatch:

@@ -66,18 +66,18 @@ test("the default report carries the Analitik İşler byline and credit", () => 
   const html = render();
   assert.match(html, /<a href="https:\/\/analitikisler\.com" class="byline"/);
   assert.match(html, /This report was made with the open source <a class="f-atd" href="https:\/\/github\.com\/analitikisler\/ai-tag-debugger"/);
-  assert.match(html, /<link rel="icon" type="image\/png" href="data:image\/png;base64,/);
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml;base64,/);
   assert.match(html, /· v\d+\.\d+\.\d+<\/span><\/p><\/footer>/);
   assert.doesNotMatch(html, /(src|srcset|href)="(?!data:|#|https:\/\/(analitikisler\.com|github\.com\/analitikisler\/ai-tag-debugger|tagassistant\.google\.com|support\.google\.com|www\.facebook\.com|chromewebstore\.google\.com|developers\.google\.com))/);
 });
 
-test("a white-labeled report swaps the logo and drops Analitik İşler but keeps a small AI Tag Debugger credit", () => {
+test("a white-labeled report swaps the logo and drops Analitik İşler but keeps a small ai tag debugger credit", () => {
   const brand = { name: "Acme <Co>", logo: "data:image/png;base64,AAAA", color: "#0a7d5a", pdf: false };
   const html = render({ brand });
   assert.match(html, /<img src="data:image\/png;base64,AAAA" alt="Acme &lt;Co&gt;"/);
   assert.match(html, /--accent:#0a7d5a/);
   assert.doesNotMatch(html, /analitikisler\.com|Analitik İşler/);
-  assert.match(html, /class="byline"[^>]*><span>by<\/span>.*AI Tag Debugger/s);
+  assert.match(html, /class="byline"[^>]*><span>by<\/span>.*ai tag debugger/s);
   assert.match(html, /Acme &lt;Co&gt; · This report was made with the open source/);
   // A name alone shows as text; a colour alone keeps the default branding.
   assert.match(render({ brand: { name: "Acme", logo: null, color: null, pdf: false } }), /<span class="brand-name">Acme<\/span>/);
@@ -89,8 +89,8 @@ test("a white-labeled report swaps the logo and drops Analitik İşler but keeps
 test("branding false leaves out the Analitik İşler parts and keeps the product's name", () => {
   const plain = render({ branding: false });
   assert.doesNotMatch(plain, /analitikisler\.com|Analitik İşler/);
-  assert.match(plain, /alt="AI Tag Debugger"/);
-  assert.match(plain, /<footer class="footer"><p class="xs">AI Tag Debugger <span class="muted">/);
+  assert.match(plain, /<svg class="logo l-lockup"[^>]* aria-label="ai tag debugger"><use href="#logo-atd-lockup"\/>/);
+  assert.match(plain, /<footer class="footer"><p class="xs">ai tag debugger <span class="muted">/);
 });
 
 test("the Summary carries the accepted line when the baseline accepted a finding, and only then", () => {

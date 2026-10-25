@@ -125,9 +125,9 @@ function topBar(ctx) {
   const t = m.html.shell;
   const brandName = brand?.name ? escapeHtml(brand.name) : "";
   const brandLogo = brand?.logo ? `<img src="${brand.logo}" alt="${brandName}" height="26">` : "";
-  const product = whiteLabel ? (brandLogo || `<span class="brand-name">${brandName}</span>`) : `${logo("atd-lockup", "AI Tag Debugger", 22, "l-lockup")}<img class="l-mark" src="${LOGOS["atd-icon"]}" alt="AI Tag Debugger" height="24">`;
-  const atdByline = whiteLabel ? `<a href="${ATD_REPO}" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "AI Tag Debugger", 16, "logo-atd")}</a>` : "";
-  const aiByline = branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("horizontal", "Analitik İşler", 16, "logo-h")}</a>` : "";
+  const product = whiteLabel ? (brandLogo || `<span class="brand-name">${brandName}</span>`) : `${logo("atd-lockup", "ai tag debugger", 22, "l-lockup")}${logo("mark", "ai tag debugger", 24, "l-mark")}`;
+  const atdByline = whiteLabel ? `<a href="${ATD_REPO}" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "ai tag debugger", 16, "logo-atd")}</a>` : "";
+  const aiByline = branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : "";
   const word = m.verdict.status[metrics.verdict.status];
   // 0–49 red, 50–89 amber, 90–100 green, as Lighthouse bands its scores; no score reads as a fail.
   const band = tally.score === null || tally.score < 50 ? "fail" : tally.score < 90 ? "mid" : "pass";
@@ -139,11 +139,11 @@ function topBar(ctx) {
 
 function footer(ctx) {
   const { m, site, title, generatedAt, brand, branding, whiteLabel } = ctx;
-  const atd = `<a class="f-atd" href="${ATD_REPO}" rel="noopener noreferrer"><img src="${LOGOS["atd-icon"]}" alt="" height="14"> AI Tag Debugger</a>`;
+  const atd = `<a class="f-atd" href="${ATD_REPO}" rel="noopener noreferrer">${logo("favicon", "", 16, "f-mark")} ai tag debugger</a>`;
   const meta = `<span class="muted">${escapeHtml(site ?? title)} · ${escapeHtml(generatedAt)} · v${VERSION}</span>`;
-  if (branding) return `<footer class="footer"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("stacked", "Analitik İşler", 40, "logo-s")}</a><p class="xs">${m.ui.credit(atd)} ${meta}</p></footer>`;
+  if (branding) return `<footer class="footer"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("master", "Analitik İşler", 24, "logo-s")}</a><p class="xs">${m.ui.credit(atd)} ${meta}</p></footer>`;
   const brandName = brand?.name ? escapeHtml(brand.name) : "";
-  return `<footer class="footer"><p class="xs">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "AI Tag Debugger"} ${meta}</p></footer>`;
+  return `<footer class="footer"><p class="xs">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "ai tag debugger"} ${meta}</p></footer>`;
 }
 
 /** The expand / collapse pair under a section's h2, for every section but Summary that holds a details.card. */
@@ -172,7 +172,7 @@ export function renderHtml(report) {
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}">
 <meta name="color-scheme" content="light dark">
-<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/png"'} href="${brand?.logo ?? LOGOS.favicon}">
+<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/svg+xml"'} href="${brand?.logo ?? LOGOS["favicon-light"]}">
 <style>${CSS}${brandCss(brand?.color)}</style></head><body>
 <a class="skip" href="#main">${escapeHtml(t.skip)}</a>
 ${sprite(`${top}${nav}${sections}${foot}`)}

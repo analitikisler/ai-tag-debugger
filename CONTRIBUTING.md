@@ -74,7 +74,7 @@ One module per concern in `src/`, in the order a run goes through them.
 - `html/`: the HTML report. `legacy.js` is the 0.17 renderer `report.js` exports today; `shell.js` is the new one (top bar, rail, footer) with one module per section (`summary.js`, `findings.js`, `journeys.js`, `consent.js`, `scope.js`), and `lib.js`, `css.js` and `script.js` hold their helpers, stylesheet and inline script.
 - `i18n.js`: every user-visible string, in `LANGUAGES`.
 - `glossary.js`: what each request parameter means, for the `?` tips in the Network tab.
-- `brand.js` and `whitelabel.js`: the embedded logos, and the `report` setting (name, logo, color, PDF).
+- `brand.js` and `whitelabel.js`: the embedded logos (written by `node scripts/brand.js` from `brand/ai/assets/`; the brand guide is `brand/ai/BRAND.md`), and the `report` setting (name, logo, color, PDF).
 
 **After the run**
 

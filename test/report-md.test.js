@@ -11,7 +11,7 @@ import { context } from "../src/html/shell.js";
 import { failedInput, reportInput } from "./helpers/demo-capture.js";
 
 const capture = JSON.parse(readFileSync(new URL("./fixtures/demo-capture.json", import.meta.url), "utf8"));
-const demo = { title: "AI Tag Debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, consentScenarios: capture.consentScenarios, changes: { previous: null } };
+const demo = { title: "ai tag debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, consentScenarios: capture.consentScenarios, changes: { previous: null } };
 const metrics = computeMetrics({ plan: capture.config.plan, runs: capture.runs, findings: capture.findings, consentScenarios: capture.consentScenarios });
 const sections = (md) => md.split("\n").filter((l) => l.startsWith("## ")).map((l) => l.slice(3));
 const section = (md, name) => md.slice(md.indexOf(`## ${name}`), md.indexOf("\n## ", md.indexOf(`## ${name}`) + 1) > 0 ? md.indexOf("\n## ", md.indexOf(`## ${name}`) + 1) : undefined);

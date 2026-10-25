@@ -13,7 +13,7 @@ import { runSummary, trend } from "../src/history.js";
 import { brandCss } from "../src/whitelabel.js";
 
 const capture = JSON.parse(readFileSync(new URL("./fixtures/demo-capture.json", import.meta.url), "utf8"));
-const demo = { title: "AI Tag Debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, lang: "en", consentScenarios: capture.consentScenarios };
+const demo = { title: "ai tag debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, lang: "en", consentScenarios: capture.consentScenarios };
 const render = (props = {}) => renderHtml({ ...demo, ...props });
 
 test("the verdict block states the verdict and a headline without a model, and the AI headline stays secondary", () => {
@@ -137,11 +137,17 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   assert.match(klaviyo, /<span class="plat-fb s14" aria-hidden="true">K<\/span><span>Klaviyo<\/span>/);
 });
 
-test("the theme has both dark selectors, the logos come as two images, and brandCss follows the same selectors", () => {
+test("the theme has both dark selectors, logos follow the text colour, and brandCss follows the same selectors", () => {
   assert.match(CSS, /@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
   assert.match(CSS, /:root\[data-theme="dark"\]\{/);
   assert.match(CSS, /--sev-risk:#9B3B9A/);
-  assert.match(logo("atd-lockup", "AI Tag Debugger", 26, "logo-atd"), /^<span class="logo logo-atd"><img class="l-light" src="data:[^"]+" alt="AI Tag Debugger" height="26"><img class="l-dark" src="data:[^"]+" alt="AI Tag Debugger" height="26"><\/span>$/);
+  // A brand logo is drawn from the sprite so its ink takes the text colour (BRAND.md §4); its width keeps the viewBox's proportions.
+  assert.match(logo("atd-lockup", "ai tag debugger", 26, "logo-atd"), /^<svg class="logo logo-atd" width="189\.9" height="26" role="img" aria-label="ai tag debugger"><use href="#logo-atd-lockup"\/><\/svg>$/);
+  assert.match(logo("mark", "", 24, "l-mark"), /^<svg class="logo l-mark" width="23\.9" height="24" aria-hidden="true"><use href="#logo-mark"\/><\/svg>$/);
+  // An image logo, the favicon tile, still comes as its light and dark files.
+  assert.match(logo("favicon", "", 16, "f-mark"), /^<span class="logo f-mark"><img class="l-light" src="data:[^"]+" alt="" height="16"><img class="l-dark" src="data:[^"]+" alt="" height="16"><\/span>$/);
+  assert.match(CSS, /--brand-point:#C12D30;/);
+  assert.match(CSS, /svg\.logo\{display:inline-block;flex:none;color:var\(--fg\)\}/);
   const css = brandCss("#0a7d5a");
   assert.match(css, /^:root\{--accent:#0a7d5a;--accent-fg:#[0-9a-f]{6};--accent-bg:#[0-9a-f]{6}\}@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{--accent:/);
   assert.match(css, /\}:root\[data-theme="dark"\]\{--accent:/);
