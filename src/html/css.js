@@ -8,13 +8,14 @@ import { brandCss } from "../whitelabel.js";
 // ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts ----------
 const TOKENS = `/* Direction D tokens. Light on :root; dark twice (OS preference unless the page forces light, and the forced dark theme),
    so <html data-theme> beats the OS both ways. Every -fg passes 4.5:1 on --card, --page and its own -bg in both modes;
-   every base passes 3:1 on --card (VISUAL.md has the table). Builders reference these names only, never a hex. */
+   every base passes 3:1 on --card (VISUAL.md has the table). Builders reference these names only, never a hex.
+   --brand-point is the logos' point. Broken is the same red (brand/ai/BRAND.md §4), so a page never shows two reds. */
 :root{
 color-scheme:light dark;
 --page:#F6F7F9;--card:#FFFFFF;--well:#EEF1F6;--fg:#111827;--muted:#4B5567;--border:#D9DEE8;--border-strong:#C3CAD8;
 --accent:#2E6CDB;--accent-fg:#2459C0;--accent-bg:#EBF1FE;
 --shadow-sm:0 1px 2px rgb(16 24 40 / 6%);--shadow-md:0 1px 2px rgb(16 24 40 / 5%),0 4px 16px -4px rgb(16 24 40 / 10%);
---sev-broken:#D92D20;--sev-broken-fg:#B42318;--sev-broken-bg:#FEE4E2;
+--brand-point:#C12D30;--sev-broken:#C12D30;--sev-broken-fg:#C12D30;--sev-broken-bg:#FEE4E2;
 --sev-risk:#9B3B9A;--sev-risk-fg:#86338A;--sev-risk-bg:#F7E8F7;
 --sev-warning:#C07B03;--sev-warning-fg:#7A5A00;--sev-warning-bg:#FBF0D0;
 --sev-info:#5B6B8C;--sev-info-fg:#3F4D6B;--sev-info-bg:#E9EDF5;
@@ -50,7 +51,7 @@ color-scheme:light dark;
 --page:#0B0F19;--card:#141927;--well:#1B2235;--fg:#EEF2FF;--muted:#9AA4BD;--border:#263050;--border-strong:#34406A;
 --accent:#4F8EF7;--accent-fg:#8CBBFF;--accent-bg:#1A2F5C;
 --shadow-sm:none;--shadow-md:none;
---sev-broken:#F04438;--sev-broken-fg:#FDA29B;--sev-broken-bg:#3D1D1D;
+--brand-point:#FA6B6D;--sev-broken:#FA6B6D;--sev-broken-fg:#FA6B6D;--sev-broken-bg:#3D1D1D;
 --sev-risk:#D78AD6;--sev-risk-fg:#E3A6E0;--sev-risk-bg:#34203A;
 --sev-warning:#E8B44A;--sev-warning-fg:#F5C451;--sev-warning-bg:#352B10;
 --sev-info:#8191B8;--sev-info-fg:#B4C0DC;--sev-info-bg:#1E2536;
@@ -71,7 +72,7 @@ color-scheme:light dark;
 --page:#0B0F19;--card:#141927;--well:#1B2235;--fg:#EEF2FF;--muted:#9AA4BD;--border:#263050;--border-strong:#34406A;
 --accent:#4F8EF7;--accent-fg:#8CBBFF;--accent-bg:#1A2F5C;
 --shadow-sm:none;--shadow-md:none;
---sev-broken:#F04438;--sev-broken-fg:#FDA29B;--sev-broken-bg:#3D1D1D;
+--brand-point:#FA6B6D;--sev-broken:#FA6B6D;--sev-broken-fg:#FA6B6D;--sev-broken-bg:#3D1D1D;
 --sev-risk:#D78AD6;--sev-risk-fg:#E3A6E0;--sev-risk-bg:#34203A;
 --sev-warning:#E8B44A;--sev-warning-fg:#F5C451;--sev-warning-bg:#352B10;
 --sev-info:#8191B8;--sev-info-fg:#B4C0DC;--sev-info-bg:#1E2536;
@@ -353,6 +354,7 @@ const SHELL = `/* Page shell: skip link, top bar, rail (expanded 200 px, collaps
 html.js .js-only{display:inline-flex!important}
 html.js .sec-tools.js-only{display:flex!important}
 .logo{display:inline-flex}
+svg.logo{display:inline-block;flex:none;color:var(--fg)}
 .logo .l-dark{display:none}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
@@ -444,7 +446,7 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 @keyframes aitd-flash{from{background-color:var(--accent-bg)}}
 
 .footer{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border-top:1px solid var(--border);background:var(--card)}
-.footer img{vertical-align:-3px}
+.footer img,.f-atd .logo{vertical-align:-3px}
 
 /* ---------- under 720 px: the rail becomes a strip under the top bar ---------- */
 @media (max-width:719.98px){

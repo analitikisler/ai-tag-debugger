@@ -20,7 +20,7 @@ function input(capture, { lang = "en", ...rest } = {}) {
   const plan = capture.config?.plan ?? null;
   const consentScenarios = capture.consentScenarios ?? null;
   return {
-    title: "AI Tag Debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 09:13 UTC", lang,
+    title: "ai tag debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 09:13 UTC", lang,
     ai: capture.ai ?? null, findings: capture.findings, explained: capture.explained ?? null, runs: capture.runs, plan, consentScenarios,
     metrics: computeMetrics({ plan, runs: capture.runs, findings: capture.findings, consentScenarios }),
     ...rest,

@@ -1,0 +1,11 @@
+/* ai tool family brand colours (BRAND.md §4). Light by default, dark with the system setting or data-theme="dark". */
+:root {
+  --ai-ink: #17140F;
+  --ai-paper: #F3F0E8;
+  --ai-point: #C12D30; /* the site's one red: ref.red.53 */
+  --ai-pencil: #6A645A;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ai-ink: #F1ECE2; --ai-paper: #151310; --ai-point: #FA6B6D; --ai-pencil: #A39C8F; }
+}
+:root[data-theme="dark"] { --ai-ink: #F1ECE2; --ai-paper: #151310; --ai-point: #FA6B6D; --ai-pencil: #A39C8F; }

@@ -18,6 +18,7 @@ const PLAN_CSS = `
 .top-end{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
 .byline{display:inline-flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted)}
 .logo{display:inline-flex}
+svg.logo{display:inline-block;flex:none;color:var(--fg)}
 .logo .l-dark{display:none}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
@@ -99,12 +100,12 @@ export function renderPlanHtml(plan, { id = "", generatedAt = "", branding = tru
   const events = plan.events ?? [];
   const custom = events.filter((ev) => ev.custom).length;
   const title = `Measurement plan${plan.site ? `: ${plan.site}` : ""}`;
-  const meta = [id && `Plan ${id}`, generatedAt, `${events.length} events (${custom} custom)`, `ai-tag-debugger ${VERSION}`].filter(Boolean).join(" · ");
+  const meta = [id && `Plan ${id}`, generatedAt, `${events.length} events (${custom} custom)`, `ai tag debugger ${VERSION}`].filter(Boolean).join(" · ");
   const consent = plan.consent_mode ? flag("Consent mode on", "on") : flag("Consent mode off");
   const footer = branding
-    ? `<a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("stacked", "Analitik İşler", 40, "logo-s")}</a><div class="f-links xs"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div><p class="f-meta xs muted">v${VERSION}</p>`
-    : `<p class="xs">AI Tag Debugger</p><p class="f-meta xs muted">v${VERSION}</p>`;
-  const body = `<header class="top"><span class="brand">${logo("atd-lockup", "AI Tag Debugger", 22, "l-lockup")}<img class="l-mark" src="${LOGOS["atd-icon"]}" alt="AI Tag Debugger" height="24"></span><span class="top-site"><span class="eyebrow">Measurement plan</span>${plan.site ? `<b>${e(plan.site)}</b>` : ""}</span><div class="top-end">${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>by</span>${logo("horizontal", "Analitik İşler", 16, "logo-h")}</a>` : ""}</div></header>
+    ? `<a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("master", "Analitik İşler", 24, "logo-s")}</a><div class="f-links xs"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div><p class="f-meta xs muted">v${VERSION}</p>`
+    : `<p class="xs">ai tag debugger</p><p class="f-meta xs muted">v${VERSION}</p>`;
+  const body = `<header class="top"><span class="brand">${logo("atd-lockup", "ai tag debugger", 22, "l-lockup")}${logo("mark", "ai tag debugger", 24, "l-mark")}</span><span class="top-site"><span class="eyebrow">Measurement plan</span>${plan.site ? `<b>${e(plan.site)}</b>` : ""}</span><div class="top-end">${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>by</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : ""}</div></header>
 <main class="plan">
 <div class="plan-title"><div class="eyebrow">Measurement plan</div><h1>${e(title)}</h1><div class="muted xs">${e(meta)}</div><div class="chips">${consent}</div></div>
 <section class="card"><div class="pl-card-h"><h2>Events</h2><p class="pl-card-d">What should be tracked, where it fires and which parameters it carries.</p></div>${events.length ? events.map(eventCard).join("") : `<p class="pl-empty muted xs">No events.</p>`}</section>
@@ -114,7 +115,7 @@ ${userPropertiesCard(plan.user_properties ?? [])}
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>${e(title)}</title><link rel="icon" type="image/png" href="${LOGOS.favicon}">
+<title>${e(title)}</title><link rel="icon" type="image/svg+xml" href="${LOGOS["favicon-light"]}">
 <style>${TOKENS}\n${COMPONENTS}\n${PRODUCT}\n${PLAN_CSS}</style></head><body>
 ${sprite(body)}
 ${body}

@@ -441,7 +441,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   lines.push(...mdJourneys(m, runs, rows));
   lines.push(...mdNotChecked(m, runs, rows, plan, consentScenarios));
   lines.push(...mdInventory(m, runs));
-  // A report with its own name or logo carries no Analitik İşler credit; the AI Tag Debugger one stays.
+  // A report with its own name or logo carries no Analitik İşler credit; the ai tag debugger one stays.
   if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
   else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");
   return lines.join("\n");

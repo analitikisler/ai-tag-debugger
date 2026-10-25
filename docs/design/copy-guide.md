@@ -36,7 +36,7 @@ Until the levels change in `checks.js`, "Risk" strings keep the broken verbs whe
 - **Steps**: "step 11 · Place the order", number first, label as the config wrote it.
 - **Pages**: the path (`/thanks.html`) in prose, the full URL in evidence.
 - **Consent signals**: code font, as Google names them: `ad_storage`, `ad_user_data`. States: "granted", "denied", never "on/off".
-- **The tool**: "AI Tag Debugger" in chrome, "this audit" or "this run" in prose.
+- **The tool**: "ai tag debugger" in chrome, "this audit" or "this run" in prose. Always lowercase, also at the start of a sentence, and never translated (Turkish adds its suffix with an apostrophe: ai tag debugger’ı); the maker is "Analitik İşler". The brand guide is `brand/ai/BRAND.md`.
 
 ## Numbers
 
