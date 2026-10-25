@@ -155,6 +155,16 @@ test("navigation errors worth a second try are told from the rest", () => {
   assert.ok(!isTransientNavigationError(pw("page.goto: net::ERR_PROXY_CONNECTION_FAILED at http://x/")));
   assert.ok(!isTransientNavigationError(pw("page.goto: net::ERR_TOO_MANY_REDIRECTS at http://x/")));
   assert.ok(!isTransientNavigationError(pw("Target page, context or browser has been closed")));
+
+  // When Chromium's error page commits first, goto's error has no code, so the failed document request's code decides.
+  const cutShort = pw('page.goto: Navigation to "http://x/" is interrupted by another navigation to "chrome-error://chromewebdata/"');
+  assert.ok(isTransientNavigationError(cutShort, "net::ERR_EMPTY_RESPONSE"));
+  assert.ok(isTransientNavigationError(cutShort, "net::ERR_CONNECTION_RESET"));
+  assert.ok(!isTransientNavigationError(cutShort, "net::ERR_BLOCKED_BY_CLIENT"));
+  assert.ok(!isTransientNavigationError(cutShort, "net::ERR_CERT_AUTHORITY_INVALID"));
+  assert.ok(!isTransientNavigationError(cutShort), "an error page without a failed request is not retried");
+  const otherPage = pw('page.goto: Navigation to "http://x/" is interrupted by another navigation to "http://x/next"');
+  assert.ok(!isTransientNavigationError(otherPage, "net::ERR_EMPTY_RESPONSE"), "only an error page defers to the failed request");
 });
 
 test("a page load the network dropped is tried once more; a load the guard refused is not", async () => {
@@ -174,7 +184,9 @@ test("a page load the network dropped is tried once more; a load the guard refus
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${server.address().port}/`;
   const lines = [];
-  const session = new AuditSession({ viewport: "desktop", site: url, log: (l) => lines.push(l), navigationRetryMs: 50 });
+  // No wait before the retry, so it starts before Chromium has shown its error page for the dropped load:
+  // that error page must not cut the retry short.
+  const session = new AuditSession({ viewport: "desktop", site: url, log: (l) => lines.push(l), navigationRetryMs: 0 });
   await session.start();
   try {
     assert.equal(await session.act({ action: "goto", url }), null);

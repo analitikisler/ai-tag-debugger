@@ -4,6 +4,7 @@
 
 - New brand: the tool's name is written `ai tag debugger`, lowercase, wherever the reports, `plan.html`, the README, the MCP registry listing and the GitHub Actions examples show it. The reports and `plan.html` carry the new lockup with its red point, the ai mark on phones, the shared ai favicon, and the Analitik İşler master logo with its red point and three bars in the byline and footer. The logos take the page's text colour in light, dark and print, with only the point in red. The "broken" red is the brand's one red, `#C12D30` in light and `#FA6B6D` in dark. The `aitd` and `ai-tag-debugger` commands, the npm package and the config keys are unchanged.
 - Fixed: dependencies with published advisories are updated: zod to 4.6.7 (the minimum is now 4.6.6), and body-parser, fast-uri and ip-address, which the MCP server's HTTP mode uses. `npm audit --omit=dev` reports none.
+- Fixed: on macOS, a page load whose connection dropped is now tried once more, as on Linux; Chromium's error page could end the load or its retry with "interrupted by another navigation to chrome-error://chromewebdata/".
 - Development: the brand guide and its assets are in `brand/ai/` (a copy of `design/13-ai-brand` from the analitikisler.com repo), the retired orange set is in `brand/retired/`, and `node scripts/brand.js` embeds the assets into `src/brand.js`.
 
 ## 0.18.0 (2026-10-19)
