@@ -4,7 +4,7 @@
 
 ## Setting up
 
-Requires Node 20 or newer (CI tests on 20 and 22).
+Requires Node 22 or newer (CI tests on 22 and 24).
 
 ```bash
 git clone https://github.com/analitikisler/ai-tag-debugger.git
@@ -144,7 +144,7 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 
 ## Conventions
 
-- Plain ESM JavaScript, Node 20+, no build step, no TypeScript. Dependencies are the official SDKs, Playwright (pinned to an exact version, which README's install commands repeat), zod and the MCP SDK; a new one needs a reason.
+- Plain ESM JavaScript, Node 22+, no build step, no TypeScript. Dependencies are the official SDKs, Playwright (pinned to an exact version, which README's install commands repeat), zod and the MCP SDK; a new one needs a reason.
 - Tests use `node:test` and `node:assert/strict`. A new test file starts with a one-line comment saying what it covers, as most existing ones do.
 - Comments explain why, not what. A regex or a workaround gets a line saying which site or SDK behavior it exists for.
 - Every user-visible string goes through `src/i18n.js`, in every language in `LANGUAGES`.

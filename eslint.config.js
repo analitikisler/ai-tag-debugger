@@ -1,5 +1,5 @@
 // Catches real mistakes (undefined names, unused imports, unreachable code), not style:
-// only the recommended rules, for ES modules on Node 20. Browser globals are on too,
+// only the recommended rules, for ES modules on Node 22. Browser globals are on too,
 // because the page scripts in src/browser.js and examples/demo-shop run inside Chromium.
 import js from "@eslint/js";
 import globals from "globals";

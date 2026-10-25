@@ -23,7 +23,7 @@ npm run demo                      # scripted, no-AI run against it, saved under 
 
 ## Conventions
 
-- Plain ESM JavaScript on Node 20+. No build step, no TypeScript, no transpiling.
+- Plain ESM JavaScript on Node 22+. No build step, no TypeScript, no transpiling.
 - Tests use `node:test` and `node:assert/strict`; one file per concern in `test/`.
 - Comments say why something is there, not what the code does.
 - All user-visible strings live in `src/i18n.js` and exist in every language in `LANGUAGES` (`en` and `tr`).
