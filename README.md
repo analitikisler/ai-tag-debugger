@@ -150,7 +150,7 @@ Adding a native provider means implementing two functions in [`src/providers.js`
 
 ## Quick start
 
-Requires Node 20+.
+Requires Node 22+.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger

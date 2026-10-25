@@ -150,7 +150,7 @@ Yerel bir sağlayıcı eklemek için [`src/providers.js`](src/providers.js) içi
 
 ## Hızlı başlangıç
 
-Node 20+ gerekir.
+Node 22+ gerekir.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger

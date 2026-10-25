@@ -23,7 +23,7 @@
     "demo": "node src/cli.js run --config examples/demo.config.json --scripted --no-ai"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "keywords": [
     "analytics",
