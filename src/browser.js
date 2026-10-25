@@ -357,12 +357,23 @@ const NAVIGATION_RETRY_MS = 2000;
 // a lookup or the server took too long. Blocked, refused-by-proxy, certificate and protocol errors are not here.
 const TRANSIENT_NET_ERRORS = /net::ERR_(CONNECTION_(RESET|CLOSED|ABORTED|REFUSED|TIMED_OUT)|TIMED_OUT|NETWORK_CHANGED|NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED|DNS_TIMED_OUT|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|EMPTY_RESPONSE|SOCKET_NOT_CONNECTED|HTTP2_(PROTOCOL|SERVER_REFUSED_STREAM|PING_FAILED)|NETWORK_IO_SUSPENDED|SPDY_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)\b/;
 
-/** The net::ERR_* code or "timeout" from a Playwright navigation error, for the log line. */
-const navigationErrorCode = (err) => String(err?.message ?? err).match(/net::ERR_[A-Z0-9_]+/)?.[0] ?? (err?.name === "TimeoutError" || /Timeout \d+ms exceeded/.test(String(err?.message)) ? "timeout" : "error");
+// goto's error when Chromium committed its error page before goto heard why the load failed. It has no
+// net::ERR_* code; the failed document request does. Other interruptions say nothing about the network.
+const ERROR_PAGE_INTERRUPTION = /interrupted by another navigation to "chrome-error:/;
+
+/**
+ * The net::ERR_* code or "timeout" from a Playwright navigation error, for the log line. failedLoad is the
+ * error text of the main frame's failed document request, which counts when an error page cut goto short.
+ */
+function navigationErrorCode(err, failedLoad) {
+  const message = String(err?.message ?? err);
+  if (ERROR_PAGE_INTERRUPTION.test(message)) return failedLoad?.match(/net::ERR_[A-Z0-9_]+/)?.[0] ?? "error";
+  return message.match(/net::ERR_[A-Z0-9_]+/)?.[0] ?? (err?.name === "TimeoutError" || /Timeout \d+ms exceeded/.test(message) ? "timeout" : "error");
+}
 
 /** True when a failed navigation is worth one more try: a transient network error or a timeout. */
-export function isTransientNavigationError(err) {
-  const code = navigationErrorCode(err);
+export function isTransientNavigationError(err, failedLoad) {
+  const code = navigationErrorCode(err, failedLoad);
   return code === "timeout" || TRANSIENT_NET_ERRORS.test(code);
 }
 
@@ -404,6 +415,8 @@ export class AuditSession {
     this.skipped = {}; // step index -> { vendor label: requests }
     this.loadedIn = new Map(); // page address -> the last step whose main-frame navigation reached it
     this.leaving = null; // the page address being navigated away from, until the next page commits
+    this.failedLoad = null; // the error text of the main frame's last failed document request in navigate()
+    this.errorPageShown = false; // whether Chromium's error page committed in the main frame since navigate() began
     this.bodyBytes = 0;
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
     this.startedAt = Date.now();
@@ -442,6 +455,7 @@ export class AuditSession {
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
     this.page.on("framenavigated", (frame) => {
       if (frame !== this.page.mainFrame()) return;
+      if (frame.url().startsWith("chrome-error:")) this.errorPageShown = true;
       this.loadedIn.set(pageKey(frame.url()), this.currentStep);
       this.leaving = null;
       // Script redirects on the first page move where it ends up.
@@ -449,7 +463,10 @@ export class AuditSession {
     });
     // From the moment the main frame starts loading another document, the open page is leaving.
     this.page.on("request", (request) => {
-      if (request.isNavigationRequest() && request.frame() === this.page.mainFrame()) this.leaving = pageKey(this.page.url());
+      if (this.isPageLoad(request)) this.leaving = pageKey(this.page.url());
+    });
+    this.page.on("requestfailed", (request) => {
+      if (this.isPageLoad(request)) this.failedLoad = request.failure()?.errorText ?? null;
     });
 
     const onRequest = (request) => {
@@ -659,15 +676,34 @@ export class AuditSession {
    */
   async navigate(url) {
     const options = { waitUntil: "domcontentloaded", timeout: 30000 };
+    this.failedLoad = null;
+    this.errorPageShown = false;
     try {
       return await this.page.goto(url, options);
     } catch (err) {
-      if (this.blocked?.step === this.currentStep || !isTransientNavigationError(err)) throw err;
+      if (this.blocked?.step === this.currentStep) throw err;
+      // When the error page cut goto short, the failed request can be reported just after goto rejects.
+      if (!this.failedLoad && ERROR_PAGE_INTERRUPTION.test(err?.message)) {
+        await this.page.waitForEvent("requestfailed", { predicate: (request) => this.isPageLoad(request), timeout: 1000 }).catch(() => {});
+      }
+      if (!isTransientNavigationError(err, this.failedLoad)) throw err;
+      const code = navigationErrorCode(err, this.failedLoad);
       const delay = this.opts.navigationRetryMs ?? NAVIGATION_RETRY_MS;
-      this.log(`  Opening ${url} failed (${navigationErrorCode(err)}); trying once more in ${Math.round(delay / 1000)}s`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      this.log(`  Opening ${url} failed (${code}); trying once more in ${Math.round(delay / 1000)}s`);
+      // Chromium can commit the error page for the failed load well after goto has given up. A retry begun
+      // before that is interrupted by it, so the retry waits for it. A load that timed out gets no error page.
+      const errorPage = code === "timeout" || this.errorPageShown ? null : this.page.waitForEvent("framenavigated", {
+        predicate: (frame) => frame === this.page.mainFrame() && frame.url().startsWith("chrome-error:"),
+        timeout: 5000,
+      }).catch(() => {});
+      await Promise.all([new Promise((resolve) => setTimeout(resolve, delay)), errorPage]);
       return this.page.goto(url, options);
     }
+  }
+
+  /** Whether a request loads a new document into the main frame. */
+  isPageLoad(request) {
+    return request.isNavigationRequest() && request.frame() === this.page.mainFrame();
   }
 
   /** Error message when the browser may not be on this URL, or null. */
