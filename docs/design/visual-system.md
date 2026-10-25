@@ -22,13 +22,15 @@ All tokens live on `:root`. Dark mode redefines the same names, twice: once unde
 
 The three `--accent*` names are the white-label entry point and keep the names `brandCss()` already writes. Nothing else may be derived from a brand color (§9).
 
+This palette is the report's own, measured here. `brand/ai/BRAND.md` asks a product's UI colours to come from the Analitik İşler design system (Tally), but Tally's tokens are not published anywhere this repository can read, so the report keeps the palette its contrast checks were made with. The one colour the brand itself fixes is shared: `--brand-point`, the logos' point, and `--sev-broken` are both the brand red (`#C12D30` light, `#FA6B6D` dark), so a page never shows two reds. When Tally publishes its tokens, map them here and re-measure.
+
 ### Severity
 
 Five severities, three tokens each: `--sev-<name>-fg` (text, icon), `--sev-<name>-bg` (tint), `--sev-<name>` (solid: left rule, dot, bar segment). Contrast is measured with WCAG 2.1 relative luminance; "card" is `--card`, "tint" is the severity's own `-bg`. Text needs 4.5:1, solid marks 3:1.
 
 | Severity | Light fg / bg / solid | fg on card · page · tint; solid on card | Dark fg / bg / solid | fg on card · page · tint; solid on card |
 |---|---|---|---|---|
-| broken | `#B42318` / `#FEE4E2` / `#D92D20` | 6.6 · 6.1 · 5.5; 4.8 | `#FDA29B` / `#3D1D1D` / `#F04438` | 9.0 · 9.9 · 7.8; 4.7 |
+| broken | `#C12D30` / `#FEE4E2` / `#C12D30` | 5.7 · 5.3 · 4.7; 5.7 | `#FA6B6D` / `#3D1D1D` / `#FA6B6D` | 6.2 · 6.7 · 5.3; 6.2 |
 | risk | `#86338A` / `#F7E8F7` / `#9B3B9A` | 7.4 · 6.9 · 6.3; 6.0 | `#E3A6E0` / `#34203A` / `#D78AD6` | 9.0 · 9.9 · 7.6; 7.1 |
 | warning | `#7A5A00` / `#FBF0D0` / `#B7791F` | 6.4 · 6.0 · 5.6; 3.6 | `#F5C451` / `#352B10` / `#E8B44A` | 10.8 · 11.8 · 8.6; 9.2 |
 | info | `#3F4D6B` / `#E9EDF5` / `#5B6B8C` | 8.5 · 7.9 · 7.2; 5.4 | `#B4C0DC` / `#1E2536` / `#8191B8` | 9.6 · 10.5 · 8.4; 5.6 |
@@ -45,7 +47,7 @@ Transitions ≤ 150ms, only on `details` chevrons and tab underlines; all off un
 
 ## 2. Typography
 
-System fonts only; the file must look the same on the machine that generated it and the one it is opened on, offline. Drop `'Google Sans'`/`'Google Sans Code'` from the stacks: they only apply on machines that have them installed, so the same report looked different on the author's and the client's machines.
+System fonts only; the file must look the same on the machine that generated it and the one it is opened on, offline. This is a deliberate exception to `brand/ai/BRAND.md` §10, which sets Google Sans for product UIs: a report is one file whose CSP loads no fonts, and embedding the font would add its weight to every report. Drop `'Google Sans'`/`'Google Sans Code'` from the stacks: they only apply on machines that have them installed, so the same report looked different on the author's and the client's machines.
 
 ```
 --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
@@ -136,7 +138,7 @@ Owner chip: outline chip, 12px, text "Developer" / "Tag Manager" / "Marketing", 
 
 A customer can set `report.color` (one hex) and `report.logo`/`report.name`. `brandCss(color)` writes `--accent`, `--accent-fg`, `--accent-bg`. The system draws from those three tokens only the things that say "this document belongs to the brand": the active tab rule, focus rings, link colour, the step index plate, and the fix-step numerals. Severity, platform icons, text and surfaces never change. `brandCss` should also emit its dark set under both dark selectors of §1 and should refuse (or auto-darken) an accent whose `--accent-fg` falls under 4.5:1 on `--card`, computing the ratio instead of the fixed 20% mix; today a yellow accent gives unreadable links.
 
-Logo slots: the top-left product slot (26px high; brand logo or `brand-name` text), the "by Analitik İşler" byline (18px) which a white-label run drops, and the footer (56px stacked logo or the customer's). The AI Tag Debugger emblem stays in the credit line at 16px in every case. All logos remain `<picture>` with light/dark sources (`logo()` in `src/report.js`); a customer logo has one source and sits on `--card`, so the topbar and footer backgrounds must stay `--card` in dark mode rather than `--page`.
+Logo slots: the top-left product slot (the ai tag debugger lockup at 22px, the ai mark alone at 24px on phones, or the customer's logo or `brand-name` text), the "by Analitik İşler" byline (the master logo at 16px) which a white-label run drops, and the footer (the master logo at 24px, or the customer's). The credit line shows the tool favicon at 16px beside the name in every case, since `brand/ai/BRAND.md` puts anything under 24px on the favicon files. Those sizes keep the lockup's x-height above the guide's 9px minimum. The files are in `brand/ai/assets/`, embedded by `scripts/brand.js`; the orange set they replace is under `brand/retired/`. The brand's logos are symbols in the page's inline sprite, drawn with `logo()` in `src/html/lib.js`: their ink is `currentColor`, set to `--fg`, and their point is `--brand-point`, as BRAND.md §4 asks of a product's UI. They follow light, dark and print without a second file. The favicon tiles carry their own ground, so they stay a light and a dark image. A customer logo has one source and sits on `--card`, so the topbar and footer backgrounds must stay `--card` in dark mode rather than `--page`.
 
 ## 10. Dark mode
 

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai brand board</title>
+<meta name="description" content="The ai tool family of Analitik İşler: mark, lockups, icons, favicons, master logo and colours, light and dark. Rules in BRAND.md.">
+<style>
+:root { --bg: #F3F0E8; --card: #FBF9F4; --ink: #17140F; --muted: #6A645A; --rule: #DDD7CB; --point: #C12D30; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #151310; --card: #1C1A16; --ink: #F1ECE2; --muted: #A39C8F; --rule: #35312A; --point: #FA6B6D; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #151310; --card: #1C1A16; --ink: #F1ECE2; --muted: #A39C8F; --rule: #35312A; --point: #FA6B6D; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 48px 16px 96px; }
+h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; }
+h2 { margin: 64px 0 8px; font-size: 22px; }
+h3 { margin: 0; font-size: 17px; font-weight: 600; }
+p { max-width: 46em; color: var(--muted); }
+code { font: 13px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+.lead b { color: var(--ink); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.tile { display: grid; place-items: center; min-height: 120px; padding: 24px; background: #F3F0E8; }
+.tile.ink { background: #151310; }
+.tile img { max-width: 100%; }
+.product { margin-top: 28px; padding: 20px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); }
+.product header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.status { color: var(--muted); font-size: 14px; }
+.row { display: grid; gap: 14px; margin-top: 14px; }
+@media (min-width: 760px) { .row { grid-template-columns: 1fr 1fr; } }
+.icons { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin-top: 16px; }
+.icons img { border-radius: 6px; box-shadow: 0 0 0 1px var(--rule); }
+.icons .mono { margin-left: auto; padding: 10px 12px; border-radius: 6px; background: #F3F0E8; box-shadow: 0 0 0 1px var(--rule); }
+.grid2 { display: grid; gap: 14px; }
+@media (min-width: 760px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.sws { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.sw { display: grid; grid-template-columns: 40px 40px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
+.sw span { grid-row: 1 / 3; height: 40px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); }
+.sw code { color: var(--muted); font-size: 12px; }
+.rules { display: grid; gap: 8px 32px; padding: 0; list-style: none; }
+@media (min-width: 760px) { .rules { grid-template-columns: 1fr 1fr; } }
+.rules li { padding: 10px 0; border-top: 1px solid var(--rule); }
+.rules b { color: var(--point); font-weight: 600; }
+.fav { display: flex; flex-wrap: wrap; gap: 18px; align-items: end; }
+.fav figure { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
+.fav img { display: block; margin: 0 auto 6px; image-rendering: pixelated; }
+</style>
+</head>
+<body><main>
+<p class="eyebrow"><code>Analitik İşler · ai brand · v1.0 · 25 Oct 2026</code></p>
+<h1>ai, the Analitik İşler tool family</h1>
+<p class="lead"><b>“ai” stands for two things: AI, and the initials of analitik işler.</b> One mark, one red, five tools,
+always lowercase. The rules are in <code>BRAND.md</code>; every file below is in <code>assets/</code>. Left tiles are light, right tiles dark.</p>
+
+<h2>The mark and the master logo</h2>
+<div class="grid2">
+  <div class="pair"><div class="tile"><img src="assets/mark/ai-mark-light.svg" alt="ai mark, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/mark/ai-mark-dark.svg" alt="ai mark, dark" style="height:72px" class=""></div></div>
+  <div class="pair"><div class="tile"><img src="assets/master/analitik-isler-light.svg" alt="Analitik İşler master logo, light" style="height:34px" class=""></div><div class="tile ink"><img src="assets/master/analitik-isler-dark.svg" alt="Analitik İşler master logo, dark" style="height:34px" class=""></div></div>
+</div>
+
+<h2>Colour</h2>
+<p>Two inks and one red. The point and the red pen use the same red as the site's “broken” state: one red, everywhere.</p>
+<div class="sws"><div class="sw"><span style="background:#17140F"></span><span style="background:#F1ECE2"></span><b>Ink</b><code>#17140F · #F1ECE2</code></div><div class="sw"><span style="background:#F3F0E8"></span><span style="background:#151310"></span><b>Paper</b><code>#F3F0E8 · #151310</code></div><div class="sw"><span style="background:#C12D30"></span><span style="background:#FA6B6D"></span><b>Point · red pen</b><code>#C12D30 · #FA6B6D</code></div><div class="sw"><span style="background:#6A645A"></span><span style="background:#A39C8F"></span><b>Pencil</b><code>#6A645A · #A39C8F</code></div></div>
+
+<h2>The five tools</h2>
+<p>Horizontal (default), stacked, endorsed; app icons 512 / 64 / 32 on paper and ink; mono at the right.</p>
+<section class="product">
+  <header><h3>ai tag debugger</h3><span class="status">Open source · MIT</span></header>
+  <div class="pair"><div class="tile"><img src="assets/lockups/ai-tag-debugger-light.svg" alt="ai tag debugger, light" style="height:40px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tag-debugger-dark.svg" alt="ai tag debugger, dark" style="height:40px" class=""></div></div>
+  <div class="row">
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-tag-debugger-stacked-light.svg" alt="ai tag debugger stacked, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tag-debugger-stacked-dark.svg" alt="ai tag debugger stacked, dark" style="height:72px" class=""></div></div>
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-tag-debugger-endorsed-light.svg" alt="ai tag debugger endorsed, light" style="height:52px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tag-debugger-endorsed-dark.svg" alt="ai tag debugger endorsed, dark" style="height:52px" class=""></div></div>
+  </div>
+  <div class="icons"><img src="assets/icons/ai-tag-debugger-512.svg" alt="ai tag debugger app icon 512" style="height:96px" class=""><img src="assets/icons/ai-tag-debugger-64.svg" alt="ai tag debugger app icon 64" style="height:64px" class=""><img src="assets/icons/ai-tag-debugger-32.svg" alt="ai tag debugger app icon 32" style="height:32px" class="">
+    <img src="assets/icons/ai-tag-debugger-512-ink.svg" alt="ai tag debugger app icon 512, ink" style="height:96px" class=""><img src="assets/icons/ai-tag-debugger-64-ink.svg" alt="ai tag debugger app icon 64, ink" style="height:64px" class=""><img src="assets/icons/ai-tag-debugger-32-ink.svg" alt="ai tag debugger app icon 32, ink" style="height:32px" class="">
+    <span class="mono"><img src="assets/lockups/ai-tag-debugger-mono.svg" alt="ai tag debugger mono" style="height:22px" class=""></span></div>
+</section><section class="product">
+  <header><h3>ai tagging server</h3><span class="status">Early development</span></header>
+  <div class="pair"><div class="tile"><img src="assets/lockups/ai-tagging-server-light.svg" alt="ai tagging server, light" style="height:40px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tagging-server-dark.svg" alt="ai tagging server, dark" style="height:40px" class=""></div></div>
+  <div class="row">
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-tagging-server-stacked-light.svg" alt="ai tagging server stacked, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tagging-server-stacked-dark.svg" alt="ai tagging server stacked, dark" style="height:72px" class=""></div></div>
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-tagging-server-endorsed-light.svg" alt="ai tagging server endorsed, light" style="height:52px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-tagging-server-endorsed-dark.svg" alt="ai tagging server endorsed, dark" style="height:52px" class=""></div></div>
+  </div>
+  <div class="icons"><img src="assets/icons/ai-tagging-server-512.svg" alt="ai tagging server app icon 512" style="height:96px" class=""><img src="assets/icons/ai-tagging-server-64.svg" alt="ai tagging server app icon 64" style="height:64px" class=""><img src="assets/icons/ai-tagging-server-32.svg" alt="ai tagging server app icon 32" style="height:32px" class="">
+    <img src="assets/icons/ai-tagging-server-512-ink.svg" alt="ai tagging server app icon 512, ink" style="height:96px" class=""><img src="assets/icons/ai-tagging-server-64-ink.svg" alt="ai tagging server app icon 64, ink" style="height:64px" class=""><img src="assets/icons/ai-tagging-server-32-ink.svg" alt="ai tagging server app icon 32, ink" style="height:32px" class="">
+    <span class="mono"><img src="assets/lockups/ai-tagging-server-mono.svg" alt="ai tagging server mono" style="height:22px" class=""></span></div>
+</section><section class="product">
+  <header><h3>ai cloud</h3><span class="status">Early access</span></header>
+  <div class="pair"><div class="tile"><img src="assets/lockups/ai-cloud-light.svg" alt="ai cloud, light" style="height:40px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-cloud-dark.svg" alt="ai cloud, dark" style="height:40px" class=""></div></div>
+  <div class="row">
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-cloud-stacked-light.svg" alt="ai cloud stacked, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-cloud-stacked-dark.svg" alt="ai cloud stacked, dark" style="height:72px" class=""></div></div>
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-cloud-endorsed-light.svg" alt="ai cloud endorsed, light" style="height:52px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-cloud-endorsed-dark.svg" alt="ai cloud endorsed, dark" style="height:52px" class=""></div></div>
+  </div>
+  <div class="icons"><img src="assets/icons/ai-cloud-512.svg" alt="ai cloud app icon 512" style="height:96px" class=""><img src="assets/icons/ai-cloud-64.svg" alt="ai cloud app icon 64" style="height:64px" class=""><img src="assets/icons/ai-cloud-32.svg" alt="ai cloud app icon 32" style="height:32px" class="">
+    <img src="assets/icons/ai-cloud-512-ink.svg" alt="ai cloud app icon 512, ink" style="height:96px" class=""><img src="assets/icons/ai-cloud-64-ink.svg" alt="ai cloud app icon 64, ink" style="height:64px" class=""><img src="assets/icons/ai-cloud-32-ink.svg" alt="ai cloud app icon 32, ink" style="height:32px" class="">
+    <span class="mono"><img src="assets/lockups/ai-cloud-mono.svg" alt="ai cloud mono" style="height:22px" class=""></span></div>
+</section><section class="product">
+  <header><h3>ai visibility</h3><span class="status">Early access · Be the answer.</span></header>
+  <div class="pair"><div class="tile"><img src="assets/lockups/ai-visibility-light.svg" alt="ai visibility, light" style="height:40px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-visibility-dark.svg" alt="ai visibility, dark" style="height:40px" class=""></div></div>
+  <div class="row">
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-visibility-stacked-light.svg" alt="ai visibility stacked, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-visibility-stacked-dark.svg" alt="ai visibility stacked, dark" style="height:72px" class=""></div></div>
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-visibility-endorsed-light.svg" alt="ai visibility endorsed, light" style="height:52px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-visibility-endorsed-dark.svg" alt="ai visibility endorsed, dark" style="height:52px" class=""></div></div>
+  </div>
+  <div class="icons"><img src="assets/icons/ai-visibility-512.svg" alt="ai visibility app icon 512" style="height:96px" class=""><img src="assets/icons/ai-visibility-64.svg" alt="ai visibility app icon 64" style="height:64px" class=""><img src="assets/icons/ai-visibility-32.svg" alt="ai visibility app icon 32" style="height:32px" class="">
+    <img src="assets/icons/ai-visibility-512-ink.svg" alt="ai visibility app icon 512, ink" style="height:96px" class=""><img src="assets/icons/ai-visibility-64-ink.svg" alt="ai visibility app icon 64, ink" style="height:64px" class=""><img src="assets/icons/ai-visibility-32-ink.svg" alt="ai visibility app icon 32, ink" style="height:32px" class="">
+    <span class="mono"><img src="assets/lockups/ai-visibility-mono.svg" alt="ai visibility mono" style="height:22px" class=""></span></div>
+</section><section class="product">
+  <header><h3>ai analyst</h3><span class="status">Alpha</span></header>
+  <div class="pair"><div class="tile"><img src="assets/lockups/ai-analyst-light.svg" alt="ai analyst, light" style="height:40px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-analyst-dark.svg" alt="ai analyst, dark" style="height:40px" class=""></div></div>
+  <div class="row">
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-analyst-stacked-light.svg" alt="ai analyst stacked, light" style="height:72px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-analyst-stacked-dark.svg" alt="ai analyst stacked, dark" style="height:72px" class=""></div></div>
+    <div class="pair"><div class="tile"><img src="assets/lockups/ai-analyst-endorsed-light.svg" alt="ai analyst endorsed, light" style="height:52px" class=""></div><div class="tile ink"><img src="assets/lockups/ai-analyst-endorsed-dark.svg" alt="ai analyst endorsed, dark" style="height:52px" class=""></div></div>
+  </div>
+  <div class="icons"><img src="assets/icons/ai-analyst-512.svg" alt="ai analyst app icon 512" style="height:96px" class=""><img src="assets/icons/ai-analyst-64.svg" alt="ai analyst app icon 64" style="height:64px" class=""><img src="assets/icons/ai-analyst-32.svg" alt="ai analyst app icon 32" style="height:32px" class="">
+    <img src="assets/icons/ai-analyst-512-ink.svg" alt="ai analyst app icon 512, ink" style="height:96px" class=""><img src="assets/icons/ai-analyst-64-ink.svg" alt="ai analyst app icon 64, ink" style="height:64px" class=""><img src="assets/icons/ai-analyst-32-ink.svg" alt="ai analyst app icon 32, ink" style="height:32px" class="">
+    <span class="mono"><img src="assets/lockups/ai-analyst-mono.svg" alt="ai analyst mono" style="height:22px" class=""></span></div>
+</section>
+
+<h2>Favicons</h2>
+<div class="grid2">
+  <div class="product"><header><h3>Every tool</h3><span class="status">the ai mark, pixel-fitted</span></header>
+    <div class="fav"><figure><img src="assets/icons/favicon-ai-16.svg" alt="ai favicon 16" style="height:16px" class="">16px</figure><figure><img src="assets/icons/favicon-ai-32.svg" alt="ai favicon 32" style="height:32px" class="">32px</figure><figure><img src="assets/icons/favicon-ai-64.svg" alt="ai favicon 64" style="height:64px" class="">64px</figure>
+    <figure><img src="assets/icons/favicon-ai-16-ink.svg" alt="ai favicon 16, ink" style="height:16px" class="">16px ink</figure><figure><img src="assets/icons/favicon-ai-32-ink.svg" alt="ai favicon 32, ink" style="height:32px" class="">32px ink</figure><figure><img src="assets/icons/favicon-ai-64-ink.svg" alt="ai favicon 64, ink" style="height:64px" class="">64px ink</figure></div></div>
+  <div class="product"><header><h3>Analitik İşler (the company)</h3><span class="status">three black bars, no red</span></header>
+    <div class="fav"><figure><img src="assets/favicon/analitik-isler-bars.svg" alt="Analitik İşler favicon" style="height:16px" class="">16px</figure><figure><img src="assets/favicon/analitik-isler-bars.svg" alt="Analitik İşler favicon" style="height:32px" class="">32px</figure><figure><img src="assets/favicon/analitik-isler-bars.svg" alt="Analitik İşler favicon" style="height:64px" class="">64px</figure><figure><img src="assets/favicon/apple-touch-icon.png" alt="Apple touch icon" style="height:64px" class="">touch icon</figure></div></div>
+</div>
+
+<h2>Rules in short</h2>
+<ul class="rules">
+  <li><b>Lowercase, always.</b> ai tag debugger, also at the start of a sentence. Never “AI Tag Debugger”.</li>
+  <li><b>Names are not translated.</b> Turkish adds an apostrophe suffix: ai tag debugger’ı, ai visibility’yi, ai cloud’da.</li>
+  <li><b>One red point per logo.</b> No product colours; the old orange, teal and blue are retired.</li>
+  <li><b>“by analitik işler” is the master logo</b>, with its red point and three bars, never the name in type.</li>
+  <li><b>Clear space 2 S</b> (S = the i's stem) on every side; mark x-height at least 9 px.</li>
+  <li><b>Status is a word beside the logo</b>, in pencil: Early access, Alpha. Never inside the file.</li>
+  <li><b>Same height in a row.</b> Lockups that sit together share one height.</li>
+  <li><b>The red pen marks real findings only</b>: a tick, a circle, an underline. Two per screen at most.</li>
+  <li><b>No second font.</b> Schibsted lives inside the logo files; UIs use the Analitik İşler system fonts.</li>
+</ul>
+</main></body></html>

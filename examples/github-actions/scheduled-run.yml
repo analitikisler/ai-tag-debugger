@@ -3,7 +3,7 @@
 # Copy to .github/workflows/ai-tag-debugger-schedule.yml and add your AI provider's API key as a repository secret.
 # The example uses ANTHROPIC_API_KEY; for OpenAI or Gemini, pass OPENAI_API_KEY or GEMINI_API_KEY instead.
 # Needs an ai-tag-debugger.config.json in the repository root (site and journeys, or a --against plan).
-name: AI Tag Debugger (scheduled)
+name: ai tag debugger (scheduled)
 on:
   schedule:
     # Every Monday at 06:00 UTC. For a daily check use '0 6 * * *'.

@@ -3,7 +3,7 @@
 // renderer imports its icon, logo and id helpers from here, so the sections cannot drift apart while
 // both exist; this module imports neither of them. CONTRACT-IMPL.md in the build notes lists what each helper is for.
 import { hitMatchesEvent } from "../checks.js";
-import { LOGOS } from "../brand.js";
+import { LOGOS, LOGO_ART } from "../brand.js";
 import { OWNERS, ownerOf } from "../verify.js";
 import { escapeHtml, platformLabel, safeKey, sortPlatforms } from "../report-shared.js";
 
@@ -52,9 +52,10 @@ const use = (id, size = 16, cls = "") => `<svg class="ic${cls ? ` ${cls}` : ""}"
 
 /** The sprite with only the symbols the page references, so a report never carries artwork it does not show. */
 function sprite(html) {
-  const used = new Set([...html.matchAll(/href="#((?:sev|ui)-[a-z]+|p-[a-z0-9_]+)"/g)].map((x) => x[1]));
+  const used = new Set([...html.matchAll(/href="#((?:sev|ui)-[a-z]+|p-[a-z0-9_]+|logo-[a-z-]+)"/g)].map((x) => x[1]));
   const symbols = [...used].sort().map((id) => {
     if (id.startsWith("p-")) return `<symbol id="${id}" viewBox="0 0 24 24">${PLATFORM_ART[id.slice(2)]}</symbol>`;
+    if (id.startsWith("logo-")) return `<symbol id="${id}" viewBox="${LOGO_ART[id.slice(5)].viewBox}">${LOGO_ART[id.slice(5)].art}</symbol>`;
     return `<symbol id="${id}" ${STROKE}>${UI_SYMBOLS[id]}</symbol>`;
   });
   return `<svg hidden style="display:none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">${symbols.join("")}</svg>`;
@@ -84,8 +85,18 @@ const hostPath = (url) => {
 
 /** A severity badge: glyph and word, never colour alone. A badge without a severity is a plain grey chip. */
 const badge = (sev, text) => (UI_SYMBOLS[`sev-${sev}`] ? `<span class="badge sev-${sev}">${use(`sev-${sev}`, 14)}${escapeHtml(text)}</span>` : `<span class="badge">${escapeHtml(text)}</span>`);
-/** A logo with its light and dark versions as two images; the CSS shows the one that fits the colour scheme or the forced theme. */
-export const logo = (key, alt, height, cls) => `<span class="logo ${cls}"><img class="l-light" src="${LOGOS[`${key}-light`]}" alt="${alt}" height="${height}"><img class="l-dark" src="${LOGOS[`${key}-dark`]}" alt="${alt}" height="${height}"></span>`;
+/**
+ * A logo at a given height. The brand's own logos (LOGO_ART) are drawn from the sprite, so their ink is the text colour and
+ * only the point is red, as brand/ai/BRAND.md §4 asks of a product's UI. Anything else in LOGOS (the favicon tiles, which
+ * carry their own ground) comes as its light and dark images, and the CSS shows the one that fits the colour scheme.
+ */
+export const logo = (key, alt, height, cls) => {
+  const art = LOGO_ART[key];
+  if (!art) return `<span class="logo ${cls}"><img class="l-light" src="${LOGOS[`${key}-light`]}" alt="${alt}" height="${height}"><img class="l-dark" src="${LOGOS[`${key}-dark`]}" alt="${alt}" height="${height}"></span>`;
+  const [, , w, h] = art.viewBox.split(" ").map(Number);
+  const named = alt ? `role="img" aria-label="${escapeHtml(alt)}"` : 'aria-hidden="true"';
+  return `<svg class="logo ${cls}" width="${+((height * w) / h).toFixed(1)}" height="${height}" ${named}><use href="#logo-${key}"/></svg>`;
+};
 
 /** The journey and step a finding's place points at. Steps are named by label; when labels repeat, prefer the step where the finding's event fired. */
 function whereTarget(runs, w, f) {
