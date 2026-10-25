@@ -3,7 +3,7 @@
 # so each report's "Changed since last run" section compares it with the previous run.
 #
 # Setup, once:
-#   npm install -g @analitikisler/ai-tag-debugger@0.16.0
+#   npm install -g @analitikisler/ai-tag-debugger@0.19.0
 #   npx playwright install --with-deps chromium
 #   mkdir -p /opt/aitd && cp ai-tag-debugger.config.json /opt/aitd/
 #   echo 'ANTHROPIC_API_KEY=...' > /etc/aitd.env && chmod 600 /etc/aitd.env
