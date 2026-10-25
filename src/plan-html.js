@@ -18,12 +18,12 @@ const PLAN_CSS = `
 .top-end{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
 .byline{display:inline-flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted)}
 .logo{display:inline-flex}
-svg.logo{display:inline-block;flex:none;color:var(--fg)}
+svg.logo{display:inline-block;flex:none;color:var(--fg-strong)}
 .logo .l-dark{display:none}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .logo .l-light{display:none}html:not([data-theme="light"]) .logo .l-dark{display:inline}}
-.eyebrow{font:600 11px/1.4 var(--font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.eyebrow{font:500 12px/1.4 var(--font-sans);color:var(--muted)}
 .plan{max-width:1100px;margin:0 auto;padding:var(--s5) var(--s6) var(--s7)}
 .plan-title{display:grid;gap:var(--s2);margin-bottom:var(--s5)}
 .plan-title .chips{margin-top:var(--s1)}
@@ -39,8 +39,8 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .pl-trigger{font-size:12px;color:var(--muted);margin-bottom:10px}
 .pl-trigger b{font-weight:500;color:var(--fg)}
 .chip .plat{display:inline-flex;align-items:center;gap:5px}
-.chip.on{--k:var(--accent);--k-fg:var(--accent-fg);background:var(--accent-bg)}
-.chip.req{--k:var(--sev-warning);--k-fg:var(--sev-warning-fg);background:var(--sev-warning-bg)}
+.chip.on{--k:var(--accent);--k-fg:var(--accent-fg)}
+.chip.req{--k:var(--sev-warning);--k-fg:var(--sev-warning-fg)}
 .pl-card-body{padding:var(--s4)}
 .tbl td,.tbl th{vertical-align:top}
 /* a narrow table scrolls inside its .tscroll instead of breaking names mid-word */

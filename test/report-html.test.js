@@ -130,7 +130,11 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   for (const id of ["sev-broken", "sev-risk", "sev-warning", "sev-info", "sev-ok", "ui-chevron", "p-ga4", "p-meta", "p-google_ads", "p-tiktok"]) assert.match(sprite, new RegExp(`<symbol id="${id}"`));
   assert.doesNotMatch(sprite, /p-pinterest/, "only the platforms the page shows");
   assert.doesNotMatch(CSS, /data:image/);
-  assert.doesNotMatch(CSS, /Google Sans/);
+  // The design system's families are named first with the system behind them; the report ships no font files.
+  assert.match(CSS, /--font-sans:"Google Sans","Segoe UI Variable Text",system-ui,/);
+  assert.match(CSS, /--font-display:"Google Sans Flex","Google Sans","Segoe UI Variable Display",system-ui,/);
+  assert.match(CSS, /--font-mono:"Google Sans Code",ui-monospace,/);
+  assert.doesNotMatch(CSS, /@font-face|url\(/);
   assert.doesNotMatch(html, /url\("data:image\/svg/);
   const klaviyo = renderHtml({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [{ journeyId: "j", viewport: "desktop", startedAt: 0, completed: true, steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Open", t: 1 }], hits: [{ platform: "klaviyo", name: "Viewed Product", params: {}, url: "https://a.klaviyo.com/x", step: 1, t: 2 }], dataLayerLog: [] }] });
   // Journeys draws a hit's platform at 14 px (the hit row's icon size), so the initials square is s14.
@@ -140,14 +144,14 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
 test("the theme has both dark selectors, logos follow the text colour, and brandCss follows the same selectors", () => {
   assert.match(CSS, /@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
   assert.match(CSS, /:root\[data-theme="dark"\]\{/);
-  assert.match(CSS, /--sev-risk:#9B3B9A/);
+  assert.match(CSS, /--sev-risk:#964799/);
   // A brand logo is drawn from the sprite so its ink takes the text colour (BRAND.md §4); its width keeps the viewBox's proportions.
   assert.match(logo("atd-lockup", "ai tag debugger", 26, "logo-atd"), /^<svg class="logo logo-atd" width="189\.9" height="26" role="img" aria-label="ai tag debugger"><use href="#logo-atd-lockup"\/><\/svg>$/);
   assert.match(logo("mark", "", 24, "l-mark"), /^<svg class="logo l-mark" width="23\.9" height="24" aria-hidden="true"><use href="#logo-mark"\/><\/svg>$/);
   // An image logo, the favicon tile, still comes as its light and dark files.
   assert.match(logo("favicon", "", 16, "f-mark"), /^<span class="logo f-mark"><img class="l-light" src="data:[^"]+" alt="" height="16"><img class="l-dark" src="data:[^"]+" alt="" height="16"><\/span>$/);
-  assert.match(CSS, /--brand-point:#C12D30;/);
-  assert.match(CSS, /svg\.logo\{display:inline-block;flex:none;color:var\(--fg\)\}/);
+  assert.match(CSS, /--brand-point:#c12d30;/);
+  assert.match(CSS, /svg\.logo\{display:inline-block;flex:none;color:var\(--fg-strong\)\}/);
   const css = brandCss("#0a7d5a");
   assert.match(css, /^:root\{--accent:#0a7d5a;--accent-fg:#[0-9a-f]{6};--accent-bg:#[0-9a-f]{6}\}@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{--accent:/);
   assert.match(css, /\}:root\[data-theme="dark"\]\{--accent:/);
@@ -334,6 +338,49 @@ test("in a browser the report has one h1, no heading skips, named tables, select
     await plain.goto(`file://${file}`);
     assert.equal(await plain.evaluate(() => [...document.querySelectorAll("main > .sec")].filter((p) => getComputedStyle(p).display !== "none" && getComputedStyle(p.querySelector("h2")).display !== "none").length), 7);
     await noJs.close();
+  } finally {
+    await browser.close();
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test("without Google Sans the score sits in the middle of its ring and each score line's points stay beside its first line", async (t) => {
+  let browser;
+  try { browser = await chromium.launch(); } catch { return t.skip("Chromium is not installed"); }
+  const dir = mkdtempSync(path.join(tmpdir(), "aitd-fonts-"));
+  try {
+    const file = path.join(dir, "report.html");
+    writeFileSync(file, render());
+    // Most readers have none of the Google Sans family: the report then lays out in whatever the stacks fall back to.
+    // Two very different stand-ins (the system face, and a monospace face with its own tall metrics) must give the same geometry.
+    const strip = (name) => CSS.match(new RegExp(`--font-${name}:([^;]+);`))[1].split(",").filter((f) => !/google sans/i.test(f)).join(",");
+    const stacks = [`${strip("sans")}|${strip("display")}|${strip("mono")}`, "monospace|monospace|monospace"];
+    for (const stack of stacks) {
+      const [sans, display, mono] = stack.split("|");
+      // The score lines sit side by side from 1100px and stack below it. Neither layout wraps a line of the demo at its
+      // natural width above 340px, so the side-by-side one is also checked with its column narrowed until lines wrap.
+      for (const [width, narrow] of [[1280, false], [1280, true], [1024, false], [390, false], [340, false]]) {
+        const page = await browser.newPage({ viewport: { width, height: 900 } });
+        await page.goto(`file://${file}#summary`);
+        await page.addStyleTag({ content: `:root{--font-sans:${sans};--font-display:${display};--font-mono:${mono}}${narrow ? "#summary .sc-costs{max-width:540px}" : ""}` });
+        const m = await page.evaluate(() => {
+          const box = (el) => el.getBoundingClientRect();
+          const ring = box(document.querySelector("#summary .sc-ring"));
+          const num = box(document.querySelector("#summary .sc-num")), of = box(document.querySelector("#summary .sc-of"));
+          const lines = [...document.querySelectorAll("#summary .sc-costs li>a")].map((a) => {
+            const pts = box(a.querySelector(".pts")), what = a.querySelector(".what");
+            const lh = parseFloat(getComputedStyle(what).lineHeight);
+            return { pts: (pts.top + pts.bottom) / 2, first: box(what).top + lh / 2, lh, lines: Math.round(box(what).height / lh) };
+          });
+          return { ring: (ring.top + ring.bottom) / 2, group: (num.top + of.bottom) / 2, lines };
+        });
+        const where = `${stack.split("|")[0].slice(0, 20)} at ${width}px${narrow ? ", narrowed" : ""}`;
+        assert.ok(Math.abs(m.group - m.ring) <= 1, `${where}: the score group is centred ${m.group - m.ring}px off the ring's middle`);
+        for (const l of m.lines) assert.ok(Math.abs(l.pts - l.first) <= l.lh / 4, `${where}: the points sit ${l.pts - l.first}px from the first line of a ${l.lines}-line text`);
+        if (narrow || width === 340) assert.ok(m.lines.some((l) => l.lines > 1), `${where}: no score line wraps, so the check above proves nothing`);
+        await page.close();
+      }
+    }
   } finally {
     await browser.close();
     rmSync(dir, { recursive: true });
