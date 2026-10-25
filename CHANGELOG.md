@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0 (2026-10-25)
 
 - The HTML report and `plan.html` take the look of Tally, the Analitik İşler design system, so they read as one family with analitikisler.com: navy grounds (`#f4f6fa` and white in light, `#071529` and `#0e1e34` in dark), one blue for links, focus and selected states (`#1161bb` / `#69b1ff`), Google Sans, Google Sans Flex and Google Sans Code named first with the system fonts behind them (the report still ships no font files), 2 px chips and badges, 4 px buttons and inputs, 6 px cards, 1 px rules and no card shadows. Labels that were set in capitals are in sentence case.
 - Severity colours follow the design system: broken, warning and ok are its red, amber and green, info is its blue (a fixed value, so a white label never recolours it), and risk keeps a plum of its own so it stays apart from broken where only a dot or a rule shows. Owner, platform, viewport and consent colours keep their hues, retuned for the navy grounds. Every text colour passes 4.5:1 and every mark 3:1 in both themes; `docs/design/visual-system.md` lists the values and ratios.
