@@ -155,7 +155,7 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 
 ## Releasing
 
-1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), and both version fields in `server.json`.
+1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), both version fields in `server.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
 2. Add the `## x.y.z (date)` section at the top of CHANGELOG.md with the lines collected for it. Update the version in README's Playwright install commands if Playwright changed.
 3. Run `npm test`, then merge to `main` with a commit such as `Release 0.16.0`.
 4. `.github/workflows/publish.yml` runs on every push to `main` that touches `package.json` (or by hand from the Actions tab). Its `check` job looks the version up on npm and stops if it is already there; otherwise `test` runs `npm ci`, installs Chromium and runs `npm test` on Node 22, and `publish` publishes with npm trusted publishing (OIDC, no stored token) from the `npm` environment with `npm publish --access public`.
