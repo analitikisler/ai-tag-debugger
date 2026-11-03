@@ -419,6 +419,7 @@ export class AuditSession {
     this.errorPageShown = false; // whether Chromium's error page committed in the main frame since navigate() began
     this.bodyBytes = 0;
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
+    this.lastTrackingAt = 0; // when a tag, consent or tracking request or a dataLayer push last happened, for settle()
     this.startedAt = Date.now();
   }
 
@@ -448,6 +449,7 @@ export class AuditSession {
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
     await this.context.exposeBinding("__atdRecord", (_source, entry) => {
+      this.lastTrackingAt = Date.now();
       this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
     await this.context.addInitScript(INIT_SCRIPT);
@@ -476,6 +478,8 @@ export class AuditSession {
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
         const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now() };
+        const late = this.lateFor(hit, entry);
+        if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
       }
       if (recorded.length) hitsOf.set(request, recorded);
@@ -493,6 +497,7 @@ export class AuditSession {
     this.context.on("request", (request) => {
       const provider = providerOf(request.url());
       if (!provider) return;
+      this.lastTrackingAt = Date.now();
       if (!provider.always && !this.checks(provider.key)) {
         const counts = (this.skipped[this.currentStep] ??= {});
         counts[provider.label] = (counts[provider.label] ?? 0) + 1;
@@ -601,6 +606,25 @@ export class AuditSession {
     if (page === pageKey(this.page.url()) && page !== this.leaving) return this.currentStep;
     const loaded = this.loadedIn.get(page);
     return loaded !== undefined && loaded < this.currentStep ? loaded : this.currentStep;
+  }
+
+  /**
+   * A page_view that arrives during a wait or a scroll for the page an earlier step loaded, when that step
+   * got none: gtag can hold it for a consent update or a slow tag until after the step was reported. It goes
+   * to the step that loaded the page, marked late, so the report doesn't read as "this click sent nothing".
+   * Returns { step, late: { during, ms } } or null.
+   */
+  lateFor(hit, entry) {
+    if (hit.name !== "page_view" || !hit.params?.page_location || entry.step !== this.currentStep) return null;
+    const now = this.steps[this.currentStep];
+    if (!["wait", "scroll"].includes(now?.action)) return null;
+    const page = pageKey(hit.params.page_location);
+    const loaded = this.loadedIn.get(page);
+    if (loaded === undefined || loaded >= this.currentStep || page !== pageKey(this.page.url())) return null;
+    // A second page_view for the same page (a virtual one, a resend) is the step's own.
+    if (this.hits.some((h) => h.name === "page_view" && h.step >= loaded && h.params?.page_location && pageKey(h.params.page_location) === page)) return null;
+    const since = this.steps[loaded].endedAt ?? this.steps[loaded].t;
+    return { step: loaded, late: { during: this.currentStep, ms: Math.max(0, entry.t - since) } };
   }
 
   /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
@@ -739,9 +763,24 @@ export class AuditSession {
   }
 
   async settle() {
-    await this.page.waitForLoadState("load", { timeout: 15000 }).catch(() => {});
-    await this.page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
-    await this.page.waitForTimeout(400);
+    for (let round = 0; round < 2; round++) {
+      await this.page.waitForLoadState("load", { timeout: 15000 }).catch(() => {});
+      await this.page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+      await this.page.waitForTimeout(400);
+      // The network can go quiet before the tags are done: gtag holds a page_view until the consent
+      // platform answers (wait_for_update), and a consent platform loads its own scripts first. So the
+      // step ends once no tag, consent or tracking request and no dataLayer push came for quietMs.
+      const quiet = this.opts.quietMs ?? 1200;
+      const until = Date.now() + (this.opts.quietCapMs ?? 3000);
+      while (Date.now() < until) {
+        const wait = this.lastTrackingAt + quiet - Date.now();
+        if (wait <= 0) break;
+        await this.page.waitForTimeout(Math.min(wait, until - Date.now()));
+      }
+      // A click whose page starts loading only now (a link delayed for its tags) is waited for once more.
+      if (!this.leaving) break;
+      await this.page.waitForEvent("framenavigated", { predicate: (f) => f === this.page.mainFrame(), timeout: 5000 }).catch(() => {});
+    }
   }
 
   async snapshot() {
@@ -905,6 +944,7 @@ export class AuditSession {
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
     this.steps[this.currentStep].pagePath = pagePath(this.page.url());
+    this.steps[this.currentStep].endedAt = Date.now(); // when the step was reported, so a late hit can say how late
     return error;
   }
 

@@ -230,3 +230,20 @@ test("tables are named, header cells have a scope, headings do not skip a level"
     assert.doesNotMatch(html, /role="note"/);
   }
 });
+
+test("a late hit sits on the step that loaded its page with how late it came, and its request is still found", () => {
+  const t0 = 1_000_000;
+  const url = "https://region1.google-analytics.com/g/collect?v=2&tid=G-ABC&cid=1.2&en=page_view";
+  const run = {
+    journeyId: "browse", viewport: "desktop", startedAt: t0, completed: true, note: "done", providers: ["ga4"],
+    steps: [{ index: 0, label: "start", t: t0 }, { index: 1, label: "Open a product", t: t0 + 1000, endedAt: t0 + 2000 }, { index: 2, label: "Wait for the page", t: t0 + 2100, action: "wait" }],
+    hits: [{ platform: "ga4", name: "page_view", params: { page_location: "https://shop/p" }, url, step: 1, t: t0 + 5200, late: { during: 2, ms: 3200 } }],
+    dataLayerLog: [],
+    network: [{ method: "POST", url, vendor: "Google Analytics", provider: "ga4", status: 204, blocked: true, step: 2, t: t0 + 5200 }],
+  };
+  const input = { title: "t", generatedAt: "now", findings: [], explained: null, runs: [run] };
+  const s1 = pane(render(context({ ...input, lang: "en" })), "j0-s1");
+  assert.match(s1, /<span class="chip plain" title="Sent after this step was over, during &quot;Wait for the page&quot;\. It belongs to this step&#39;s page\.">arrived 3\.2 s late<\/span>/);
+  assert.match(s1, /href="#j0-s2-q0">POST region1\.google-analytics\.com\/g\/collect 204/);
+  assert.match(pane(render(context({ ...input, lang: "tr" })), "j0-s1"), />3,2 sn gecikmeli geldi</);
+});

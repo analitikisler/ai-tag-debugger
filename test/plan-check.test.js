@@ -20,7 +20,7 @@ const plan = {
 const hit = (platform, name, step, params = {}) => ({ platform, name, step, params, url: "https://x/" });
 const run = (journeyId, hits) => ({ journeyId, viewport: "desktop", completed: true, steps: [{ index: 0, label: "start" }, { index: 1, label: "go" }], consentStep: null, dataLayerLog: [], hits, providers: ["ga4", "meta"] });
 const runs = [
-  run("cart", [hit("ga4", "add_to_cart", 1), hit("ga4", "view_item", 1), hit("ga4", "scroll", 1)]),
+  run("cart", [hit("ga4", "add_to_cart", 1), hit("ga4", "view_item", 1), hit("ga4", "newsletter_open", 1), hit("ga4", "scroll", 1)]),
   run("checkout", [hit("ga4", "purchase", 1, { value: "0", currency: "EUR", items: "[]" })]),
 ];
 const findings = runs.flatMap((r) => checkRun(plan, r));
@@ -34,7 +34,9 @@ test("sorts each planned event into one bucket and scores coverage on the checka
   assert.equal(bucket("ga4", "sign_up"), "not_checked");
   assert.equal(bucket("meta", "AddToCart"), "missing");
   assert.equal(bucket("tiktok", "AddToCart"), "not_checked");
-  assert.equal(bucket("ga4", "scroll"), "unplanned");
+  assert.equal(bucket("ga4", "newsletter_open"), "unplanned");
+  // GA4 sends scroll itself (enhanced measurement), so it is not an unplanned event.
+  assert.equal(bucket("ga4", "scroll"), undefined);
   assert.deepEqual(pc.coverage, { implemented: 1, checkable: 4, not_checked: 2, percent: 25, platforms: {
     ga4: { implemented: 1, checkable: 3, not_checked: 1, percent: 33 },
     meta: { implemented: 0, checkable: 1, not_checked: 0, percent: 0 },

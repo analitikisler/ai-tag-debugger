@@ -48,6 +48,17 @@ test("a reject journey flags tags, a re-grant and cookies after the visitor said
   assert.ok(!findings.some((f) => /session/.test(f.detail)));
 });
 
+test("a reject that keeps the essential signals granted is not a re-grant", () => {
+  // CMPs commonly leave security and functionality storage granted on "reject all".
+  const essential = { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied", functionality_storage: "granted", security_storage: "granted", personalization_storage: "granted" };
+  const kept = checks(run({ rejectStep: 1, dataLayerLog: [...run().dataLayerLog, cmd(1, "update", essential)] }));
+  assert.ok(!kept.includes("broken:reject_ignored"));
+  for (const signal of ["ad_storage", "analytics_storage", "ad_user_data", "ad_personalization"]) {
+    const got = checks(run({ rejectStep: 1, dataLayerLog: [...run().dataLayerLog, cmd(2, "update", { ...essential, [signal]: "granted" })] }));
+    assert.ok(got.includes("broken:reject_ignored"), signal);
+  }
+});
+
 test("a reject that left the banner open is a failed reject button", () => {
   const steps = [0, 1, 2].map((index) => ({ index, label: `s${index}`, ...(index === 1 ? { bannerOpenAfter: true } : {}) }));
   assert.ok(checks(run({ rejectStep: 1, steps })).includes("broken:reject_button_failed"));

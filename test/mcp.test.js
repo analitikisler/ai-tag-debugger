@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { buildServer } from "../src/mcp.js";
+import { buildServer, stepCapture } from "../src/mcp.js";
 
 const PORT = await freePort();
 let server;
@@ -39,6 +39,8 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   const id = page.match(/audit_id: (\w+)/)[1];
   assert.match(page, /meta PageView/);
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Accept all/), reason: "Accept cookies", accepts_consent: true });
+  // The consent command comes whole, as key=value, not as JSON cut at a fixed length.
+  assert.match(page, /- consent update: ad_storage=granted analytics_storage=granted ad_user_data=granted ad_personalization=granted/);
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /product\.html/), reason: "Open a product" });
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Add to cart/), reason: "Add to cart" });
   assert.match(page, /ga4 add_to_cart \[consent ad_storage=granted/);
@@ -197,4 +199,36 @@ test("make_plan without a key tells the chat app how to go on, in its own terms"
   } finally {
     for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
   }
+});
+
+test("a step result keeps page addresses and consent commands whole and lists the calls it read no event from", () => {
+  const longUrl = `https://shop.example/landing?${"x".repeat(150)}&utm_source=news&utm_campaign=autumn_sale_2026`;
+  const audit = { session: {
+    steps: [{ index: 0, label: "Open the start page" }, { index: 1, label: "Wait" }],
+    hits: [
+      { platform: "ga4", name: "page_view", step: 0, params: { page_location: longUrl, page_referrer: "https://ref.example/", long: "y".repeat(300) }, late: { during: 1, ms: 3200 } },
+      { platform: "ga4", name: "scroll", step: 1, params: {} },
+    ],
+    dataLayerLog: [
+      { step: 1, value: ["consent", "update", { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied", functionality_storage: "granted", security_storage: "granted" }] },
+      { step: 1, value: { event: "virtual_page", page: { page_location: longUrl, filler: "z".repeat(300) } } },
+    ],
+    network: [
+      { step: 1, provider: "google_ads", vendor: "Google Ads", url: "https://www.google.com/ccm/collect?en=page_view&gcs=G100&gcd=13p3p3p2p5l1&dma=1" },
+      { step: 1, provider: "ga4", vendor: "Google Analytics", url: "https://region1.google-analytics.com/g/collect?v=2&tid=G-X&en=scroll" },
+    ],
+  } };
+  const first = stepCapture(audit, 0);
+  assert.ok(first.includes(`page_location=${longUrl}`), "page_location is not cut");
+  assert.ok(first.includes("page_referrer=https://ref.example/"));
+  assert.match(first, /long=y{100,}…/);
+  assert.match(first, /arrived 3\.2 s late, after the step that loaded its page: "Open the start page"/);
+  const later = stepCapture(audit, 1);
+  assert.match(later, /Tracking hits sent by this step: 1\n- ga4 scroll/);
+  assert.match(later, /belong to the step that loaded their page: ga4 page_view \(step "Open the start page"\)/);
+  assert.match(later, /- consent update: ad_storage=denied analytics_storage=denied ad_user_data=denied ad_personalization=denied functionality_storage=granted security_storage=granted/);
+  assert.ok(later.includes(`…`) && later.includes(`(page_location=${longUrl})`), "a long push is cut but keeps its page address whole");
+  // The Consent Mode ping is listed with its consent parameters; the GA4 hit is not listed twice.
+  assert.match(later, /- Google Ads: www\.google\.com\/ccm\/collect \[gcs=G100 gcd=13p3p3p2p5l1 dma=1\]/);
+  assert.doesNotMatch(later, /region1\.google-analytics\.com/);
 });

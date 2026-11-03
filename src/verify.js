@@ -14,6 +14,7 @@ const OWNER_BY_CHECK = {
   server_side: "developer",
   unplanned_events: "marketing",
   planned_out_of_scope: "marketing",
+  ga4_automatic_event: "marketing",
 };
 
 /** Who most likely fixes this finding: the site's developer, whoever runs Tag Manager, or marketing (the plan itself). Tag and consent setup is the default. */

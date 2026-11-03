@@ -168,3 +168,39 @@ test("flags GA4 and Meta disagreeing on the same order, in English and Turkish",
   const other = checkRun(plan, run({ hits: [hits[0], { ...hits[1], params: { ...hits[1].params, order_id: "T10" } }] }));
   assert.ok(!other.some((f) => f.check === "purchase_mismatch"));
 });
+
+test("GA4's automatic and enhanced measurement events are never unplanned", () => {
+  const p = { events: [{ platform: "ga4", name: "purchase" }] };
+  const builtin = ["page_view", "user_engagement", "scroll", "click", "view_search_results", "video_start", "file_download", "form_start", "form_submit"];
+  const findings = checkRun(p, run({ hits: [...builtin.map((n) => hit("ga4", n, 1)), hit("ga4", "purchase", 4), hit("ga4", "newsletter_open", 2), hit("meta", "scroll", 2)] }));
+  const unplanned = findings.find((f) => f.check === "unplanned_events");
+  assert.ok(unplanned, "the site's own unplanned event is still listed");
+  assert.match(unplanned.detail, /ga4:newsletter_open/);
+  // Only GA4 sends these by itself: a Meta event of the same name is still unplanned.
+  assert.match(unplanned.detail, /meta:scroll/);
+  for (const n of builtin) assert.doesNotMatch(unplanned.detail, new RegExp(`ga4:${n}\\b`), n);
+});
+
+test("a planned enhanced measurement event that never fired names the stream setting that sends it", () => {
+  const p = { events: [{ platform: "ga4", name: "scroll" }, { platform: "ga4", name: "file_download" }, { platform: "ga4", name: "page_view" }] };
+  const findings = checkRun(p, run({ hits: [hit("meta", "PageView", 1)] }));
+  const byEvent = Object.fromEntries(findings.filter((f) => f.check === "missing_event").map((f) => [f.event, f]));
+  assert.equal(byEvent.scroll.severity, "broken");
+  assert.match(byEvent.scroll.detail, /Enhanced measurement.*"Scrolls"/);
+  assert.match(byEvent.file_download.detail, /"File downloads"/);
+  // A missing page_view means the GA4 tag did not send at all, so it gets the plain text.
+  assert.doesNotMatch(byEvent.page_view.detail, /Enhanced measurement/);
+  const tr = checkRun(p, run({ hits: [] }), { lang: "tr" }).find((f) => f.event === "scroll");
+  assert.match(tr.detail, /Geliştirilmiş ölçüm.*"Kaydırmalar"/);
+});
+
+test("planned GA4 automatic events are read from their flags and are never missing", () => {
+  const p = { events: [{ platform: "ga4", name: "session_start" }, { platform: "ga4", name: "first_visit" }, { platform: "ga4", name: "user_engagement" }] };
+  const flagged = checkRun(p, run({ hits: [hit("ga4", "page_view", 1, {}, { autoEvents: ["first_visit", "session_start"] })] }));
+  assert.ok(!flagged.some((f) => f.check === "missing_event"));
+  const auto = flagged.filter((f) => f.check === "ga4_automatic_event");
+  assert.deepEqual(auto.map((f) => `${f.severity}:${f.event}`), ["info:user_engagement"]);
+  const none = checkRun(p, run({ hits: [] }));
+  assert.ok(!none.some((f) => f.check === "missing_event"));
+  assert.equal(none.filter((f) => f.check === "ga4_automatic_event").length, 3);
+});

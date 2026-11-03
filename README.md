@@ -47,7 +47,7 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Duplicates | `add_to_cart` sent twice by one click |
 | Consent | Meta `PageView` fired before the visitor accepted cookies, Consent Mode default missing or set too late, Consent Mode v2 signals (`ad_user_data`, `ad_personalization`) missing, tracking cookies set before consent, tags or cookies still active after the `decline_cookies` journey rejects the banner, a reject button that does nothing |
 | Personal data | An email address sent to an ad platform in plain text |
-| Unplanned events | Events firing that aren't in your measurement plan |
+| Unplanned events | Events firing that aren't in your measurement plan. GA4's automatic events (`first_visit`, `session_start`, `user_engagement`) and enhanced measurement events (`page_view`, `scroll`, `click`, `view_search_results`, `video_*`, `file_download`, `form_start`, `form_submit`) never count, since no tag sends them. When one of them is planned and missing, the finding names the enhanced measurement setting that sends it; `first_visit` and `session_start` are read from the flags GA4 puts on its other hits. |
 | Plan coverage | Each planned event sorted into implemented, missing, missing parameters, wrong values or not checked (see [Plan vs. site](#plan-vs-site)) |
 | Campaign parameters | `utm_campaign` or `gclid` on the landing address dropped by a redirect, or missing from the page address the hits report. The visit would be credited to direct traffic |
 | Server-side tracking | One event ID used for two different events, or a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container turns into a Conversions API event |
@@ -292,7 +292,7 @@ When a run uses `--against`, the report has a **Plan vs. site** section: at the 
 | Missing | Planned for a journey the run walked, but never fired |
 | Missing params | Fired, but a required parameter is absent |
 | Wrong values | Fired with a value problem, from the same checks as purchase value, currency and items |
-| Unplanned | Fired, but isn't in the plan |
+| Unplanned | Fired, but isn't in the plan (GA4's automatic and enhanced measurement events never are) |
 | Not checked | Planned, but its journey or platform wasn't part of this run |
 
 The coverage score is implemented divided by the planned events that were checkable (all except not checked), shown overall and per platform, for example `Coverage 7 of 11 (64%), 2 events not checked`. The same entries are in `plan-check.json`, one per planned event with its bucket. Exit codes don't change: `--fail-on` still looks at finding severity. Without `--against`, the report is exactly as before.
@@ -625,7 +625,7 @@ Tools the server offers:
 | `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
 | `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
 | `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. |
-| `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent. |
+| `browser_action` | One click, fill, select, goto, scroll or wait. Returns the page and the tracking hits that step sent, its dataLayer pushes (Consent Mode commands in full as `key=value`, page addresses never cut) and the calls it read no event from, such as Consent Mode pings with their `gcs` and `gcd`. A page_view that arrives during a later wait or scroll is listed on the step that loaded its page, marked late. |
 | `get_page` | Shows the current page. |
 | `finish_audit` | Checks everything against your measurement plan (JSON), a saved one given as `against` (`latest`, `first`, a plan ID, or on a local server a path), or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. The site comes from the audit. |
 | `run_audit` | Runs a config file end to end. With `against`, it checks the run against a saved plan and, when the config has no journeys, walks the journeys derived from that plan. `concurrency` runs that many journeys at once, each in its own browser (default 1), and `baseline` names a file of accepted findings written with `--update-baseline` (default: the config's `baseline`; see [Accept known findings](#accept-known-findings)). Local only for file paths. |
