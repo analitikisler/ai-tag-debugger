@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.20.1 (2026-11-03)
 
+- Runs can report fewer findings than 0.20.0 on the same site: GA4's own events are no longer unplanned, and a reject that keeps essential storage granted is no longer a re-grant. A baseline written with 0.20.0 can then list those entries as stale; `--update-baseline` rewrites it.
 - Fixed: a reject that left `functionality_storage`, `security_storage` or `personalization_storage` granted was reported as "the reject button does not stick". Only `ad_storage`, `analytics_storage`, `ad_user_data` and `ad_personalization` granted after a reject count as a re-grant now; consent platforms keep the others granted on "reject all".
 - GA4's automatic events (`first_visit`, `session_start`, `user_engagement`) and enhanced measurement events (`page_view`, `scroll`, `click`, `view_search_results`, `video_start`, `video_progress`, `video_complete`, `file_download`, `form_start`, `form_submit`) are never listed as unplanned, in the findings or in Plan vs. site. When a plan lists an enhanced measurement event that never fired, the finding says which setting under Admin > Data streams > Enhanced measurement sends it. A planned `first_visit` or `session_start` counts as sent when a GA4 hit carries its flag (`_fv`, `_ss`), since GA4 never sends them by name, and a planned automatic event that wasn't seen is an info note instead of a missing event.
 - A step waits until the tags have gone quiet: after the page loads and the network is idle, it waits until no tag, consent or tracking request and no dataLayer push came for 1.2 seconds, at most 3 seconds more, and once more for a page a delayed link only now started loading. A page_view gtag held for a consent update lands on the click that opened its page. Steps with recent tag activity take up to that much longer.
