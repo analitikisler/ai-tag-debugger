@@ -102,6 +102,7 @@ Advanced:
   --host <addr>        HTTP host (default 127.0.0.1)
   --token <secret>     Secret URL path segment, at least 16 characters (default: random)
   --allow-private-network   Over HTTP, let audits open localhost and private addresses
+  --allow-live              Over HTTP, let start_audit send live (tracking requests reach the real accounts)
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,6 +8,8 @@ import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resol
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
+import { campaignParamsIn } from "./campaign.js";
+import { detectCmpInPage } from "./cmp.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -26,7 +29,9 @@ export function installBrowser() {
 export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
 #truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
 #sp_message_container, [id^="sp_message_container_"], #cookie-law-info-bar, #BorlabsCookieBox, .klaro, #termly-code-snippet-support, #cookie-information-template-wrapper, #coiOverlay, \
-#cmpwrapper, #cmpbox2, .fc-consent-root, #ppms_cm_popup_overlay, [aria-label*="cookie" i][role=dialog]`;
+#cmpwrapper, #cmpbox2, .fc-consent-root, #ppms_cm_popup_overlay, [aria-label*="cookie" i][role=dialog], \
+[data-name^="Banner"][efl-consent-not-saved]`;
+// Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
 const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000 };
@@ -113,7 +118,7 @@ const INIT_SCRIPT = `(() => {
 // and form fields, it finds custom controls that sites build from divs and spans
 // (role attributes, tabindex, or a pointer cursor). Elements on screen come first,
 // so a long menu or footer can't push the button the agent needs out of the list.
-function snapshotInPage({ first, limit, textLimit, frameBox }) {
+function snapshotInPage({ first, limit, textLimit, frameBox, offscreenLimit = null }) {
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
@@ -187,8 +192,11 @@ function snapshotInPage({ first, limit, textLimit, frameBox }) {
     .map((el, order) => ({ el, order, tier: tierOf(el) }))
     .sort((a, b) => a.tier - b.tier || a.order - b.order);
   const firstCovered = ranked.findIndex((x) => x.tier === 2);
+  let offscreen = 0;
   const items = ranked
     .filter((item, i) => item.tier < 2 || i - firstCovered < 30) // only a few covered or clipped ones
+    // A compact view keeps a few elements above or below the screen; scrolling brings the rest on screen.
+    .filter((item) => item.tier !== 1 || offscreenLimit === null || offscreen++ < offscreenLimit)
     .slice(0, limit)
     .map((item) => ({ ...item, onScreen: item.tier === 0 }));
   const lines = [];
@@ -377,6 +385,72 @@ export function isTransientNavigationError(err, failedLoad) {
   return code === "timeout" || TRANSIENT_NET_ERRORS.test(code);
 }
 
+/**
+ * What a step's analytics and ad cookies say, without keeping their values: the GA4 client id from _ga
+ * (the cid GA4 hits carry anyway), whether _gcl_aw and _fbc hold the click ids the landing page was opened
+ * with ("landing") or other ones ("other"), and whether _gcl_au and _fbp exist. Null when none of them do.
+ */
+export function identityOf(cookies, landingUrl) {
+  const value = (name) => cookies.find((c) => c.name === name)?.value ?? "";
+  const sent = landingUrl ? campaignParamsIn(landingUrl) : {};
+  const out = {};
+  const ga = /^GA\d\.\d+\.(\d+\.\d+)$/.exec(value("_ga"));
+  if (ga) out.ga_client_id = ga[1];
+  // _gcl_aw is GCL.<time>.<gclid>; _fbc is fb.<n>.<time>.<fbclid>.
+  const aw = /^GCL\.\d+\.(.+)$/.exec(value("_gcl_aw"));
+  if (aw) out.gcl_aw = aw[1] === sent.gclid ? "landing" : "other";
+  const fbc = /^fb\.\d+\.\d+\.(.+)$/.exec(value("_fbc"));
+  if (fbc) out.fbc = fbc[1] === sent.fbclid ? "landing" : "other";
+  if (value("_gcl_au")) out.gcl_au = true;
+  if (value("_fbp")) out.fbp = true;
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Runs in the page: the Google tag's own consent state (google_tag_data.ics), or null before a Google tag loaded.
+ * Per consent type the default and update it holds, and whether it applied a default and an update at all, whether
+ * the default came after a tag had already read consent (wasSetLate), and whether wait_for_update ran out. It is how
+ * the tag sees consent, wherever it was set: gtag() in the page, or a consent platform's GTM template, which never
+ * shows in the dataLayer. Not documented by Google; read defensively.
+ */
+export function googleConsentStateInPage() {
+  const ics = window.google_tag_data?.ics;
+  if (!ics || typeof ics !== "object") return null;
+  const word = (v) => (v === true ? "granted" : v === false ? "denied" : undefined);
+  const entries = {};
+  for (const [type, e] of Object.entries(ics.entries ?? {})) {
+    if (!e || typeof e !== "object") continue;
+    const d = word(e.default);
+    const u = word(e.update);
+    entries[type] = { ...(d ? { default: d } : {}), ...(u ? { update: u } : {}) };
+  }
+  return { entries, usedDefault: Boolean(ics.usedDefault), usedUpdate: Boolean(ics.usedUpdate), wasSetLate: Boolean(ics.wasSetLate), waitPeriodTimedOut: Boolean(ics.waitPeriodTimedOut) };
+}
+
+/**
+ * Runs in the page: whether it is something other than the site, so what a step captured there says nothing about
+ * the site's tracking. A bot challenge in its place (Cloudflare, DataDome, HUMAN, Akamai), or a page that crashed in
+ * the browser (the error screen a Next.js app shows when its scripts fail). Null for a page that looks like itself.
+ * @returns {null | { kind: "challenge"|"crash", vendor?: string }}
+ */
+export function pageProblemInPage() {
+  const title = (document.title || "").trim();
+  const text = (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 3000);
+  const has = (selector) => {
+    try {
+      return Boolean(document.querySelector(selector));
+    } catch {
+      return false;
+    }
+  };
+  if (/^just a moment\.\.\.$|^attention required! \| cloudflare$/i.test(title) || has("#challenge-form, #challenge-running, #cf-challenge-running")) return { kind: "challenge", vendor: "Cloudflare" };
+  if (has('iframe[src*="captcha-delivery.com"]')) return { kind: "challenge", vendor: "DataDome" };
+  if (has("#px-captcha")) return { kind: "challenge", vendor: "HUMAN" };
+  if (/^access denied$/i.test(title) && /reference\s*#\s*[\d.a-f]+/i.test(text)) return { kind: "challenge", vendor: "Akamai" };
+  if (/^application error: a client-side exception has occurred/i.test(text)) return { kind: "crash", vendor: "Next.js" };
+  return null;
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
@@ -406,6 +480,10 @@ export class AuditSession {
     this.consentStep = null;
     this.rejectStep = null;
     this.cookieLog = []; // each cookie name and domain with the step it was first seen at (never values)
+    this.cookieChanges = []; // { step, name, domain, change: added|changed|removed }, never values
+    this.cookieHashes = new Map(); // domain|name -> a hash of the value at the last step, kept in memory only
+    this.cmp = null; // the consent platform and its setup, from detectCmpInPage, with the step it was first seen at
+    this.refusedScripts = new Map(); // step -> how many of the page's scripts were refused for coming back as HTML
     this.errors = [];
     this.dataLayerLog = [];
     this.network = [];
@@ -455,6 +533,10 @@ export class AuditSession {
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
+    // A script that comes back as an HTML page (a bot check, or files a new deployment no longer has) is refused.
+    this.page.on("console", (msg) => {
+      if (msg.type() === "error" && /^Refused to execute script from .*MIME type \('text\/html'\)/.test(msg.text())) this.refusedScripts.set(this.currentStep, (this.refusedScripts.get(this.currentStep) ?? 0) + 1);
+    });
     this.page.on("framenavigated", (frame) => {
       if (frame !== this.page.mainFrame()) return;
       if (frame.url().startsWith("chrome-error:")) this.errorPageShown = true;
@@ -521,7 +603,14 @@ export class AuditSession {
     });
     this.context.on("response", (response) => {
       const call = calls.get(response.request());
-      if (call) call.status = response.status();
+      if (!call) return;
+      call.status = response.status();
+      // A consent platform's script or setup file date tells which build of its setup the site serves. Setup files
+      // (OneTrust's, Cookiebot's) are fetched by script rather than loaded as one.
+      if (call.provider === "consent" && ["script", "fetch", "xhr"].includes(call.type)) {
+        const lastModified = response.headers()["last-modified"];
+        if (lastModified) call.lastModified = lastModified;
+      }
     });
     this.context.on("requestfailed", (request) => {
       const call = calls.get(request);
@@ -783,20 +872,21 @@ export class AuditSession {
     }
   }
 
-  async snapshot() {
+  /** @param {{ offscreenLimit?: number|null }} [opts] offscreenLimit: how many elements above or below the screen to list; null for all. */
+  async snapshot({ offscreenLimit = null } = {}) {
     const blocked = await this.enforce();
     if (blocked && this.page.url() === "about:blank") return { url: "about:blank", title: "", elements: "", text: `(${blocked})` };
     try {
       // The main page first, then iframes (booking and payment widgets often live in one).
       const frames = await this.visibleFrames();
-      const main = await this.page.evaluate(snapshotInPage, { first: 1, limit: frames.length ? MAX_ELEMENTS - 60 : MAX_ELEMENTS, textLimit: 3000 });
+      const main = await this.page.evaluate(snapshotInPage, { first: 1, limit: frames.length ? MAX_ELEMENTS - 60 : MAX_ELEMENTS, textLimit: 3000, offscreenLimit });
       this.refFrames = new Map();
       const lines = [...main.lines];
       let next = main.next;
       let more = main.more;
       for (const { frame, frameBox } of frames) {
         if (next > MAX_ELEMENTS) break;
-        const sub = await frame.evaluate(snapshotInPage, { first: next, limit: MAX_ELEMENTS - next + 1, textLimit: 0, frameBox }).catch(() => null);
+        const sub = await frame.evaluate(snapshotInPage, { first: next, limit: MAX_ELEMENTS - next + 1, textLimit: 0, frameBox, offscreenLimit }).catch(() => null);
         if (!sub?.lines.length) continue;
         lines.push(`(inside an embedded frame from ${new URL(sub.url).host})`, ...sub.lines);
         for (let r = next; r < sub.next; r++) this.refFrames.set(r, frame);
@@ -940,12 +1030,34 @@ export class AuditSession {
    */
   async act(a) {
     const error = await this.perform(a);
-    await this.trackCookies();
+    await this.observe();
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
     this.steps[this.currentStep].pagePath = pagePath(this.page.url());
     this.steps[this.currentStep].endedAt = Date.now(); // when the step was reported, so a late hit can say how late
     return error;
+  }
+
+  /**
+   * What the step just taken left behind, beyond its requests: the cookies it changed, the consent platform the
+   * first time one is seen, and the Google tag's consent state when it changed. act() calls it after every action;
+   * the consent scenarios call it after the steps they take themselves.
+   */
+  async observe() {
+    await this.trackCookies();
+    if (!this.cmp) {
+      const cmp = await this.evaluateWithin(detectCmpInPage);
+      if (cmp) this.cmp = { ...cmp, step: this.currentStep };
+    }
+    const problem = await this.evaluateWithin(pageProblemInPage);
+    if (problem) {
+      const refused = this.refusedScripts.get(this.currentStep) ?? 0;
+      this.steps[this.currentStep].pageProblem = { ...problem, ...(refused ? { refusedScripts: refused } : {}) };
+    }
+    // Kept on the step only when it changed, so the steps that hold one are where the Google tag's state moved.
+    const tagConsent = await this.evaluateWithin(googleConsentStateInPage);
+    const before = this.steps.slice(0, this.currentStep).map((st) => st.tagConsent).filter(Boolean).at(-1);
+    if (tagConsent && JSON.stringify(tagConsent) !== JSON.stringify(before)) this.steps[this.currentStep].tagConsent = tagConsent;
   }
 
   async perform(a) {
@@ -1021,10 +1133,14 @@ export class AuditSession {
       if (a.rejects_consent && this.rejectStep === null) {
         this.rejectStep = this.currentStep;
         // A rejected banner should close; one that is still showing means the button did nothing.
-        step.bannerOpenAfter = await this.page.evaluate((sel) => [...document.querySelectorAll(sel)].some((n) => {
-          const r = n.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && getComputedStyle(n).visibility !== "hidden";
-        }), CMP_BANNER_SELECTORS).catch(() => false);
+        step.bannerOpenAfter = await this.page.evaluate((sel) => {
+          const roots = [document];
+          for (let i = 0; i < roots.length; i++) for (const n of roots[i].querySelectorAll("*")) if (n.shadowRoot) roots.push(n.shadowRoot);
+          return roots.flatMap((r) => [...r.querySelectorAll(sel)]).some((n) => {
+            const r = n.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && getComputedStyle(n).visibility !== "hidden";
+          });
+        }, CMP_BANNER_SELECTORS).catch(() => false);
       }
       return null;
     } catch (err) {
@@ -1032,20 +1148,56 @@ export class AuditSession {
     }
   }
 
-  /** Notes which cookies appeared during the step just taken (names and domains only). */
+  /**
+   * Notes the cookies the step just taken added, changed or removed, and what the analytics and ad cookies
+   * say (identityOf). Values never leave this function: a short hash of each, held until the next step,
+   * is enough to tell that one changed.
+   */
   async trackCookies() {
+    const all = await this.rawCookies();
     const seen = new Set(this.cookieLog.map((c) => `${c.domain}|${c.name}`));
-    for (const c of await this.cookies()) {
-      if (!seen.has(`${c.domain}|${c.name}`) && this.cookieLog.length < 500) this.cookieLog.push({ ...c, step: this.currentStep });
+    const now = new Map();
+    for (const c of all) {
+      const k = `${c.domain}|${c.name}`;
+      const hash = createHash("sha256").update(c.value).digest("base64").slice(0, 16);
+      now.set(k, hash);
+      if (!seen.has(k) && this.cookieLog.length < 500) this.cookieLog.push({ name: c.name, domain: c.domain, step: this.currentStep });
+      const before = this.cookieHashes.get(k);
+      const change = before === undefined ? "added" : before !== hash ? "changed" : null;
+      if (change && this.cookieChanges.length < 2000) this.cookieChanges.push({ step: this.currentStep, name: c.name, domain: c.domain, change });
     }
+    for (const k of this.cookieHashes.keys()) {
+      if (now.has(k) || this.cookieChanges.length >= 2000) continue;
+      const [domain, ...name] = k.split("|");
+      this.cookieChanges.push({ step: this.currentStep, name: name.join("|"), domain, change: "removed" });
+    }
+    this.cookieHashes = now;
+    const identity = identityOf(all, this.landing?.requested);
+    if (identity) this.steps[this.currentStep].identity = identity;
   }
 
-  async cookies() {
+  /** page.evaluate(fn), or null when it fails or the page does not answer within ms: a page stuck in a script never answers, and the next page read reports that. */
+  async evaluateWithin(fn, ms = 2000) {
+    let timer;
+    const result = await Promise.race([
+      this.page.evaluate(fn).catch(() => null),
+      new Promise((resolve) => (timer = setTimeout(() => resolve(null), ms))),
+    ]);
+    clearTimeout(timer);
+    return result;
+  }
+
+  /** The browser's cookies with their values, for trackCookies only; [] when the browser takes too long. */
+  async rawCookies() {
     let timer;
     const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve([]), 10_000)));
     const cookies = await Promise.race([this.context.cookies().catch(() => []), tooLong]);
     clearTimeout(timer);
-    return cookies.map((c) => ({ name: c.name, domain: c.domain }));
+    return cookies;
+  }
+
+  async cookies() {
+    return (await this.rawCookies()).map((c) => ({ name: c.name, domain: c.domain }));
   }
 
   async close() {

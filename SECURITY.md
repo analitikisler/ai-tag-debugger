@@ -24,7 +24,7 @@ Please report:
 - Token handling: using the HTTP server without the secret, learning it from logs or reports, or a timing difference in the check.
 - Secrets leaking into the browser environment, a report or a saved site.
 
-Out of scope: findings about websites you audit (they are the site's problem, not the tool's), the behavior of the AI models themselves, and anything that needs `--keep-bodies`, `--allow-private-network` or `block_hits: false` to be set on purpose.
+Out of scope: findings about websites you audit (they are the site's problem, not the tool's), the behavior of the AI models themselves, and anything that needs `--keep-bodies`, `--allow-private-network`, `--allow-live`, `live: true` or `block_hits: false` to be set on purpose.
 
 ## How to report
 

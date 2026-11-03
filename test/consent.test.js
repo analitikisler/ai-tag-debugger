@@ -83,7 +83,7 @@ test("a clean reject journey has no consent findings", () => {
 });
 
 test("recognizes more consent platforms", () => {
-  for (const host of ["sdk.privacy-center.org", "cdn.cookie-script.com", "cdn.iubenda.com", "app.termly.io", "consent.trustarc.com", "cmp.quantcast.mgr.consensu.org"]) {
+  for (const host of ["sdk.privacy-center.org", "cdn.cookie-script.com", "cdn.iubenda.com", "app.termly.io", "consent.trustarc.com", "cmp.quantcast.mgr.consensu.org", "bundles.efilli.com", "analytic.efilli.com", "cdn-cookieyes.com"]) {
     assert.equal(providerOf(`https://${host}/x.js`)?.key, "consent", host);
   }
 });

@@ -247,3 +247,36 @@ test("a late hit sits on the step that loaded its page with how late it came, an
   assert.match(s1, /href="#j0-s2-q0">POST region1\.google-analytics\.com\/g\/collect 204/);
   assert.match(pane(render(context({ ...input, lang: "tr" })), "j0-s1"), />3,2 sn gecikmeli geldi</);
 });
+
+test("the Cookies tab lists a step's cookie changes by name and what the client id and click id cookies hold", () => {
+  const t0 = 1_000_000;
+  const steps = [
+    { index: 0, label: "start", t: t0 },
+    { index: 1, label: "Open the shop", t: t0 + 100 },
+    { index: 2, label: "Accept cookies", t: t0 + 200, identity: { ga_client_id: "111.222", gcl_aw: "landing", gcl_au: true } },
+    { index: 3, label: "Open a product", t: t0 + 300, identity: { ga_client_id: "333.444", gcl_aw: "landing", gcl_au: true } },
+  ];
+  const cookieChanges = [
+    { step: 1, name: "visit", domain: "shop.example", change: "added" },
+    { step: 2, name: "_ga", domain: ".shop.example", change: "added" },
+    { step: 2, name: "_gcl_aw", domain: ".shop.example", change: "added" },
+    { step: 3, name: "_ga", domain: ".shop.example", change: "changed" },
+  ];
+  const run = { journeyId: "browse", viewport: "desktop", startedAt: t0, completed: true, note: "", providers: ["ga4"], steps, hits: [], dataLayerLog: [], network: [], cookieChanges };
+  const input = { title: "t", generatedAt: "now", findings: [], explained: null, runs: [run] };
+  const html = render(context({ ...input, lang: "en" }));
+  const s2 = pane(html, "j0-s2");
+  assert.match(s2, /<button type="button" role="tab" aria-controls="j0-s2-ck" aria-selected="true">Cookies <span class="n">2<\/span><\/button>/);
+  assert.match(s2, /GA4 client id \(_ga\): 111\.222, new at this step\./);
+  assert.match(s2, /_gcl_aw holds the gclid the landing page was opened with\./);
+  assert.match(s2, /<td><code>_gcl_aw<\/code><\/td><td class="mono xs">\.shop\.example<\/td><td>added<\/td>/);
+  assert.match(pane(html, "j0-s3"), /GA4 client id \(_ga\): 333\.444, changed from 111\.222\./);
+  // The step that only added an unrelated cookie lists it and says nothing about ids.
+  const s1 = pane(html, "j0-s1");
+  assert.match(s1, /<td><code>visit<\/code><\/td>/);
+  assert.doesNotMatch(s1, /client id/);
+  assert.match(pane(render(context({ ...input, lang: "tr" })), "j0-s3"), /GA4 istemci kimliği \(_ga\): 333\.444, 111\.222 değerinden değişti\./);
+  // A capture from before cookies were tracked per step gets no Cookies tab.
+  const old = render(context({ ...input, runs: [{ ...run, cookieChanges: undefined }], lang: "en" }));
+  assert.doesNotMatch(old, /-ck"/);
+});

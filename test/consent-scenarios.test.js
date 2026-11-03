@@ -52,8 +52,10 @@ test("answers each choice through the consent platform's API", async () => {
     assert.deepEqual(result.states.reject.after, {});
     assert.ok(result.states.analytics.after.ga4);
     assert.equal(result.states.analytics.after.meta, undefined);
-    // Each choice has its own browser, so the ones after the first can run side by side with the same outcome.
-    assert.deepEqual(await runConsentScenarios({ site }, { concurrency: 3 }), result);
+    // Each choice has its own browser, so the ones after the first can run side by side with the same outcome. How many
+    // milliseconds each provider took to load differs from run to run, so only which providers loaded is compared.
+    const sameOutcome = (r) => JSON.parse(JSON.stringify(r, (k, v) => (k === "loaded" ? Object.keys(v).sort() : v)));
+    assert.deepEqual(sameOutcome(await runConsentScenarios({ site }, { concurrency: 3 })), sameOutcome(result));
   } finally {
     server.close();
   }

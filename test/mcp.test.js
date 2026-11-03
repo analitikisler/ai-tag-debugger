@@ -3,6 +3,7 @@ import { freePort } from "./helpers/free-port.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,7 +34,7 @@ const refIn = (text, pattern) => Number(text.split("\n").find((l) => /^\[\d+\]/.
 test("a chat app can drive an audit through the MCP tools", async () => {
   const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
   const { client, call } = await connect({ allowFiles: true, reportsDir });
-  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "get_hit", "get_step", "finish_audit", "make_plan", "what_changed", "run_audit"]);
+  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "get_hit", "get_step", "get_report", "consent_matrix", "finish_audit", "make_plan", "what_changed", "run_audit"]);
 
   let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
   const id = page.match(/audit_id: (\w+)/)[1];
@@ -57,7 +58,20 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   assert.match((await client.callTool({ name: "get_hit", arguments: { audit_id: id, step, hit: 99 } })).content[0].text, /^Step \d+ has \d+ hits? \(h0 to h\d+\)\.$/);
 
   const plan = JSON.stringify({ consent_mode: true, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }] });
-  const result = await call("finish_audit", { audit_id: id, completed: true, note: "Added.", measurement_plan: plan });
+  const finished = (await client.callTool({ name: "finish_audit", arguments: { audit_id: id, completed: true, note: "Added.", measurement_plan: plan } })).content;
+  const result = finished[0].text;
+  // A timeline comes with the result: one entry per step, with the hits and their consent.
+  const timeline = JSON.parse(finished[1].text.replace(/^Timeline \(JSON, one entry per step\):\n/, ""));
+  const cart = timeline.find((e) => e.action === "Add to cart");
+  assert.ok(cart.hits.some((h) => h.platform === "ga4" && h.event === "add_to_cart" && h.consent.ad_storage === "granted"));
+  assert.ok(timeline.find((e) => e.action === "Accept cookies").consent_commands.some((c) => c.update?.ad_storage === "granted"));
+  // The report can be read over MCP by the name the result gives.
+  const name = result.match(/get_report with report "([^"]+)"/)[1];
+  assert.match(await call("get_report", { report: name }), /^# /m);
+  assert.equal(JSON.parse(await call("get_report", { report: name, part: "summary" })).site, "localhost");
+  const steps = JSON.parse(await call("get_report", { report: name, part: "timeline" }));
+  assert.deepEqual(steps[0].steps, timeline);
+  assert.match((await client.callTool({ name: "get_report", arguments: { report: "../../etc" } })).content[0].text, /^No report "\.\.\/\.\.\/etc" from this server\. Its reports: /);
   assert.match(result, /Meta "PageView" was sent before the visitor made a consent choice/);
   assert.match(result, /sent 2 times/);
   const reportPath = result.match(/event timeline: (.+report\.html)/)[1];
@@ -281,4 +295,102 @@ test("start_audit opens the site as given with campaign false, and with a campai
   const campaign = capture.findings.filter((f) => f.check.startsWith("campaign_"));
   assert.deepEqual(campaign.map((f) => `${f.severity}:${f.check}`), ["ok:campaign_params"]);
   assert.match(campaign[0].detail, /gclid.*utm_source|utm_source.*gclid/);
+});
+
+test("a step result lists its cookie changes by name, the GA4 client id when it changes, and the click ids a consent ping carried", () => {
+  const audit = { session: {
+    steps: [
+      { index: 0, label: "start" },
+      { index: 1, label: "Accept", identity: { ga_client_id: "111.222", gcl_aw: "landing" } },
+      { index: 2, label: "Next page", identity: { ga_client_id: "111.222", gcl_aw: "landing" } },
+      { index: 3, label: "Reset", identity: { ga_client_id: "333.444", gcl_aw: "landing" } },
+    ],
+    hits: [], dataLayerLog: [],
+    cookieChanges: [
+      { step: 1, name: "_ga", domain: ".shop", change: "added" },
+      { step: 1, name: "_gcl_aw", domain: ".shop", change: "added" },
+      { step: 3, name: "_ga", domain: ".shop", change: "changed" },
+      { step: 3, name: "prefs", domain: "shop", change: "removed" },
+    ],
+    network: [
+      { step: 1, provider: "google_ads", vendor: "Google Ads", url: "https://www.google.com/ccm/collect?en=consent_update&gclid=aitd-gclid&gclaw=aitd-gclid&gcs=G111" },
+      { step: 2, provider: "google_ads", vendor: "Google Ads", url: "https://pagead2.googlesyndication.com/ccm/collect?en=page_view&gclid=0&gcs=G100" },
+    ],
+  } };
+  const accept = stepCapture(audit, 1);
+  assert.match(accept, /^Cookies \(names only\): added _ga, _gcl_aw$/m);
+  assert.match(accept, /^GA4 client id \(_ga\) 111\.222, new at this step; _gcl_aw holds the landing gclid\.$/m);
+  assert.match(accept, /\[gcs=G111 gclid=aitd-gclid gclaw=aitd-gclid\]/);
+  // Nothing changed at step 2: no cookie lines; the redacted gclid is named.
+  const next = stepCapture(audit, 2);
+  assert.doesNotMatch(next, /Cookies|client id/);
+  assert.match(next, /\[gcs=G100 gclid=0 \(redacted\)\]/);
+  const reset = stepCapture(audit, 3);
+  assert.match(reset, /^Cookies \(names only\): changed _ga; removed prefs$/m);
+  assert.match(reset, /^GA4 client id \(_ga\) 333\.444, changed from 111\.222; _gcl_aw holds the landing gclid\.$/m);
+});
+
+test("a compact page view lists 40 off-screen elements at most and leaves out what the last view already showed", async () => {
+  const links = Array.from({ length: 120 }, (_, i) => `<p style="margin:40px 0"><a href="/p${i}">Product ${i}</a></p>`).join("");
+  const page = `<!doctype html><button id="b" onclick="document.getElementById('t').textContent='Added'">Add</button><p id="t">Ready</p>${links}`;
+  const site = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise((r) => site.listen(0, "127.0.0.1", r));
+  try {
+    const { call } = await connect({ allowFiles: true, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")) });
+    const first = await call("start_audit", { site: `http://127.0.0.1:${site.address().port}/`, campaign: false });
+    const id = first.match(/audit_id: (\w+)/)[1];
+    const offscreen = (view) => view.split("\n").filter((l) => /^\[\d+\].*\(not in view\)$/.test(l)).length;
+    assert.equal(offscreen(first), 40);
+    assert.match(first, /more elements not listed/);
+    // Nothing changed: neither the text nor the elements are sent again.
+    const waited = await call("browser_action", { audit_id: id, action: "wait", value: "200", reason: "Wait" });
+    assert.match(waited, /Visible text:\n\(unchanged since the last page view\)/);
+    assert.match(waited, /Interactive elements:\n\(unchanged since the last page view: the same refs still apply\)/);
+    // The text changed, the elements did not.
+    const added = await call("browser_action", { audit_id: id, action: "click", text: "Add", reason: "Add" });
+    assert.match(added, /Visible text:\n[^(]*Added/);
+    assert.match(added, /Interactive elements:\n\(unchanged since the last page view/);
+    // get_page shows everything, and so does detail full.
+    const full = await call("get_page", { audit_id: id });
+    assert.ok(offscreen(full) > 100, String(offscreen(full)));
+    assert.match(full, /Visible text:\n[^(]*Added/);
+    assert.ok(offscreen(await call("browser_action", { audit_id: id, action: "wait", value: "100", reason: "Wait", detail: "full" })) > 100);
+    await call("finish_audit", { audit_id: id, completed: true, note: "Done." });
+  } finally {
+    site.close();
+  }
+});
+
+test("a live audit lets tracking requests through, only where the server allows it, and the result and report say so", async () => {
+  let received = 0;
+  const site = createServer((req, res) => {
+    if (req.url.startsWith("/g/collect")) {
+      received++;
+      return res.writeHead(204).end();
+    }
+    res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><p>shop</p><script>fetch("/g/collect?v=2&tid=G-TEST&en=page_view&dl=" + encodeURIComponent(location.href), { method: "POST", keepalive: true });</script>`);
+  });
+  await new Promise((r) => site.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${site.address().port}/`;
+  try {
+    const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+    const locked = await connect({ allowFiles: false, reportsDir, allowLive: false });
+    assert.match((await locked.client.callTool({ name: "start_audit", arguments: { site: url, live: true } })).content[0].text, /^Live audits are off on this server: it was started without --allow-live\./);
+
+    const { call } = await connect({ allowFiles: true, reportsDir, allowLive: true });
+    const quiet = await call("start_audit", { site: url, campaign: false });
+    assert.match(quiet, /ga4 page_view/);
+    assert.equal(received, 0, "answered locally by default");
+    await call("finish_audit", { audit_id: quiet.match(/audit_id: (\w+)/)[1], completed: true, note: "Opened." });
+
+    const page = await call("start_audit", { site: url, campaign: false, live: true });
+    assert.match(page, /^LIVE: tracking requests go to the real analytics and ad accounts/m);
+    assert.ok(received >= 1, "the hit reached the site's endpoint");
+    const result = await call("finish_audit", { audit_id: page.match(/audit_id: (\w+)/)[1], completed: true, note: "Opened." });
+    assert.match(result, /^LIVE: /);
+    const md = await readFile(path.join(path.dirname(result.match(/event timeline: (.+report\.html)/)[1]), "report.md"), "utf8");
+    assert.match(md, /^\*\*Live run: tracking requests reached the real analytics and ad accounts/m);
+  } finally {
+    site.close();
+  }
 });
