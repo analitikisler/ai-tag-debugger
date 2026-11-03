@@ -118,8 +118,34 @@ function describeCall(c) {
     return `- ${c.vendor ?? c.provider} ${cut(c.url, VALUE_LIMIT)}`;
   }
   const consent = googleConsent(u.searchParams);
-  const signals = ["gcs", "gcd", "dma", "npa"].filter((k) => u.searchParams.has(k)).map((k) => `${k}=${u.searchParams.get(k)}`).join(" ");
+  // gclid is the landing click id the ping reports (0 when ads_data_redaction blanks it), gclaw the one _gcl_aw holds.
+  const signals = ["gcs", "gcd", "dma", "npa", "gclid", "gclaw"].filter((k) => u.searchParams.has(k))
+    .map((k) => `${k}=${u.searchParams.get(k)}${k === "gclid" && u.searchParams.get(k) === "0" ? " (redacted)" : ""}`).join(" ");
   return `- ${c.vendor ?? c.provider}: ${u.hostname}${u.pathname}${signals ? ` [${signals}]` : ""}${consent ? ` [consent ${consentText(consent)}]` : ""}`;
+}
+
+const NAMES_SHOWN = 15;
+/** The cookies a step added, changed or removed, by name, and what the analytics and ad cookies say when that changed. */
+function cookieLines(session, step) {
+  const lines = [];
+  const changes = (session.cookieChanges ?? []).filter((c) => c.step === step);
+  const names = (kind) => [...new Set(changes.filter((c) => c.change === kind).map((c) => c.name))];
+  const part = (label, list) => (list.length ? `${label} ${list.slice(0, NAMES_SHOWN).join(", ")}${list.length > NAMES_SHOWN ? ` and ${list.length - NAMES_SHOWN} more` : ""}` : null);
+  const parts = [part("added", names("added")), part("changed", names("changed")), part("removed", names("removed"))].filter(Boolean);
+  if (parts.length) lines.push(`Cookies (names only): ${parts.join("; ")}`);
+  const id = session.steps[step]?.identity;
+  const before = session.steps.slice(0, step).map((st) => st.identity).filter(Boolean).at(-1);
+  if (!id || (!parts.length && JSON.stringify(id) === JSON.stringify(before))) return lines;
+  const facts = [];
+  if (id.ga_client_id) {
+    const prev = before?.ga_client_id;
+    const since = session.steps.findIndex((st) => st.identity?.ga_client_id === id.ga_client_id);
+    facts.push(`GA4 client id (_ga) ${id.ga_client_id}, ${!prev ? "new at this step" : prev === id.ga_client_id ? `the same since step ${since}` : `changed from ${prev}`}`);
+  }
+  if (id.gcl_aw) facts.push(id.gcl_aw === "landing" ? "_gcl_aw holds the landing gclid" : "_gcl_aw holds a gclid other than the landing one");
+  if (id.fbc) facts.push(id.fbc === "landing" ? "_fbc holds the landing fbclid" : "_fbc holds an fbclid other than the landing one");
+  if (facts.length) lines.push(`${facts.join("; ")}.`);
+  return lines;
 }
 
 export function stepCapture(audit, step) {
@@ -137,6 +163,7 @@ export function stepCapture(audit, step) {
   if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
   if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
   if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
+  lines.push(...cookieLines(session, step));
   return lines.join("\n");
 }
 

@@ -282,3 +282,36 @@ test("start_audit opens the site as given with campaign false, and with a campai
   assert.deepEqual(campaign.map((f) => `${f.severity}:${f.check}`), ["ok:campaign_params"]);
   assert.match(campaign[0].detail, /gclid.*utm_source|utm_source.*gclid/);
 });
+
+test("a step result lists its cookie changes by name, the GA4 client id when it changes, and the click ids a consent ping carried", () => {
+  const audit = { session: {
+    steps: [
+      { index: 0, label: "start" },
+      { index: 1, label: "Accept", identity: { ga_client_id: "111.222", gcl_aw: "landing" } },
+      { index: 2, label: "Next page", identity: { ga_client_id: "111.222", gcl_aw: "landing" } },
+      { index: 3, label: "Reset", identity: { ga_client_id: "333.444", gcl_aw: "landing" } },
+    ],
+    hits: [], dataLayerLog: [],
+    cookieChanges: [
+      { step: 1, name: "_ga", domain: ".shop", change: "added" },
+      { step: 1, name: "_gcl_aw", domain: ".shop", change: "added" },
+      { step: 3, name: "_ga", domain: ".shop", change: "changed" },
+      { step: 3, name: "prefs", domain: "shop", change: "removed" },
+    ],
+    network: [
+      { step: 1, provider: "google_ads", vendor: "Google Ads", url: "https://www.google.com/ccm/collect?en=consent_update&gclid=aitd-gclid&gclaw=aitd-gclid&gcs=G111" },
+      { step: 2, provider: "google_ads", vendor: "Google Ads", url: "https://pagead2.googlesyndication.com/ccm/collect?en=page_view&gclid=0&gcs=G100" },
+    ],
+  } };
+  const accept = stepCapture(audit, 1);
+  assert.match(accept, /^Cookies \(names only\): added _ga, _gcl_aw$/m);
+  assert.match(accept, /^GA4 client id \(_ga\) 111\.222, new at this step; _gcl_aw holds the landing gclid\.$/m);
+  assert.match(accept, /\[gcs=G111 gclid=aitd-gclid gclaw=aitd-gclid\]/);
+  // Nothing changed at step 2: no cookie lines; the redacted gclid is named.
+  const next = stepCapture(audit, 2);
+  assert.doesNotMatch(next, /Cookies|client id/);
+  assert.match(next, /\[gcs=G100 gclid=0 \(redacted\)\]/);
+  const reset = stepCapture(audit, 3);
+  assert.match(reset, /^Cookies \(names only\): changed _ga; removed prefs$/m);
+  assert.match(reset, /^GA4 client id \(_ga\) 333\.444, changed from 111\.222; _gcl_aw holds the landing gclid\.$/m);
+});

@@ -276,6 +276,27 @@ function parityNote(m, run, step, parity) {
   }).join("");
 }
 
+/** The step's cookie changes by name, and what the analytics and ad cookies say when the step changed it. */
+function cookiePane(m, run, step) {
+  const changes = (run.cookieChanges ?? []).filter((c) => c.step === step.index);
+  const id = step.identity;
+  const before = (run.steps ?? []).filter((st) => st.index < step.index && st.identity).at(-1)?.identity;
+  const facts = [];
+  if (id && (changes.length || JSON.stringify(id) !== JSON.stringify(before))) {
+    if (id.ga_client_id) {
+      const prev = before?.ga_client_id;
+      const since = (run.steps ?? []).find((st) => st.identity?.ga_client_id === id.ga_client_id)?.index;
+      facts.push(m.ui.gaClientId(id.ga_client_id, prev ? since : null, prev && prev !== id.ga_client_id ? prev : null));
+    }
+    if (id.gcl_aw) facts.push(m.ui.gclAw(id.gcl_aw === "landing"));
+    if (id.fbc) facts.push(m.ui.fbc(id.fbc === "landing"));
+  }
+  const table = changes.length
+    ? `<table class="tbl jr-req" aria-label="${esc(m.ui.tabCookies)}"><thead><tr><th scope="col">${esc(m.ui.cookieCol)}</th><th scope="col">${esc(m.ui.domainCol)}</th><th scope="col">${esc(m.ui.changeCol)}</th></tr></thead><tbody>${changes.map((c) => `<tr><td><code>${esc(c.name)}</code></td><td class="mono xs">${esc(c.domain)}</td><td>${esc(m.ui.cookieChange[c.change] ?? c.change)}</td></tr>`).join("")}</tbody></table>`
+    : "";
+  return { count: changes.length, live: changes.length > 0 || facts.length > 0, html: `${facts.map((f) => `<p class="xs jr-note-s">${esc(f)}</p>`).join("")}${table ? `<div class="tscroll">${table}</div>` : ""}<p class="muted xs jr-note-s">${esc(m.ui.cookieNamesOnly)}</p>` };
+}
+
 function stepPane(ctx, t, rows, run, ri, step, sev, selected) {
   const { m } = ctx;
   const id = stepAnchor(ri, step.index);
@@ -284,15 +305,19 @@ function stepPane(ctx, t, rows, run, ri, step, sev, selected) {
   const calls = requestsOf(run, step.index);
   const skipped = skippedOf(run, step.index);
   const skippedN = skipped.reduce((a, [, c]) => a + c, 0);
+  const cookies = cookiePane(m, run, step);
   const meta = [step.pagePath ? pathOf(step.pagePath) : null, ...actionText(m, step), secs(run, step.t)].filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join("");
   const reqNotes = `${skippedN ? `<p class="muted xs jr-note-s">${esc(m.ui.skippedInStep(skipped.map(([v, c]) => `${v} ${c}`).join(", "), skippedN))}</p>` : ""}${calls.some((c) => c.bodyDropped) ? `<p class="muted xs jr-note-s">${esc(m.ui.bodyDropped)}</p>` : ""}`;
   const tabs = [
     ["hits", esc(m.html.hitsCol), m.html.hitsInStep, hits.length, hits.length ? `<div class="jr-list">${hits.map((h, k) => hitCard(ctx, t, rows, run, ri, step, h, k)).join("")}</div>` : `<p class="muted xs jr-empty">${esc(m.ui.noHits)}</p>`],
     ["dl", esc(t.dataLayer), t.dataLayer, pushes.length, pushes.length ? `<div class="jr-list">${pushes.map((e, k) => pushCard(ctx, t, run, ri, step, e, k)).join("")}</div>` : `<p class="muted xs jr-empty">${esc(m.ui.noPushes)}</p>`],
     ["req", esc(m.ui.tabNetwork), m.ui.tabNetwork, calls.length, `${calls.length ? requestTable(ctx, t, run, ri, step, calls) : `<p class="muted xs jr-empty">${esc(m.ui.noRequests)}</p>`}${reqNotes}`],
+    // Captures from before cookies were tracked per step have no cookieChanges, and no tab for them.
+    ...(run.cookieChanges ? [["ck", esc(m.ui.tabCookies), m.ui.tabCookies, cookies.count, cookies.html]] : []),
   ];
-  // A tab with nothing in it is shown but disabled; the requests tab stays open when it only has the skipped-requests note.
-  const live = (k, c) => c > 0 || (k === "req" && Boolean(reqNotes));
+  // A tab with nothing in it is shown but disabled; the requests tab stays open when it only has the skipped-requests note,
+  // and the cookies tab when it only says what the click id and client id cookies hold.
+  const live = (k, c) => c > 0 || (k === "req" && Boolean(reqNotes)) || (k === "ck" && cookies.live);
   const first = tabs.find(([k, , , c]) => live(k, c));
   const body = first
     ? `<div class="tabs jr-tabs" data-tabs><div role="tablist" aria-label="${esc(t.stepOf(step.index))}">${tabs.map(([k, label, , c]) => `<button type="button" role="tab" aria-controls="${id}-${k}" aria-selected="${first[0] === k}"${live(k, c) ? "" : " disabled"}>${label} ${n(c)}</button>`).join("")}</div>
