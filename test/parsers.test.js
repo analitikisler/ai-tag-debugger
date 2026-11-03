@@ -87,3 +87,10 @@ test("Meta hit carries event_id and advanced matching fields", () => {
   assert.equal(meta.params.event_id, "ord-5");
   assert.deepEqual(Object.keys(meta.userFields), ["ud[em]"]);
 });
+
+test("GA4 hits carry the first_visit and session_start flags as the automatic events they stand for", () => {
+  const [first] = parseTrackingRequest("https://www.google-analytics.com/g/collect?v=2&tid=G-X&en=page_view&_fv=1&_ss=1&_nsi=1");
+  assert.deepEqual(first.autoEvents, ["first_visit", "session_start"]);
+  const [later] = parseTrackingRequest("https://www.google-analytics.com/g/collect?v=2&tid=G-X&en=page_view");
+  assert.equal(later.autoEvents, undefined);
+});

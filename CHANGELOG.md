@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: a reject that left `functionality_storage`, `security_storage` or `personalization_storage` granted was reported as "the reject button does not stick". Only `ad_storage`, `analytics_storage`, `ad_user_data` and `ad_personalization` granted after a reject count as a re-grant now; consent platforms keep the others granted on "reject all".
+- GA4's automatic events (`first_visit`, `session_start`, `user_engagement`) and enhanced measurement events (`page_view`, `scroll`, `click`, `view_search_results`, `video_start`, `video_progress`, `video_complete`, `file_download`, `form_start`, `form_submit`) are never listed as unplanned, in the findings or in Plan vs. site. When a plan lists an enhanced measurement event that never fired, the finding says which setting under Admin > Data streams > Enhanced measurement sends it. A planned `first_visit` or `session_start` counts as sent when a GA4 hit carries its flag (`_fv`, `_ss`), since GA4 never sends them by name, and a planned automatic event that wasn't seen is an info note instead of a missing event.
+- A step waits until the tags have gone quiet: after the page loads and the network is idle, it waits until no tag, consent or tracking request and no dataLayer push came for 1.2 seconds, at most 3 seconds more, and once more for a page a delayed link only now started loading. A page_view gtag held for a consent update lands on the click that opened its page. Steps with recent tag activity take up to that much longer.
+- A page_view that still arrives during a later wait or scroll, for a page an earlier step loaded and with none of its own yet, is put on that earlier step and marked late: the report shows "arrived 3.2 s late" on the hit and links to the request in the step it was sent in, and the MCP step result says where it went. A second page_view for the same page stays on its own step.
+- MCP: `browser_action` and `start_audit` results no longer cut what the agent needs to read. Consent Mode commands are shown in full as `key=value`, `page_location` and `page_referrer` are never cut, in hits or inside dataLayer pushes, and a value that is cut ends in `…`. Calls to analytics and ad endpoints that carry no event the tool reads, such as Google's `ccm/collect` Consent Mode pings, are listed per step with their `gcs`, `gcd`, `dma` and `npa`, instead of only being counted in `finish_audit`.
+
 ## 0.20.0 (2026-10-25)
 
 - Node 22 or newer is required. Node 20 reached its end of life on 30 April 2026, and the OpenAI SDK the tool installs already needed 22. `aitd doctor` and `npm run setup` say so on an older Node, and CI tests on Node 22 and 24.

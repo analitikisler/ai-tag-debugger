@@ -17,7 +17,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { AuditSession } from "./browser.js";
 import { navigationError, privateHostChecker } from "./guard.js";
 import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
-import { checkRun, groupFindings, summarize } from "./checks.js";
+import { checkRun, groupFindings, isConsentCommand, summarize } from "./checks.js";
 import { LANGUAGES, messages } from "./i18n.js";
 import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { validatePlan } from "./schema.js";
@@ -29,7 +29,7 @@ import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
 import { savePlan } from "./plan.js";
 import { changesLines, sinceLastRun } from "./changes.js";
-import { DEFAULT_PROVIDERS, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
+import { DEFAULT_PROVIDERS, isCollectionEndpoint, parseTrackingRequest, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -64,20 +64,68 @@ const audits = new Map();
 const text = (t) => ({ content: [{ type: "text", text: t }] });
 const fail = (t) => ({ content: [{ type: "text", text: t }], isError: true });
 
-function describeHit(h) {
-  const params = Object.entries(h.params ?? {})
-    .filter(([k]) => !["v", "tid", "gtm", "_p", "cid", "sid", "_s", "sct", "seg", "dl", "dr", "dt", "ul", "sr", "_et", "en"].includes(k))
-    .slice(0, 12)
-    .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`.slice(0, 120))
-    .join(", ");
-  return `- ${h.platform} ${h.name}${h.consent ? ` [consent ${Object.entries(h.consent).map(([k, v]) => `${k}=${v}`).join(" ")}]` : ""}${params ? `: ${params}` : ""}`;
+// Kept whole in the step result, wherever they appear: the end of a page address is where a UTM
+// parameter or a gclid gets lost, so cutting it hides exactly what a campaign check needs.
+const WHOLE_FIELDS = new Set(["page_location", "page_referrer"]);
+const VALUE_LIMIT = 120;
+const PUSH_LIMIT = 200;
+const cut = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
+const show = (v) => (typeof v === "string" ? v : JSON.stringify(v));
+
+/** The page address fields anywhere in a pushed object, a few levels deep, as [name, value]. */
+function wholeFieldsIn(value, depth = 0, out = []) {
+  if (!value || typeof value !== "object" || depth > 3) return out;
+  for (const [k, v] of Object.entries(value)) {
+    if (WHOLE_FIELDS.has(k) && typeof v === "string") out.push([k, v]);
+    else wholeFieldsIn(v, depth + 1, out);
+  }
+  return out;
 }
 
-function stepCapture(audit, step) {
-  const hits = audit.session.hits.filter((h) => h.step === step);
-  const pushes = audit.session.dataLayerLog.filter((e) => e.step === step);
-  const lines = [`Tracking hits sent by this step: ${hits.length}`, ...hits.map(describeHit)];
-  if (pushes.length) lines.push(`dataLayer pushes: ${pushes.map((p) => JSON.stringify(p.value).slice(0, 160)).join(" | ")}`);
+function describeHit(h, steps) {
+  const entries = Object.entries(h.params ?? {}).filter(([k]) => !["v", "tid", "gtm", "_p", "cid", "sid", "_s", "sct", "seg", "dl", "dr", "dt", "ul", "sr", "_et", "en"].includes(k));
+  const params = [
+    ...entries.filter(([k]) => !WHOLE_FIELDS.has(k)).slice(0, 12).map(([k, v]) => cut(`${k}=${show(v)}`, VALUE_LIMIT)),
+    ...entries.filter(([k]) => WHOLE_FIELDS.has(k)).map(([k, v]) => `${k}=${show(v)}`),
+  ].join(", ");
+  const late = h.late ? ` (arrived ${(h.late.ms / 1000).toFixed(1)} s late, after the step that loaded its page: "${steps[h.step]?.label ?? `step ${h.step}`}")` : "";
+  return `- ${h.platform} ${h.name}${h.consent ? ` [consent ${Object.entries(h.consent).map(([k, v]) => `${k}=${v}`).join(" ")}]` : ""}${params ? `: ${params}` : ""}${late}`;
+}
+
+/** A consent command in full, as key=value; any other push as JSON, cut, with its page address fields whole. */
+function describePush(p) {
+  if (isConsentCommand(p, "default") || isConsentCommand(p, "update")) {
+    const signals = p.value[2] && typeof p.value[2] === "object" ? Object.entries(p.value[2]).map(([k, v]) => `${k}=${show(v)}`).join(" ") : show(p.value[2]);
+    return `- consent ${p.value[1]}: ${signals}`;
+  }
+  const json = JSON.stringify(p.value) ?? String(p.value);
+  const whole = json.length > PUSH_LIMIT ? wholeFieldsIn(p.value) : [];
+  return `- ${cut(json, PUSH_LIMIT)}${whole.length ? ` (${whole.map(([k, v]) => `${k}=${v}`).join(", ")})` : ""}`;
+}
+
+/** A call to a tracking endpoint that carries no event the tool reads, such as a Consent Mode ping, with its consent parameters. */
+function describeCall(c) {
+  let u;
+  try {
+    u = new URL(c.url);
+  } catch {
+    return `- ${c.vendor ?? c.provider} ${cut(c.url, VALUE_LIMIT)}`;
+  }
+  const signals = ["gcs", "gcd", "dma", "npa"].filter((k) => u.searchParams.has(k)).map((k) => `${k}=${u.searchParams.get(k)}`).join(" ");
+  return `- ${c.vendor ?? c.provider}: ${u.hostname}${u.pathname}${signals ? ` [${signals}]` : ""}`;
+}
+
+export function stepCapture(audit, step) {
+  const { session } = audit;
+  const hits = session.hits.filter((h) => h.step === step);
+  const pushes = session.dataLayerLog.filter((e) => e.step === step);
+  // Hits that arrived during this step for a page an earlier step loaded are listed there, and noted here.
+  const lateHere = session.hits.filter((h) => h.late?.during === step);
+  const pings = session.network.filter((c) => c.step === step && isCollectionEndpoint(c.url) && !parseTrackingRequest(c.url, c.postData ?? null));
+  const lines = [`Tracking hits sent by this step: ${hits.length}`, ...hits.map((h) => describeHit(h, session.steps))];
+  if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
+  if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
+  if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
   return lines.join("\n");
 }
 

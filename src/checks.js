@@ -15,6 +15,9 @@ const sentBefore = (a, b) => a.step < b.step || (a.step === b.step && a.t != nul
 const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 // Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
 const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
+// The signals a "reject all" must keep denied. functionality_storage and security_storage cover what
+// the site needs to work, and personalization_storage its own features, so CMPs grant them on reject too.
+const TRACKING_SIGNALS = ["ad_storage", "analytics_storage", ...V2_SIGNALS];
 const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
@@ -61,6 +64,28 @@ export function canonicalEvent(name) {
   let n = String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
   if (n.startsWith("dl") && n.length > 2) n = n.slice(2);
   return CANONICAL.get(n) ?? n;
+}
+
+// GA4 makes these itself: first_visit and session_start from flags on its other hits, user_engagement
+// when the page is hidden or left. No tag sends them, so they are never unplanned, and a run can end
+// before user_engagement goes out. Keyed by canonicalEvent, like every comparison of event names here.
+const GA4_AUTOMATIC = new Set(["first_visit", "session_start", "user_engagement"].map(canonicalEvent));
+// Enhanced measurement events, which GA4 sends with no tag when the web stream's setting is on.
+// The value names the setting that sends it.
+const GA4_ENHANCED = new Map(Object.entries({
+  page_view: "pageViews", scroll: "scrolls", click: "outboundClicks", view_search_results: "siteSearch",
+  video_start: "videoEngagement", video_progress: "videoEngagement", video_complete: "videoEngagement",
+  file_download: "fileDownloads", form_start: "formInteractions", form_submit: "formInteractions",
+}).map(([name, setting]) => [canonicalEvent(name), setting]));
+const isGa4Automatic = (platform, name) => platform === "ga4" && GA4_AUTOMATIC.has(canonicalEvent(name));
+/** Whether GA4 sends this event by itself, so a plan need not list it. */
+const isGa4Builtin = (platform, name) => isGa4Automatic(platform, name) || (platform === "ga4" && GA4_ENHANCED.has(canonicalEvent(name)));
+
+/** Whether a planned event was sent on a run: by name, or for GA4's first_visit and session_start, as a flag on another hit. */
+function eventFired(ev, hits) {
+  if (hits.some((h) => hitMatchesEvent(ev, h))) return true;
+  const name = canonicalEvent(ev.name);
+  return ev.platform === "ga4" && hits.some((h) => h.platform === "ga4" && (h.autoEvents ?? []).some((a) => canonicalEvent(a) === name));
 }
 
 /** Whether a captured hit is the planned event, by its exact name, an alias or a common variant. */
@@ -169,17 +194,22 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Expected events that never fired.
   for (const ev of plan.events) {
     if (!expectedIn(ev, run.journeyId)) continue;
-    const fired = run.hits.some((h) => hitMatchesEvent(ev, h));
-    if (!fired) {
-      findings.push({
-        ...base,
-        severity: run.completed ? "broken" : "info",
-        check: "missing_event",
-        platform: ev.platform,
-        event: ev.name,
-        detail: run.completed ? d.missingEvent(ev.platform, ev.name) : d.missingEventEarly(ev.name),
-      });
+    if (eventFired(ev, run.hits)) continue;
+    if (isGa4Automatic(ev.platform, ev.name)) {
+      findings.push({ ...base, severity: "info", check: "ga4_automatic_event", platform: ev.platform, event: ev.name, detail: d.missingAutomatic(ev.name) });
+      continue;
     }
+    // page_view is enhanced measurement too, but a missing one means the GA4 tag itself did not send.
+    const name = canonicalEvent(ev.name);
+    const setting = ev.platform === "ga4" && name !== canonicalEvent("page_view") ? GA4_ENHANCED.get(name) : undefined;
+    findings.push({
+      ...base,
+      severity: run.completed ? "broken" : "info",
+      check: "missing_event",
+      platform: ev.platform,
+      event: ev.name,
+      detail: !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
+    });
   }
 
   // Required parameters missing on events that did fire (reported once per event).
@@ -410,7 +440,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   if (rejectStep !== null) {
     const reject = run.steps.find((s) => s.index === rejectStep);
     const regranted = run.dataLayerLog.find(
-      (e) => e.step >= rejectStep && isConsentCommand(e, "update") && Object.values(e.value[2] ?? {}).includes("granted"),
+      (e) => e.step >= rejectStep && isConsentCommand(e, "update") && TRACKING_SIGNALS.some((k) => e.value[2]?.[k] === "granted"),
     );
     if (regranted) findings.push({ ...base, severity: "broken", check: "reject_ignored", step: stepLabel(regranted.step), detail: d.rejectIgnored() });
     else if (reject?.bannerOpenAfter) findings.push({ ...base, severity: "broken", check: "reject_button_failed", step: stepLabel(rejectStep), detail: d.rejectButtonFailed() });
@@ -495,7 +525,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // Events that are not in the plan. Without a plan every event would be listed, which says nothing.
-  const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h)).map((h) => key(h.platform, h.name)))];
+  const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h) && !isGa4Builtin(h.platform, h.name)).map((h) => key(h.platform, h.name)))];
   if (hasPlan && unplanned.length) {
     findings.push({ ...base, severity: "info", check: "unplanned_events", detail: d.unplanned(unplanned) });
   }
@@ -557,10 +587,12 @@ export function planCheck(plan, runs, findings) {
       const own = findings.filter((f) => f.event && walked.some((r) => r.journeyId === f.journey && r.viewport === f.viewport) && hitMatchesEvent(ev, { platform: f.platform, name: f.event }));
       const params = own.filter((f) => f.check === "missing_params");
       const values = own.filter((f) => WRONG_VALUE_CHECKS.has(f.check));
-      const fired = walked.some((r) => r.hits.some((h) => hitMatchesEvent(ev, h)));
+      const fired = walked.some((r) => eventFired(ev, r.hits));
       if (params.length) entry.bucket = "missing_params";
       else if (values.length) entry.bucket = "wrong_values";
-      else entry.bucket = fired ? "implemented" : "missing";
+      else if (fired) entry.bucket = "implemented";
+      // GA4 makes these without a tag, so not seeing one says nothing about the site's setup.
+      else entry.bucket = isGa4Automatic(ev.platform, ev.name) ? "not_checked" : "missing";
       const details = [...new Set([...params, ...values].map((f) => f.detail))];
       if (details.length) entry.details = details;
     }
@@ -571,7 +603,7 @@ export function planCheck(plan, runs, findings) {
   for (const r of runs) {
     if (!findings.some((f) => f.check === "unplanned_events" && f.journey === r.journeyId && f.viewport === r.viewport)) continue;
     for (const h of r.hits) {
-      if (events.some((e) => hitMatchesEvent(e, h)) || seen.has(key(h.platform, h.name))) continue;
+      if (events.some((e) => hitMatchesEvent(e, h)) || isGa4Builtin(h.platform, h.name) || seen.has(key(h.platform, h.name))) continue;
       seen.add(key(h.platform, h.name));
       entries.push({ platform: h.platform, event: h.name, bucket: "unplanned", journeys: [r.journeyId] });
     }

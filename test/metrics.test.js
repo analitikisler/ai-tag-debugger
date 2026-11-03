@@ -104,7 +104,7 @@ test("planCoverage: buckets with shares of the checkable events, overall and per
 });
 
 test("planCoverage: not checked and unplanned events are counted but kept out of the shares", () => {
-  const r = run("checkout", [hit("ga4", "purchase", 3, good), hit("ga4", "scroll", 1)]);
+  const r = run("checkout", [hit("ga4", "purchase", 3, good), hit("ga4", "newsletter_open", 1)]);
   const c = planCoverage({ plan, runs: [r], findings: checkRun(plan, r) });
   assert.deepEqual(c.counts, { implemented: 1, missing: 2, missing_params: 0, wrong_values: 0, unplanned: 1, not_checked: 1 });
   assert.equal(c.planned, 4);

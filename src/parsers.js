@@ -64,6 +64,8 @@ export function parseGa4(url, postData) {
     for (const [k, v] of new URLSearchParams(line)) merged.set(k, v);
     const items = [...merged].filter(([k]) => /^pr\d+$/.test(k)).map(([, v]) => v);
     const user = [...merged].filter(([k]) => isUserDataKey(k));
+    // GA4 makes first_visit and session_start from these flags on another hit; they are never sent by name.
+    const autoEvents = [["_fv", "first_visit"], ["_ss", "session_start"]].filter(([flag]) => merged.has(flag)).map(([, name]) => name);
     return {
       platform: "ga4",
       delivery: ga4Delivery(u),
@@ -72,6 +74,7 @@ export function parseGa4(url, postData) {
       params: ga4ParamsFrom(merged),
       consent: ga4Consent(merged),
       ...(items.length ? { items } : {}),
+      ...(autoEvents.length ? { autoEvents } : {}),
       ...(user.length ? { userFields: Object.fromEntries(user) } : {}),
       url,
     };

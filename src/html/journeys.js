@@ -65,8 +65,10 @@ function pushesForHit(run, hit) {
 
 /** The network request that carried the hit. Identical hits (duplicates) are paired with identical requests in order. */
 function callsForHit(run, hit) {
-  const calls = (run.network ?? []).filter((c) => c.step === hit.step && c.url === hit.url);
-  const twins = run.hits.filter((h) => h.step === hit.step && h.url === hit.url);
+  // A late hit was sent during a later step, so its request is recorded there.
+  const sentIn = hit.late?.during ?? hit.step;
+  const calls = (run.network ?? []).filter((c) => c.step === sentIn && c.url === hit.url);
+  const twins = run.hits.filter((h) => (h.late?.during ?? h.step) === sentIn && h.url === hit.url);
   return twins.length > 1 && calls.length === twins.length ? [calls[twins.indexOf(hit)]] : calls;
 }
 
@@ -216,7 +218,7 @@ function runState(ctx, rows, run) {
 /* ---------- step pane: hits ---------- */
 
 /** The 1–3 parameters a practitioner scans first: missing required ones, value, items, the order id; a page title when there is nothing else. */
-function keyBits(ctx, t, hit, flag) {
+function keyBits(ctx, t, hit, flag, run) {
   const { m } = ctx;
   const p = hit.params ?? {};
   const out = [];
@@ -228,6 +230,7 @@ function keyBits(ctx, t, hit, flag) {
   if (p.transaction_id) out.push(kv("transaction_id", p.transaction_id));
   if (hit.delivery === "server") out.push(`<span class="chip plain">${esc(m.ui.serverSideTag)}</span>`);
   if (!out.length && p.page_title) out.push(kv("", p.page_title));
+  if (hit.late) out.unshift(`<span class="chip plain" title="${esc(m.ui.lateHitTip((run?.steps ?? []).find((s) => s.index === hit.late.during)?.label ?? hit.late.during))}">${esc(m.ui.lateHit(hit.late.ms))}</span>`);
   if (!out.length) return `<span class="muted">${esc(m.ui.noParameters)}</span>`;
   return out.slice(0, 3).join("");
 }
@@ -261,10 +264,10 @@ function hitCard(ctx, t, rows, run, ri, step, hit, k) {
   const label = PROVIDERS[safeKey(hit.platform)] ?? platformLabel(hit.platform);
   const calls = callsForHit(run, hit);
   const reqLine = calls.length
-    ? calls.map((c) => `<a class="mono" href="#${requestId(ri, step.index, stepCalls.indexOf(c))}">${esc(c.method ?? "")} ${esc(hostPath(c.url))} ${esc(c.status ?? "")}</a>${c.blocked ? `<span class="muted">${esc(m.html.blockedBy(label))}</span>` : ""}`).join("")
+    ? calls.map((c) => `<a class="mono" href="#${requestId(ri, c.step, (c.step === step.index ? stepCalls : requestsOf(run, c.step)).indexOf(c))}">${esc(c.method ?? "")} ${esc(hostPath(c.url))} ${esc(c.status ?? "")}</a>${c.blocked ? `<span class="muted">${esc(m.html.blockedBy(label))}</span>` : ""}`).join("")
     : `<span class="mono">${esc(hostPath(hit.url))}</span>`;
   const card = flag ? ids.get(flag) : null;
-  return `<details class="card jr-hit${sev ? ` sev-${sev}` : ""}" id="${id}"${sev ? ` data-flagged="${sev}" data-print-open` : ""}><summary><span class="jr-c-p">${platChip(hit.platform)}</span><code class="jr-ev">${esc(hit.name)}</code><span class="jr-c-k">${keyBits(ctx, t, hit, flag)}</span><span class="jr-c-c">${hitConsent(t, hit.consent)}</span><span class="jr-c-s">${sev ? badge(sev, m.severity[sev]) : ""}</span><span class="jr-tm">${esc(secs(run, hit.t))}</span></summary>
+  return `<details class="card jr-hit${sev ? ` sev-${sev}` : ""}" id="${id}"${sev ? ` data-flagged="${sev}" data-print-open` : ""}><summary><span class="jr-c-p">${platChip(hit.platform)}</span><code class="jr-ev">${esc(hit.name)}</code><span class="jr-c-k">${keyBits(ctx, t, hit, flag, run)}</span><span class="jr-c-c">${hitConsent(t, hit.consent)}</span><span class="jr-c-s">${sev ? badge(sev, m.severity[sev]) : ""}</span><span class="jr-tm">${esc(secs(run, hit.t))}</span></summary>
 <div class="body">${flag ? `<p class="jr-flag sev-${sev}">${use(`sev-${sev}`, 14)}<span>${detailHtml(flag.detail)}</span>${card ? `<a href="#${card}">${esc(m.html.findingLink)}</a>` : ""}</p>` : ""}
 <div class="jr-hb"><div><h4 class="jr-h">${esc(m.ui.parameters)}${n(event.length + missing.length)}</h4>${batch ? `<p class="muted xs jr-batch">${esc(m.ui.inBatch(batch[0], batch[1]))}</p>` : ""}${paramTable}${ctxTable}</div>
 ${items.length ? `<div><h4 class="jr-h">${esc(m.ui.items)}${n(items.length)}</h4>${itemsTable(m, t, items)}</div>` : ""}
