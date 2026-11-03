@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Development: the guide for coding agents is `AGENTS.md`, the name agents of any vendor read, instead of `CLAUDE.md`, and CONTRIBUTING.md points to it.
+- Development: ESLint's `minimatch` is held at 11 through `overrides` in package.json, for the globparts denial-of-service advisory (GHSA-g3hv-75wg-m249) that no 3.x or 10.x release fixes; ESLint itself still ships an older one. The tool as installed from npm was never affected: `minimatch` is only a development dependency. `npm audit` reports none.
 
 ## 0.21.0 (2026-11-03)
 
