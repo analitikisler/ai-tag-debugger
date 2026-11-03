@@ -5,7 +5,7 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: [".claude/", "node_modules/", "reports/", "aitd/", "saved/"] },
+  { ignores: ["node_modules/", "reports/", "aitd/", "saved/"] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: "module", globals: { ...globals.node, ...globals.browser } },

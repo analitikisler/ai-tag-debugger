@@ -1,6 +1,6 @@
 # Contributing
 
-`ai-tag-debugger` is a Node CLI and MCP server. There is no build step: the files in `src/` are what runs. This page says how to set up, where things live, and how to add the pieces people most often add. [README.md](README.md) is the user manual; read it first.
+`ai-tag-debugger` is a Node CLI and MCP server. There is no build step: the files in `src/` are what runs. This page says how to set up, where things live, and how to add the pieces people most often add. [README.md](README.md) is the user manual; read it first. If you work with a coding agent, [AGENTS.md](AGENTS.md) gives it the same rules in short.
 
 ## Setting up
 
