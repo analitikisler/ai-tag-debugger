@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- MCP: `start_audit` opens the first page the way an ad click does, as the CLI already did, so `finish_audit` checks that the campaign parameters survive redirects and reach the hits. `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses a campaign's own values.
+- MCP: each step result starts with its step number, and each hit has an `[h]` number and the ids and flags GA4 sends with it (`cid`, `sid`, `sct`, `seg`, `gcs`, `gcd`, `dma`, `npa`, `_fv`, `_ss`, `_nsi`). The new `get_hit` tool shows one hit in full: every parameter its request carried, its place in a batched request, where it was sent and `gcd` decoded per consent signal. The new `get_step` tool shows an earlier step's capture again.
+- `gcd` is read on GA4 hits, Google Ads conversions and Consent Mode pings: each hit's consent now includes `ad_user_data` and `ad_personalization`, and `gcd` stands in for `gcs` when a hit has none. Google Ads conversions carry their consent too. The report shows all four signals on a hit.
+- A Google hit that says `ad_user_data` or `ad_personalization` was granted counts as granted, like `ad_storage` and `analytics_storage`: before the visitor chose, after a reject, and in the consent scenarios. Runs on sites that grant those two early can show findings they did not before.
+
 ## 0.20.1 (2026-11-03)
 
 - Runs can report fewer findings than 0.20.0 on the same site: GA4's own events are no longer unplanned, and a reject that keeps essential storage granted is no longer a re-grant. A baseline written with 0.20.0 can then list those entries as stale; `--update-baseline` rewrites it.
