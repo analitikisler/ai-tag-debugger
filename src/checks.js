@@ -21,7 +21,7 @@ const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 const TRACKING_SIGNALS = CONSENT_SIGNALS;
 /** Whether a Google hit says it was sent with any of the tracking signals granted (from gcs, and gcd for the v2 ones). */
 const claimsGranted = (hit) => TRACKING_SIGNALS.some((k) => hit.consent?.[k] === "granted");
-const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
+export const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
@@ -163,8 +163,15 @@ export function consentGrantedStep(run) {
   const fromUpdate = run.dataLayerLog.find(
     (e) => isConsentCommand(e, "update") && e.value[2]?.ad_storage === "granted",
   );
-  const candidates = [run.consentStep, fromUpdate?.step].filter((s) => s !== null && s !== undefined);
+  // A consent platform's GTM template updates the Google tag without a dataLayer command; the tag's own state shows it.
+  const fromTag = tagConsentStates(run).find((st) => st.entries.ad_storage?.update === "granted");
+  const candidates = [run.consentStep, fromUpdate?.step, fromTag?.step].filter((s) => s !== null && s !== undefined);
   return candidates.length ? Math.min(...candidates) : null;
+}
+
+/** The Google tag's own consent states a run recorded (google_tag_data.ics, kept on the steps where it changed), as { step, ...state }. */
+export function tagConsentStates(run) {
+  return (run.steps ?? []).filter((st) => st.tagConsent).map((st) => ({ step: st.index, ...st.tagConsent }));
 }
 
 /**
@@ -194,6 +201,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     findings.push({ ...base, severity: "warning", check: "journey_incomplete", detail: d.journeyIncomplete(run.note) });
   }
 
+  // A page that was a bot challenge or crashed in the browser: the tags there may never have run, so what the run
+  // did not see there is unverified rather than missing.
+  const troubled = (run.steps ?? []).filter((st) => st.pageProblem);
+  const challenge = troubled.find((st) => st.pageProblem.kind === "challenge");
+  if (challenge) findings.push({ ...base, severity: "warning", check: "page_blocked", step: stepLabel(challenge.index), detail: d.pageBlocked(challenge.pageProblem.vendor) });
+  const crash = troubled.find((st) => st.pageProblem.kind === "crash");
+  if (crash) findings.push({ ...base, severity: "warning", check: "page_crashed", step: stepLabel(crash.index), detail: d.pageCrashed(crash.pageProblem.vendor, crash.pageProblem.refusedScripts ?? 0) });
+
   // Expected events that never fired.
   for (const ev of plan.events) {
     if (!expectedIn(ev, run.journeyId)) continue;
@@ -207,11 +222,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     const setting = ev.platform === "ga4" && name !== canonicalEvent("page_view") ? GA4_ENHANCED.get(name) : undefined;
     findings.push({
       ...base,
-      severity: run.completed ? "broken" : "info",
+      severity: run.completed && !troubled.length ? "broken" : "info",
       check: "missing_event",
       platform: ev.platform,
       event: ev.name,
-      detail: !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
+      detail: troubled.length ? d.missingEventUnverified(ev.name) : !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
     });
   }
 
@@ -441,27 +456,39 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   const granted = consentGrantedStep(run);
   // Consent Mode only governs Google tags. Within one step, the push and hit times decide which came first.
   const firstGoogleHit = run.hits.filter((h) => GOOGLE_PLATFORMS.has(h.platform)).reduce((a, h) => (!a || sentBefore(h, a) ? h : a), null);
+  // The Google tag's own state also counts: a consent platform's GTM template sets the default and the update inside
+  // GTM, where the dataLayer never shows them.
+  const tagStates = tagConsentStates(run);
+  const tagDefault = tagStates.find((st) => st.usedDefault) ?? null;
+  const defaultEntry = run.dataLayerLog.find((e) => isConsentCommand(e, "default"));
   if (plan.consent_mode) {
-    const defaultEntry = run.dataLayerLog.find((e) => isConsentCommand(e, "default"));
-    if (!defaultEntry) {
+    if (!defaultEntry && !tagDefault) {
       findings.push({ ...base, severity: "risk", check: "consent_default_missing", detail: d.consentDefaultMissing() });
-    } else if (firstGoogleHit && sentBefore(firstGoogleHit, defaultEntry)) {
+    } else if ((defaultEntry && firstGoogleHit && sentBefore(firstGoogleHit, defaultEntry)) || tagStates.some((st) => st.wasSetLate)) {
       findings.push({ ...base, severity: "risk", check: "consent_default_late", detail: d.consentDefaultLate() });
     }
   }
+  // A default the page pushed that the Google tag never applied: pushed as a plain array instead of through gtag(), to
+  // another dataLayer, or from a frame. Tag Assistant then says Consent Mode is not configured.
+  if (defaultEntry && tagStates.length && !tagDefault) {
+    findings.push({ ...base, severity: "warning", check: "consent_default_not_applied", step: stepLabel(defaultEntry.step), detail: d.consentDefaultNotApplied() });
+  }
   const defaults = run.dataLayerLog.filter((e) => isConsentCommand(e, "default"));
-  if (plan.consent_mode && defaults.length) {
-    const declared = new Set(defaults.flatMap((e) => Object.keys(e.value[2] ?? {})));
+  const declared = defaults.length
+    ? new Set(defaults.flatMap((e) => Object.keys(e.value[2] ?? {})))
+    : tagDefault ? new Set(Object.entries(tagDefault.entries).filter(([, e]) => e.default).map(([k]) => k)) : null;
+  if (plan.consent_mode && declared) {
     const missing = V2_SIGNALS.filter((k) => !declared.has(k));
     if (missing.length) findings.push({ ...base, severity: "risk", check: "consent_v2_missing", detail: d.consentV2Missing(missing) });
   }
   if (granted !== null) {
     const updates = run.dataLayerLog.filter((e) => isConsentCommand(e, "update"));
-    if (updates.length) {
-      const grantedKeys = new Set(updates.flatMap((e) => Object.entries(e.value[2] ?? {}).filter(([, v]) => v === "granted").map(([k]) => k)));
-      const missing = V2_SIGNALS.filter((k) => !grantedKeys.has(k));
-      if (missing.length) findings.push({ ...base, severity: "warning", check: "consent_v2_update", detail: d.consentV2Update(missing) });
-    }
+    const tagGrant = tagStates.find((st) => st.entries.ad_storage?.update === "granted");
+    const grantedKeys = updates.length
+      ? new Set(updates.flatMap((e) => Object.entries(e.value[2] ?? {}).filter(([, v]) => v === "granted").map(([k]) => k)))
+      : tagGrant ? new Set(Object.entries(tagGrant.entries).filter(([, e]) => e.update === "granted").map(([k]) => k)) : null;
+    const missing = grantedKeys ? V2_SIGNALS.filter((k) => !grantedKeys.has(k)) : [];
+    if (missing.length) findings.push({ ...base, severity: "warning", check: "consent_v2_update", detail: d.consentV2Update(missing) });
   }
 
   // Declining: nothing may be sent or stored for ads after the visitor said no.
@@ -470,7 +497,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     const reject = run.steps.find((s) => s.index === rejectStep);
     const regranted = run.dataLayerLog.find(
       (e) => e.step >= rejectStep && isConsentCommand(e, "update") && TRACKING_SIGNALS.some((k) => e.value[2]?.[k] === "granted"),
-    );
+    ) ?? tagStates.find((st) => st.step >= rejectStep && TRACKING_SIGNALS.some((k) => st.entries[k]?.update === "granted"));
     if (regranted) findings.push({ ...base, severity: "broken", check: "reject_ignored", step: stepLabel(regranted.step), detail: d.rejectIgnored() });
     else if (reject?.bannerOpenAfter) findings.push({ ...base, severity: "broken", check: "reject_button_failed", step: stepLabel(rejectStep), detail: d.rejectButtonFailed() });
     const afterReject = new Map();

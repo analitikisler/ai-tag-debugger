@@ -4,7 +4,7 @@
 // { plan, runs, findings, consentScenarios } (no I/O, no AI, no HTML) and returns plain data; the
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
-import { canonicalEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize } from "./checks.js";
+import { canonicalEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
 import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
@@ -32,7 +32,7 @@ const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
 const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 // Consent findings that say the visitor's "no" was not honoured, against the ones that say the setup is risky.
 const CONSENT_FAIL_CHECKS = new Set(["after_reject", "cookies_after_reject", "reject_ignored", "reject_button_failed"]);
-const CONSENT_ATTENTION_CHECKS = new Set(["before_consent", "cookies_before_consent", "consent_default_missing", "consent_default_late", "consent_v2_missing", "consent_v2_update"]);
+const CONSENT_ATTENTION_CHECKS = new Set(["before_consent", "cookies_before_consent", "consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update"]);
 const CONSENT_CHECK = /^(consent_|cookies_|reject_|before_consent|after_reject)/;
 
 // Ecommerce parameters sites send under another name (UA-style products/revenue, order ids), as checks.js reads them.
@@ -243,15 +243,21 @@ export function platformParity({ runs = [] } = {}) {
 function consentDefaultIn(run) {
   const log = run.dataLayerLog ?? [];
   const entry = log.find((e) => isConsentCommand(e, "default")) ?? null;
+  // Without a dataLayer command, the Google tag's own state can still show a default (a consent platform's GTM template).
+  const tagStates = entry ? [] : tagConsentStates({ steps: run.steps ?? [] });
+  const tagDefault = tagStates.find((st) => st.usedDefault) ?? null;
+  const set = Boolean(entry || tagDefault);
   const firstGoogleHit = (run.hits ?? []).filter((h) => GOOGLE_PLATFORMS.has(h.platform)).sort(byTime)[0] ?? null;
   const step = entry ? stepOf(run, entry.step) : null;
-  const declared = uniq(log.filter((e) => isConsentCommand(e, "default")).flatMap((e) => Object.keys(e.value[2] ?? {})));
+  const declared = entry
+    ? uniq(log.filter((e) => isConsentCommand(e, "default")).flatMap((e) => Object.keys(e.value[2] ?? {})))
+    : tagDefault ? Object.entries(tagDefault.entries).filter(([, e]) => e.default).map(([k]) => k) : [];
   const missing = V2_SIGNALS.filter((k) => !declared.includes(k));
   return {
-    journey: run.journeyId, viewport: run.viewport, present: Boolean(entry),
-    step: entry?.step ?? null, stepLabel: step?.label ?? null, ms: entry && step && entry.t != null && step.t != null ? entry.t - step.t : null,
-    beforeFirstGoogleHit: entry && firstGoogleHit ? !sentBefore(firstGoogleHit, entry) : null,
-    v2Signals: { present: Boolean(entry) && !missing.length, missing: entry ? missing : V2_SIGNALS },
+    journey: run.journeyId, viewport: run.viewport, present: set, source: entry ? "dataLayer" : tagDefault ? "tag" : null,
+    step: entry?.step ?? tagDefault?.step ?? null, stepLabel: step?.label ?? null, ms: entry && step && entry.t != null && step.t != null ? entry.t - step.t : null,
+    beforeFirstGoogleHit: entry && firstGoogleHit ? !sentBefore(firstGoogleHit, entry) : tagDefault ? !tagStates.some((st) => st.wasSetLate) : null,
+    v2Signals: { present: set && !missing.length, missing: set ? missing : V2_SIGNALS },
   };
 }
 

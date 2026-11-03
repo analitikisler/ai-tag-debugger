@@ -252,6 +252,9 @@ export function collect(session, journey, viewport) {
     rejectStep: session.rejectStep,
     cookieLog: session.cookieLog,
     cookieChanges: session.cookieChanges,
+    cmp: session.cmp,
+    // Hits let through to the real accounts (block_hits false, or a live MCP audit): the reports say so.
+    ...(session.opts.blockHits === false ? { live: true } : {}),
     dataLayerLog: session.dataLayerLog,
     network: session.network,
     providers: session.providers,

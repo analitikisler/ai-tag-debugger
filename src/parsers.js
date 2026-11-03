@@ -487,12 +487,14 @@ export const DEFAULT_PROVIDERS = ["ga4", "google_ads", "meta", "tiktok"];
 // Tag managers and consent platforms are always shown: they explain how the tags loaded.
 // Server-side tagging providers are too: their requests show where events are sent from.
 const ALWAYS_SHOWN = { gtm: "Google Tag Manager", consent: "Consent platform", stape: "Stape", elevar: "Elevar" };
+/** The display name of any provider key a network call can carry: a tracking vendor or one that is always shown. */
+export const providerLabel = (key) => PROVIDERS[key] ?? ALWAYS_SHOWN[key] ?? key;
 
 const HOSTS = [
   [/(^|\.)stape\.(io|jp)$/, "stape"],
   [/(^|\.)getelevar\.com$/, "elevar"],
   ...VENDORS.filter((v) => v.hosts).map((v) => [v.hosts, v.key]),
-  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.(eu|com)|cookieyes\.com|didomi\.io|privacy-center\.org|trustarc\.com|truste\.com|consensu\.org|quantcast\.com|osano\.com|iubenda\.com|termly\.io|cookiefirst\.com|axeptio\.eu|sourcepoint\.com|sp-prod\.net|consentmanager\.net|cookiescript\.com|cookie-script\.com|cookieinformation\.com|civiccomputing\.com|piwik\.pro|complianz\.io|cdn\.privacy-mgmt\.com)$/, "consent"],
+  [/(^|\.)(cookiebot\.com|cookielaw\.org|onetrust\.com|usercentrics\.(eu|com)|cookieyes\.com|didomi\.io|privacy-center\.org|trustarc\.com|truste\.com|consensu\.org|quantcast\.com|osano\.com|iubenda\.com|termly\.io|cookiefirst\.com|axeptio\.eu|sourcepoint\.com|sp-prod\.net|consentmanager\.net|cookiescript\.com|cookie-script\.com|cookieinformation\.com|civiccomputing\.com|piwik\.pro|complianz\.io|cdn\.privacy-mgmt\.com|efilli\.com|cdn-cookieyes\.com)$/, "consent"],
 ];
 
 /**

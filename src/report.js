@@ -1,4 +1,5 @@
-import { AD_PLATFORMS, consentTable } from "./consent.js";
+import { AD_PLATFORMS, consentMatrixMarkdown, consentTable } from "./consent.js";
+import { cmpFacts } from "./cmp.js";
 import { ownerOf, verifyLinks } from "./verify.js";
 import { createProvider } from "./providers.js";
 import { canonicalEvent, groupFindings, summarize } from "./checks.js";
@@ -293,8 +294,10 @@ function mdCell(m, col, cell, raw, adPlatform) {
 }
 
 /** The consent section: the Consent Mode timing sentence, then the scenario table with a reason in every cell. */
-function mdConsent(m, metrics, scenarios) {
+function mdConsent(m, metrics, scenarios, runs = []) {
   const lines = [`## ${m.ui.md.consent}`, ""];
+  const platform = cmpFacts(m, runs);
+  if (platform) lines.push(`${m.ui.cmp.title}: ${mdText(platform.vendor)}. ${platform.facts.map(mdText).join(" ")}`, "");
   const cm = metrics.consent?.consentMode;
   const tested = Boolean(cm?.runs?.length);
   if (tested) {
@@ -307,6 +310,8 @@ function mdConsent(m, metrics, scenarios) {
     lines.push(`| ${m.ui.scenarioTag} | ${cols.map((c) => m.ui.scenarioCols[c]).join(" | ")} |`, `|${" --- |".repeat(cols.length + 1)}`);
     for (const r of rows) lines.push(`| ${mdText(platformLabel(r.platform))} \`${mdCode(r.event)}\` | ${r.cells.map((c) => mdCell(m, c.state, c, rawOf(c.state, r.platform, r.event), AD_PLATFORMS.has(r.platform))).join(" | ")} |`);
     lines.push("", m.ui.md.consentLegend, "");
+    const matrix = consentMatrixMarkdown(m, scenarios);
+    if (matrix.length) lines.push(`### ${m.ui.matrix.title}`, "", ...matrix, "");
   } else if (!tested) lines.push(m.ui.md.consentNotChecked, "");
   return lines;
 }
@@ -417,6 +422,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   const meta = [m.ui.md.meta(mdText(generatedAt), runs.length, m.ui.md.platformsSeen(platformsSeen.length, platformsSeen.map((p) => mdText(platformLabel(p))).join(", ")), VERSION), `[${m.ui.md.htmlReport}](report.html)`, ...(against ? [mdText(m.ui.checkedAgainst(against))] : [])];
   const status = `**${m.verdict.status[metrics.verdict.status]}**${metrics.score?.score === null || metrics.score?.score === undefined ? "" : ` · ${m.ui.md.score(metrics.score.score)}`}`;
   const lines = [`# ${mdText(m.ui.md.title(site ?? title, mdHeadline(m, runs, rows, metrics)))}`, "", meta.join(" · "), status, `**${m.ui.counts(counts)}**${changes && !changes.previous ? ` · ${m.ui.noPreviousRun}` : ""}`, ""];
+  if (runs.some((r) => r.live)) lines.push(`**${mdText(m.ui.liveRun)}**`, "");
   if (accepted) lines.push(mdText(m.ui.acceptedLine(accepted)), "");
   if (planChanges) lines.push(mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : []));
   const sum = summaryParts(explained?.summary);
@@ -436,7 +442,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   for (const f of problems.slice(0, MD_BLOCKS)) lines.push(...mdFinding(m, runs, f, ids));
   const rest = problems.slice(MD_BLOCKS);
   if (rest.length) lines.push(`### ${m.ui.md.also}`, ...rest.map((f) => `- **${m.severity[f.severity]}** ${mdDetail(f.detail).replace(/\.$/, "")} · ${mdWhere(m, runs, f.where, { full: false })}`), "");
-  lines.push(...mdConsent(m, metrics, consentScenarios));
+  lines.push(...mdConsent(m, metrics, consentScenarios, runs));
   lines.push(...mdPassed(m, runs, findings, metrics, planCheck));
   lines.push(...mdJourneys(m, runs, rows));
   lines.push(...mdNotChecked(m, runs, rows, plan, consentScenarios));

@@ -32,6 +32,7 @@ async function main(args = process.argv.slice(2)) {
       providers: { type: "string", multiple: true },
       "allow-host": { type: "string", multiple: true },
       "allow-private-network": { type: "boolean", default: false },
+      "allow-live": { type: "boolean", default: false },
       scripted: { type: "boolean", default: false },
       "no-ai": { type: "boolean", default: false },
       provider: { type: "string" },
@@ -79,7 +80,7 @@ async function main(args = process.argv.slice(2)) {
   }
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
-    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"] });
+    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"] });
     return;
   }
   if (command === "replay" && !values.help) {

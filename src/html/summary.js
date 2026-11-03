@@ -172,7 +172,7 @@ function scorecard(ctx) {
 <p class="sc-verdict sev-${sev}">${use(`sev-${sev}`, 26)}${esc(verdict.statusText)}</p>
 <p class="sc-head">${esc(headline)}</p>
 ${aiLine(ctx)}${costLines(ctx, noScore)}
-${statusChips(ctx)}${accepted > 0 ? `\n<p class="meta accepted-line">${esc(m.ui.acceptedLine(accepted))}</p>` : ""}
+${statusChips(ctx)}${accepted > 0 ? `\n<p class="meta accepted-line">${esc(m.ui.acceptedLine(accepted))}</p>` : ""}${ctx.runs.some((r) => r.live) ? `\n<p class="meta sev-warning">${use("sev-warning", 14)} ${esc(m.ui.liveRun)}</p>` : ""}
 </div>`;
 }
 

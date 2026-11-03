@@ -191,7 +191,7 @@ test("consentCompliance: the demo's Meta pixel fires before consent and after re
   assert.equal(c.status, "fail");
   assert.deepEqual({ ...c.consentMode, runs: undefined }, { expected: true, defaultPresent: true, defaultOnTime: true, v2Signals: { present: true, missing: [] }, runs: undefined });
   assert.equal(c.consentMode.runs.length, 4);
-  assert.deepEqual({ ...c.consentMode.runs[0], ms: undefined }, { journey: "browse", viewport: "desktop", present: true, step: 1, stepLabel: "Open http://localhost:4321/", ms: undefined, beforeFirstGoogleHit: true, v2Signals: { present: true, missing: [] } });
+  assert.deepEqual({ ...c.consentMode.runs[0], ms: undefined }, { journey: "browse", viewport: "desktop", present: true, source: "dataLayer", step: 1, stepLabel: "Open http://localhost:4321/", ms: undefined, beforeFirstGoogleHit: true, v2Signals: { present: true, missing: [] } });
   assert.ok(c.consentMode.runs[0].ms > 0 && c.consentMode.runs[0].ms < 1000);
   assert.deepEqual(c.platforms, [
     { platform: "ga4", ad: false, beforeConsent: 0, afterReject: 0, afterAnalyticsOnly: null, scenarios: { before: 2, accept: 2, reject: 2, analytics: null }, status: "pass" },
