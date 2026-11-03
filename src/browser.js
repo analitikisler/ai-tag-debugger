@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,6 +8,7 @@ import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resol
 import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
+import { campaignParamsIn } from "./campaign.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -377,6 +379,27 @@ export function isTransientNavigationError(err, failedLoad) {
   return code === "timeout" || TRANSIENT_NET_ERRORS.test(code);
 }
 
+/**
+ * What a step's analytics and ad cookies say, without keeping their values: the GA4 client id from _ga
+ * (the cid GA4 hits carry anyway), whether _gcl_aw and _fbc hold the click ids the landing page was opened
+ * with ("landing") or other ones ("other"), and whether _gcl_au and _fbp exist. Null when none of them do.
+ */
+export function identityOf(cookies, landingUrl) {
+  const value = (name) => cookies.find((c) => c.name === name)?.value ?? "";
+  const sent = landingUrl ? campaignParamsIn(landingUrl) : {};
+  const out = {};
+  const ga = /^GA\d\.\d+\.(\d+\.\d+)$/.exec(value("_ga"));
+  if (ga) out.ga_client_id = ga[1];
+  // _gcl_aw is GCL.<time>.<gclid>; _fbc is fb.<n>.<time>.<fbclid>.
+  const aw = /^GCL\.\d+\.(.+)$/.exec(value("_gcl_aw"));
+  if (aw) out.gcl_aw = aw[1] === sent.gclid ? "landing" : "other";
+  const fbc = /^fb\.\d+\.\d+\.(.+)$/.exec(value("_fbc"));
+  if (fbc) out.fbc = fbc[1] === sent.fbclid ? "landing" : "other";
+  if (value("_gcl_au")) out.gcl_au = true;
+  if (value("_fbp")) out.fbp = true;
+  return Object.keys(out).length ? out : null;
+}
+
 export class AuditSession {
   /**
    * @param {{ viewport: string, site?: string, allowedHosts?: string[], providers?: string[], keepBodies?: boolean, blockPrivate?: boolean | ((ip: string) => boolean), blockHits?: boolean, headless?: boolean }} opts
@@ -406,6 +429,8 @@ export class AuditSession {
     this.consentStep = null;
     this.rejectStep = null;
     this.cookieLog = []; // each cookie name and domain with the step it was first seen at (never values)
+    this.cookieChanges = []; // { step, name, domain, change: added|changed|removed }, never values
+    this.cookieHashes = new Map(); // domain|name -> a hash of the value at the last step, kept in memory only
     this.errors = [];
     this.dataLayerLog = [];
     this.network = [];
@@ -1032,20 +1057,45 @@ export class AuditSession {
     }
   }
 
-  /** Notes which cookies appeared during the step just taken (names and domains only). */
+  /**
+   * Notes the cookies the step just taken added, changed or removed, and what the analytics and ad cookies
+   * say (identityOf). Values never leave this function: a short hash of each, held until the next step,
+   * is enough to tell that one changed.
+   */
   async trackCookies() {
+    const all = await this.rawCookies();
     const seen = new Set(this.cookieLog.map((c) => `${c.domain}|${c.name}`));
-    for (const c of await this.cookies()) {
-      if (!seen.has(`${c.domain}|${c.name}`) && this.cookieLog.length < 500) this.cookieLog.push({ ...c, step: this.currentStep });
+    const now = new Map();
+    for (const c of all) {
+      const k = `${c.domain}|${c.name}`;
+      const hash = createHash("sha256").update(c.value).digest("base64").slice(0, 16);
+      now.set(k, hash);
+      if (!seen.has(k) && this.cookieLog.length < 500) this.cookieLog.push({ name: c.name, domain: c.domain, step: this.currentStep });
+      const before = this.cookieHashes.get(k);
+      const change = before === undefined ? "added" : before !== hash ? "changed" : null;
+      if (change && this.cookieChanges.length < 2000) this.cookieChanges.push({ step: this.currentStep, name: c.name, domain: c.domain, change });
     }
+    for (const k of this.cookieHashes.keys()) {
+      if (now.has(k) || this.cookieChanges.length >= 2000) continue;
+      const [domain, ...name] = k.split("|");
+      this.cookieChanges.push({ step: this.currentStep, name: name.join("|"), domain, change: "removed" });
+    }
+    this.cookieHashes = now;
+    const identity = identityOf(all, this.landing?.requested);
+    if (identity) this.steps[this.currentStep].identity = identity;
   }
 
-  async cookies() {
+  /** The browser's cookies with their values, for trackCookies only; [] when the browser takes too long. */
+  async rawCookies() {
     let timer;
     const tooLong = new Promise((resolve) => (timer = setTimeout(() => resolve([]), 10_000)));
     const cookies = await Promise.race([this.context.cookies().catch(() => []), tooLong]);
     clearTimeout(timer);
-    return cookies.map((c) => ({ name: c.name, domain: c.domain }));
+    return cookies;
+  }
+
+  async cookies() {
+    return (await this.rawCookies()).map((c) => ({ name: c.name, domain: c.domain }));
   }
 
   async close() {

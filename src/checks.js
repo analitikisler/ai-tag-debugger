@@ -411,6 +411,32 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }
   }
 
+  // Cookies that carry the visit from page to page. Captures from before cookies were tracked per step have no cookieChanges.
+  if (run.cookieChanges) {
+    // A Google Ads tag keeps the landing gclid in _gcl_aw, so a later conversion can be tied to the click. GA4 alone
+    // never writes it, and with ad storage denied the cookie is rightly not written: only Ads, with storage granted.
+    const gclid = landing ? campaignParamsIn(landing.final ?? landing.requested).gclid : undefined;
+    const adsTag = run.hits.some((h) => h.platform === "google_ads") || (run.network ?? []).some((c) => c.provider === "google_ads");
+    const googleHits = run.hits.filter((h) => GOOGLE_PLATFORMS.has(h.platform));
+    // Without Consent Mode, no hit carries ad_storage at all, and nothing holds the cookie back.
+    const adStorage = googleHits.some((h) => h.consent?.ad_storage === "granted") || (googleHits.length > 0 && googleHits.every((h) => !h.consent?.ad_storage));
+    if (gclid && adsTag && adStorage && !run.steps.some((st) => st.identity?.gcl_aw === "landing")) {
+      findings.push({ ...base, severity: "warning", check: "gclid_not_stored", platform: "google_ads", step: stepLabel(landing.step), detail: d.gclidNotStored() });
+    }
+    // A GA4 client id that changes mid-visit splits it into two users. A reject in between may rightly clear the cookie.
+    let seen = null;
+    for (const st of run.steps) {
+      const cid = st.identity?.ga_client_id;
+      if (!cid) continue;
+      const rejectedBetween = run.rejectStep != null && run.rejectStep > seen?.step && run.rejectStep <= st.index;
+      if (seen && cid !== seen.cid && !rejectedBetween) {
+        findings.push({ ...base, severity: "warning", check: "client_id_changed", platform: "ga4", step: stepLabel(st.index), detail: d.clientIdChanged(stepLabel(seen.step), stepLabel(st.index)), evidence: `_ga ${seen.cid} -> ${cid}` });
+        break;
+      }
+      seen = { cid, step: st.index };
+    }
+  }
+
   // Consent.
   const granted = consentGrantedStep(run);
   // Consent Mode only governs Google tags. Within one step, the push and hit times decide which came first.

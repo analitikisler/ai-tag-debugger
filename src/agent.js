@@ -237,7 +237,7 @@ export const journeyError = (err) => `The journey stopped with an error: ${err?.
 export function failedRun(journey, viewport, err, providers) {
   return {
     journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
-    cookieLog: [], dataLayerLog: [], network: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+    cookieLog: [], cookieChanges: [], dataLayerLog: [], network: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }
 
@@ -251,6 +251,7 @@ export function collect(session, journey, viewport) {
     consentStep: session.consentStep,
     rejectStep: session.rejectStep,
     cookieLog: session.cookieLog,
+    cookieChanges: session.cookieChanges,
     dataLayerLog: session.dataLayerLog,
     network: session.network,
     providers: session.providers,

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Each step records the cookies it added, changed or removed, by name, and what the analytics and ad cookies say: the GA4 client id in `_ga`, and whether `_gcl_aw` and `_fbc` hold the click ids the landing page was opened with. Cookie values are still never stored; a changed value is noticed through a hash kept in memory until the next step. The report has a **Cookies** tab per step under **Journeys**, and MCP step results list the same.
+- New check `gclid_not_stored` (warning): a Google Ads tag ran with ad storage granted, but `_gcl_aw` never held the landing page's `gclid`, so a later conversion can't be tied to the click. GA4 alone never writes the cookie and ad storage denied rightly keeps it out, so neither is flagged.
+- New check `client_id_changed` (warning): the GA4 client id in `_ga` changed mid-visit, which splits one visitor into two users. A change after the visitor rejected cookies is not flagged.
+- MCP: Consent Mode pings show the click ids they carried: `gclid`, `gclid=0 (redacted)` when ads data redaction blanks it, and `gclaw`, the one `_gcl_aw` holds.
 - MCP: `start_audit` opens the first page the way an ad click does, as the CLI already did, so `finish_audit` checks that the campaign parameters survive redirects and reach the hits. `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses a campaign's own values.
 - MCP: each step result starts with its step number, and each hit has an `[h]` number and the ids and flags GA4 sends with it (`cid`, `sid`, `sct`, `seg`, `gcs`, `gcd`, `dma`, `npa`, `_fv`, `_ss`, `_nsi`). The new `get_hit` tool shows one hit in full: every parameter its request carried, its place in a batched request, where it was sent and `gcd` decoded per consent signal. The new `get_step` tool shows an earlier step's capture again.
 - `gcd` is read on GA4 hits, Google Ads conversions and Consent Mode pings: each hit's consent now includes `ad_user_data` and `ad_personalization`, and `gcd` stands in for `gcs` when a hit has none. Google Ads conversions carry their consent too. The report shows all four signals on a hit.
