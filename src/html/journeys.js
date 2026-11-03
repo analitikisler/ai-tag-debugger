@@ -3,8 +3,9 @@
 // [data-vp-switch], details.card), so shell.js drives it; the JOURNEYS script in script.js only keeps the viewport
 // when the journey changes. Ids come from lib.js (stepAnchor, hitId, pushId, requestId) so Findings links land here.
 import { canonicalEvent } from "../checks.js";
-import { parseTrackingRequest, providerOf, PROVIDERS } from "../parsers.js";
-import { decodeGa4Item, isEventParam, paramTip } from "../glossary.js";
+import { CONSENT_SIGNALS, parseTrackingRequest, providerOf, PROVIDERS } from "../parsers.js";
+import { decodeGa4Item, paramTip } from "../glossary.js";
+import { callsForHit, hitParams, paramSets } from "../hit-params.js";
 import { SEVERITY_RANK, isConsentEntry } from "../report-shared.js";
 import {
   sectionBlock, use, plat, platIcon, badge, chip, n, esc, secs, pathOf, hostPath, safeKey, platformLabel, sortPlatforms, detailHtml,
@@ -63,53 +64,7 @@ function pushesForHit(run, hit) {
   return twins.length > 1 && pushes.length === twins.length ? [pushes[twins.indexOf(hit)]] : pushes;
 }
 
-/** The network request that carried the hit. Identical hits (duplicates) are paired with identical requests in order. */
-function callsForHit(run, hit) {
-  // A late hit was sent during a later step, so its request is recorded there.
-  const sentIn = hit.late?.during ?? hit.step;
-  const calls = (run.network ?? []).filter((c) => c.step === sentIn && c.url === hit.url);
-  const twins = run.hits.filter((h) => (h.late?.during ?? h.step) === sentIn && h.url === hit.url);
-  return twins.length > 1 && calls.length === twins.length ? [calls[twins.indexOf(hit)]] : calls;
-}
-
-/* ---------- request parameters, moved from the 0.17 renderer ---------- */
-
-/** Nested JSON as dotted keys (properties.value); arrays stay JSON text. */
-function flatten(obj, prefix = "", out = []) {
-  for (const [k, v] of Object.entries(obj ?? {})) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object" && !Array.isArray(v) && prefix.split(".").length < 3) flatten(v, key, out);
-    else out.push([key, cell(v)]);
-  }
-  return out;
-}
-
-/** The parameter sets a request carried: one per event in a GA4 batch (query plus each body line), the query plus a flattened JSON body, or just the query. */
-function paramSets(call) {
-  let u;
-  try {
-    u = new URL(call.url);
-  } catch {
-    return [[]];
-  }
-  const query = [...u.searchParams];
-  const body = call.postData;
-  if (!body) return [query];
-  const trimmed = body.trim();
-  if (trimmed.startsWith("{")) {
-    try {
-      return [[...query, ...flatten(JSON.parse(trimmed))]];
-    } catch { /* not JSON, or cut at the size limit */ }
-  }
-  if (/^[^\s{]*=/.test(trimmed)) {
-    return trimmed.split("\n").filter(Boolean).map((line) => {
-      const merged = new Map(query);
-      for (const [k, v] of new URLSearchParams(line)) merged.set(k, v);
-      return [...merged];
-    });
-  }
-  return [query];
-}
+/* ---------- request parameters ---------- */
 
 /** Parameter rows with a glossary tip: the "?" shows the tip on hover and takes no focus; screen readers read the hidden span. */
 function paramRows(lang, entries) {
@@ -118,24 +73,6 @@ function paramRows(lang, entries) {
     const isItem = /^pr\d+$/.test(k);
     return `<tr${isItem ? ' class="pr"' : ""}><th scope="row"><span class="pk">${esc(k)}</span>${tip ? `<span class="q" aria-hidden="true" data-tip="${esc(tip)}">?</span><span class="sr">${esc(tip)}</span>` : ""}</th><td>${isItem ? `<span class="muted">${esc(tip ?? "")}</span>` : esc(v)}</td></tr>`;
   }).join("");
-}
-
-/**
- * What a hit card shows as its parameters: the request's own parameter set (raw keys, with glossary tips), split
- * into the event's parameters and the session, device, page and consent ones. A GA4 batch carries one set per
- * event; the hit takes the set with its name. Without a captured request, the hit's parsed parameters.
- */
-function hitParams(run, hit) {
-  const call = callsForHit(run, hit)[0] ?? null;
-  if (!call) return { call, batch: null, event: Object.entries(hit.params ?? {}).filter(([k]) => !(k === "items" && hit.items?.length)).map(([k, v]) => [k, cell(v)]), context: [] };
-  const sets = paramSets(call);
-  let i = 0;
-  if (sets.length > 1) {
-    const names = (parseTrackingRequest(call.url, call.postData ?? null) ?? []).map((h) => h.name);
-    i = Math.max(0, names.indexOf(hit.name));
-  }
-  const entries = sets[i] ?? [];
-  return { call, batch: sets.length > 1 ? [i + 1, sets.length] : null, event: entries.filter(([k]) => isEventParam(k)), context: entries.filter(([k]) => !isEventParam(k)) };
 }
 
 /* ---------- items: GA4 item strings and dataLayer item objects as one table ---------- */
@@ -178,7 +115,7 @@ function consentChip(t, key, v) {
   return `<span class="chip chip-consent ${safeKey(v)}" title="${esc(`${key}: ${v}`)}"><span class="k" aria-hidden="true">${esc(t.signals[key] ?? key)}</span><span aria-hidden="true">${mark}</span><span class="sr">${esc(`${key} ${v}`)}</span></span>`;
 }
 const hitConsent = (t, c) => {
-  const keys = c ? ["ad_storage", "analytics_storage"].filter((k) => typeof c[k] === "string") : [];
+  const keys = c ? CONSENT_SIGNALS.filter((k) => typeof c[k] === "string") : [];
   return keys.length ? keys.map((k) => consentChip(t, k, c[k])).join("") : `<span class="chip chip-consent none" title="${esc(t.noSignalTitle)}">${esc(t.noSignal)}</span>`;
 };
 const missingChip = (m, k) => `<span class="chip chip-sev broken jr-miss"><span class="k">${esc(k)}</span>${esc(m.ui.missing)}</span>`;

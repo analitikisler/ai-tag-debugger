@@ -18,13 +18,62 @@ function ga4ParamsFrom(searchParams) {
   return params;
 }
 
-// gcs=G1xy: x = ad_storage, y = analytics_storage (1 granted, 0 denied).
-function ga4Consent(searchParams) {
-  const gcs = searchParams.get("gcs");
-  if (!gcs || !/^G1[01-]{2}$/.test(gcs)) return undefined;
-  const state = (c) => (c === "1" ? "granted" : c === "0" ? "denied" : "unknown");
-  return { ad_storage: state(gcs[2]), analytics_storage: state(gcs[3]) };
+export const CONSENT_SIGNALS = ["ad_storage", "analytics_storage", "ad_user_data", "ad_personalization"];
+
+// gcd=13r3r3r2r5l1: one letter per signal, in CONSENT_SIGNALS order, each saying the default and the update
+// the Google tag holds. Google publishes no key for the letters. Each one below was read off gtag.js in
+// November 2026 by sending that consent sequence (test/parsers.test.js keeps the strings it sent); a letter
+// not listed is kept as it is and never decides a check.
+const GCD_STATES = {
+  l: {}, // consent mode not used for this signal
+  p: { default: "denied" },
+  q: { default: "denied", update: "denied" },
+  r: { default: "denied", update: "granted" },
+  t: { default: "granted" },
+  u: { default: "granted", update: "denied" },
+  v: { default: "granted", update: "granted" },
+  m: { update: "denied" },
+  n: { update: "granted" },
+};
+
+/** The gcd parameter as { signal: { letter, default?, update?, known } }, or null when it isn't one. */
+export function decodeGcd(gcd) {
+  const m = /^\d{2}([a-z])\d([a-z])\d([a-z])\d([a-z])/i.exec(gcd ?? "");
+  if (!m) return null;
+  return Object.fromEntries(CONSENT_SIGNALS.map((signal, i) => {
+    const letter = m[i + 1].toLowerCase();
+    return [signal, { letter, ...(GCD_STATES[letter] ?? {}), known: Object.hasOwn(GCD_STATES, letter) }];
+  }));
 }
+
+/**
+ * The consent a Google hit says it was sent with. gcs=G1xy gives ad_storage (x) and analytics_storage (y),
+ * 1 granted and 0 denied; gcd adds ad_user_data and ad_personalization, and stands in for gcs when it is absent.
+ */
+export function googleConsent(searchParams) {
+  const out = {};
+  const gcs = searchParams.get("gcs");
+  if (gcs && /^G1[01-]{2}$/.test(gcs)) {
+    const state = (c) => (c === "1" ? "granted" : c === "0" ? "denied" : "unknown");
+    out.ad_storage = state(gcs[2]);
+    out.analytics_storage = state(gcs[3]);
+  }
+  const gcd = decodeGcd(searchParams.get("gcd"));
+  for (const signal of CONSENT_SIGNALS) {
+    const state = gcd?.[signal].update ?? gcd?.[signal].default;
+    if (!(signal in out) && state) out[signal] = state;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+// Fields of the Google protocol that are no event parameter but answer consent and session questions:
+// the client and session ids, the session count and engagement, consent state, and the first visit,
+// session start and new session id flags.
+const GOOGLE_PROTOCOL = ["cid", "sid", "sct", "seg", "gcs", "gcd", "dma", "npa", "_fv", "_ss", "_nsi"];
+const protocolOf = (searchParams) => {
+  const out = Object.fromEntries(GOOGLE_PROTOCOL.filter((k) => searchParams.has(k)).map((k) => [k, searchParams.get(k)]));
+  return Object.keys(out).length ? out : undefined;
+};
 
 // Only www.google.<tld> and doubleclick.net: analytics.google.com is a primary GA4 endpoint.
 const GOOGLE_COMPANION_HOST = /^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$|(^|\.)doubleclick\.net$/;
@@ -72,7 +121,8 @@ export function parseGa4(url, postData) {
       name: merged.get("en") || "(unnamed)",
       id: merged.get("tid") || undefined,
       params: ga4ParamsFrom(merged),
-      consent: ga4Consent(merged),
+      consent: googleConsent(merged),
+      protocol: protocolOf(merged),
       ...(items.length ? { items } : {}),
       ...(autoEvents.length ? { autoEvents } : {}),
       ...(user.length ? { userFields: Object.fromEntries(user) } : {}),
@@ -112,7 +162,9 @@ export function parseGoogleAds(url) {
   for (const key of ["label", "value", "currency_code", "oid"]) {
     if (u.searchParams.has(key)) params[key === "currency_code" ? "currency" : key === "oid" ? "transaction_id" : key] = u.searchParams.get(key);
   }
-  return [{ platform: "google_ads", name: params.label ? `conversion:${params.label}` : "conversion", id: conversionId, params, url }];
+  const consent = googleConsent(u.searchParams);
+  const protocol = protocolOf(u.searchParams);
+  return [{ platform: "google_ads", name: params.label ? `conversion:${params.label}` : "conversion", id: conversionId, params, ...(consent ? { consent } : {}), ...(protocol ? { protocol } : {}), url }];
 }
 
 /** @returns {Hit[] | null} */

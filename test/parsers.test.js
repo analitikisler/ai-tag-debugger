@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTrackingRequest } from "../src/parsers.js";
+import { decodeGcd, parseTrackingRequest } from "../src/parsers.js";
 
 test("parses a GA4 hit with ecommerce params and consent state", () => {
   const [hit] = parseTrackingRequest(
@@ -93,4 +93,56 @@ test("GA4 hits carry the first_visit and session_start flags as the automatic ev
   assert.deepEqual(first.autoEvents, ["first_visit", "session_start"]);
   const [later] = parseTrackingRequest("https://www.google-analytics.com/g/collect?v=2&tid=G-X&en=page_view");
   assert.equal(later.autoEvents, undefined);
+});
+
+test("gcd is read per signal into its default and update, and an unknown letter is kept as it is", () => {
+  const all = decodeGcd("13r3r3r2r5l1");
+  assert.deepEqual(all.ad_storage, { letter: "r", default: "denied", update: "granted", known: true });
+  assert.deepEqual(Object.keys(all), ["ad_storage", "analytics_storage", "ad_user_data", "ad_personalization"]);
+  assert.deepEqual(decodeGcd("13p3t3l2v5l1").analytics_storage, { letter: "t", default: "granted", known: true });
+  assert.deepEqual(decodeGcd("13p3t3l2v5l1").ad_user_data, { letter: "l", known: true });
+  assert.deepEqual(decodeGcd("13z3r3r2r5l1").ad_storage, { letter: "z", known: false });
+  assert.equal(decodeGcd("G111"), null);
+  assert.equal(decodeGcd(undefined), null);
+});
+
+test("Google hits take their consent from gcs and gcd and keep the protocol fields apart from the event parameters", () => {
+  const [hit] = parseTrackingRequest("https://region1.google-analytics.com/g/collect?v=2&tid=G-X&cid=123.456&sid=789&sct=2&seg=1&gcs=G111&gcd=13r3r3p2r5l1&dma=1&_ss=1&en=page_view&dl=https%3A%2F%2Fshop%2F");
+  // gcs decides ad_storage and analytics_storage; gcd adds the v2 signals: ad_user_data denied (p), ad_personalization granted (r).
+  assert.deepEqual(hit.consent, { ad_storage: "granted", analytics_storage: "granted", ad_user_data: "denied", ad_personalization: "granted" });
+  assert.deepEqual(hit.protocol, { cid: "123.456", sid: "789", sct: "2", seg: "1", gcs: "G111", gcd: "13r3r3p2r5l1", dma: "1", _ss: "1" });
+  assert.equal(hit.params.cid, undefined);
+  // Without gcs, gcd stands in for all four.
+  const [only] = parseTrackingRequest("https://region1.google-analytics.com/g/collect?v=2&tid=G-X&gcd=13p3p3p2p5l1&en=page_view");
+  assert.deepEqual(only.consent, { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+  // Google Ads conversions carry the same fields.
+  const [ads] = parseTrackingRequest("https://www.googleadservices.com/pagead/conversion/123/?label=abc&value=10&gcs=G100&gcd=13q3q3q2q5l1&npa=1");
+  assert.deepEqual(ads.consent, { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+  assert.deepEqual(ads.protocol, { gcs: "G100", gcd: "13q3q3q2q5l1", npa: "1" });
+  const [plain] = parseTrackingRequest("https://www.googleadservices.com/pagead/conversion/123/?label=abc");
+  assert.equal(plain.consent, undefined);
+});
+
+test("gcd as gtag.js sent it for each consent sequence decodes to that sequence", () => {
+  // Captured from gtag.js (November 2026): a page with these consent commands, the gcd of the hit sent after them.
+  const sent = {
+    "13l3l3l3l1l1": [{}, {}],
+    "13p3p3p3p5l1": [{ default: "denied" }, {}],
+    "13t3t3t3t5l1": [{ default: "granted" }, {}],
+    "13r3r3r3r5l1": [{ default: "denied" }, { update: "granted" }],
+    "13q3q3q3q5l1": [{ default: "denied" }, { update: "denied" }],
+    "13u3u3u3u5l1": [{ default: "granted" }, { update: "denied" }],
+    "13v3v3v3v5l1": [{ default: "granted" }, { update: "granted" }],
+    "13n3n3n3n5l1": [{}, { update: "granted" }],
+    "13m3m3m3m5l1": [{}, { update: "denied" }],
+  };
+  for (const [gcd, [def, upd]] of Object.entries(sent)) {
+    for (const [signal, state] of Object.entries(decodeGcd(gcd))) {
+      assert.deepEqual({ default: state.default, update: state.update }, { default: def.default, update: upd.update }, `${gcd} ${signal}`);
+      assert.ok(state.known);
+    }
+  }
+  // A default of ad_storage denied, analytics_storage granted, ad_user_data denied, ad_personalization granted.
+  const mixed = decodeGcd("13p3t3p3t5l1");
+  assert.deepEqual(Object.fromEntries(Object.entries(mixed).map(([k, v]) => [k, v.default])), { ad_storage: "denied", analytics_storage: "granted", ad_user_data: "denied", ad_personalization: "granted" });
 });

@@ -29,7 +29,9 @@ import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
 import { savePlan } from "./plan.js";
 import { changesLines, sinceLastRun } from "./changes.js";
-import { DEFAULT_PROVIDERS, isCollectionEndpoint, parseTrackingRequest, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
+import { decodeGcd, DEFAULT_PROVIDERS, googleConsent, isCollectionEndpoint, parseTrackingRequest, PROVIDERS as TRACKING_PROVIDERS } from "./parsers.js";
+import { hitParams } from "./hit-params.js";
+import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -44,7 +46,7 @@ Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the sit
 
 Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}, plus any other platform the site turns out to use); pass their choice as providers, or leave it out for the default.
 
-To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language.
+To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language. When a question needs a hit's raw parameters (client id, gcs, gcd decoded per consent signal, session flags), call get_hit with the step number and the hit's [h] number; get_step shows an earlier step again.
 
 While browsing:
 ${SYSTEM_PROMPT.split("How to work:\n")[1]}`;
@@ -82,14 +84,18 @@ function wholeFieldsIn(value, depth = 0, out = []) {
   return out;
 }
 
-function describeHit(h, steps) {
+const consentText = (c) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join(" ");
+/** The Google protocol fields of a hit, short: values for the ids and consent strings, bare names for the 1-flags. */
+const protocolText = (p) => Object.entries(p).map(([k, v]) => (["_fv", "_ss", "_nsi"].includes(k) && v === "1" ? k : `${k}=${v}`)).join(" ");
+
+function describeHit(h, steps, index) {
   const entries = Object.entries(h.params ?? {}).filter(([k]) => !["v", "tid", "gtm", "_p", "cid", "sid", "_s", "sct", "seg", "dl", "dr", "dt", "ul", "sr", "_et", "en"].includes(k));
   const params = [
     ...entries.filter(([k]) => !WHOLE_FIELDS.has(k)).slice(0, 12).map(([k, v]) => cut(`${k}=${show(v)}`, VALUE_LIMIT)),
     ...entries.filter(([k]) => WHOLE_FIELDS.has(k)).map(([k, v]) => `${k}=${show(v)}`),
   ].join(", ");
   const late = h.late ? ` (arrived ${(h.late.ms / 1000).toFixed(1)} s late, after the step that loaded its page: "${steps[h.step]?.label ?? `step ${h.step}`}")` : "";
-  return `- ${h.platform} ${h.name}${h.consent ? ` [consent ${Object.entries(h.consent).map(([k, v]) => `${k}=${v}`).join(" ")}]` : ""}${params ? `: ${params}` : ""}${late}`;
+  return `- [h${index}] ${h.platform} ${h.name}${h.consent ? ` [consent ${consentText(h.consent)}]` : ""}${h.protocol ? ` {${protocolText(h.protocol)}}` : ""}${params ? `: ${params}` : ""}${late}`;
 }
 
 /** A consent command in full, as key=value; any other push as JSON, cut, with its page address fields whole. */
@@ -103,7 +109,7 @@ function describePush(p) {
   return `- ${cut(json, PUSH_LIMIT)}${whole.length ? ` (${whole.map(([k, v]) => `${k}=${v}`).join(", ")})` : ""}`;
 }
 
-/** A call to a tracking endpoint that carries no event the tool reads, such as a Consent Mode ping, with its consent parameters. */
+/** A call to a tracking endpoint that carries no event the tool reads, such as a Consent Mode ping, with its consent. */
 function describeCall(c) {
   let u;
   try {
@@ -111,8 +117,9 @@ function describeCall(c) {
   } catch {
     return `- ${c.vendor ?? c.provider} ${cut(c.url, VALUE_LIMIT)}`;
   }
+  const consent = googleConsent(u.searchParams);
   const signals = ["gcs", "gcd", "dma", "npa"].filter((k) => u.searchParams.has(k)).map((k) => `${k}=${u.searchParams.get(k)}`).join(" ");
-  return `- ${c.vendor ?? c.provider}: ${u.hostname}${u.pathname}${signals ? ` [${signals}]` : ""}`;
+  return `- ${c.vendor ?? c.provider}: ${u.hostname}${u.pathname}${signals ? ` [${signals}]` : ""}${consent ? ` [consent ${consentText(consent)}]` : ""}`;
 }
 
 export function stepCapture(audit, step) {
@@ -122,10 +129,42 @@ export function stepCapture(audit, step) {
   // Hits that arrived during this step for a page an earlier step loaded are listed there, and noted here.
   const lateHere = session.hits.filter((h) => h.late?.during === step);
   const pings = session.network.filter((c) => c.step === step && isCollectionEndpoint(c.url) && !parseTrackingRequest(c.url, c.postData ?? null));
-  const lines = [`Tracking hits sent by this step: ${hits.length}`, ...hits.map((h) => describeHit(h, session.steps))];
+  const lines = [
+    `Step ${step}: "${session.steps[step]?.label ?? ""}". Read a hit's full parameters with get_hit (audit_id, step ${step}, its [h] number).`,
+    `Tracking hits sent by this step: ${hits.length}`,
+    ...hits.map((h, i) => describeHit(h, session.steps, i)),
+  ];
   if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
   if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
   if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
+  return lines.join("\n");
+}
+
+const MAX_PARAM_VALUE = 2000;
+/** What a gcd letter says about one signal, in words. */
+function gcdWords({ letter, default: d, update: u, known }) {
+  if (!known) return `${letter}: a letter this tool doesn't know`;
+  if (!d && !u) return `${letter}: consent mode not used`;
+  return `${letter}: ${d ? `${d} by default` : "no default"}, ${u ? `${u} by update` : "no update"}`;
+}
+
+/** One hit in full: where it was sent, its consent and every parameter its request carried. */
+export function hitDetail(audit, step, index) {
+  const { session } = audit;
+  const hits = session.hits.filter((h) => h.step === step);
+  const h = hits[index];
+  if (!h) return null;
+  const { call, batch, event, context } = hitParams(session, h);
+  const label = session.steps[step]?.label ?? "";
+  const rows = (entries) => entries.map(([k, v]) => `  ${k} = ${cut(String(v), MAX_PARAM_VALUE)}`);
+  const lines = [`[h${index}] ${h.platform} ${h.name}, step ${step} "${label}"${h.late ? `, sent ${(h.late.ms / 1000).toFixed(1)} s late during step ${h.late.during} "${session.steps[h.late.during]?.label ?? ""}"` : ""}`];
+  lines.push(`Request: ${call ? `${call.method ?? ""} ${call.url}`.trim() : h.url}${call?.blocked ? " (answered locally, never reached the platform)" : ""}`);
+  if (h.consent) lines.push(`Consent: ${consentText(h.consent)}`);
+  const gcd = decodeGcd(h.protocol?.gcd);
+  if (gcd) lines.push(`gcd ${h.protocol.gcd}: ${Object.entries(gcd).map(([signal, state]) => `${signal} ${gcdWords(state)}`).join("; ")}`);
+  if (h.userData?.fields?.length) lines.push(`User data redacted from this hit: ${h.userData.fields.join(", ")}`);
+  lines.push(`Event parameters${batch ? ` (event ${batch[0]} of ${batch[1]} in one request)` : ""}:`, ...(event.length ? rows(event) : ["  (none)"]));
+  if (context.length) lines.push("Other parameters (ids, page, device, consent):", ...rows(context));
   return lines.join("\n");
 }
 
@@ -209,9 +248,13 @@ export function buildServer(opts) {
           .array(z.enum(Object.keys(TRACKING_PROVIDERS)))
           .optional()
           .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
+        campaign: z
+          .union([z.boolean(), z.object(Object.fromEntries(CAMPAIGN_PARAMS.map((k) => [k, z.string().min(1).optional()]))).strict()])
+          .optional()
+          .describe(`Open the first page the way an ad click does, so finish_audit checks that the campaign parameters survive redirects and reach the hits. Default true: test values (utm_source=aitd, gclid=aitd-gclid, fbclid=aitd-fbclid...) unless site already carries campaign parameters. false opens site as given. Or your own values, e.g. {"utm_source": "newsletter", "utm_campaign": "autumn", "gclid": "test123"}; allowed keys: ${CAMPAIGN_PARAMS.join(", ")}.`),
       },
     },
-    async ({ site, journey, viewport, allowed_hosts, providers }) => {
+    async ({ site, journey, viewport, allowed_hosts, providers, campaign = true }) => {
       let url;
       try {
         url = new URL(site);
@@ -242,10 +285,13 @@ export function buildServer(opts) {
       const name = preset?.id ?? ((journey || "journey").toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 40) || "journey");
       const audit = { id, session, site: url.href, journey: name, preset, viewport: viewport ?? "desktop", lastUsed: Date.now() };
       audits.set(id, audit);
-      const error = await session.act({ action: "goto", url: url.href, reason: `Open ${url.href}` });
+      const start = campaign === false ? url.href : withCampaignParams(url.href, typeof campaign === "object" ? campaign : null);
+      const error = await session.act({ action: "goto", url: start, reason: `Open ${start}` });
       const page = pageView(await session.snapshot(), error);
       const goal = preset ? `Journey goal: ${preset.goal}\nEvents expected on the way: ${preset.events.map((e) => `${e.platform} ${e.name}`).join(", ")}\n\n` : "";
-      return text(`audit_id: ${id}\n${goal}\n${page}\n\n${stepCapture(audit, session.currentStep)}`);
+      const sent = campaignParamsIn(start);
+      const opened = Object.keys(sent).length ? `Opened like an ad click with ${Object.entries(sent).map(([k, v]) => `${k}=${v}`).join(", ")}; finish_audit checks that they survive redirects and reach the hits.\n` : "";
+      return text(`audit_id: ${id}\n${opened}${goal}\n${page}\n\n${stepCapture(audit, session.currentStep)}`);
     },
   );
 
@@ -286,6 +332,44 @@ export function buildServer(opts) {
       annotations: { readOnlyHint: true },
     },
     async ({ audit_id }) => text(pageView(await getAudit(audit_id).session.snapshot())),
+  );
+
+  server.registerTool(
+    "get_hit",
+    {
+      title: "Show one tracking hit in full",
+      description:
+        "Returns every parameter one tracking hit's request carried (client and session ids, gcs and gcd with gcd decoded per consent signal, page, device and event parameters), where it was sent, and its consent. Step results list each hit with an [h] number; pass that and the step number.",
+      inputSchema: {
+        audit_id: z.string(),
+        step: z.number().int().min(0).describe("The step number from the step result's first line."),
+        hit: z.number().int().min(0).describe("The hit's [h] number in that step."),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ audit_id, step, hit }) => {
+      const audit = getAudit(audit_id);
+      const detail = hitDetail(audit, step, hit);
+      if (detail !== null) return text(detail);
+      const count = audit.session.hits.filter((h) => h.step === step).length;
+      return fail(step >= audit.session.steps.length ? `There is no step ${step}; the last is ${audit.session.steps.length - 1}.` : `Step ${step} has ${count} hit${count === 1 ? "" : "s"}${count ? ` (h0 to h${count - 1})` : ""}.`);
+    },
+  );
+
+  server.registerTool(
+    "get_step",
+    {
+      title: "Show an earlier step's capture again",
+      description:
+        "Returns what an earlier step captured, as browser_action showed it: its hits, other tracking calls and dataLayer pushes. Use it to see a step again, for example after a hit that arrived late was added to the step that loaded its page.",
+      inputSchema: { audit_id: z.string(), step: z.number().int().min(0).describe("The step number from the step result's first line.") },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ audit_id, step }) => {
+      const audit = getAudit(audit_id);
+      if (step >= audit.session.steps.length) return fail(`There is no step ${step}; the last is ${audit.session.steps.length - 1}.`);
+      return text(stepCapture(audit, step));
+    },
   );
 
   server.registerTool(

@@ -19,10 +19,13 @@ export function campaignParamsIn(url) {
   }
 }
 
-/** The address with test campaign parameters added, unless it already carries campaign parameters. */
-export function withCampaignParams(url) {
-  if (Object.keys(campaignParamsIn(url)).length) return url;
+/**
+ * The address with test campaign parameters added, unless it already carries campaign parameters.
+ * Given parameters of the caller's own (a real campaign's UTM values, a gclid), those are set instead, always.
+ */
+export function withCampaignParams(url, own = null) {
+  if (!own && Object.keys(campaignParamsIn(url)).length) return url;
   const u = new URL(url);
-  for (const [k, v] of Object.entries(TEST_PARAMS)) u.searchParams.set(k, v);
+  for (const [k, v] of Object.entries(own ?? TEST_PARAMS)) u.searchParams.set(k, v);
   return u.href;
 }

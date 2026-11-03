@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { buildServer, stepCapture } from "../src/mcp.js";
+import { buildServer, hitDetail, stepCapture } from "../src/mcp.js";
 
 const PORT = await freePort();
 let server;
@@ -33,17 +33,28 @@ const refIn = (text, pattern) => Number(text.split("\n").find((l) => /^\[\d+\]/.
 test("a chat app can drive an audit through the MCP tools", async () => {
   const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
   const { client, call } = await connect({ allowFiles: true, reportsDir });
-  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "finish_audit", "make_plan", "what_changed", "run_audit"]);
+  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "get_hit", "get_step", "finish_audit", "make_plan", "what_changed", "run_audit"]);
 
   let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
   const id = page.match(/audit_id: (\w+)/)[1];
   assert.match(page, /meta PageView/);
+  // By default the first page opens like an ad click, as in the CLI.
+  assert.match(page, /^Opened like an ad click with gclid=aitd-gclid, fbclid=aitd-fbclid, utm_source=aitd, utm_medium=check, utm_campaign=aitd-campaign-check;/m);
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Accept all/), reason: "Accept cookies", accepts_consent: true });
   // The consent command comes whole, as key=value, not as JSON cut at a fixed length.
   assert.match(page, /- consent update: ad_storage=granted analytics_storage=granted ad_user_data=granted ad_personalization=granted/);
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /product\.html/), reason: "Open a product" });
   page = await call("browser_action", { audit_id: id, action: "click", ref: refIn(page, /Add to cart/), reason: "Add to cart" });
-  assert.match(page, /ga4 add_to_cart \[consent ad_storage=granted/);
+  assert.match(page, /\[h\d+\] ga4 add_to_cart \[consent ad_storage=granted/);
+  // The step's number and each hit's [h] number lead to the hit in full.
+  const step = Number(page.match(/^Step (\d+): "Add to cart"/m)[1]);
+  const h = Number(page.match(/\[h(\d+)\] ga4 add_to_cart/)[1]);
+  const full = await call("get_hit", { audit_id: id, step, hit: h });
+  assert.match(full, new RegExp(`^\\[h${h}\\] ga4 add_to_cart, step ${step} "Add to cart"`));
+  assert.match(full, /^Request: .*\/g\/collect/m);
+  assert.match(full, /^Event parameters/m);
+  assert.match(await call("get_step", { audit_id: id, step }), /ga4 add_to_cart/);
+  assert.match((await client.callTool({ name: "get_hit", arguments: { audit_id: id, step, hit: 99 } })).content[0].text, /^Step \d+ has \d+ hits? \(h0 to h\d+\)\.$/);
 
   const plan = JSON.stringify({ consent_mode: true, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }] });
   const result = await call("finish_audit", { audit_id: id, completed: true, note: "Added.", measurement_plan: plan });
@@ -224,11 +235,50 @@ test("a step result keeps page addresses and consent commands whole and lists th
   assert.match(first, /long=y{100,}…/);
   assert.match(first, /arrived 3\.2 s late, after the step that loaded its page: "Open the start page"/);
   const later = stepCapture(audit, 1);
-  assert.match(later, /Tracking hits sent by this step: 1\n- ga4 scroll/);
+  assert.match(later, /^Step 1: "Wait"\. Read a hit's full parameters with get_hit/);
+  assert.match(later, /Tracking hits sent by this step: 1\n- \[h0\] ga4 scroll/);
   assert.match(later, /belong to the step that loaded their page: ga4 page_view \(step "Open the start page"\)/);
   assert.match(later, /- consent update: ad_storage=denied analytics_storage=denied ad_user_data=denied ad_personalization=denied functionality_storage=granted security_storage=granted/);
   assert.ok(later.includes(`…`) && later.includes(`(page_location=${longUrl})`), "a long push is cut but keeps its page address whole");
   // The Consent Mode ping is listed with its consent parameters; the GA4 hit is not listed twice.
-  assert.match(later, /- Google Ads: www\.google\.com\/ccm\/collect \[gcs=G100 gcd=13p3p3p2p5l1 dma=1\]/);
+  assert.match(later, /- Google Ads: www\.google\.com\/ccm\/collect \[gcs=G100 gcd=13p3p3p2p5l1 dma=1\] \[consent ad_storage=denied analytics_storage=denied ad_user_data=denied ad_personalization=denied\]/);
   assert.doesNotMatch(later, /region1\.google-analytics\.com/);
+});
+
+test("get_hit shows every parameter of a hit's request, its batch position and gcd per signal", () => {
+  const url = "https://region1.google-analytics.com/g/collect?v=2&tid=G-X&cid=123.456&sid=789&gcs=G101&gcd=13p3r3z2l5l1&_fv=1&_ss=1&dl=https%3A%2F%2Fshop%2F";
+  const hit = { platform: "ga4", name: "scroll", step: 0, url, params: { percent_scrolled: "90" }, consent: { ad_storage: "denied", analytics_storage: "granted" }, protocol: { cid: "123.456", sid: "789", gcs: "G101", gcd: "13p3r3z2l5l1", _fv: "1", _ss: "1" } };
+  const audit = { session: {
+    steps: [{ index: 0, label: "Read the article" }],
+    hits: [{ ...hit, name: "page_view", params: {} }, hit],
+    dataLayerLog: [],
+    network: [{ step: 0, method: "POST", url, postData: "en=page_view\nen=scroll&epn.percent_scrolled=90", blocked: true }],
+  } };
+  const detail = hitDetail(audit, 0, 1);
+  assert.match(detail, /^\[h1\] ga4 scroll, step 0 "Read the article"$/m);
+  assert.match(detail, /^Request: POST https:\/\/region1\.google-analytics\.com\/g\/collect\?.* \(answered locally, never reached the platform\)$/m);
+  assert.match(detail, /^gcd 13p3r3z2l5l1: ad_storage p: denied by default, no update; analytics_storage r: denied by default, granted by update; ad_user_data z: a letter this tool doesn't know; ad_personalization l: consent mode not used$/m);
+  assert.match(detail, /^Event parameters \(event 2 of 2 in one request\):\n {2}en = scroll\n {2}epn\.percent_scrolled = 90$/m);
+  assert.match(detail, /^ {2}cid = 123\.456$/m);
+  assert.match(detail, /^ {2}_fv = 1$/m);
+  assert.equal(hitDetail(audit, 0, 2), null);
+  // The step result names the hit with its [h] number and the protocol fields in short.
+  assert.match(stepCapture(audit, 0), /- \[h1\] ga4 scroll \[consent ad_storage=denied analytics_storage=granted\] \{cid=123\.456 sid=789 gcs=G101 gcd=13p3r3z2l5l1 _fv _ss\}: percent_scrolled=90/);
+});
+
+test("start_audit opens the site as given with campaign false, and with a campaign's own values when given", async () => {
+  const { call } = await connect({ allowFiles: true, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")) });
+  const plain = await call("start_audit", { site: `http://localhost:${PORT}/`, campaign: false });
+  assert.doesNotMatch(plain, /Opened like an ad click/);
+  assert.match(plain, /^URL: http:\/\/localhost:\d+\/$/m);
+  await call("finish_audit", { audit_id: plain.match(/audit_id: (\w+)/)[1], completed: true, note: "Opened." });
+  const own = await call("start_audit", { site: `http://localhost:${PORT}/`, campaign: { utm_source: "newsletter", gclid: "test123" } });
+  assert.match(own, /^Opened like an ad click with gclid=test123, utm_source=newsletter;/m);
+  const result = await call("finish_audit", { audit_id: own.match(/audit_id: (\w+)/)[1], completed: true, note: "Opened." });
+  // The campaign checks ran on the landing page and found the parameters kept.
+  const reportPath = result.match(/event timeline: (.+report\.html)/)[1];
+  const capture = JSON.parse(await readFile(path.join(path.dirname(reportPath), "capture.json"), "utf8"));
+  const campaign = capture.findings.filter((f) => f.check.startsWith("campaign_"));
+  assert.deepEqual(campaign.map((f) => `${f.severity}:${f.check}`), ["ok:campaign_params"]);
+  assert.match(campaign[0].detail, /gclid.*utm_source|utm_source.*gclid/);
 });

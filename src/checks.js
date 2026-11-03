@@ -4,6 +4,7 @@
 import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
+import { CONSENT_SIGNALS } from "./parsers.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
@@ -17,7 +18,9 @@ const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 // The signals a "reject all" must keep denied. functionality_storage and security_storage cover what
 // the site needs to work, and personalization_storage its own features, so CMPs grant them on reject too.
-const TRACKING_SIGNALS = ["ad_storage", "analytics_storage", ...V2_SIGNALS];
+const TRACKING_SIGNALS = CONSENT_SIGNALS;
+/** Whether a Google hit says it was sent with any of the tracking signals granted (from gcs, and gcd for the v2 ones). */
+const claimsGranted = (hit) => TRACKING_SIGNALS.some((k) => hit.consent?.[k] === "granted");
 const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
@@ -447,8 +450,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     const afterReject = new Map();
     for (const hit of run.hits) {
       if (hit.step < rejectStep) continue;
-      const claimsGranted = hit.consent?.ad_storage === "granted" || hit.consent?.analytics_storage === "granted";
-      if (NON_GOOGLE_AD_PLATFORMS.has(hit.platform) || claimsGranted) {
+      if (NON_GOOGLE_AD_PLATFORMS.has(hit.platform) || claimsGranted(hit)) {
         const k = key(hit.platform, hit.name);
         if (!afterReject.has(k)) afterReject.set(k, hit);
       }
@@ -480,8 +482,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     const early = granted === null || hit.step < granted;
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);
-    const googleClaimsGranted = hit.consent?.ad_storage === "granted" || hit.consent?.analytics_storage === "granted";
-    if (adPlatform || googleClaimsGranted) {
+    if (adPlatform || claimsGranted(hit)) {
       const k = key(hit.platform, hit.name);
       if (!beforeConsent.has(k)) beforeConsent.set(k, hit);
     }

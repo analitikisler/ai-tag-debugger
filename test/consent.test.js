@@ -59,6 +59,18 @@ test("a reject that keeps the essential signals granted is not a re-grant", () =
   }
 });
 
+test("a Google hit with ad_user_data or ad_personalization granted counts as granted, before a choice and after a reject", () => {
+  const hit = (step, consent) => ({ platform: "ga4", name: "page_view", step, params: {}, url: "https://x/", consent });
+  const denied = { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" };
+  const quiet = checks(run({ rejectStep: 1, hits: [hit(0, denied), hit(2, denied)] }));
+  assert.ok(!quiet.includes("broken:after_reject") && !quiet.includes("risk:before_consent"));
+  for (const signal of ["ad_user_data", "ad_personalization"]) {
+    const got = checks(run({ rejectStep: 1, hits: [hit(0, { ...denied, [signal]: "granted" }), hit(2, { ...denied, [signal]: "granted" })] }));
+    assert.ok(got.includes("risk:before_consent"), signal);
+    assert.ok(got.includes("broken:after_reject"), signal);
+  }
+});
+
 test("a reject that left the banner open is a failed reject button", () => {
   const steps = [0, 1, 2].map((index) => ({ index, label: `s${index}`, ...(index === 1 ? { bannerOpenAfter: true } : {}) }));
   assert.ok(checks(run({ rejectStep: 1, steps })).includes("broken:reject_button_failed"));

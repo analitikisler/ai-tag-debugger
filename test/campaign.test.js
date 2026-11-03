@@ -37,3 +37,10 @@ test("a hit that reports a page address without the parameters is broken", () =>
 test("a run without a landing address has no campaign findings", () => {
   assert.deepEqual(checks(run(null, [pv("https://shop.com/")])).filter((c) => c.startsWith("campaign")), []);
 });
+
+test("own campaign parameters are set even on an address that has some, and replace the test values", () => {
+  const own = withCampaignParams("https://shop.com/a?utm_source=old&x=1", { utm_source: "newsletter", gclid: "test123" });
+  assert.deepEqual(campaignParamsIn(own), { gclid: "test123", utm_source: "newsletter" });
+  assert.match(own, /x=1/);
+  assert.equal(new URL(own).searchParams.get("utm_medium"), null, "no test values are mixed in");
+});

@@ -3,6 +3,7 @@
 // Runs on its own with every audit when the page shows a consent banner.
 import { AuditSession, CMP_BANNER_SELECTORS } from "./browser.js";
 import { runPool } from "./pool.js";
+import { CONSENT_SIGNALS } from "./parsers.js";
 
 export const CONSENT_STATES = ["accept", "reject", "analytics"];
 // Tags that are advertising, so an "analytics only" choice should keep them quiet.
@@ -62,9 +63,10 @@ const applyInPage = ({ state, selectors }) => {
   return null;
 };
 
-// A Google hit that says storage is denied is a cookieless Consent Mode ping, which a "no" allows.
-const cookieless = (h) => !!h.consent && h.consent.ad_storage !== "granted" && h.consent.analytics_storage !== "granted";
-const isAnalyticsOnlyOk = (h) => !!h.consent && h.consent.ad_storage !== "granted";
+// A Google hit that says every tracking signal is denied is a cookieless Consent Mode ping, which a "no"
+// allows; after "analytics only" the ad signals must be denied.
+const cookieless = (h) => !!h.consent && CONSENT_SIGNALS.every((k) => h.consent[k] !== "granted");
+const isAnalyticsOnlyOk = (h) => !!h.consent && CONSENT_SIGNALS.filter((k) => k !== "analytics_storage").every((k) => h.consent[k] !== "granted");
 
 /** Hits per platform and event: { n, quiet } where quiet counts the ones sent with storage denied. */
 const countBy = (hits) => {
