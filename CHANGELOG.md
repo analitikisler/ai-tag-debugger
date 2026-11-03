@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.21.0 (2026-11-03)
 
+- Runs can report findings 0.20.1 did not on the same site (hits with `ad_user_data` or `ad_personalization` granted before consent or after a reject, `gclid_not_stored`, `client_id_changed`, `consent_default_not_applied`, `page_blocked`, `page_crashed`, and tags sent with cookies when the visitor made no choice), and no longer reports `consent_default_missing` where a consent platform sets the default inside GTM. A baseline written with 0.20.1 can then list stale or new entries; `--update-baseline` rewrites it.
 - OneTrust and Cookiebot in full. The Consent platform card gives their version, the consent model and region they applied to the visit (and says so when they counted it as consent without a choice), their groups or categories, whether their Consent Mode integration is on and which group or category grants each signal (OneTrust's from its own setting, Cookiebot's fixed), ads data redaction, auto-blocking, IAB TCF, and when the site last published its setup file.
 - Fixed: Cookiebot's newer script exposes only `CookieConsent`, not `Cookiebot`, so the consent scenarios could not answer it and fell back to clicking. They now use either.
 - Fixed: analytics only with OneTrust turned on group `C0002`, which sites that number their groups otherwise (onetrust.com uses `2`) do not have, so it did nothing there. It now turns on the group OneTrust's Consent Mode setting gives `analytics_storage`, and is skipped when ads share that group.
