@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Development: the guide for coding agents is `AGENTS.md`, the name agents of any vendor read, instead of `CLAUDE.md`, and CONTRIBUTING.md points to it.
+
 ## 0.21.0 (2026-11-03)
 
 - Runs can report findings 0.20.1 did not on the same site (hits with `ad_user_data` or `ad_personalization` granted before consent or after a reject, `gclid_not_stored`, `client_id_changed`, `consent_default_not_applied`, `page_blocked`, `page_crashed`, and tags sent with cookies when the visitor made no choice), and no longer reports `consent_default_missing` where a consent platform sets the default inside GTM. A baseline written with 0.20.1 can then list stale or new entries; `--update-baseline` rewrites it.

@@ -1,6 +1,6 @@
 # ai-tag-debugger
 
-An open-source Node CLI and MCP server that QA-tests a website's analytics and ad tracking. An AI model (or a scripted replay) drives a real browser through a journey with Playwright; the tool records every tracking hit and dataLayer push, checks them against a measurement plan with deterministic rules, and writes an HTML, Markdown and CSV report in English or Turkish. README.md is the user manual and CONTRIBUTING.md the contributor guide; read them before changing behavior.
+An open-source Node CLI and MCP server that QA-tests a website's analytics and ad tracking. An AI model (or a scripted replay) drives a real browser through a journey with Playwright; the tool records every tracking hit and dataLayer push, checks them against a measurement plan with deterministic rules, and writes an HTML, Markdown and CSV report in English or Turkish. This file is for coding agents working on the repository. README.md is the user manual and CONTRIBUTING.md the contributor guide; read them before changing behavior.
 
 ## Pipeline
 
