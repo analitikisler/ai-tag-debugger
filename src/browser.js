@@ -10,7 +10,7 @@ import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
-import { callersOf, containerOf } from "./containers.js";
+import { callersOf, containerOf, containerVersion } from "./containers.js";
 import { frameInfo } from "./frames.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
@@ -36,7 +36,7 @@ export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk
 // Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
-const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500 };
+const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500 };
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
@@ -548,6 +548,7 @@ export class AuditSession {
     this.errors = [];
     this.dataLayerLog = [];
     this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
+    this.containerScripts = []; // each container script's answer: status, version, size and load time
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.landing = null; // the first page: { step, requested, chain, final }
@@ -683,6 +684,11 @@ export class AuditSession {
       const call = calls.get(request);
       // Keepalive requests answered below are still reported as aborted; the page got the 204.
       if (call && call.status === null) call.status = "failed";
+      // A script answered with an error status has a response, but Chromium aborts its body: the status is kept.
+      if (containerOf(request.url())) this.recordScript(request, request.response().catch(() => null)).catch(() => {});
+    });
+    this.context.on("requestfinished", (request) => {
+      if (containerOf(request.url())) this.recordScript(request, request.response()).catch(() => {});
     });
 
     // Hits come from the request event rather than the route below: a request sent while
@@ -840,6 +846,31 @@ export class AuditSession {
       step: this.currentStep,
       t: Date.now(),
       ...(frame ? { frame } : {}),
+    });
+  }
+
+  /**
+   * A container script's answer: its HTTP status (or "failed"), the container version its published data opens
+   * with, the size of the script as the page got it (decoded) and over the wire, and how long it took to load.
+   * response resolves to null when no answer came at all. Only the ID and host are kept, not the address.
+   */
+  async recordScript(request, response) {
+    const container = containerOf(request.url());
+    if (!container) return;
+    const step = this.currentStep;
+    const res = await response;
+    const body = res ? await res.body().catch(() => null) : null;
+    const sizes = res ? await request.sizes().catch(() => null) : null;
+    const timing = request.timing();
+    const ms = timing.responseEnd > 0 ? Math.round(timing.responseEnd) : null;
+    const version = body ? containerVersion(body.subarray(0, 4096).toString("utf8")) : null;
+    this.record("containerScripts", {
+      id: container.id, host: container.host, step,
+      status: res ? res.status() : "failed",
+      ...(version ? { version } : {}),
+      ...(body ? { bytes: body.length } : {}),
+      ...(sizes?.responseBodySize > 0 ? { transferBytes: sizes.responseBodySize } : {}),
+      ...(ms !== null ? { ms } : {}),
     });
   }
 

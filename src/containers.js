@@ -31,6 +31,40 @@ export function containerOf(url) {
   };
 }
 
+/**
+ * The container version a gtm.js or gtag/js script was published as: its data opens with
+ * `var data = { "resource": { "version": "153", ...`. Null when the script says nothing of the kind.
+ */
+export function containerVersion(text) {
+  return String(text ?? "").match(/"resource"\s*:\s*\{\s*"version"\s*:\s*"(\d+)"/)?.[1] ?? null;
+}
+
+/** Whether a container script's answer means it never ran: the request failed or the server answered with an error. */
+export const scriptFailed = (script) => script.status === "failed" || (typeof script.status === "number" && script.status >= 400);
+
+/**
+ * The answer to a load's script request (see recordScript in browser.js): the first one for the same container and
+ * host from the load's step on, else the last before it. Null for runs saved by older versions.
+ */
+export function scriptOf(run, load) {
+  const same = (run.containerScripts ?? []).filter((s) => s.id === load.id && s.host === load.host);
+  return same.find((s) => s.step >= (load.step ?? 0)) ?? same.at(-1) ?? null;
+}
+
+/** What a row or load shows of its script's answer: { version?, bytes?, transferBytes?, ms?, failed? }. */
+export function scriptFacts(script) {
+  if (!script) return {};
+  // A load that already carries the facts (from loadSources) passes them on as they are.
+  if (!("status" in script)) return Object.fromEntries(["version", "bytes", "transferBytes", "ms", "failed"].filter((k) => script[k] != null).map((k) => [k, script[k]]));
+  return {
+    ...(script.version ? { version: script.version } : {}),
+    ...(script.bytes ? { bytes: script.bytes } : {}),
+    ...(script.transferBytes ? { transferBytes: script.transferBytes } : {}),
+    ...(script.ms != null ? { ms: script.ms } : {}),
+    ...(scriptFailed(script) ? { failed: String(script.status) } : {}),
+  };
+}
+
 /** origin + path, so a caller's query string (which may carry user data) is never kept. */
 export function scriptPath(url) {
   try {
@@ -106,15 +140,16 @@ export function sourceOf(load, pushes = []) {
   return { kind: "inline" };
 }
 
-/** A run's container loads with their sources, in the order they happened. Runs saved by older versions have none. */
+/** A run's container loads with their sources and their scripts' answers (scriptFacts), in the order they happened. Runs saved by older versions have none. */
 export function loadSources(run) {
   const pushes = run.dataLayerLog ?? [];
-  return (run.containerLoads ?? []).map((load) => ({ ...load, ...sourceOf(load, pushes) }));
+  return (run.containerLoads ?? []).map((load) => ({ ...load, ...sourceOf(load, pushes), ...scriptFacts(scriptOf(run, load)) }));
 }
 
 /**
  * One row per container and source across runs, in the order first seen: { id, script, layer, served, host,
- * environment?, kind, by?, frame?, pages, journeys }, where frame is the iframe it loaded in, if any.
+ * environment?, kind, by?, frame?, version?, bytes?, transferBytes?, ms?, failed?, pages, journeys }. frame is the
+ * iframe it loaded in; version to failed are its script's answer (see scriptFacts), from the first load in the row.
  */
 export function containerRows(runs) {
   const rows = new Map();
@@ -125,6 +160,7 @@ export function containerRows(runs) {
         id: l.id, script: l.script, layer: l.layer, served: l.served, host: l.host,
         ...(l.environment ? { environment: l.environment } : {}), kind: l.kind, ...(l.by ? { by: l.by } : {}),
         ...(l.frame ? { frame: { origin: l.frame.origin, party: l.frame.party } } : {}),
+        ...scriptFacts(l),
         pages: new Set(), journeys: new Set(),
       };
       if (l.page) row.pages.add(l.page);

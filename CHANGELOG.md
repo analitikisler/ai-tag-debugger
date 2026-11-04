@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.2 (2026-11-04)
+
+- Runs can report a finding 0.22.1 did not on the same site (`container_failed`). A baseline written with 0.22.1 can then list new entries; `--update-baseline` rewrites it.
+- Each Google container shows its published version (the number its `gtm.js` or `gtag/js` data opens with, as in GTM's Versions tab), the script's size and how long it took to load, in the Google containers card, `report.md` (a new **Version and size** column) and over MCP: step results, `get_containers`, `finish_audit`, `run_audit`, the JSON timeline and `get_report` with `part: "containers"` (`version`, `size_bytes`, `transfer_bytes`, `load_ms`). `capture.json` keeps each container script's answer under `containerScripts`.
+- New check `container_failed` (warning): a container script that failed to load or was answered with an error status, such as a wrong container ID or a server container that doesn't serve `gtm.js`, so none of its tags ran on that page.
+
 ## 0.22.1 (2026-11-04)
 
 - Runs can report different findings than 0.22.0 on the same site: an embedded widget's own hits no longer count as the site's, so a planned event only a widget sent is now missing, and the new `widget_tracking` and `iframe_container` (info) findings appear. A baseline written with 0.22.0 can then list stale or new entries; `--update-baseline` rewrites it.

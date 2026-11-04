@@ -238,7 +238,7 @@ export const journeyError = (err) => `The journey stopped with an error: ${err?.
 export function failedRun(journey, viewport, err, providers) {
   return {
     journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
-    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }
 
@@ -258,6 +258,7 @@ export function collect(session, journey, viewport) {
     // Hits let through to the real accounts (block_hits false, or a live MCP audit): the reports say so.
     ...(session.opts.blockHits === false ? { live: true } : {}),
     containerLoads: session.containerLoads,
+    containerScripts: session.containerScripts,
     network: session.network,
     providers: session.providers,
     skipped: session.skipped,
