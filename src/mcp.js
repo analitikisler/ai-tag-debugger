@@ -34,7 +34,7 @@ import { hitParams } from "./hit-params.js";
 import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { cmpFacts } from "./cmp.js";
 import { containerRows, loadSources } from "./containers.js";
-import { isWidgetHit, pushedEvent, siteIds, splitRun, widgetSummaries } from "./frames.js";
+import { isEventMessage, isWidgetHit, messageOutcomes, pushedEvent, siteIds, splitRun, widgetSummaries } from "./frames.js";
 import { consentMatrixMarkdown, consentTable, runConsentScenarios } from "./consent.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -192,6 +192,8 @@ export function stepCapture(audit, step) {
   if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
   const loads = loadSources({ containerLoads: (session.containerLoads ?? []).filter((l) => l.step === step), containerScripts: session.containerScripts, dataLayerLog: session.dataLayerLog });
   if (loads.length) lines.push("Google containers loaded:", ...loads.map(describeLoad));
+  const posted = (session.frameMessages ?? []).filter((x) => x.step === step);
+  if (posted.length) lines.push("Messages iframes posted to the page (name and field names only):", ...posted.map((x) => `  ${x.name} from ${x.origin} (${x.party === "site" ? "same site" : "third party"})${x.keys?.length ? `, fields ${x.keys.join(", ")}` : ""}${isEventMessage(x) ? "" : "; housekeeping, not checked"}`));
   lines.push(...cookieLines(session, step));
   const tag = session.steps[step]?.tagConsent;
   if (tag) {
@@ -272,6 +274,17 @@ export function containerLines(runs) {
 /** The embedded widgets of the runs as summaries (see widgetSummaries), compared by canonical event name. */
 const widgetsIn = (runs) => widgetSummaries(runs, (a, b) => canonicalEvent(a) === canonicalEvent(b));
 
+/** The events iframes posted to the page, with what the page did next, as lines for a tool result; [] when none. */
+export function messageLines(runs) {
+  const t = messages("en").ui.messages;
+  const list = runs.flatMap((r) => messageOutcomes(r, (a, b) => canonicalEvent(a) === canonicalEvent(b)));
+  if (!list.length) return [];
+  return [
+    "Messages from iframes (events posted to the page with postMessage, and what the page did next):",
+    ...list.map((x) => `  ${x.name} from ${x.origin} (${x.party === "site" ? "same site" : "third party"}), step ${x.step}: ${x.outcome === "nothing" ? t.nothing : t[x.outcome](x.relay.kind, x.relay.name, x.relay.ms)}`),
+  ];
+}
+
 /** The embedded widgets as lines for a tool result; [] when there were none. */
 export function widgetLines(runs) {
   const widgets = widgetsIn(runs);
@@ -303,6 +316,8 @@ export function timelineOf(run) {
     if (hits.length) entry.hits = hits.map((h) => ({ platform: h.platform, event: h.name, ...(h.consent ? { consent: h.consent } : {}), ...(h.late ? { late_ms: h.late.ms } : {}), ...(h.frame ? { iframe: h.frame.origin } : {}) }));
     // An embedded widget's own hits, kept apart from the site's (see src/frames.js).
     const widget = (run.widgetHits ?? []).filter((h) => h.step === st.index);
+    const posted = messageOutcomes({ ...run, frameMessages: (run.frameMessages ?? []).filter((x) => x.step === st.index) }, (a, b) => canonicalEvent(a) === canonicalEvent(b));
+    if (posted.length) entry.iframe_messages = posted.map((x) => ({ from: x.origin, name: x.name, outcome: x.outcome, ...(x.relay ? { relay: x.relay } : {}) }));
     const widgetPushes = (run.widgetDataLayerLog ?? []).filter((e) => e.step === st.index && e.frame && pushedEvent(e.value));
     if (widgetPushes.length) entry.widget_pushes = widgetPushes.map((e) => ({ widget: e.frame.origin, event: pushedEvent(e.value) }));
     if (widget.length) entry.widget_hits = widget.map((h) => ({ widget: h.frame.origin, platform: h.platform, event: h.name, ...(h.id ? { id: h.id } : {}), ...(h.consent ? { consent: h.consent } : {}) }));
@@ -590,10 +605,10 @@ export function buildServer(opts) {
     {
       title: "Read a report this server wrote",
       description:
-        "Returns a report finish_audit or run_audit wrote, so it can be read without access to the computer running this server. part markdown (default): report.md, the verdict, findings, consent and journeys in about 120 lines. summary: summary.json, the counts, journeys and findings as JSON. timeline: one JSON entry per step of each journey (hits with their consent, consent commands, the Google tag's consent, cookies and ids, the Google containers loaded). containers: every GTM container and Google tag the journeys loaded as JSON, with how each reached the page (source html, inline, script, custom_html, google_tag, nested, config, send_to or destination, and by: the container or script that loaded it), its dataLayer, host, GTM environment, version, size, load time and pages. widgets: every embedded third-party widget as JSON: where it was embedded, the containers it loaded, the tracking it sent to its own accounts and to the site's, its own dataLayer events, and the events it pushed that never reached the site's accounts (unshared).",
+        "Returns a report finish_audit or run_audit wrote, so it can be read without access to the computer running this server. part markdown (default): report.md, the verdict, findings, consent and journeys in about 120 lines. summary: summary.json, the counts, journeys and findings as JSON. timeline: one JSON entry per step of each journey (hits with their consent, consent commands, the Google tag's consent, cookies and ids, the Google containers loaded). containers: every GTM container and Google tag the journeys loaded as JSON, with how each reached the page (source html, inline, script, custom_html, google_tag, nested, config, send_to or destination, and by: the container or script that loaded it), its dataLayer, host, GTM environment, version, size, load time and pages. widgets: every embedded third-party widget as JSON: where it was embedded, the containers it loaded, the tracking it sent to its own accounts and to the site's, its own dataLayer events, and the events it pushed that never reached the site's accounts (unshared). messages: every event an iframe posted to the page with postMessage as JSON, with what the page did next (outcome relayed, followed or nothing, and relay: the push or hit that followed).",
       inputSchema: {
         report: z.string().describe("The report name finish_audit or run_audit gave."),
-        part: z.enum(["markdown", "summary", "timeline", "containers", "widgets"]).optional().describe("Default markdown."),
+        part: z.enum(["markdown", "summary", "timeline", "containers", "widgets", "messages"]).optional().describe("Default markdown."),
       },
       annotations: { readOnlyHint: true },
     },
@@ -606,6 +621,7 @@ export function buildServer(opts) {
         const capture = JSON.parse(await readFile(path.join(dir, "capture.json"), "utf8"));
         if (part === "containers") return text(JSON.stringify(containerRows(capture.runs ?? []).map(containerJson)));
         if (part === "widgets") return text(JSON.stringify(widgetsIn(capture.runs ?? [])));
+        if (part === "messages") return text(JSON.stringify((capture.runs ?? []).flatMap((r) => messageOutcomes(r, (a, b) => canonicalEvent(a) === canonicalEvent(b)).map((x) => ({ journey: r.journeyId, viewport: r.viewport, ...x })))));
         return text(JSON.stringify((capture.runs ?? []).map((r) => ({ journey: r.journeyId, viewport: r.viewport, steps: timelineOf(r) }))));
       } catch (err) {
         return fail(`Could not read the report: ${err.message}`);
@@ -717,13 +733,14 @@ export function buildServer(opts) {
         ...((platform) => (platform ? [`Consent platform: ${platform.vendor}. ${platform.facts.join(" ")}`] : []))(cmpFacts(messages("en"), [run])),
         ...containerLines([run]),
         ...widgetLines([run]),
+        ...messageLines([run]),
         opts.allowFiles
           ? `Full report with the event timeline: ${reportPath}`
           : opts.reportsUrl
             ? `Full report with the event timeline: ${opts.reportsUrl}/${path.basename(outDir)}/report.html`
             : "",
         "",
-        `To read the report here: get_report with report "${path.basename(outDir)}" (markdown, summary, timeline, containers or widgets).`,
+        `To read the report here: get_report with report "${path.basename(outDir)}" (markdown, summary, timeline, containers, widgets or messages).`,
         "Explain each problem to the user with its likely cause and fix.",
       ];
       return {
@@ -871,8 +888,9 @@ export function buildServer(opts) {
             ...grouped.map((f) => `- ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${f.detail}`),
             ...containerLines(result.runs),
             ...widgetLines(result.runs),
+            ...messageLines(result.runs),
             `Report: ${result.reportPath}`,
-            `To read the report here: get_report with report "${path.basename(result.outDir)}" (markdown, summary, timeline, containers or widgets).`,
+            `To read the report here: get_report with report "${path.basename(result.outDir)}" (markdown, summary, timeline, containers, widgets or messages).`,
           ].join("\n"),
         );
       },

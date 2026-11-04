@@ -154,3 +154,66 @@ export function widgetSummaries(runs, same = (a, b) => plainName(a) === plainNam
     };
   });
 }
+
+// A message counts as an event when it is dataLayer-shaped ({ event: ... }) or its name reads like one; frame
+// housekeeping (resizing, ready and heartbeat pings, scroll and focus) never does.
+const EVENT_KEYS = new Set(["event", "eventName", "event_name"]);
+const EVENT_WORDS = /(submit|complete|success|confirm|purchase|order|lead|book|reserv|sign.?up|register|checkout|payment|paid|conversion|subscribe|contact|quote|enquir|inquir|apply|download|add.?to.?cart)/i;
+const HOUSEKEEPING = /^(resize|height|setheight|size|ready|loaded|load|init|initialized|heartbeat|ping|pong|scroll|focus|blur|close|open|visible|hidden|iframeresizer.*|.*resize.*)$/i;
+
+/** Whether an iframe's message reads as an event the page might need to track. */
+export function isEventMessage(m) {
+  const name = String(m.name ?? "");
+  if (!name || HOUSEKEEPING.test(name.replace(/[^a-z0-9]/gi, ""))) return false;
+  return EVENT_KEYS.has(m.nameKey) || EVENT_WORDS.test(name);
+}
+
+// How long after a message the page has to react for the reaction to count as its relay under another name.
+export const RELAY_WINDOW_MS = 3000;
+
+/**
+ * What the page did after each event message an iframe posted to it, one per iframe, name and step:
+ * { origin, party, name, keys, step, t, outcome, relay? }. outcome "relayed": the page pushed or sent the same event
+ * (relay: { kind: "push"|"hit", name, ms }); "followed": within RELAY_WINDOW_MS it pushed another event or sent a hit,
+ * maybe the same event under another name; "nothing": neither. Only the page's own pushes and the site's own hits
+ * count (not an iframe's). same(a, b) compares event names, as in widgetSummaries.
+ *
+ * Each reaction of the page answers one message at most, so one iframe's relayed event never makes another's look
+ * handled. A reaction carrying a message's own name belongs to that message. Any other belongs to the latest message
+ * before it, since a page's listener reacts as the message arrives; when that message already has its answer, the
+ * reaction is a second effect of it (the hit after a push) and answers nothing else.
+ */
+export function messageOutcomes(run, same = (a, b) => plainName(a) === plainName(b)) {
+  // In recording order: seq where both have one (several often share a millisecond), else the time.
+  const order = (a, b) => (a.seq != null && b.seq != null ? a.seq - b.seq : (a.t ?? 0) - (b.t ?? 0));
+  const pushes = (run.dataLayerLog ?? []).filter((e) => !e.frame && pushedEvent(e.value)).map((e) => ({ kind: "push", name: pushedEvent(e.value), t: e.t ?? 0, seq: e.seq }));
+  const hits = (run.hits ?? []).filter((h) => !h.frame).map((h) => ({ kind: "hit", name: h.name, t: h.t ?? 0, seq: h.seq }));
+  const reactions = [...pushes, ...hits].sort(order);
+  const seen = new Set();
+  const messages = [];
+  for (const m of [...(run.frameMessages ?? [])].sort(order)) {
+    if (!isEventMessage(m)) continue;
+    const k = `${m.origin}|${m.name}|${m.step}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    messages.push({ m, relay: null, outcome: "nothing" });
+  }
+  const used = new Set();
+  for (const msg of messages) {
+    const r = reactions.find((x) => !used.has(x) && order(x, msg.m) >= 0 && same(x.name, msg.m.name));
+    if (!r) continue;
+    Object.assign(msg, { relay: r, outcome: "relayed" });
+    used.add(r);
+  }
+  for (const r of reactions) {
+    if (used.has(r)) continue;
+    const latest = messages.filter((x) => order(x.m, r) <= 0).at(-1);
+    if (!latest || latest.relay || r.t - latest.m.t > RELAY_WINDOW_MS) continue;
+    Object.assign(latest, { relay: r, outcome: "followed" });
+    used.add(r);
+  }
+  return messages.map(({ m, relay, outcome }) => ({
+    origin: m.origin, party: m.party, name: m.name, keys: m.keys ?? [], step: m.step, t: m.t, outcome,
+    ...(relay ? { relay: { kind: relay.kind, name: relay.name, ms: Math.max(0, relay.t - m.t) } } : {}),
+  }));
+}

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.4 (2026-11-04)
+
+- Runs can report a finding 0.22.3 did not on the same site (`iframe_message_unhandled`). A baseline written with 0.22.3 can then list new entries; `--update-baseline` rewrites it.
+- New **Messages from iframes** card under the inventory and a table in `report.md`: each event an iframe posted to the page with `postMessage` (a form or checkout saying it is done), and what the page did next: pushed or sent the same event, did something else within 3 seconds (perhaps the same event under another name), or nothing. Only the message's name and field names are recorded, never values. Housekeeping messages (resizing, ready and heartbeat pings) are left out. `capture.json` keeps them under `frameMessages`.
+- New check `iframe_message_unhandled` (info): an iframe posted an event to the page, but the page pushed nothing to its dataLayer and sent no hit right after, so a conversion completed in the iframe can go untracked.
+- MCP: step results list the messages iframes posted at that step, `finish_audit` and `run_audit` end with them and what the page did, the JSON timeline lists them per step under `iframe_messages`, and `get_report` returns them with `part: "messages"`.
+- New guide, [Google containers, embedded widgets and iframes](docs/guides/containers-and-widgets.md), in English and Turkish: what the containers, widgets and messages cards show, what each of their findings usually means and how to fix it, with a page listener that relays an iframe's event to the dataLayer.
+
 ## 0.22.3 (2026-11-04)
 
 - Runs can report a finding 0.22.2 did not on the same site (`widget_events_unshared`). A baseline written with 0.22.2 can then list new entries; `--update-baseline` rewrites it.
