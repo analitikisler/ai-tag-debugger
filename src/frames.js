@@ -177,27 +177,41 @@ export const RELAY_WINDOW_MS = 3000;
  * (relay: { kind: "push"|"hit", name, ms }); "followed": within RELAY_WINDOW_MS it pushed another event or sent a hit,
  * maybe the same event under another name; "nothing": neither. Only the page's own pushes and the site's own hits
  * count (not an iframe's). same(a, b) compares event names, as in widgetSummaries.
+ *
+ * Each reaction of the page answers one message at most, so one iframe's relayed event never makes another's look
+ * handled. A reaction carrying a message's own name belongs to that message. Any other belongs to the latest message
+ * before it, since a page's listener reacts as the message arrives; when that message already has its answer, the
+ * reaction is a second effect of it (the hit after a push) and answers nothing else.
  */
 export function messageOutcomes(run, same = (a, b) => plainName(a) === plainName(b)) {
   const pushes = (run.dataLayerLog ?? []).filter((e) => !e.frame && pushedEvent(e.value)).map((e) => ({ kind: "push", name: pushedEvent(e.value), t: e.t ?? 0 }));
   const hits = (run.hits ?? []).filter((h) => !h.frame).map((h) => ({ kind: "hit", name: h.name, t: h.t ?? 0 }));
-  const after = [...pushes, ...hits].sort((a, b) => a.t - b.t);
+  const reactions = [...pushes, ...hits].sort((a, b) => a.t - b.t);
   const seen = new Set();
-  const out = [];
-  for (const m of run.frameMessages ?? []) {
+  const messages = [];
+  for (const m of [...(run.frameMessages ?? [])].sort((a, b) => (a.t ?? 0) - (b.t ?? 0))) {
     if (!isEventMessage(m)) continue;
     const k = `${m.origin}|${m.name}|${m.step}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    const later = after.filter((x) => x.t >= m.t);
-    const exact = later.find((x) => same(x.name, m.name));
-    const near = later.find((x) => x.t - m.t <= RELAY_WINDOW_MS);
-    const hit = exact ?? near;
-    out.push({
-      origin: m.origin, party: m.party, name: m.name, keys: m.keys ?? [], step: m.step, t: m.t,
-      outcome: exact ? "relayed" : near ? "followed" : "nothing",
-      ...(hit ? { relay: { kind: hit.kind, name: hit.name, ms: Math.max(0, hit.t - m.t) } } : {}),
-    });
+    messages.push({ m, relay: null, outcome: "nothing" });
   }
-  return out;
+  const used = new Set();
+  for (const msg of messages) {
+    const r = reactions.find((x) => !used.has(x) && x.t >= msg.m.t && same(x.name, msg.m.name));
+    if (!r) continue;
+    Object.assign(msg, { relay: r, outcome: "relayed" });
+    used.add(r);
+  }
+  for (const r of reactions) {
+    if (used.has(r)) continue;
+    const latest = messages.filter((x) => x.m.t <= r.t).at(-1);
+    if (!latest || latest.relay || r.t - latest.m.t > RELAY_WINDOW_MS) continue;
+    Object.assign(latest, { relay: r, outcome: "followed" });
+    used.add(r);
+  }
+  return messages.map(({ m, relay, outcome }) => ({
+    origin: m.origin, party: m.party, name: m.name, keys: m.keys ?? [], step: m.step, t: m.t, outcome,
+    ...(relay ? { relay: { kind: relay.kind, name: relay.name, ms: Math.max(0, relay.t - m.t) } } : {}),
+  }));
 }

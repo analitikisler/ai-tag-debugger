@@ -100,3 +100,22 @@ test("what reads as an event, and what is housekeeping", () => {
   for (const name of ["resize", "iFrameResizer0:300", "ready", "heartbeat", "setHeight", "scroll", "load"]) assert.equal(is(name), false, name);
   assert.equal(is("theme_changed"), false, "a name that reads as nothing tracked");
 });
+
+test("each reaction of the page answers one message, whatever order the iframes load in", () => {
+  const msg = (t, origin, name, nameKey = "type") => ({ t, origin, party: origin.includes("widget") ? "third" : "site", name, nameKey, keys: [nameKey], step: 1 });
+  const push = (t, event) => ({ t, step: 1, value: { event } });
+  const outcomes = (run) => messageOutcomes(run).map((x) => `${x.name} ${x.outcome}${x.relay ? ` ${x.relay.name}` : ""}`).sort();
+  const form = [msg(200, "https://shop.example", "form_submitted"), push(201, "generate_lead"), msg(300, "https://shop.example", "sign_up", "event"), push(301, "sign_up")];
+  const widget = msg(100, "https://widget.example", "booking_complete", "event");
+  const expected = ["booking_complete nothing", "form_submitted followed generate_lead", "sign_up relayed sign_up"];
+  // The order the CI runner saw: the widget's message first, then the form's messages and the page's relays of them.
+  // The page relaying the form's sign_up within 3 seconds must not make the widget's booking look handled.
+  const ciOrder = { frameMessages: [widget, form[0], form[2]], dataLayerLog: [form[1], form[3]] };
+  assert.deepEqual(outcomes(ciOrder), expected);
+  // And the other way round: the widget's message after everything the page did.
+  const later = { ...widget, t: 400 };
+  assert.deepEqual(outcomes({ frameMessages: [form[0], form[2], later], dataLayerLog: [form[1], form[3]] }), expected);
+  // A hit right after a relayed push is a second effect of the same message, not an answer to an earlier one.
+  const hitAfter = { frameMessages: [widget, form[2]], dataLayerLog: [form[3]], hits: [{ platform: "ga4", name: "sign_up_hit", t: 350 }] };
+  assert.deepEqual(outcomes(hitAfter), ["booking_complete nothing", "sign_up relayed sign_up"]);
+});
