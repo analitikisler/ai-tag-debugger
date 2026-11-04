@@ -6,6 +6,7 @@ import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
 import { CONSENT_SIGNALS } from "./parsers.js";
 import { duplicateLoads, loadSources, splitLayers } from "./containers.js";
+import { widgetsOf } from "./frames.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
@@ -195,6 +196,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (skipped.length) findings.push({ ...base, severity: "info", check: "planned_out_of_scope", detail: d.plannedOutOfScope(skipped.map((e) => key(e.platform, e.name))) });
   }
   const stepLabel = (i) => run.steps[i]?.label ?? `step ${i}`;
+  // Embedded widgets' hits (run.widgetHits, see src/frames.js) count for consent and personal data only: the site
+  // answers for what the widgets it embeds collect, but they say nothing about its own tracking plan.
+  const legalHits = [...run.hits, ...(run.widgetHits ?? [])].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+  const legalKey = (hit) => `${key(hit.platform, hit.name)}${hit.frame?.party === "third" ? `|${hit.frame.origin}` : ""}`;
+  const fromWidget = (hit, text) => ((run.widgetHits ?? []).includes(hit) ? d.fromWidget(hit.frame.origin, text) : text);
   const planEventFor = (hit) => plan.events.find((e) => hitMatchesEvent(e, hit));
   const planKeyOf = (hit) => { const e = planEventFor(hit); return e ? key(e.platform, e.name) : key(hit.platform, hit.name); };
 
@@ -383,6 +389,15 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     findings.push({ ...base, severity: "info", check: "container_send_to_only", platform: l.id.startsWith("G-") ? "ga4" : "google_ads", step: stepLabel(l.step), detail: d.sendToOnly(l.id, l.by) });
   }
 
+  // Widgets that tracked on their own, left out of the plan checks: said once per widget, so nothing goes missing silently.
+  for (const w of widgetsOf(run.widgetHits ?? [])) {
+    const first = (run.widgetHits ?? []).find((h) => h.frame.origin === w.origin);
+    findings.push({ ...base, severity: "info", check: "widget_tracking", step: stepLabel(first.step), detail: d.widgetTracking(w.origin, w.platforms) });
+  }
+  // A container in a same-site iframe beside one in the page: two documents, two dataLayers.
+  const iframeLoad = loads.find((l) => l.frame?.party === "site" && loads.some((t) => !t.frame && t.step <= l.step));
+  if (iframeLoad) findings.push({ ...base, severity: "info", check: "iframe_container", step: stepLabel(iframeLoad.step), detail: d.iframeContainer(iframeLoad.id, iframeLoad.frame.origin, iframeLoad.frame.parent) });
+
   // One event ID on two different events: the platform keeps the first and drops the other as its
   // duplicate, so a real event is lost (usually an ID set once per page instead of once per event).
   const byId = new Map();
@@ -518,15 +533,15 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     if (regranted) findings.push({ ...base, severity: "broken", check: "reject_ignored", step: stepLabel(regranted.step), detail: d.rejectIgnored() });
     else if (reject?.bannerOpenAfter) findings.push({ ...base, severity: "broken", check: "reject_button_failed", step: stepLabel(rejectStep), detail: d.rejectButtonFailed() });
     const afterReject = new Map();
-    for (const hit of run.hits) {
+    for (const hit of legalHits) {
       if (hit.step < rejectStep) continue;
       if (NON_GOOGLE_AD_PLATFORMS.has(hit.platform) || claimsGranted(hit)) {
-        const k = key(hit.platform, hit.name);
+        const k = legalKey(hit);
         if (!afterReject.has(k)) afterReject.set(k, hit);
       }
     }
     for (const [, hit] of afterReject) {
-      findings.push({ ...base, severity: "broken", check: "after_reject", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.afterReject(hit.platform, hit.name) });
+      findings.push({ ...base, severity: "broken", check: "after_reject", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: fromWidget(hit, d.afterReject(hit.platform, hit.name)) });
     }
   }
 
@@ -546,14 +561,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   const beforeConsent = new Map();
-  for (const hit of run.hits) {
+  for (const hit of legalHits) {
     // Hits from the reject click on are covered by the after_reject check.
     if (rejectStep !== null && hit.step >= rejectStep) continue;
     const early = granted === null || hit.step < granted;
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);
     if (adPlatform || claimsGranted(hit)) {
-      const k = key(hit.platform, hit.name);
+      const k = legalKey(hit);
       if (!beforeConsent.has(k)) beforeConsent.set(k, hit);
     }
   }
@@ -565,26 +580,26 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       platform: hit.platform,
       event: hit.name,
       step: stepLabel(hit.step),
-      detail: granted === null ? d.beforeConsentNever(hit.platform, hit.name) : d.beforeConsent(hit.platform, hit.name),
+      detail: fromWidget(hit, granted === null ? d.beforeConsentNever(hit.platform, hit.name) : d.beforeConsent(hit.platform, hit.name)),
     });
   }
 
   // Personal data in hits.
   const piiSeen = new Set();
-  for (const hit of run.hits) {
+  for (const hit of legalHits) {
     let url = hit.url;
     try {
       url = decodeURIComponent(hit.url);
     } catch { /* malformed % sequence, e.g. "50%": search the raw URL */ }
     const haystack = url + " " + JSON.stringify(hit.params);
-    if (piiSeen.has(key(hit.platform, hit.name))) continue;
+    if (piiSeen.has(legalKey(hit))) continue;
     // User data for ad matching is redacted at capture; userData.plain lists the fields that were not hashed.
     if (hit.userData?.plain?.length) {
-      piiSeen.add(key(hit.platform, hit.name));
-      findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.piiUnhashed(hit.platform, hit.name, hit.userData.plain) });
+      piiSeen.add(legalKey(hit));
+      findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: fromWidget(hit, d.piiUnhashed(hit.platform, hit.name, hit.userData.plain)) });
     } else if (visitorEmailIn(haystack, hit)) {
-      piiSeen.add(key(hit.platform, hit.name));
-      findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.pii(hit.platform, hit.name) });
+      piiSeen.add(legalKey(hit));
+      findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: fromWidget(hit, d.pii(hit.platform, hit.name)) });
     }
   }
 

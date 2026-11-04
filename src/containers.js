@@ -114,16 +114,17 @@ export function loadSources(run) {
 
 /**
  * One row per container and source across runs, in the order first seen: { id, script, layer, served, host,
- * environment?, kind, by?, pages, journeys }.
+ * environment?, kind, by?, frame?, pages, journeys }, where frame is the iframe it loaded in, if any.
  */
 export function containerRows(runs) {
   const rows = new Map();
   for (const run of runs) {
     for (const l of loadSources(run)) {
-      const k = [l.id, l.kind, l.by ?? "", l.host, l.layer, l.environment ?? ""].join("|");
+      const k = [l.id, l.kind, l.by ?? "", l.host, l.layer, l.environment ?? "", l.frame?.origin ?? ""].join("|");
       const row = rows.get(k) ?? {
         id: l.id, script: l.script, layer: l.layer, served: l.served, host: l.host,
         ...(l.environment ? { environment: l.environment } : {}), kind: l.kind, ...(l.by ? { by: l.by } : {}),
+        ...(l.frame ? { frame: { origin: l.frame.origin, party: l.frame.party } } : {}),
         pages: new Set(), journeys: new Set(),
       };
       if (l.page) row.pages.add(l.page);

@@ -405,7 +405,7 @@ function mdContainers(m, runs) {
   const lines = [`## ${m.ui.containersTitle}`, "", `| ${m.ui.containerCol} | ${m.ui.sourceCol} | ${m.ui.layerCol} | ${m.ui.servedCol} | ${m.ui.pagesCol} |`, "|---|---|---|---|---|"];
   for (const r of rows.slice(0, MD_INVENTORY_ROWS)) {
     const served = r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`;
-    lines.push(`| ${mdText(r.id)} (${c.script[r.script]}) | ${mdText(c.kinds[r.kind](r.by))}${r.environment ? `, ${mdText(c.environment(r.environment))}` : ""} | ${mdText(r.layer)} | ${mdText(served)} | ${r.pages.length} |`);
+    lines.push(`| ${mdText(r.id)} (${c.script[r.script]}) | ${mdText(c.kinds[r.kind](r.by))}${r.frame ? `, ${mdText(c.iframe(r.frame.origin, r.frame.party))}` : ""}${r.environment ? `, ${mdText(c.environment(r.environment))}` : ""} | ${mdText(r.layer)} | ${mdText(served)} | ${r.pages.length} |`);
   }
   if (rows.length > MD_INVENTORY_ROWS) lines.push("", m.ui.md.moreIn(rows.length - MD_INVENTORY_ROWS, "report.html"));
   lines.push("");

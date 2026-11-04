@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.1 (2026-11-04)
+
+- Runs can report different findings than 0.22.0 on the same site: an embedded widget's own hits no longer count as the site's, so a planned event only a widget sent is now missing, and the new `widget_tracking` and `iframe_container` (info) findings appear. A baseline written with 0.22.0 can then list stale or new entries; `--update-baseline` rewrites it.
+- Fixed: hits sent from inside an iframe counted as the site's own tracking, so an embedded widget (a booking or chat widget, a payment form, a video) tracking to its vendor's own accounts could satisfy a planned event, be listed as the site's unplanned events, or move the scores. Hits, dataLayer pushes, vendor calls and container loads from an iframe now record its origin, the page it is embedded in and whether it is on the site's own site. A third-party iframe's hits to accounts the site's own tags don't use are the widget's: they are left out of plan matching, coverage, duplicates, unplanned events and the scores, and kept for the consent and personal data checks, whose findings name the widget. A plan drafted with `aitd plan` leaves them out too.
+- New `widget_tracking` (info) finding: each embedded widget that tracked on its own, with its accounts and events. New `iframe_container` (info) finding: a container in a same-site iframe beside one in the page, which the page's dataLayer pushes and consent never reach.
+- The Google containers card and `report.md` table say which containers ran in an iframe. MCP step results mark each hit from an iframe and whether the plan checks count it, and the JSON timeline lists widget hits per step under `widget_hits`.
+
 ## 0.22.0 (2026-11-04)
 
 - Runs can report findings 0.21.0 did not on the same site (`container_duplicate`, `container_environment`, `datalayer_split`, `container_send_to_only`). A baseline written with 0.21.0 can then list new entries; `--update-baseline` rewrites it.

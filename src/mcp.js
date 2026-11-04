@@ -34,6 +34,7 @@ import { hitParams } from "./hit-params.js";
 import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { cmpFacts } from "./cmp.js";
 import { containerRows, loadSources } from "./containers.js";
+import { isWidgetHit, siteIds } from "./frames.js";
 import { consentMatrixMarkdown, consentTable, runConsentScenarios } from "./consent.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -91,20 +92,29 @@ const consentText = (c) => Object.entries(c).map(([k, v]) => `${k}=${v}`).join("
 /** The Google protocol fields of a hit, short: values for the ids and consent strings, bare names for the 1-flags. */
 const protocolText = (p) => Object.entries(p).map(([k, v]) => (["_fv", "_ss", "_nsi"].includes(k) && v === "1" ? k : `${k}=${v}`)).join(" ");
 
-function describeHit(h, steps, index) {
+/** Where an iframe's hit came from, and whether the plan checks will count it (see src/frames.js). */
+function frameNote(h, ids) {
+  if (!h.frame) return "";
+  if (h.frame.party === "site") return ` (from an iframe on the site: ${h.frame.origin})`;
+  return isWidgetHit(h, ids)
+    ? ` (from an embedded widget at ${h.frame.origin}, to an account the site's tags don't use: left out of the plan checks, kept for consent and personal data)`
+    : ` (from a third-party iframe at ${h.frame.origin}, to the site's own account)`;
+}
+
+function describeHit(h, steps, index, ids = new Set()) {
   const entries = Object.entries(h.params ?? {}).filter(([k]) => !["v", "tid", "gtm", "_p", "cid", "sid", "_s", "sct", "seg", "dl", "dr", "dt", "ul", "sr", "_et", "en"].includes(k));
   const params = [
     ...entries.filter(([k]) => !WHOLE_FIELDS.has(k)).slice(0, 12).map(([k, v]) => cut(`${k}=${show(v)}`, VALUE_LIMIT)),
     ...entries.filter(([k]) => WHOLE_FIELDS.has(k)).map(([k, v]) => `${k}=${show(v)}`),
   ].join(", ");
   const late = h.late ? ` (arrived ${(h.late.ms / 1000).toFixed(1)} s late, after the step that loaded its page: "${steps[h.step]?.label ?? `step ${h.step}`}")` : "";
-  return `- [h${index}] ${h.platform} ${h.name}${h.consent ? ` [consent ${consentText(h.consent)}]` : ""}${h.protocol ? ` {${protocolText(h.protocol)}}` : ""}${params ? `: ${params}` : ""}${late}`;
+  return `- [h${index}] ${h.platform} ${h.name}${h.consent ? ` [consent ${consentText(h.consent)}]` : ""}${h.protocol ? ` {${protocolText(h.protocol)}}` : ""}${params ? `: ${params}` : ""}${late}${frameNote(h, ids)}`;
 }
 
 /** A consent command in full, as key=value; any other push as JSON, cut, with its page address fields whole. */
 function describePush(p) {
   // Pushes to a dataLayer of another name (a container's l=) say which.
-  const layer = p.layer ? `[${p.layer}] ` : "";
+  const layer = `${p.frame ? `[iframe ${p.frame.origin}] ` : ""}${p.layer ? `[${p.layer}] ` : ""}`;
   if (isConsentCommand(p, "default") || isConsentCommand(p, "update")) {
     const signals = p.value[2] && typeof p.value[2] === "object" ? Object.entries(p.value[2]).map(([k, v]) => `${k}=${show(v)}`).join(" ") : show(p.value[2]);
     return `- ${layer}consent ${p.value[1]}: ${signals}`;
@@ -156,13 +166,14 @@ function cookieLines(session, step) {
 /** One container load in words: its ID, what inserted it, its dataLayer and where it came from. */
 function describeLoad(l) {
   const c = messages("en").ui.containers;
-  const extra = [l.layer !== "dataLayer" && `dataLayer ${l.layer}`, l.served === "site" && `served from ${l.host}`, l.environment && c.environment(l.environment)].filter(Boolean);
+  const extra = [l.layer !== "dataLayer" && `dataLayer ${l.layer}`, l.served === "site" && `served from ${l.host}`, l.environment && c.environment(l.environment), l.frame && c.iframe(l.frame.origin, l.frame.party)].filter(Boolean);
   return `  ${l.id} (${c.script[l.script]}): ${c.kinds[l.kind](l.by)}${extra.length ? `; ${extra.join(", ")}` : ""}`;
 }
 
 export function stepCapture(audit, step) {
   const { session } = audit;
   const hits = session.hits.filter((h) => h.step === step);
+  const ids = siteIds(session);
   const pushes = session.dataLayerLog.filter((e) => e.step === step);
   // Hits that arrived during this step for a page an earlier step loaded are listed there, and noted here.
   const lateHere = session.hits.filter((h) => h.late?.during === step);
@@ -173,7 +184,7 @@ export function stepCapture(audit, step) {
     ...(problem?.kind === "crash" ? [`WARNING: the page crashed in the browser (the ${problem.vendor} error screen)${problem.refusedScripts ? `; ${problem.refusedScripts} of its own scripts came back as HTML pages, which bot protection or a mismatched deployment does` : ""}. Its tags may never have run.`] : []),
     `Step ${step}: "${session.steps[step]?.label ?? ""}". Read a hit's full parameters with get_hit (audit_id, step ${step}, its [h] number).`,
     `Tracking hits sent by this step: ${hits.length}`,
-    ...hits.map((h, i) => describeHit(h, session.steps, i)),
+    ...hits.map((h, i) => describeHit(h, session.steps, i, ids)),
   ];
   if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
   if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
@@ -233,6 +244,7 @@ function containerJson(l) {
     ...(l.layer !== "dataLayer" ? { data_layer: l.layer } : {}),
     ...(l.served === "site" ? { served_from: l.host } : {}),
     ...(l.environment ? { gtm_environment: l.environment } : {}),
+    ...(l.frame ? { iframe: { origin: l.frame.origin, party: l.frame.party } } : {}),
     ...(l.pages ? { pages: l.pages } : {}),
   };
 }
@@ -245,7 +257,7 @@ export function containerLines(runs) {
   return [
     "Google containers (how each reached the page):",
     ...rows.map((r) => {
-      const extra = [r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
+      const extra = [r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), r.frame && c.iframe(r.frame.origin, r.frame.party), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
       return `  ${r.id} (${c.script[r.script]}): ${c.kinds[r.kind](r.by)}; ${extra.join(", ")}`;
     }),
   ];
@@ -261,7 +273,10 @@ export function timelineOf(run) {
     const names = (kind) => [...new Set(changes.filter((c) => c.change === kind).map((c) => c.name))];
     const entry = { step: st.index, action: st.label, ...(st.pagePath ? { page: st.pagePath } : {}) };
     if (st.error) entry.error = st.error;
-    if (hits.length) entry.hits = hits.map((h) => ({ platform: h.platform, event: h.name, ...(h.consent ? { consent: h.consent } : {}), ...(h.late ? { late_ms: h.late.ms } : {}) }));
+    if (hits.length) entry.hits = hits.map((h) => ({ platform: h.platform, event: h.name, ...(h.consent ? { consent: h.consent } : {}), ...(h.late ? { late_ms: h.late.ms } : {}), ...(h.frame ? { iframe: h.frame.origin } : {}) }));
+    // An embedded widget's own hits, kept apart from the site's (see src/frames.js).
+    const widget = (run.widgetHits ?? []).filter((h) => h.step === st.index);
+    if (widget.length) entry.widget_hits = widget.map((h) => ({ widget: h.frame.origin, platform: h.platform, event: h.name, ...(h.id ? { id: h.id } : {}), ...(h.consent ? { consent: h.consent } : {}) }));
     if (others.length) entry.other_tracking_calls = others.length;
     if (commands.length) entry.consent_commands = commands.map((e) => ({ [e.value[1]]: e.value[2] }));
     if (st.tagConsent) entry.tag_consent = Object.fromEntries(Object.entries(st.tagConsent.entries).map(([k, e]) => [k, e.update ?? e.default ?? null]));

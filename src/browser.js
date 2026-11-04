@@ -11,6 +11,7 @@ import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
 import { callersOf, containerOf } from "./containers.js";
+import { frameInfo } from "./frames.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -587,11 +588,13 @@ export class AuditSession {
     }
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
-    await this.context.exposeBinding("__atdRecord", (_source, entry) => {
+    await this.context.exposeBinding("__atdRecord", (source, entry) => {
+      const frame = frameInfo(source?.frame);
+      if (frame) entry = { ...entry, frame };
       this.lastTrackingAt = Date.now();
       this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
-    await this.context.exposeBinding("__atdLoad", (_source, entry) => this.recordLoad(entry));
+    await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
@@ -619,9 +622,10 @@ export class AuditSession {
       const hits = parseTrackingRequest(request.url(), request.postData());
       if (!hits) return;
       const recorded = [];
+      const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now() };
+        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now(), ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -660,6 +664,7 @@ export class AuditSession {
         ...this.storeBody(request),
         blocked: this.opts.blockHits && isCollectionEndpoint(request.url()),
         status: null,
+        ...((frame) => (frame ? { frame } : {}))(this.frameOf(request)),
       };
       if (this.record("network", call)) calls.set(request, call);
     });
@@ -823,7 +828,7 @@ export class AuditSession {
    * script did and, for a script, the callers on the stack. Only addresses without their query are kept, so
    * the environment token (gtm_auth) and user data in a page's query string never reach the capture.
    */
-  recordLoad(entry) {
+  recordLoad(entry, frame = null) {
     const container = containerOf(entry?.src);
     if (!container) return;
     this.record("containerLoads", {
@@ -834,7 +839,17 @@ export class AuditSession {
       doc: String(entry.doc ?? "").slice(0, 16),
       step: this.currentStep,
       t: Date.now(),
+      ...(frame ? { frame } : {}),
     });
+  }
+
+  /** The iframe a request came from, as frameInfo gives it; null for the page itself or a worker. */
+  frameOf(request) {
+    try {
+      return frameInfo(request.frame());
+    } catch {
+      return null; // service worker requests have no frame
+    }
   }
 
   /** Adds an entry to one of the logs, up to its limit. Returns false once the limit is reached. */
