@@ -697,6 +697,7 @@ Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini in
 
 Tek tıkla ya da tek satırla kurulum:
 
+- **Claude Code, eklenti olarak:** `/plugin install ai-tag-debugger --marketplace analitikisler/ai-tag-debugger` sunucuyu ve Claude'a bir denetimi adım adım anlatan bir beceriyi ekler; [plugin/README.md](plugin/README.md) çalıştırdığı, indirdiği ve yazdığı her şeyi listeler. Eklenti, birlikte yayımlandığı sürümün tam olarak aynısını başlatır.
 - **Claude Code:** `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`
 - **Cursor:** [Cursor'a ekle](https://cursor.com/en/install-mcp?name=ai-tag-debugger&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhbmFsaXRpa2lzbGVyL2FpLXRhZy1kZWJ1Z2dlciIsIm1jcCJdfQ==)
 - **VS Code:** [VS Code'a yükle](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D), ya da `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`

@@ -6,4 +6,6 @@
 
 The reports embed the logos as data URIs so that a report is one file. `node scripts/brand.js` reads the files it names in `brand/ai/assets/` and writes `src/brand.js`; run it after `brand/ai/` changes. `test/brand-script.test.js` fails when `src/brand.js` no longer matches the assets.
 
+`plugin/.claude-plugin/icon.png` is the Claude plugin's icon: `brand/ai/assets/icons/ai-tag-debugger-512.svg`, unchanged, rendered at 1024 × 1024. The plugin directory takes it as the listing icon only once, when the plugin is first submitted.
+
 `social-preview.png` is the repository's sharing image: the endorsed lockup from `brand/ai/assets/lockups/ai-tag-debugger-endorsed-light.svg`, unchanged, on the brand's paper colour, at GitHub's 1280 × 640. GitHub has no file for it; upload it under the repository's Settings, General, Social preview.

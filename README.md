@@ -697,6 +697,7 @@ The browser (Chromium) downloads itself the first time you run an audit, about a
 
 One-click and one-line setup:
 
+- **Claude Code, as a plugin:** `/plugin install ai-tag-debugger --marketplace analitikisler/ai-tag-debugger` adds the server and a skill that walks Claude through an audit; [plugin/README.md](plugin/README.md) lists everything it runs, fetches and writes. The plugin starts the exact version it was released with.
 - **Claude Code:** `claude mcp add ai-tag-debugger -- npx -y @analitikisler/ai-tag-debugger mcp`
 - **Cursor:** [Add to Cursor](https://cursor.com/en/install-mcp?name=ai-tag-debugger&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhbmFsaXRpa2lzbGVyL2FpLXRhZy1kZWJ1Z2dlciIsIm1jcCJdfQ==)
 - **VS Code:** [Install in VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=ai-tag-debugger&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40analitikisler%2Fai-tag-debugger%22%2C%22mcp%22%5D%7D), or `code --add-mcp '{"name":"ai-tag-debugger","command":"npx","args":["-y","@analitikisler/ai-tag-debugger","mcp"]}'`
