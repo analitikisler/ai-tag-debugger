@@ -6,6 +6,7 @@ import { canonicalEvent, groupFindings, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { buildInventory } from "./inventory.js";
 import { containerRows } from "./containers.js";
+import { widgetSummaries } from "./frames.js";
 import { computeMetrics } from "./metrics.js";
 import { historySummaryLines, sparkline } from "./history.js";
 import { cardIds } from "./html/lib.js";
@@ -403,6 +404,23 @@ export function scriptCell(c, r) {
   return [r.version && c.version(r.version), r.bytes && c.size(r.bytes), r.ms != null && c.loadTime(r.ms)].filter(Boolean).join(", ");
 }
 
+/** The embedded widgets, one row each: where they were embedded, their tracking and their own dataLayer events. Omitted when none. */
+function mdWidgets(m, runs) {
+  const widgets = widgetSummaries(runs, (a, b) => canonicalEvent(a) === canonicalEvent(b));
+  if (!widgets.length) return [];
+  const w = m.ui.widgets;
+  const hits = (list) => list.map((e) => w.hits(e.platform, e.id, e.events)).join("; ") || w.none;
+  const lines = [`## ${m.ui.widgetsTitle}`, "", `| ${m.ui.widgetCol} | ${m.ui.embeddedCol} | ${m.ui.ownCol} | ${m.ui.sharedCol} | ${m.ui.pushesCol} |`, "|---|---|---|---|---|"];
+  for (const x of widgets.slice(0, MD_INVENTORY_ROWS)) {
+    const events = x.pushes.events.map((e) => w.event(e.name, e.count)).join(", ") || w.none;
+    const unshared = x.unshared.length ? ` (${w.unshared}: ${x.unshared.join(", ")})` : "";
+    lines.push(`| ${mdText(x.origin)} | ${mdText(x.parents.join(", ")) || "–"} | ${mdText(hits(x.own))} | ${mdText(hits(x.shared))} | ${mdText(events + unshared)} |`);
+  }
+  if (widgets.length > MD_INVENTORY_ROWS) lines.push("", m.ui.md.moreIn(widgets.length - MD_INVENTORY_ROWS, "report.html"));
+  lines.push("");
+  return lines;
+}
+
 /** The Google containers and how each reached the page, one row per container and source. Omitted when none loaded. */
 function mdContainers(m, runs) {
   const rows = containerRows(runs);
@@ -470,6 +488,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   lines.push(...mdNotChecked(m, runs, rows, plan, consentScenarios));
   lines.push(...mdInventory(m, runs));
   lines.push(...mdContainers(m, runs));
+  lines.push(...mdWidgets(m, runs));
   // A report with its own name or logo carries no Analitik İşler credit; the ai tag debugger one stays.
   if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
   else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");

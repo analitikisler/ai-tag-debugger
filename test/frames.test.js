@@ -9,7 +9,11 @@ import { collect } from "../src/agent.js";
 import { checkRun } from "../src/checks.js";
 import { isWidgetHit, siteIds, splitRun, widgetsOf } from "../src/frames.js";
 import { containerRows } from "../src/containers.js";
-import { timelineOf } from "../src/mcp.js";
+import { timelineOf, widgetLines } from "../src/mcp.js";
+import { widgetSummaries } from "../src/frames.js";
+import { render as renderScope } from "../src/html/scope.js";
+import { context } from "../src/html/shell.js";
+import { renderMarkdown } from "../src/report.js";
 
 const hit = (tid, en, gcs) => `fetch("https://region1.google-analytics.com/g/collect?v=2&tid=${tid}&cid=1.2&_p=${Math.floor(Math.random() * 1e9)}&gcs=${gcs}&en=${en}&dl=" + encodeURIComponent(location.href), { method: "POST", keepalive: true });`;
 const snippet = (id) => `<script>(function(){var j=document.createElement('script');j.async=true;j.src='/gtm.js?id=${id}';document.head.appendChild(j);})();</script>`;
@@ -27,7 +31,8 @@ before(async () => {
     if (req.url === "/form.html") return html(`${snippet("GTM-FORM")}<script>dataLayer.push({ event: "form_view" });</script>`);
     // The widget tracks to its own GA4 property, with consent claimed granted before the visitor chose, and also
     // sends a lead to the site's own property, as a booking engine set up with the site's ID does.
-    if (req.url === "/widget.html") return html(`<script>dataLayer.push({ event: "widget_ready" }); ${hit("G-WIDGET", "purchase", "G111")} ${hit("G-SITE", "generate_lead", "G100")}</script>`);
+    // Its own container, and its own dataLayer: the booking it completes is pushed there, which the page's tags never see.
+    if (req.url === "/widget.html") return html(`${snippet("GTM-WIDGET")}<script>dataLayer.push({ event: "widget_ready" }); dataLayer.push({ event: "booking_complete" }); dataLayer.push({ event: "generate_lead" }); ${hit("G-WIDGET", "purchase", "G111")} ${hit("G-SITE", "generate_lead", "G100")}</script>`);
     res.writeHead(200, { "content-type": "application/javascript" }).end("");
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -56,7 +61,7 @@ test("a widget's own hits are kept apart from the site's, and still count for co
   assert.ok(run.widgetDataLayerLog.some((e) => e.value?.event === "widget_ready"));
   assert.ok(!run.dataLayerLog.some((e) => e.value?.event === "widget_ready"));
   assert.ok(session.network.some((c) => c.frame?.origin === widget));
-  assert.deepEqual(containerRows([run]).map((r) => `${r.id} ${r.frame?.party ?? "page"}`), ["GTM-TOP page", "GTM-FORM site"]);
+  assert.deepEqual(containerRows([run]).map((r) => `${r.id} ${r.frame?.party ?? "page"}`), ["GTM-TOP page", "GTM-FORM site", "GTM-WIDGET third"]);
 
   const plan = { events: [{ platform: "ga4", name: "purchase" }, { platform: "ga4", name: "generate_lead" }] };
   const findings = checkRun(plan, run);
@@ -69,10 +74,31 @@ test("a widget's own hits are kept apart from the site's, and still count for co
   assert.match(f("before_consent")[0].detail, new RegExp(`^In an embedded widget from ${widget}: GA4 "purchase" was sent although`));
   assert.match(f("widget_tracking")[0].detail, new RegExp(`^An embedded widget from ${widget} sent its own tracking: GA4 \\(G-WIDGET\\) "purchase"\\.`));
   assert.match(f("iframe_container")[0].detail, new RegExp(`^GTM-FORM runs in an iframe from http://127\\.0\\.0\\.1:\\d+ embedded in ${url}\\.`));
+  // The widget as a whole: where it sat, its container, its tracking both ways, and its own dataLayer.
+  const [w] = widgetSummaries([run]);
+  assert.deepEqual({ ...w, step: undefined }, {
+    origin: widget, parents: [url], containers: [{ id: "GTM-WIDGET", script: "gtm" }],
+    own: [{ platform: "ga4", id: "G-WIDGET", events: ["purchase"] }],
+    shared: [{ platform: "ga4", id: "G-SITE", events: ["generate_lead"] }],
+    pushes: { total: 3, consent: 0, events: [{ name: "widget_ready", count: 1 }, { name: "booking_complete", count: 1 }, { name: "generate_lead", count: 1 }] },
+    unshared: ["widget_ready", "booking_complete"],
+    step: undefined,
+  });
+  assert.match(f("widget_events_unshared")[0].detail, new RegExp(`^An embedded widget from ${widget} pushed "widget_ready", "booking_complete" to its own dataLayer, but none of its hits to the site's accounts carried them\\.`));
+  const html = renderScope(context({ title: "t", generatedAt: "now", findings, explained: null, runs: [run] }));
+  assert.match(html, /id="inv-widgets"><summary><span class="t">Embedded widgets<\/span>/);
+  assert.match(html, /<code>GA4 G-WIDGET: purchase<\/code>/);
+  assert.match(html, /Not sent to the site&#39;s accounts<\/span><code>widget_ready<\/code> <code>booking_complete<\/code>|Not sent to the site's accounts<\/span><code>widget_ready<\/code> <code>booking_complete<\/code>/);
+  const md = renderMarkdown({ title: "t", generatedAt: "now", findings, explained: null, runs: [run] });
+  assert.match(md, new RegExp(`## Embedded widgets\\n\\n\\| Widget \\| Embedded in \\| Own tracking \\| To the site's accounts \\| dataLayer events \\|\\n\\|---\\|---\\|---\\|---\\|---\\|\\n\\| ${widget.replace(/[.:/]/g, "\\$&")} \\| `));
+  assert.match(md, /\| GA4 G-WIDGET: purchase \| GA4 G-SITE: generate_lead \| widget_ready, booking_complete, generate_lead \(Not sent to the site's accounts: widget_ready, booking_complete\) \|/);
+  assert.match(renderMarkdown({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" }), /## Gömülü widget'lar/);
+  assert.match(widgetLines([run]).join("\n"), /not sent to the site's accounts: widget_ready, booking_complete/);
   // The MCP timeline shows the widget's hits beside the site's.
   const steps = timelineOf(run);
   assert.ok(steps.some((s) => s.widget_hits?.some((h) => h.widget === widget && h.event === "purchase" && h.id === "G-WIDGET")));
   assert.ok(steps.some((s) => s.hits?.some((h) => h.event === "generate_lead" && h.iframe === widget)));
+  assert.ok(steps.some((s) => s.widget_pushes?.some((p) => p.widget === widget && p.event === "booking_complete")));
 });
 
 test("site IDs come from the page and same-site iframes; old captures stay whole", () => {
@@ -101,4 +127,37 @@ test("site IDs come from the page and same-site iframes; old captures stay whole
   assert.equal(old.hits.length, 1);
   assert.equal(old.widgetHits.length, 0);
   assert.equal(old.dataLayerLog.length, 1);
+});
+
+test("over MCP: get_widgets during the audit, then finish_audit and get_report", async () => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+  const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+  const { buildServer } = await import("../src/mcp.js");
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await buildServer({ allowFiles: true, reportsDir: await mkdtemp(path.join(tmpdir(), "atd-")) }).connect(a);
+  const client = new Client({ name: "test", version: "1" });
+  await client.connect(b);
+  const call = async (name, args) => (await client.callTool({ name, arguments: args })).content;
+  try {
+    const page = (await call("start_audit", { site: url, journey: "browse", campaign: false }))[0].text;
+    const id = page.match(/audit_id: (\w+)/)[1];
+    await call("browser_action", { audit_id: id, action: "wait", ms: 500, reason: "Let the widget load" });
+    const listed = (await call("get_widgets", { audit_id: id }))[0].text;
+    assert.match(listed, new RegExp(`^ {2}${widget.replace(/[.:/]/g, "\\$&")}, embedded in ${url.replace(/[.:/]/g, "\\$&")}; containers GTM-WIDGET$`, "m"));
+    assert.match(listed, /^ {4}own tracking: GA4 G-WIDGET: purchase$/m);
+    assert.match(listed, /^ {4}not sent to the site's accounts: widget_ready, booking_complete$/m);
+    assert.equal(JSON.parse(listed.split("As JSON: ")[1])[0].origin, widget);
+
+    const [result] = await call("finish_audit", { audit_id: id, completed: true, note: "Loaded.", measurement_plan: JSON.stringify({ events: [] }) });
+    assert.match(result.text, /^Embedded widgets \(third-party iframes; their own dataLayer is invisible to the page's tags\):$/m);
+    assert.match(result.text, /pushed "widget_ready", "booking_complete" to its own dataLayer/);
+    const name = result.text.match(/get_report with report "([^"]+)"/)[1];
+    const [w] = JSON.parse((await call("get_report", { report: name, part: "widgets" }))[0].text);
+    assert.deepEqual(w.unshared, ["widget_ready", "booking_complete"]);
+  } finally {
+    await client.close();
+  }
 });
