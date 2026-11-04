@@ -23,7 +23,10 @@ One line per GTM container (`gtm.js`) and Google tag (`gtag/js`) the pages loade
   | A `gtag('config')` command | The page configured that destination |
   | An event's `send_to` with no config | The destination was loaded only because an event was sent to it |
   | A destination of the Google tag | A destination linked to the Google tag in Google's own settings |
+  | Only a preload hint in the page | A `<link rel="preload">` downloaded the container, but nothing added it as a script, so it never ran |
+  | Not seen being added | It ran, or was requested, without the tool seeing a script added: usually a consent platform's auto-blocking has replaced the browser's own functions |
 
+- **Whether it ran.** After every step the tool reads Google's own registry of the containers that ran (`google_tag_manager`). A container that downloaded but never ran is marked *never ran*.
 - **Version, size and load time.** The version is the number the container was published as, the same as in GTM's Versions tab. If it isn't the version you just published, the site is caching an old one, or a different container or environment is live.
 - **dataLayer** the container reads, when it isn't `dataLayer`.
 - **Served from** Google, or the site's own domain (the Google tag gateway or a server container).
@@ -33,6 +36,8 @@ One line per GTM container (`gtm.js`) and Google tag (`gtag/js`) the pages loade
 
 | Finding | What it means | What to do |
 |---|---|---|
+| `container_not_run` (warning) | A GTM container was downloaded or asked for, but never ran on any page of the run, so none of its tags fired. A common cause: the page only preloads it and the code meant to add it fails, as when the page's own scripts break. | Check that something actually adds the script, the snippet or the framework component (a preload alone runs nothing). Look for script errors and for a consent platform that never releases it. |
+| `container_held` (info) | The same, but a consent platform is present and the run never consented: holding GTM back until consent is expected. | Run the journey with consent accepted to check its tags. |
 | `container_failed` (warning) | The container script failed to load or was answered with an error, so none of its tags ran on that page. | Check the container ID and the address in the snippet. For a server container or the Google tag gateway, check that it serves `gtm.js` and `gtag/js`. |
 | `container_duplicate` (warning) | The same container was loaded twice into one page, for example by the snippet and again by a consent platform or a Custom HTML tag. Its tags can fire twice. | Keep one install: remove the extra snippet, or the tag that loads it again. |
 | `container_environment` (warning) | The snippet loads a GTM environment (`gtm_preview`, `gtm_auth`) instead of Live, so visitors get a staging or development version. | Use the Live snippet in production, or publish what the environment holds to Live. |

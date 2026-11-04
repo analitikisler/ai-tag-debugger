@@ -33,7 +33,7 @@ import { decodeGcd, DEFAULT_PROVIDERS, googleConsent, isCollectionEndpoint, pars
 import { hitParams } from "./hit-params.js";
 import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { cmpFacts } from "./cmp.js";
-import { containerRows, loadSources } from "./containers.js";
+import { containerRows, containersNotRun, loadSources, unseenContainers } from "./containers.js";
 import { isEventMessage, isWidgetHit, messageOutcomes, pushedEvent, siteIds, splitRun, widgetSummaries } from "./frames.js";
 import { consentMatrixMarkdown, consentTable, runConsentScenarios } from "./consent.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
@@ -244,7 +244,7 @@ export function hitDetail(audit, step, index) {
 function containerJson(l) {
   return {
     id: l.id, source: l.kind, ...(l.by ? { by: l.by } : {}),
-    ...(l.layer !== "dataLayer" ? { data_layer: l.layer } : {}),
+    ...(l.layer && l.layer !== "dataLayer" ? { data_layer: l.layer } : {}),
     ...(l.served === "site" ? { served_from: l.host } : {}),
     ...(l.environment ? { gtm_environment: l.environment } : {}),
     ...(l.frame ? { iframe: { origin: l.frame.origin, party: l.frame.party } } : {}),
@@ -253,6 +253,7 @@ function containerJson(l) {
     ...(l.transferBytes ? { transfer_bytes: l.transferBytes } : {}),
     ...(l.ms != null ? { load_ms: l.ms } : {}),
     ...(l.failed ? { failed: l.failed } : {}),
+    ...(typeof l.ran === "boolean" ? { ran: l.ran } : {}),
     ...(l.pages ? { pages: l.pages } : {}),
   };
 }
@@ -265,7 +266,7 @@ export function containerLines(runs) {
   return [
     "Google containers (how each reached the page):",
     ...rows.map((r) => {
-      const extra = [scriptCell(c, r), r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), r.frame && c.iframe(r.frame.origin, r.frame.party), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
+      const extra = [scriptCell(c, r), r.layer && r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), r.frame && c.iframe(r.frame.origin, r.frame.party), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
       return `  ${r.id} (${c.script[r.script]}): ${c.kinds[r.kind](r.by)}; ${extra.join(", ")}`;
     }),
   ];
@@ -575,10 +576,20 @@ export function buildServer(opts) {
     },
     async ({ audit_id }) => {
       const { session } = getAudit(audit_id);
-      const loads = loadSources({ containerLoads: session.containerLoads ?? [], containerScripts: session.containerScripts, dataLayerLog: session.dataLayerLog });
-      if (!loads.length) return text("No GTM container or Google tag script has loaded on this audit's pages yet.");
+      const run = {
+        containerLoads: session.containerLoads ?? [], containerScripts: session.containerScripts, dataLayerLog: session.dataLayerLog,
+        containerPreloads: [...(session.containerPreloads?.values() ?? [])],
+        containersRunning: [...(session.containersRunning ?? [])].map(([id, step]) => ({ id, step })),
+      };
+      const loads = loadSources(run);
+      const unseen = unseenContainers(run);
+      const notRun = containersNotRun(run);
+      if (!loads.length && !unseen.length) return text("No GTM container or Google tag script has loaded on this audit's pages yet.");
+      const c = messages("en").ui.containers;
       const lines = loads.map((l) => `Step ${l.step} ("${session.steps[l.step]?.label ?? ""}"), ${l.page ?? "?"}:\n${describeLoad(l)}`);
-      return text(`${loads.length} container ${loads.length === 1 ? "load" : "loads"}:\n${lines.join("\n")}\n\nAs JSON: ${JSON.stringify(loads.map((l) => ({ step: l.step, page: l.page, ...containerJson(l) })))}`);
+      if (unseen.length) lines.push("Asked for without a script being seen added:", ...unseen.map((u) => `  ${u.id} (${c.script[u.script]}), step ${u.step}: ${c.kinds[u.kind]()}`));
+      if (notRun.length) lines.push(`Never ran so far (Google's registry never held ${notRun.length === 1 ? "it" : "them"}): ${notRun.map((x) => x.id).join(", ")}. If a consent platform holds GTM back, accept consent to see it run.`);
+      return text(`${loads.length} container ${loads.length === 1 ? "load" : "loads"}:\n${lines.join("\n")}\n\nAs JSON: ${JSON.stringify([...loads, ...unseen].map((l) => ({ step: l.step, page: l.page, ...containerJson(l), ...(l.id.startsWith("GTM-") ? { ran: run.containersRunning.some((r) => r.id === l.id) } : {}) })))}`);
     },
   );
 

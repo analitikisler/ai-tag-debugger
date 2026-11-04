@@ -23,7 +23,10 @@ Sayfaların yüklediği her GTM container'ı (`gtm.js`) ve Google etiketi (`gtag
   | Bir `gtag('config')` komutu | Sayfa o hedefi yapılandırdı |
   | config olmadan bir olayın `send_to` değeri | Hedef yalnızca ona bir olay gönderildiği için yüklendi |
   | Google etiketinin bir hedefi | Google'ın kendi ayarlarında Google etiketine bağlanmış bir hedef |
+  | Sayfada yalnızca bir ön yükleme ipucu | Bir `<link rel="preload">` container'ı indirdi ama hiçbir şey onu betik olarak eklemedi, bu yüzden hiç çalışmadı |
+  | Eklendiği görülmedi | Araç bir betiğin eklendiğini görmeden çalıştı ya da istendi: genellikle bir onay platformunun otomatik engellemesi tarayıcının kendi işlevlerini değiştirmiştir |
 
+- **Çalışıp çalışmadığı.** Araç her adımdan sonra Google'ın çalışan container'lar kaydını (`google_tag_manager`) okur. İndirilip hiç çalışmayan bir container *hiç çalışmadı* olarak işaretlenir.
 - **Sürüm, boyut ve yükleme süresi.** Sürüm, container'ın yayımlandığı numaradır; GTM'deki Sürümler sekmesindekiyle aynıdır. Az önce yayımladığınız sürüm değilse site eski bir sürümü önbellekte tutuyordur ya da yayında başka bir container veya ortam vardır.
 - Container'ın okuduğu **dataLayer**, `dataLayer` değilse.
 - **Sunulduğu yer:** Google ya da sitenin kendi alan adı (Google etiket ağ geçidi ya da bir sunucu container'ı).
@@ -33,6 +36,8 @@ Sayfaların yüklediği her GTM container'ı (`gtm.js`) ve Google etiketi (`gtag
 
 | Bulgu | Ne anlama geldiği | Ne yapmalı |
 |---|---|---|
+| `container_not_run` (uyarı) | Bir GTM container'ı indirildi ya da istendi, ama çalıştırmanın hiçbir sayfasında çalışmadı; etiketlerinin hiçbiri çalışmadı. Sık bir neden: sayfa onu yalnızca ön yüklüyor ve onu eklemesi gereken kod başarısız oluyor, örneğin sayfanın kendi betikleri bozulduğunda. | Betiği gerçekten bir şeyin eklediğini kontrol edin: snippet ya da çatı bileşeni (yalnızca ön yükleme hiçbir şeyi çalıştırmaz). Betik hatalarına ve onu hiç serbest bırakmayan bir onay platformuna bakın. |
+| `container_held` (bilgi) | Aynısı, ama bir onay platformu var ve çalıştırmada onay verilmedi: GTM'in onaya kadar bekletilmesi beklenen bir durum. | Etiketlerini kontrol etmek için yolculuğu onay kabul edilmiş olarak çalıştırın. |
 | `container_failed` (uyarı) | Container betiği yüklenemedi ya da hatayla yanıtlandı; o sayfada etiketlerinin hiçbiri çalışmadı. | Snippet'teki container kimliğini ve adresi kontrol edin. Sunucu container'ı ya da Google etiket ağ geçidi için `gtm.js` ve `gtag/js` sunduğunu kontrol edin. |
 | `container_duplicate` (uyarı) | Aynı container aynı sayfaya iki kez yüklendi; örneğin snippet ile, bir de bir onay platformu ya da Özel HTML etiketiyle. Etiketleri iki kez çalışabilir. | Tek bir kurulum bırakın: fazladan snippet'i ya da onu yeniden yükleyen etiketi kaldırın. |
 | `container_environment` (uyarı) | Snippet Live yerine bir GTM ortamı (`gtm_preview`, `gtm_auth`) yüklüyor; ziyaretçiler bir test ya da geliştirme sürümü alıyor. | Canlı sitede Live snippet'ini kullanın ya da ortamdaki sürümü Live'a yayımlayın. |

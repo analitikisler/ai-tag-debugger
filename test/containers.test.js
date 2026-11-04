@@ -5,8 +5,10 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { AuditSession } from "../src/browser.js";
-import { callersOf, containerOf, containerRows, loadSources, sourceOf } from "../src/containers.js";
+import { callersOf, containerOf, containerRows, containersNotRun, loadSources, sourceOf } from "../src/containers.js";
+import { renderMarkdown } from "../src/report.js";
 import { checkRun } from "../src/checks.js";
+import { collect } from "../src/agent.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -50,7 +52,19 @@ before(async () => {
     if (req.url === "/" || req.url.startsWith("/?")) return res.writeHead(200, { "content-type": "text/html" }).end(PAGE);
     // A container whose ID is wrong: Google answers 404.
     if (req.url === "/gtm.js?id=GTM-GONE") return res.writeHead(404).end();
-    res.writeHead(200, { "content-type": "application/javascript" }).end(SCRIPTS[req.url] ?? "");
+    // A page that only preloads its container, and one whose container runs without the tool seeing it added
+    // (as when a consent platform's auto-blocking replaces the browser's own functions).
+    if (req.url === "/preload") {
+      return res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><link rel="preload" href="/gtm.js?id=GTM-PRE" as="script"><script>window.google_tag_manager = { "GTM-GHOST": {} };</script>`);
+    }
+    // The usual Next.js pattern: a preload hint in the head, then the script itself.
+    if (req.url === "/next") {
+      return res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><link rel="preload" href="/gtm.js?id=GTM-NEXT" as="script"><script async src="/gtm.js?id=GTM-NEXT"></script>`);
+    }
+    // Like the real gtm.js, each stand-in container registers itself in google_tag_manager when it runs.
+    const id = req.url.match(/^\/gtm\.js\?id=(GTM-[A-Z0-9]+)/)?.[1];
+    const register = id ? `window.google_tag_manager = window.google_tag_manager || {}; window.google_tag_manager[${JSON.stringify(id)}] = {};\n` : "";
+    res.writeHead(200, { "content-type": "application/javascript" }).end(register + (SCRIPTS[req.url] ?? ""));
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   url = `http://127.0.0.1:${server.address().port}/`;
@@ -64,7 +78,7 @@ test("each container load is recorded with the way it reached the page", async (
   try {
     await session.act({ action: "goto", url: `${url}?email=someone@example.com` });
     await session.act({ action: "wait", ms: 400 });
-    run = { journeyId: "j", viewport: "desktop", dataLayerLog: session.dataLayerLog, containerLoads: session.containerLoads, containerScripts: session.containerScripts };
+    run = { ...collect(session, { id: "j" }, "desktop") };
   } finally {
     await session.close();
   }
@@ -99,7 +113,7 @@ test("each container load is recorded with the way it reached the page", async (
   // Each container script's answer: the version its data was published as, its size and how long it took, or its failure.
   const main = loadSources(run).find((l) => l.id === "GTM-MAIN");
   assert.equal(main.version, "153");
-  assert.equal(main.bytes, Buffer.byteLength(SCRIPTS["/gtm.js?id=GTM-MAIN"]));
+  assert.equal(main.bytes, Buffer.byteLength(`window.google_tag_manager = window.google_tag_manager || {}; window.google_tag_manager["GTM-MAIN"] = {};\n${SCRIPTS["/gtm.js?id=GTM-MAIN"]}`));
   assert.ok(Number.isInteger(main.ms) && main.ms >= 0, `load time ${main.ms}`);
   assert.equal(loadSources(run).find((l) => l.id === "GTM-GONE").failed, "404");
   assert.equal(loadSources(run).find((l) => l.id === "GTM-ZONE").version, undefined, "a script without published data has no version");
@@ -215,7 +229,7 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   const listed = (await call("get_containers", { audit_id: id }))[0].text;
   // The test server is the site, so every script counts as served from the site's own domain.
   assert.match(listed, /GTM-MAIN \(GTM container\): Inline code in the page \(the snippet\); version 153, [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1/);
-  assert.match(listed, /GTM-CHTML \(GTM container\): A Custom HTML tag in GTM-MAIN; loaded in \d+ ms, served from 127\.0\.0\.1, GTM environment env-3/);
+  assert.match(listed, /GTM-CHTML \(GTM container\): A Custom HTML tag in GTM-MAIN; [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1, GTM environment env-3/);
   assert.match(listed, /G-HTML \(Google tag\): A script tag in the page's HTML; [\d.]+ KB, loaded in \d+ ms, dataLayer myDataLayer, served from 127\.0\.0\.1/);
   const json = JSON.parse(listed.split("As JSON: ")[1]);
   assert.ok(json.some((l) => l.id === "AW-222" && l.source === "send_to" && l.by === "G-HTML"));
@@ -232,9 +246,9 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   const name = result.text.match(/get_report with report "([^"]+)"/)[1];
   const rows = JSON.parse((await call("get_report", { report: name, part: "containers" }))[0].text);
   // An empty stand-in script still has a load time, and a few bytes on the wire from chunked encoding.
-  const { load_ms: chtmlMs, transfer_bytes: _wire, ...chtml } = rows.find((r) => r.id === "GTM-CHTML");
+  const { load_ms: chtmlMs, transfer_bytes: _wire, size_bytes: _size, ...chtml } = rows.find((r) => r.id === "GTM-CHTML");
   assert.ok(Number.isInteger(chtmlMs));
-  assert.deepEqual(chtml, { id: "GTM-CHTML", source: "custom_html", by: "GTM-MAIN", served_from: "127.0.0.1", gtm_environment: "env-3", pages: [url] });
+  assert.deepEqual(chtml, { id: "GTM-CHTML", source: "custom_html", by: "GTM-MAIN", served_from: "127.0.0.1", gtm_environment: "env-3", ran: true, pages: [url] });
   const mainRow = rows.find((r) => r.id === "GTM-MAIN" && r.source === "inline");
   assert.equal(mainRow.version, "153");
   assert.ok(mainRow.size_bytes > 0);
@@ -242,4 +256,56 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   assert.match(result.text, /^ {2}GTM-GONE \(GTM container\): A script tag in the page's HTML; failed to load \(HTTP 404\)/m);
   assert.match(result.text, /The GTM-GONE script from 127\.0\.0\.1 was answered with HTTP 404, so none of its tags ran on that page\./);
   await client.close();
+});
+
+test("a container the page only preloads, or that runs unseen, is listed, and one that never ran is flagged", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], quietMs: 0 });
+  await session.start();
+  let run;
+  try {
+    await session.act({ action: "goto", url: `${url}preload` });
+    await session.act({ action: "wait", ms: 300 });
+    run = { ...collect(session, { id: "j" }, "desktop"), completed: true };
+  } finally {
+    await session.close();
+  }
+  const rows = containerRows([run]).map((r) => `${r.id} ${r.kind} ran:${r.ran}`);
+  assert.deepEqual(rows.sort(), ["GTM-GHOST unseen ran:true", "GTM-PRE preload ran:false"]);
+  assert.equal(containerRows([run]).find((r) => r.id === "GTM-PRE").bytes > 0, true, "the preloaded script was downloaded");
+  assert.deepEqual(containerRows([run]).find((r) => r.id === "GTM-PRE").pages, [`${url}preload`]);
+  const f = checkRun({ events: [] }, run).filter((x) => /container_(not_run|held)/.test(x.check));
+  assert.deepEqual(f.map((x) => `${x.severity}:${x.check}`), ["warning:container_not_run"]);
+  assert.equal(f[0].detail, "GTM-PRE was downloaded because of a preload hint in the page, but nothing added it as a script, and it never ran on any page of this run: Google's own registry never held it, so none of its tags fired.");
+  // With a consent platform and no consent, holding GTM back is expected: said, not flagged.
+  const held = checkRun({ events: [] }, { ...run, cmp: { vendor: "Efilli", step: 1 } }).filter((x) => /container_(not_run|held)/.test(x.check));
+  assert.deepEqual(held.map((x) => `${x.severity}:${x.check}`), ["info:container_held"]);
+  assert.match(held[0].detail, /^GTM-PRE never ran, which is expected while Efilli holds it back until the visitor consents\./);
+  // Once consent was given, it should have run.
+  const consented = checkRun({ events: [] }, { ...run, cmp: { vendor: "Efilli", step: 1 }, consentStep: 1 }).filter((x) => /container_(not_run|held)/.test(x.check));
+  assert.deepEqual(consented.map((x) => x.check), ["container_not_run"]);
+  // The report says it never ran.
+  const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained: null, runs: [run] });
+  assert.match(md, /\| GTM-PRE \(GTM container\) \| Only a preload hint in the page \(<link rel="preload">\): downloaded, never added as a script \| – \| Google|\| GTM-PRE \(GTM container\) \| Only a preload hint/);
+  assert.match(md, /never ran \|/);
+});
+
+test("captures from before the registry was recorded say nothing about running", () => {
+  const old = { containerLoads: [{ id: "GTM-A", script: "gtm", layer: "dataLayer", host: "www.googletagmanager.com", served: "google", how: "parser", step: 1 }] };
+  assert.deepEqual(containersNotRun(old), []);
+  assert.equal(containerRows([{ ...old, journeyId: "j", viewport: "d" }])[0].ran, undefined);
+});
+
+test("a preload followed by the script itself is one ordinary load", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], quietMs: 0 });
+  await session.start();
+  let run;
+  try {
+    await session.act({ action: "goto", url: `${url}next` });
+    await session.act({ action: "wait", ms: 300 });
+    run = { ...collect(session, { id: "j" }, "desktop"), completed: true };
+  } finally {
+    await session.close();
+  }
+  assert.deepEqual(containerRows([run]).map((r) => `${r.id} ${r.kind} ran:${r.ran}`), ["GTM-NEXT html ran:true"]);
+  assert.deepEqual(checkRun({ events: [] }, run).filter((f) => f.check.startsWith("container_")).map((f) => f.check), []);
 });

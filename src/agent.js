@@ -238,7 +238,7 @@ export const journeyError = (err) => `The journey stopped with an error: ${err?.
 export function failedRun(journey, viewport, err, providers) {
   return {
     journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
-    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], frameMessages: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], containersRunning: [], containerPreloads: [], frameMessages: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }
 
@@ -259,6 +259,8 @@ export function collect(session, journey, viewport) {
     ...(session.opts.blockHits === false ? { live: true } : {}),
     containerLoads: session.containerLoads,
     containerScripts: session.containerScripts,
+    containersRunning: [...session.containersRunning].map(([id, step]) => ({ id, step })),
+    containerPreloads: [...session.containerPreloads.values()],
     frameMessages: session.frameMessages,
     network: session.network,
     providers: session.providers,
