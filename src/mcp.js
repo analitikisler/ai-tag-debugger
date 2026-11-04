@@ -442,6 +442,10 @@ export function buildServer(opts) {
           .optional()
           .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
         campaign: campaignSchema().describe(`Open the first page the way an ad click does, so finish_audit checks that the campaign parameters survive redirects and reach the hits. ${CAMPAIGN_DOC}`),
+        connect: z
+          .string()
+          .optional()
+          .describe("Run the audit in a fresh window of the user's own Chrome instead of the tool's browser: the debugging address Chrome was started with, e.g. http://127.0.0.1:9222 (Chrome started with --remote-debugging-port=9222 and its own --user-data-dir). Only a Chrome on the computer running a local server. Use it only when the user asks to see the audit in their Chrome."),
         session: z
           .enum(["saved"])
           .optional()
@@ -449,7 +453,7 @@ export function buildServer(opts) {
         live: z.boolean().optional().describe("Default false: tracking requests are answered locally and never reach the site's accounts. true lets them through to the real analytics and ad accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant: the test traffic then shows in the site's reports. Only when the user asks for it."),
       },
     },
-    async ({ site, journey, viewport, allowed_hosts, providers, campaign = true, live = false, session: savedSession }) => {
+    async ({ site, journey, viewport, allowed_hosts, providers, campaign = true, live = false, session: savedSession, connect }) => {
       let url;
       try {
         url = new URL(site);
@@ -468,8 +472,10 @@ export function buildServer(opts) {
         if (live && !opts.allowLive) return fail("Live audits are off on this server: it was started without --allow-live. Leave live out to audit with tracking requests answered locally.");
         // A saved login lives on the computer running the server; over HTTP, a chat elsewhere must not use it.
         if (savedSession && !opts.allowFiles) return fail("A saved login session can only be used on a local server. Leave session out, or log in with the test account during the journey.");
+        // A Chrome on the server's computer belongs to whoever runs it; over HTTP, a chat elsewhere must not drive it.
+        if (connect && !opts.allowFiles) return fail("Connecting to your own Chrome works only on a local server. Leave connect out to use the tool's browser.");
         const storageState = savedSession ? resolveSessionFile("saved", { site: url.href, dataDir: opts.dataDir ?? DEFAULT_DATA_DIR }) : undefined;
-        session = new AuditSession({ viewport: viewport ?? "desktop", site: url.href, allowedHosts: allowed_hosts, providers, blockPrivate: opts.blockPrivate, blockHits: !live, storageState });
+        session = new AuditSession({ viewport: viewport ?? "desktop", site: url.href, allowedHosts: allowed_hosts, providers, blockPrivate: opts.blockPrivate, blockHits: !live, storageState, connect });
       } catch (err) {
         return fail(err.message);
       }
@@ -477,7 +483,7 @@ export function buildServer(opts) {
         await session.start();
       } catch (err) {
         await session.close().catch(() => {});
-        return fail(`Could not start the browser: ${err.message}. If Chromium is missing, run: npx playwright install chromium`);
+        return fail(connect ? `Could not connect to Chrome: ${err.message}` : `Could not start the browser: ${err.message}. If Chromium is missing, run: npx playwright install chromium`);
       }
       const id = randomUUID().slice(0, 8);
       const preset = presetFor(journey);

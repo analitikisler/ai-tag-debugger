@@ -43,6 +43,7 @@ Options:
   --lang <code>        Report language: ${Object.keys(LANGUAGES).join(" or ")}
   --headed             Show the browser window
   --session <file>     Start logged in: saved (the session aitd login saved) or a session file
+  --connect <url>      Run in your own Chrome, started with a debugging port (http://127.0.0.1:9222)
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
   --baseline <file>    Known findings to accept; they don't count toward --fail-on
   --update-baseline    Write the baseline file after the run (creates it)
@@ -74,6 +75,7 @@ Options:
   --site <url>         The site (required)
   --topic <name>       Only plan one kind of event: custom-events, ecommerce, forms or consent
   --headed             Show the browser window
+  --connect <url>      Explore in your own Chrome, started with a debugging port
 
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 

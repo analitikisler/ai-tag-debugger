@@ -19,7 +19,7 @@ It works where Claude can run programs on your computer: Claude Code, and Cowork
 ## What it runs, fetches and writes
 
 - **The server.** The plugin starts `npx -y @analitikisler/ai-tag-debugger@<version> mcp` on your computer, so npm downloads that exact version of the package the first time.
-- **A local browser.** The first audit downloads Chromium (about 150 MB, once) from Playwright's download servers. Each audit opens a headless Chromium on your computer.
+- **A local browser.** The first audit downloads Chromium (about 150 MB, once) from Playwright's download servers. Each audit opens a headless Chromium on your computer, or, when you ask for it with `connect`, a fresh private window in a Google Chrome you started with a debugging port on the same computer; that window closes when the audit ends and your Chrome keeps running.
 - **The sites you name.** The browser visits only the site you ask about (its subdomains and any hosts you allow), loading its pages and scripts like a visitor would. It uses obvious test data and never enters real payment details.
 - **Tracking requests are kept out of your accounts.** Collection requests to GA4, Google Ads, Meta, TikTok and the other platforms it reads are answered inside the browser, so test traffic does not reach the site's analytics or ad accounts. Tag scripts and some vendors it only recognises by host still load from their servers. Only when you ask for a live audit (`live: true`) are tracking requests let through to the real accounts.
 - **Personal data.** Email addresses and other user data in hits are redacted before anything is stored; cookie values and the values of messages iframes post are never stored.

@@ -421,6 +421,21 @@ The model never sees them. It fills login forms with the placeholders `{{login.e
 
 **A saved session**, for a login that needs a person: a CAPTCHA, a code sent to a phone, or single sign-on. `aitd login --site https://yourshop.com` opens the site in a browser window; log in by hand, press Enter in the terminal, and the session (cookies and storage) is saved to `aitd/<domain>/session.json`, readable only by you. `aitd run … --session saved`, the config's `session_file`, or `session: "saved"` on a local MCP server's `start_audit` start every journey logged in. The file holds a live login: keep it private, and save it again when the login expires.
 
+### Using your own Chrome
+
+Audits normally run in the tool's own Chromium. To watch them in your own Google Chrome instead, on your computer's own network, start Chrome with a debugging port and a profile folder for audits (Chrome refuses remote debugging on your everyday profile, and a folder of its own keeps audits away from it):
+
+```bash
+# macOS
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"
+# Windows
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%USERPROFILE%\aitd-chrome"
+# Linux
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"
+```
+
+Then add `--connect http://127.0.0.1:9222` to `aitd run` or `aitd plan` (or `connect` in the config, or `connect` on a local MCP server's `start_audit`). Each journey opens a fresh private window in that Chrome, as clean as the tool's own browser, so every audit is a first visit with no cookies or consent choice left over; the window closes when the journey ends, and Chrome keeps running. Everything else works as usual: tracking requests are answered inside the browser, the site's host limits apply, and a [test account or saved session](#logging-in) logs in. Only a Chrome on the same computer (`127.0.0.1` or `localhost`) is accepted, and an HTTP MCP server never connects to one.
+
 Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan, and `--against latest` checks the site against it.
 
 ### Keeping API usage down
@@ -515,6 +530,7 @@ The file holds one entry per finding, with a `key` the run matches on (the check
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
 | `session_file` | A session saved with `aitd login`, so every journey starts logged in: `"saved"` for the site's own, or a file path. See [Logging in](#logging-in). |
+| `connect` | Your own Chrome's debugging address, e.g. `http://127.0.0.1:9222`: each journey runs in a fresh window of it. See [Using your own Chrome](#using-your-own-chrome). |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
 | `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
@@ -569,7 +585,7 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--c
          [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <list>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
-         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>] [--connect <url>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live]
@@ -614,6 +630,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
 | `--session saved\|<file>` | run | Start every journey logged in, from the session `aitd login` saved (`saved`) or a session file. Same as `session_file`. See [Logging in](#logging-in). |
 | `--save <file>` | login | Where `aitd login` saves the session (default `aitd/<domain>/session.json`). |
+| `--connect <url>` | run, plan | Run in your own Chrome, started with a debugging port, e.g. `http://127.0.0.1:9222`. Same as `connect`. See [Using your own Chrome](#using-your-own-chrome). |
 | `--keep-bodies` | run | Store tracking requests as sent, without redacting user data. |
 | `--no-branding` | plan, run | Leave the logo and credit line out of the reports and `plan.html`. |
 | `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | See the MCP section below. |
@@ -683,7 +700,7 @@ Tools the server offers:
 |---|---|
 | `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
 | `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
-| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. `live: true` lets the tracking requests through to the site's real accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant; the test traffic then shows in the site's reports, and the results and the report say the run was live. Over HTTP the server needs `--allow-live` for it. The first page opens the way an ad click does, with test campaign parameters (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …), so `finish_audit` checks that they survive redirects and reach the hits; `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses your own values. A test account set on the server's computer is used through its placeholders, and `session: "saved"` starts from the session `aitd login` saved (local servers only); see [Logging in](#logging-in). |
+| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. `live: true` lets the tracking requests through to the site's real accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant; the test traffic then shows in the site's reports, and the results and the report say the run was live. Over HTTP the server needs `--allow-live` for it. The first page opens the way an ad click does, with test campaign parameters (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …), so `finish_audit` checks that they survive redirects and reach the hits; `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses your own values. A test account set on the server's computer is used through its placeholders, and `session: "saved"` starts from the session `aitd login` saved (local servers only); see [Logging in](#logging-in). `connect` runs it in a fresh window of your own Chrome (local servers only; see [Using your own Chrome](#using-your-own-chrome)). |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the step number, the page and the tracking hits that step sent, each with an `[h]` number, its consent (from `gcs`, and `gcd` for `ad_user_data` and `ad_personalization`) and the ids and flags GA4 sends with it (`cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), its dataLayer pushes (Consent Mode commands in full as `key=value`, page addresses never cut) and the calls it read no event from, such as Consent Mode pings with their `gcs`, `gcd` and click ids (`gclid`, `gclid=0 (redacted)` when ads data redaction blanks it, `gclaw` from `_gcl_aw`), and the cookies the step added, changed or removed, by name, with the GA4 client id and whether `_gcl_aw` and `_fbc` hold the landing click ids when that changes. A page_view that arrives during a later wait or scroll is listed on the step that loaded its page, marked late. The page view is compact by default, since long sessions lose their oldest results: up to 40 elements above or below the screen, and the page text or element list replaced by a note when they haven't changed since the last view. Pass `detail: "full"` for everything. |
 | `get_page` | Shows the current page, in full: every element and the whole page text. |
 | `get_hit` | Shows one hit in full, by its `step` and `[h]` number: every parameter its request carried, its place in a batched request, where it was sent, and `gcd` decoded per consent signal (default and update). |

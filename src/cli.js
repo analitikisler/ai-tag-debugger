@@ -71,6 +71,7 @@ async function main(args = process.argv.slice(2)) {
       providers: { type: "string", multiple: true },
       "allow-host": { type: "string", multiple: true },
       session: { type: "string" },
+      connect: { type: "string" },
       save: { type: "string" },
       "allow-private-network": { type: "boolean", default: false },
       "allow-live": { type: "boolean", default: false },
@@ -177,7 +178,7 @@ async function main(args = process.argv.slice(2)) {
     const { discoverPlan } = await import("./discover.js");
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
-    const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], log: console.log });
+    const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], connect: values.connect, log: console.log });
     const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);
@@ -236,6 +237,8 @@ async function main(args = process.argv.slice(2)) {
   }
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
+  // Your own Chrome, started with a debugging port: every journey runs in a fresh window of it.
+  if (values.connect) loaded.config = { ...loaded.config, connect: values.connect };
   // A session saved with `aitd login` ("saved") or a file: every journey starts logged in.
   const sessionArg = values.session ?? loaded.config.session_file;
   if (sessionArg) loaded.config = { ...loaded.config, session_file: resolveSessionFile(sessionArg, { site: loaded.config.site, dataDir: values["data-dir"] ?? DEFAULT_DATA_DIR }) };
