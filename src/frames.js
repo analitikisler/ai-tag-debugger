@@ -88,3 +88,69 @@ export function widgetsOf(widgetHits = []) {
     platforms: [...w.platforms.values()].map((p) => ({ platform: p.platform, ids: [...p.ids], events: [...p.events] })),
   }));
 }
+
+/** The event a dataLayer push names, { event: "x" } or gtag's ["event", "x", ...], or null. GTM's own (gtm.js, gtm.dom...) are left out. */
+export function pushedEvent(value) {
+  const name = Array.isArray(value) ? (value[0] === "event" ? value[1] : null) : value?.event;
+  return typeof name === "string" && name && !name.startsWith("gtm.") ? name : null;
+}
+
+const plainName = (n) => String(n).toLowerCase().replace(/[^a-z0-9]/g, "");
+const isConsentPush = (v) => Array.isArray(v) && v[0] === "consent";
+
+/**
+ * One summary per embedded widget (third-party iframe origin) across runs: { origin, parents, containers,
+ * own, shared, pushes, unshared, step }.
+ * - parents: the pages it was embedded in; containers: [{ id, script }] it loaded itself
+ * - own: [{ platform, id, events }] it sent to its own accounts; shared: the same for what it sent to the site's
+ * - pushes: { total, consent, events: [{ name, count }] } of its own dataLayer
+ * - unshared: the events it pushed that none of its hits to the site's accounts carried
+ * - step: the first step it was seen at, in the first run it was seen in
+ * same(a, b) compares event names; checks.js passes canonicalEvent so add_to_cart and addToCart are one event.
+ */
+export function widgetSummaries(runs, same = (a, b) => plainName(a) === plainName(b)) {
+  const byOrigin = new Map();
+  const of = (frame, step) => {
+    const w = byOrigin.get(frame.origin) ?? {
+      origin: frame.origin, parents: new Set(), containers: new Map(), own: new Map(), shared: new Map(),
+      total: 0, consent: 0, events: new Map(), step,
+    };
+    if (frame.parent) w.parents.add(frame.parent);
+    byOrigin.set(frame.origin, w);
+    return w;
+  };
+  const addHit = (map, h) => {
+    const k = `${h.platform}|${h.id ?? ""}`;
+    const e = map.get(k) ?? { platform: h.platform, ...(h.id ? { id: h.id } : {}), events: new Set() };
+    e.events.add(h.name);
+    map.set(k, e);
+  };
+  for (const run of runs) {
+    for (const l of run.containerLoads ?? []) if (l.frame?.party === "third") of(l.frame, l.step).containers.set(l.id, { id: l.id, script: l.script });
+    for (const h of run.widgetHits ?? []) addHit(of(h.frame, h.step).own, h);
+    for (const h of run.hits ?? []) if (h.frame?.party === "third") addHit(of(h.frame, h.step).shared, h);
+    for (const e of run.widgetDataLayerLog ?? []) {
+      if (!e.frame) continue;
+      const w = of(e.frame, e.step);
+      w.total++;
+      if (isConsentPush(e.value)) w.consent++;
+      const name = pushedEvent(e.value);
+      if (name) w.events.set(name, (w.events.get(name) ?? 0) + 1);
+    }
+  }
+  const list = (map) => [...map.values()].map((e) => ({ ...e, events: [...e.events] }));
+  return [...byOrigin.values()].map((w) => {
+    const shared = list(w.shared);
+    const sent = shared.flatMap((e) => e.events);
+    return {
+      origin: w.origin,
+      parents: [...w.parents].sort(),
+      containers: [...w.containers.values()],
+      own: list(w.own),
+      shared,
+      pushes: { total: w.total, consent: w.consent, events: [...w.events].map(([name, count]) => ({ name, count })) },
+      unshared: [...w.events.keys()].filter((name) => !sent.some((s) => same(s, name))),
+      step: w.step,
+    };
+  });
+}
