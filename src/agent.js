@@ -19,6 +19,7 @@ How to work:
 - If a cookie or consent banner appears, accept all cookies (as most visitors do) and set accepts_consent to true on that click. (A journey whose goal says to reject or decline cookies does that instead and sets rejects_consent to true on that click; if the banner has no reject-all button, use the one that declines non-essential cookies, and never accept.)
 - Use obvious test data in forms: name "Test User", email "qa-test@example.com", phone "5550100", address "1 Test Street", city "Testville", postcode "00000".
 - Never enter real payment card details. If the site offers a test or demo payment option, use it. If completing the journey would require a real payment or a real account you don't have, stop and call finish with success false and explain why.
+- To log in with the test account, fill the fields with the placeholders {{login.email}} (or {{login.username}} where the site asks for a username) and {{login.password}}, written exactly like that. The browser types the real values; you never see them, and pages show them back as the placeholders. If the fill says no test account is set up, stop and call finish with success false.
 - If something is broken (an error, a button that does nothing), try a reasonable alternative once, then finish with success false and describe what happened.
 - Call finish as soon as the goal is reached.`;
 
@@ -204,7 +205,7 @@ export const harName = (journeyId, viewport) => `${String(journeyId).replace(/[^
 export async function runJourney(config, journey, viewport, opts = {}) {
   const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
   const session = new AuditSession({
-    viewport, site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
+    viewport, site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
     blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
   });
   try {
@@ -238,7 +239,7 @@ export const journeyError = (err) => `The journey stopped with an error: ${err?.
 export function failedRun(journey, viewport, err, providers) {
   return {
     journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
-    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], containersRunning: [], containerPreloads: [], frameMessages: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], containersRunning: [], containerPreloads: [], frameMessages: [], loginStep: null, providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }
 
@@ -252,6 +253,8 @@ export function collect(session, journey, viewport) {
     steps: session.steps,
     consentStep: session.consentStep,
     rejectStep: session.rejectStep,
+    // The first step that typed the test account's password: the user ID check starts after it.
+    loginStep: session.loginStep ?? null,
     cookieLog: session.cookieLog,
     cookieChanges: session.cookieChanges,
     cmp: session.cmp,

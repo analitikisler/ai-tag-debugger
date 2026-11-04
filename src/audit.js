@@ -1,6 +1,7 @@
 // A full audit from a config file: run every journey, check, explain, write the reports.
 // Shared by the CLI and the MCP server's run_audit tool.
-import { newRunDir } from "./workspace.js";
+import { DEFAULT_DATA_DIR, newRunDir } from "./workspace.js";
+import { resolveSessionFile } from "./login.js";
 import { compareRuns, previousPlanChanges, previousRun, routeHints } from "./changes.js";
 import { sendAlerts } from "./notify.js";
 import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
@@ -133,6 +134,8 @@ export async function runAudit(opts) {
     for (const w of checked.flatMap((c) => c.warnings)) log(w);
   }
   if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
+  // "saved" names the session `aitd login` saved for the site; a path must exist. Checked before any browser starts.
+  if (config.session_file) config = { ...config, session_file: resolveSessionFile(config.session_file, { site: config.site, dataDir: opts.dataDir ?? DEFAULT_DATA_DIR }) };
   const lang = opts.lang ?? config.language ?? "en";
   if (!LANGUAGES[lang]) throw new Error(`Language must be one of ${Object.keys(LANGUAGES).join(", ")}.`);
   const useAi = opts.ai !== false;

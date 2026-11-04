@@ -68,6 +68,7 @@ export const CONFIG_SCHEMA = z.looseObject({
   viewports: z.array(z.enum(Object.keys(VIEWPORTS))).optional(),
   journeys: z.array(JOURNEY_SCHEMA).optional(),
   allowed_hosts: names.optional(),
+  session_file: text.optional(),
   providers: z.union([names, text], { error: 'must be a list of platforms, e.g. ["ga4", "meta"]' }).optional(),
   detect_providers: flag.optional(),
   campaign_checks: flag.optional(),

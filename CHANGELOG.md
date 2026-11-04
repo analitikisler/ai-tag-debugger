@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.22.6 (2026-11-04)
 
+- Journeys can log in. Set a test account in `AITD_LOGIN_EMAIL` (or `AITD_LOGIN_USERNAME`) and `AITD_LOGIN_PASSWORD`: the model fills login forms with the placeholders `{{login.email}}`, `{{login.username}}` and `{{login.password}}`, and the browser types the real values, only into the audited site's pages, never into a frame from another site. The values are turned back into their placeholders in everything the tool keeps or shows (page views, steps, hits, dataLayer pushes, network calls, saved steps and reports), a password field's value is never read into the page view, and the browser doesn't get them in its environment. Over MCP, `start_audit` says whether a test account is set up.
+- New ready-made journey `login` (or `signin`): logs in with the test account and expects GA4 `login`. A plan with a `login` event uses it with `--against`.
+- New command `aitd login --site <url>`: log in by hand once in a browser window (a CAPTCHA, a phone code or single sign-on are fine) and the session is saved to `aitd/<domain>/session.json`, readable only by you. `aitd run --session saved` (or a file), the config's `session_file`, and `session: "saved"` on a local MCP server's `start_audit` start every journey logged in. An HTTP server never uses it.
+- New check `user_id_missing` (info): after logging in with the test account, GA4 hits went out without the site's user ID (`uid`), so GA4 can't tie the visit to the account. A baseline written with 0.22.5 can then list new entries; `--update-baseline` rewrites it.
 - ai-tag-debugger is a Claude plugin: `/plugin install ai-tag-debugger --marketplace analitikisler/ai-tag-debugger` in Claude Code adds the MCP server and an `audit-tracking` skill that walks Claude through an audit: what to ask first, which tool answers which question, how to walk the journey and how to explain the findings. The plugin lives in `plugin/`, pins the npm version it starts, and is ready for Anthropic's plugin directory. Its README lists everything it runs, fetches and writes.
 
 ## 0.22.5 (2026-11-04)

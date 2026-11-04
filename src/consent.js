@@ -184,7 +184,7 @@ export function scenarioLanding(config, campaign) {
  */
 async function runState(config, state, opts) {
   const session = new AuditSession({
-    viewport: "desktop", site: config.site, allowedHosts: config.allowed_hosts, providers: config.providers,
+    viewport: "desktop", site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, providers: config.providers,
     blockHits: config.block_hits !== false, headless: !opts.headed, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}),
   });
   const landing = scenarioLanding(config, opts.campaign);

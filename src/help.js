@@ -13,6 +13,7 @@ Commands:
   run      Audit what a site actually sends, and compare it to a plan
   replay   Re-check saved sites offline, without AI
   mcp      Start the MCP server for Claude, ChatGPT and other chat apps
+  login    Log in to a site by hand once and save the session for runs to start from
   doctor   Check that Node, Chromium, an AI key and the data folder are ready
   history  Show how a site's saved runs trend: counts, open problems, flapping, journeys
 
@@ -41,6 +42,7 @@ Options:
   --events <names>     Only check these events, e.g. purchase,add_to_cart
   --lang <code>        Report language: ${Object.keys(LANGUAGES).join(" or ")}
   --headed             Show the browser window
+  --session <file>     Start logged in: saved (the session aitd login saved) or a session file
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
   --baseline <file>    Known findings to accept; they don't count toward --fail-on
   --update-baseline    Write the baseline file after the run (creates it)
@@ -106,6 +108,23 @@ Advanced:
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 
+const LOGIN = `Usage: aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
+
+Open the site in a browser window, log in by hand (a CAPTCHA, a code sent to your phone or
+single sign-on are fine), then press Enter in the terminal: the logged-in session (cookies and
+storage) is saved to aitd/<domain>/session.json. Runs start from it with --session saved.
+The file holds a live login: keep it private, and save it again when the login expires.
+
+For journeys that can log in by themselves, set a test account instead:
+AITD_LOGIN_EMAIL (or AITD_LOGIN_USERNAME) and AITD_LOGIN_PASSWORD. The model sees only
+the placeholders {{login.email}} and {{login.password}}; the browser types the real values.
+
+Options:
+  --site <url>         The site to log in to (required)
+  --save <file>        Where to save the session (default: aitd/<domain>/session.json)
+  --allow-host <host>  Another host the login passes through, such as a single sign-on page (repeatable)
+  --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
+
 const DOCTOR = `Usage: aitd doctor [--site <url>] [--data-dir <dir>]
 
 Check that this machine can run an audit: the Node version, Playwright's Chromium, whether
@@ -130,7 +149,7 @@ Options:
   --lang <code>        Language of the lines: ${Object.keys(LANGUAGES).join(" or ")}
   --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
 
-const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP, doctor: DOCTOR, history: HISTORY };
+const HELP = { run: RUN, plan: PLAN, replay: REPLAY, mcp: MCP, login: LOGIN, doctor: DOCTOR, history: HISTORY };
 
 /** Help text for a command, or the top-level help when the command is unknown or missing. */
 export function helpText(command) {

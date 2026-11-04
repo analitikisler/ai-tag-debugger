@@ -15,9 +15,9 @@ test("--version and -v print the package version", () => {
 
 test("the top-level help is short and lists the commands and examples", () => {
   const help = cli("--help");
-  // 21 since aitd history joined the command list; one line per command, nothing else grows.
-  assert.ok(help.trim().split("\n").length <= 21, "top-level help is about 20 lines at most");
-  for (const c of ["plan", "run", "replay", "mcp", "doctor", "history"]) assert.match(help, new RegExp(`^  ${c} {2,}\\S`, "m"));
+  // 22 since aitd login joined the command list (21 with aitd history); one line per command, nothing else grows.
+  assert.ok(help.trim().split("\n").length <= 22, "top-level help is about 20 lines at most");
+  for (const c of ["plan", "run", "replay", "mcp", "login", "doctor", "history"]) assert.match(help, new RegExp(`^  ${c} {2,}\\S`, "m"));
   assert.match(help, /aitd run --site https:\/\/example\.com --against latest/);
   assert.match(help, /-v, --version/);
   assert.doesNotMatch(help, /--max-steps|--base-url|--providers/);

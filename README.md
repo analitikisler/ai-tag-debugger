@@ -53,6 +53,7 @@ Manual tag QA catches this, but it's tedious, so it rarely happens after every r
 | Click id and client id cookies | A Google Ads tag ran with ad storage granted, but `_gcl_aw` never held the landing page's `gclid`, so conversions can't be tied to the click; or the GA4 client id in `_ga` changed mid-visit, which splits one visitor into two users |
 | Pages that aren't the site | A bot challenge (Cloudflare, DataDome, HUMAN, Akamai) shown instead of the page, or a page that crashed in the browser, such as a Next.js "Application error" after its own scripts came back as HTML. Events not seen on such a run are unverified rather than missing |
 | Server-side tracking | One event ID used for two different events, or a Meta event ID that doesn't match the `event_id` on the GA4 hit a server container turns into a Conversions API event |
+| Logged-in tracking | After logging in with the test account, GA4 hits went out without the site's user ID (`uid`), so GA4 can't tie the visit to the account |
 
 Platforms: GA4 (including server-side GTM endpoints and Google tag gateway paths on the site's own domain; hits to a server container are marked server-side, and Stape and Elevar requests are recognised), Google Ads conversions, Meta Pixel, TikTok Pixel, basic X Pixel events, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag, and Pinterest, Snapchat and Klaviyo events. Adobe Analytics, Matomo and Piwik PRO events are read too (page views, links, goals, site search and ecommerce orders), and Microsoft Clarity and Hotjar tag loads name the project or site id.
 
@@ -401,8 +402,24 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 | `sign_up` (or `signup`, `register`) | Creates an account with test data | GA4 `sign_up`; Meta `CompleteRegistration` |
 | `lead` (or `contact`, `form`) | Fills in and sends a contact, quote or demo form | GA4 `generate_lead`; Meta `Lead` |
 | `search` | Searches the site and opens a result | GA4 `search` with `search_term`; Meta `Search` |
+| `login` (or `signin`) | Logs in with the [test account](#logging-in) | GA4 `login` |
 
 `--journey` also picks journeys from your config by id. With a config, ready-made journeys add their events to your plan.
+
+### Logging in
+
+Journeys that need an account can log in two ways.
+
+**A test account.** Set its email (or `AITD_LOGIN_USERNAME` where the site asks for a username) and password on the computer running the tool:
+
+```bash
+export AITD_LOGIN_EMAIL=qa-test@yourshop.com
+export AITD_LOGIN_PASSWORD='…'
+```
+
+The model never sees them. It fills login forms with the placeholders `{{login.email}}`, `{{login.username}}` and `{{login.password}}`, and the browser types the real values, only into pages on the audited site (its subdomains and `allowed_hosts`), never into a frame from another site. Everything the tool keeps or shows has them turned back into their placeholders: the page views the model reads, the steps, hits, dataLayer pushes, network calls, saved steps and reports. The browser itself doesn't get them in its environment. The `login` journey uses the account, and any journey or MCP audit can. After a login, `user_id_missing` (info) reports GA4 hits that carry no user ID. Use an account made for testing, never a real customer's.
+
+**A saved session**, for a login that needs a person: a CAPTCHA, a code sent to a phone, or single sign-on. `aitd login --site https://yourshop.com` opens the site in a browser window; log in by hand, press Enter in the terminal, and the session (cookies and storage) is saved to `aitd/<domain>/session.json`, readable only by you. `aitd run … --session saved`, the config's `session_file`, or `session: "saved"` on a local MCP server's `start_audit` start every journey logged in. The file holds a live login: keep it private, and save it again when the login expires.
 
 Not sure what to test? `aitd plan --site https://yoursite.com` drafts a measurement plan, and `--against latest` checks the site against it.
 
@@ -497,6 +514,7 @@ The file holds one entry per finding, with a `key` the run matches on (the check
 | `journeys[].start` | Optional start path (default `/`). |
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
+| `session_file` | A session saved with `aitd login`, so every journey starts logged in: `"saved"` for the site's own, or a file path. See [Logging in](#logging-in). |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
 | `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
@@ -551,10 +569,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--c
          [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <list>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
-         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -593,6 +612,8 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
 | `--base-url <url>` | run | The API address for an OpenAI-compatible provider. |
 | `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
+| `--session saved\|<file>` | run | Start every journey logged in, from the session `aitd login` saved (`saved`) or a session file. Same as `session_file`. See [Logging in](#logging-in). |
+| `--save <file>` | login | Where `aitd login` saves the session (default `aitd/<domain>/session.json`). |
 | `--keep-bodies` | run | Store tracking requests as sent, without redacting user data. |
 | `--no-branding` | plan, run | Leave the logo and credit line out of the reports and `plan.html`. |
 | `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | See the MCP section below. |
@@ -662,7 +683,7 @@ Tools the server offers:
 |---|---|
 | `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
 | `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
-| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. `live: true` lets the tracking requests through to the site's real accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant; the test traffic then shows in the site's reports, and the results and the report say the run was live. Over HTTP the server needs `--allow-live` for it. The first page opens the way an ad click does, with test campaign parameters (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …), so `finish_audit` checks that they survive redirects and reach the hits; `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses your own values. |
+| `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. `live: true` lets the tracking requests through to the site's real accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant; the test traffic then shows in the site's reports, and the results and the report say the run was live. Over HTTP the server needs `--allow-live` for it. The first page opens the way an ad click does, with test campaign parameters (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …), so `finish_audit` checks that they survive redirects and reach the hits; `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses your own values. A test account set on the server's computer is used through its placeholders, and `session: "saved"` starts from the session `aitd login` saved (local servers only); see [Logging in](#logging-in). |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the step number, the page and the tracking hits that step sent, each with an `[h]` number, its consent (from `gcs`, and `gcd` for `ad_user_data` and `ad_personalization`) and the ids and flags GA4 sends with it (`cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), its dataLayer pushes (Consent Mode commands in full as `key=value`, page addresses never cut) and the calls it read no event from, such as Consent Mode pings with their `gcs`, `gcd` and click ids (`gclid`, `gclid=0 (redacted)` when ads data redaction blanks it, `gclaw` from `_gcl_aw`), and the cookies the step added, changed or removed, by name, with the GA4 client id and whether `_gcl_aw` and `_fbc` hold the landing click ids when that changes. A page_view that arrives during a later wait or scroll is listed on the step that loaded its page, marked late. The page view is compact by default, since long sessions lose their oldest results: up to 40 elements above or below the screen, and the page text or element list replaced by a note when they haven't changed since the last view. Pass `detail: "full"` for everything. |
 | `get_page` | Shows the current page, in full: every element and the whole page text. |
 | `get_hit` | Shows one hit in full, by its `step` and `[h]` number: every parameter its request carried, its place in a batched request, where it was sent, and `gcd` decoded per consent signal (default and update). |
@@ -734,6 +755,7 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 - The browser stays on the audited site and its subdomains, plus any `allowed_hosts`. It opens only `http` and `https` pages.
 - The model is told that page content is data, never instructions. A prompt rule can't guarantee a model is never misled, so the navigation limits above contain what a misled model can do.
 - The browser runs without your API keys and other secrets in its environment.
+- A [test account](#logging-in) is typed only into the audited site's pages, never shown to the model, and turned back into its placeholders in everything the tool keeps. A saved login session is readable only by you and is never used by an HTTP server.
 - **User data sent for ad matching is redacted** before it is stored in `capture.json` or shown in the report: emails, phone numbers, names, addresses and user ids in GA4 and Google Ads enhanced conversions (`em`, `ph`, `uid`, …), Meta advanced matching (`ud[*]`, `udff[*]`), TikTok `context.user`, and the `user_data` the site pushes to the dataLayer for enhanced conversions. Any value that looks like an email address is redacted whatever its field is called, except the audited site's own address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, …), such as a contact link in a GTM click event, which is not visitor data. Each value becomes a marker such as `[redacted: 64 chars, looks hashed]`, and a value that wasn't hashed is reported as a personal data risk. `--keep-bodies` (`"keep_bodies": true`) stores requests as sent, for debugging.
 - Stored request bodies are capped at 32 KB per request and 2 MB per journey. Past that, the report says the body wasn't stored.
 - Only run it against sites you own or are authorized to test.

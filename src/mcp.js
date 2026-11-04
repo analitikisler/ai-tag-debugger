@@ -33,6 +33,7 @@ import { decodeGcd, DEFAULT_PROVIDERS, googleConsent, isCollectionEndpoint, pars
 import { hitParams } from "./hit-params.js";
 import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { cmpFacts } from "./cmp.js";
+import { resolveSessionFile } from "./login.js";
 import { containerRows, containersNotRun, loadSources, unseenContainers } from "./containers.js";
 import { isEventMessage, isWidgetHit, messageOutcomes, pushedEvent, siteIds, splitRun, widgetSummaries } from "./frames.js";
 import { consentMatrixMarkdown, consentTable, runConsentScenarios } from "./consent.js";
@@ -441,10 +442,14 @@ export function buildServer(opts) {
           .optional()
           .describe(`Tracking providers to check. Default ${DEFAULT_PROVIDERS.join(", ")} plus any other known platform the site sends to. When given, requests to the others are still answered locally, but they are only counted, not shown or checked.`),
         campaign: campaignSchema().describe(`Open the first page the way an ad click does, so finish_audit checks that the campaign parameters survive redirects and reach the hits. ${CAMPAIGN_DOC}`),
+        session: z
+          .enum(["saved"])
+          .optional()
+          .describe("Start logged in, from the session saved for this site with `aitd login --site <url>` on the computer running this server. For sites whose login needs a person (a CAPTCHA or a code). Local servers only."),
         live: z.boolean().optional().describe("Default false: tracking requests are answered locally and never reach the site's accounts. true lets them through to the real analytics and ad accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant: the test traffic then shows in the site's reports. Only when the user asks for it."),
       },
     },
-    async ({ site, journey, viewport, allowed_hosts, providers, campaign = true, live = false }) => {
+    async ({ site, journey, viewport, allowed_hosts, providers, campaign = true, live = false, session: savedSession }) => {
       let url;
       try {
         url = new URL(site);
@@ -461,7 +466,10 @@ export function buildServer(opts) {
       let session;
       try {
         if (live && !opts.allowLive) return fail("Live audits are off on this server: it was started without --allow-live. Leave live out to audit with tracking requests answered locally.");
-        session = new AuditSession({ viewport: viewport ?? "desktop", site: url.href, allowedHosts: allowed_hosts, providers, blockPrivate: opts.blockPrivate, blockHits: !live });
+        // A saved login lives on the computer running the server; over HTTP, a chat elsewhere must not use it.
+        if (savedSession && !opts.allowFiles) return fail("A saved login session can only be used on a local server. Leave session out, or log in with the test account during the journey.");
+        const storageState = savedSession ? resolveSessionFile("saved", { site: url.href, dataDir: opts.dataDir ?? DEFAULT_DATA_DIR }) : undefined;
+        session = new AuditSession({ viewport: viewport ?? "desktop", site: url.href, allowedHosts: allowed_hosts, providers, blockPrivate: opts.blockPrivate, blockHits: !live, storageState });
       } catch (err) {
         return fail(err.message);
       }
@@ -483,7 +491,8 @@ export function buildServer(opts) {
       const sent = campaignParamsIn(start);
       const opened = Object.keys(sent).length ? `Opened like an ad click with ${Object.entries(sent).map(([k, v]) => `${k}=${v}`).join(", ")}; finish_audit checks that they survive redirects and reach the hits.\n` : "";
       const liveLine = live ? `${LIVE_NOTE}\n` : "";
-      return text(`audit_id: ${id}\n${liveLine}${opened}${goal}\n${page}\n\n${stepCapture(audit, session.currentStep)}`);
+      const accountLine = `${session.login ? "A test account is set up: to log in, fill {{login.email}} (or {{login.username}}) and {{login.password}}, written exactly like that; the browser types the real values." : "No test account is set up on this computer (AITD_LOGIN_EMAIL and AITD_LOGIN_PASSWORD), so a journey that needs a login stops at it."}${savedSession ? " The browser started from the saved login session." : ""}\n`;
+      return text(`audit_id: ${id}\n${liveLine}${accountLine}${opened}${goal}\n${page}\n\n${stepCapture(audit, session.currentStep)}`);
     },
   );
 

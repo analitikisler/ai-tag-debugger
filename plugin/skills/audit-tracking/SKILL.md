@@ -11,7 +11,8 @@ The ai-tag-debugger tools drive a real browser on the user's computer, record ev
 
 Ask only what you can't infer, in one message:
 
-- **The site and the journey.** A ready-made journey (`purchase`, `add_to_cart`, `sign_up`, `lead`, `search`, `decline_cookies`) or the user's own description, such as "fill in the contact form".
+- **The site and the journey.** A ready-made journey (`purchase`, `add_to_cart`, `sign_up`, `login`, `lead`, `search`, `decline_cookies`) or the user's own description, such as "fill in the contact form".
+- **A login, if the journey needs one.** `start_audit` says whether a test account is set up. If so, fill login forms with `{{login.email}}` (or `{{login.username}}`) and `{{login.password}}` exactly as written: the browser types the real values, and you never see them. If the login needs a person (a CAPTCHA or a code), ask the user to run `aitd login --site <url>` once and pass `session: "saved"`. Never ask the user to type a password into the chat.
 - **The platforms.** Suggest the default (GA4, Google Ads, Meta, TikTok, plus any other platform the site turns out to use) and pass the user's choice as `providers`.
 - **The consent choice.** Accept, reject, or both. For any question about the cookie banner, consent or Consent Mode, prefer `consent_matrix`, which tries every choice in about half a minute.
 - **The plan.** If they have a measurement plan, use it (`against: "latest"` for one saved earlier, or the plan as JSON). If they want to know what they *should* track, that is a plan, not an audit: `make_plan` drafts one, but it needs an AI provider key on their computer; if it says none is set, offer to draft the plan yourself from an audit.

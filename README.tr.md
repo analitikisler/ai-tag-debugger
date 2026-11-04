@@ -53,6 +53,7 @@ Manuel etiket kontrolü bunu yakalar, ama zahmetlidir; bu yüzden her sürümden
 | Tıklama kimliği ve istemci kimliği çerezleri | Bir Google Ads etiketi reklam depolamasına izin verilmişken çalıştı ama `_gcl_aw` açılış sayfasının `gclid`'ini hiç tutmadı, bu yüzden dönüşümler tıklamaya bağlanamıyor; ya da `_ga`'daki GA4 istemci kimliği ziyaret ortasında değişti ve bir ziyaretçi iki kullanıcıya bölündü |
 | Site olmayan sayfalar | Sayfanın yerine gösterilen bir bot doğrulaması (Cloudflare, DataDome, HUMAN, Akamai) ya da tarayıcıda çöken bir sayfa, ör. kendi betikleri HTML olarak geldikten sonra bir Next.js "Application error" ekranı. Böyle bir çalıştırmada görülmeyen event'ler eksik değil, doğrulanmamış sayılır |
 | Sunucu tarafı takip | Aynı event kimliğinin iki farklı event'te kullanılması, ya da Meta event kimliğinin sunucu konteynerinin Conversions API olayına dönüştürdüğü GA4 isteğindeki `event_id` ile eşleşmemesi |
+| Giriş yapılmış takip | Test hesabıyla giriş yapıldıktan sonra GA4 istekleri sitenin kullanıcı kimliği (`uid`) olmadan gönderildi; GA4 ziyareti hesaba bağlayamıyor |
 
 Platformlar: GA4 (sitenin kendi alan adındaki sunucu tarafı GTM uç noktaları ve Google etiket geçidi yolları dahil; bir sunucu konteynerine giden istekler sunucu tarafı olarak işaretlenir, Stape ve Elevar istekleri tanınır), Google Ads dönüşümleri, Meta Pixel, TikTok Pixel, temel X Pixel event'leri, LinkedIn Insight Tag, Microsoft Advertising UET, Criteo OneTag ile Pinterest, Snapchat ve Klaviyo event'leri. Adobe Analytics, Matomo ve Piwik PRO event'leri de okunur (sayfa görüntülemeleri, bağlantılar, hedefler, site içi arama ve e-ticaret siparişleri); Microsoft Clarity ve Hotjar etiket yüklemeleri ise proje ya da site kimliğini gösterir.
 
@@ -401,8 +402,24 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 | `sign_up` (ya da `signup`, `register`) | Test verileriyle bir hesap oluşturur | GA4 `sign_up`; Meta `CompleteRegistration` |
 | `lead` (ya da `contact`, `form`) | Bir iletişim, teklif ya da demo formunu doldurup gönderir | GA4 `generate_lead`; Meta `Lead` |
 | `search` | Sitede arama yapar ve bir sonucu açar | GA4 `search` (`search_term` ile); Meta `Search` |
+| `login` (ya da `signin`) | [Test hesabıyla](#giriş-yapmak) giriş yapar | GA4 `login` |
 
 `--journey`, ayar dosyanızdaki yolculukları id'leriyle de seçer. Bir ayar dosyasıyla, hazır yolculuklar kendi event'lerini planınıza ekler.
+
+### Giriş yapmak
+
+Hesap gerektiren yolculuklar iki şekilde giriş yapabilir.
+
+**Bir test hesabı.** E-postasını (site bir kullanıcı adı istiyorsa `AITD_LOGIN_USERNAME`) ve parolasını aracı çalıştıran bilgisayarda ayarlayın:
+
+```bash
+export AITD_LOGIN_EMAIL=qa-test@magazaniz.com
+export AITD_LOGIN_PASSWORD='…'
+```
+
+Model bunları hiç görmez. Giriş formlarını `{{login.email}}`, `{{login.username}}` ve `{{login.password}}` yer tutucularıyla doldurur; gerçek değerleri tarayıcı yazar, yalnızca denetlenen sitenin sayfalarına (alt alan adları ve `allowed_hosts`), başka bir siteden gelen bir çerçeveye asla. Aracın sakladığı ya da gösterdiği her şeyde bu değerler yeniden yer tutuculara çevrilir: modelin okuduğu sayfa görünümleri, adımlar, istekler, dataLayer push'ları, ağ çağrıları, kaydedilen adımlar ve raporlar. Tarayıcının kendisi de bunları ortamında almaz. `login` yolculuğu hesabı kullanır; her yolculuk ve MCP denetimi de kullanabilir. Bir girişten sonra `user_id_missing` (bilgi), kullanıcı kimliği taşımayan GA4 isteklerini bildirir. Test için açılmış bir hesap kullanın, asla gerçek bir müşterinin hesabını değil.
+
+**Kaydedilmiş bir oturum**, bir insan gerektiren girişler için: bir CAPTCHA, telefona gelen bir kod ya da tek oturum açma (SSO). `aitd login --site https://magazaniz.com` siteyi bir tarayıcı penceresinde açar; elle giriş yapın, terminalde Enter'a basın; oturum (çerezler ve depolama) yalnızca sizin okuyabileceğiniz `aitd/<alan-adı>/session.json` dosyasına kaydedilir. `aitd run … --session saved`, yapılandırmadaki `session_file` ya da yerel bir MCP sunucusunda `start_audit` için `session: "saved"` her yolculuğu giriş yapılmış olarak başlatır. Dosya canlı bir oturum tutar: gizli tutun ve oturum sona erdiğinde yeniden kaydedin.
 
 Ne test edeceğinizden emin değil misiniz? `aitd plan --site https://yoursite.com` bir ölçümleme planı taslağı çıkarır, `--against latest` de siteyi buna göre kontrol eder.
 
@@ -497,6 +514,7 @@ Dosyada her bulgu için bir kayıt bulunur: çalıştırmanın eşleştirme yapt
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. Bunlar yoksa `--scripted`, sitenin o yolculuğu son tamamlayan çalıştırmasının adımlarını tekrarlar. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
+| `session_file` | `aitd login` ile kaydedilmiş bir oturum; her yolculuk giriş yapılmış olarak başlar: sitenin kendi oturumu için `"saved"` ya da bir dosya yolu. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `campaign_checks` | Varsayılan `true`. Her çalıştırma ilk sayfayı bir reklam tıklaması gibi açar (UTM parametreleri, `gclid`, `fbclid` ya da başlangıç adresinde zaten olanlar) ve bunların yönlendirmelerden geçip isteklere ulaştığını denetler. Düz adresi açmak için `false` yapın. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
@@ -551,10 +569,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--
          [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <liste>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <dosya>] [--update-baseline]
-         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>] [--session saved|<dosya>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -593,6 +612,8 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
 | `--base-url <url>` | run | OpenAI uyumlu bir sağlayıcının API adresi. |
 | `--allow-host <ana makine>` | run | Yolculukların ziyaret edebileceği başka bir ana makine (tekrarlanabilir). `allowed_hosts` ile aynıdır. |
+| `--session saved\|<dosya>` | run | Her yolculuğu, `aitd login`'in kaydettiği oturumdan (`saved`) ya da bir oturum dosyasından giriş yapılmış olarak başlatır. `session_file` ile aynı. Bkz. [Giriş yapmak](#giriş-yapmak). |
+| `--save <dosya>` | login | `aitd login`'in oturumu nereye kaydedeceği (varsayılan `aitd/<alan-adı>/session.json`). |
 | `--keep-bodies` | run | Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden sakla. |
 | `--no-branding` | plan, run | Logo ve kredi satırını raporlardan ve `plan.html` dosyasından çıkar. |
 | `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | Aşağıdaki MCP bölümüne bakın. |
@@ -662,7 +683,7 @@ Sunucunun sunduğu araçlar:
 |---|---|
 | `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
 | `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
-| `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. `live: true`, takip isteklerini sitenin gerçek hesaplarına geçirir; böylece GA4 Realtime ya da DebugView, Meta Events Manager veya Tag Assistant'ta kontrol edilebilirler. Test trafiği o zaman sitenin raporlarında görünür; sonuçlar ve rapor çalıştırmanın canlı olduğunu söyler. HTTP üzerinden sunucunun bunun için `--allow-live` ile başlatılması gerekir. İlk sayfa bir reklam tıklaması gibi, test kampanya parametreleriyle (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …) açılır; böylece `finish_audit` bunların yönlendirmelerden sağ çıkıp isteklere ulaştığını kontrol eder. `campaign: false` URL'yi olduğu gibi açar, `campaign: {"utm_source": "newsletter", "gclid": "test123"}` ise sizin değerlerinizi kullanır. |
+| `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. `live: true`, takip isteklerini sitenin gerçek hesaplarına geçirir; böylece GA4 Realtime ya da DebugView, Meta Events Manager veya Tag Assistant'ta kontrol edilebilirler. Test trafiği o zaman sitenin raporlarında görünür; sonuçlar ve rapor çalıştırmanın canlı olduğunu söyler. HTTP üzerinden sunucunun bunun için `--allow-live` ile başlatılması gerekir. İlk sayfa bir reklam tıklaması gibi, test kampanya parametreleriyle (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …) açılır; böylece `finish_audit` bunların yönlendirmelerden sağ çıkıp isteklere ulaştığını kontrol eder. `campaign: false` URL'yi olduğu gibi açar, `campaign: {"utm_source": "newsletter", "gclid": "test123"}` ise sizin değerlerinizi kullanır. Sunucunun bilgisayarında ayarlı bir test hesabı yer tutucularıyla kullanılır; `session: "saved"` ise `aitd login`'in kaydettiği oturumdan başlar (yalnızca yerel sunucular); bkz. [Giriş yapmak](#giriş-yapmak). |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Adım numarasını, sayfayı, o adımın gönderdiği takip isteklerini (her biri bir `[h]` numarası, onay durumu — `gcs`'den, `ad_user_data` ve `ad_personalization` için `gcd`'den — ve GA4'ün onunla gönderdiği kimlik ve işaretlerle: `cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), dataLayer push'larını (Consent Mode komutları `anahtar=değer` olarak eksiksiz, sayfa adresleri hiç kesilmeden) ve event olarak okunmayan çağrıları (ör. `gcs`, `gcd` ve tıklama kimlikleriyle Consent Mode ping'leri: `gclid`, reklam verisi karartma açıksa `gclid=0 (redacted)`, `_gcl_aw`'dan `gclaw`), ayrıca adımın eklediği, değiştirdiği ya da sildiği çerezleri adlarıyla, değiştiğinde de GA4 istemci kimliğini ve `_gcl_aw` ile `_fbc`'nin açılış tıklama kimliklerini tutup tutmadığını döndürür. Sonraki bir bekleme ya da kaydırma sırasında gelen page_view, sayfasını yükleyen adımda gecikmeli olarak işaretlenip gösterilir. Uzun oturumlar en eski sonuçlarını kaybettiği için sayfa görünümü varsayılan olarak kısadır: ekranın üstünde ya da altında en fazla 40 öğe; sayfa metni ya da öğe listesi son görünümden beri değişmediyse yerine bir not. Hepsi için `detail: "full"` verin. |
 | `get_page` | Geçerli sayfayı eksiksiz gösterir: her öğe ve sayfanın tüm metni. |
 | `get_hit` | Bir isteği `step` ve `[h]` numarasıyla eksiksiz gösterir: isteğin taşıdığı her parametre, toplu bir istekteki sırası, nereye gönderildiği ve her onay sinyali için çözümlenmiş `gcd` (varsayılan ve güncelleme). |
@@ -734,6 +755,7 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 - Tarayıcı, denetlenen sitede ve alt alan adlarında kalır; ayrıca varsa `allowed_hosts` içinde. Yalnızca `http` ve `https` sayfalarını açar.
 - Modele, sayfa içeriğinin veri olduğu ve talimat olmadığı söylenir. Bir istem kuralı, bir modelin asla yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini sınırlar.
 - Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgileriniz olmadan çalışır.
+- Bir [test hesabı](#giriş-yapmak) yalnızca denetlenen sitenin sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
 - **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
 - Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
 - Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.
