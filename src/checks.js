@@ -6,7 +6,7 @@ import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
 import { CONSENT_SIGNALS } from "./parsers.js";
 import { duplicateLoads, loadSources, scriptFailed, splitLayers } from "./containers.js";
-import { widgetSummaries, widgetsOf } from "./frames.js";
+import { messageOutcomes, widgetSummaries, widgetsOf } from "./frames.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
@@ -402,6 +402,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Events a widget pushed to its own dataLayer that never reached the site's accounts: the page's tags can't see them.
   for (const w of widgetSummaries([run], (a, b) => canonicalEvent(a) === canonicalEvent(b)).filter((x) => x.unshared.length)) {
     findings.push({ ...base, severity: "info", check: "widget_events_unshared", step: stepLabel(w.step), detail: d.widgetEventsUnshared(w.origin, w.unshared.slice(0, 10)) });
+  }
+  // An event an iframe posted to the page that the page never acted on: no push, no hit, not even under another name.
+  const unhandled = new Set();
+  for (const msg of messageOutcomes(run, (a, b) => canonicalEvent(a) === canonicalEvent(b)).filter((x) => x.outcome === "nothing")) {
+    const k = `${msg.origin}|${canonicalEvent(msg.name)}`;
+    if (unhandled.has(k)) continue;
+    unhandled.add(k);
+    findings.push({ ...base, severity: "info", check: "iframe_message_unhandled", event: msg.name, step: stepLabel(msg.step), detail: d.iframeMessageUnhandled(msg.origin, msg.name, msg.party) });
   }
   // A container in a same-site iframe beside one in the page: two documents, two dataLayers.
   const iframeLoad = loads.find((l) => l.frame?.party === "site" && loads.some((t) => !t.frame && t.step <= l.step));

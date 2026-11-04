@@ -4,7 +4,7 @@
 // vendors, the trend) is the 0.17 renderer's, so the numbers match the Markdown report and the CLI.
 import { buildInventory } from "../inventory.js";
 import { containerRows } from "../containers.js";
-import { widgetSummaries } from "../frames.js";
+import { messageOutcomes, widgetSummaries } from "../frames.js";
 import { canonicalEvent } from "../checks.js";
 import { providerOf } from "../parsers.js";
 import { siteOf } from "../redact.js";
@@ -228,6 +228,19 @@ ${x.unshared.length ? line(w.unshared, x.unshared.map(code).join(" ")) : ""}</ul
   return `<li><details class="card inv" id="inv-widgets"><summary><span class="t">${esc(m.ui.widgetsTitle)}</span>${plain(n(widgets.length))}<span class="inv-m">${esc(widgets.slice(0, 3).map((x) => x.origin.replace(/^https?:\/\//, "")).join(", "))}${widgets.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.widgetsIntro)}</p><ul class="inv-rows">${items}</ul></div></details></li>`;
 }
 
+/** The events iframes posted to the page and what the page did next, one line each. Null when there were none. */
+function messagesCard(ctx) {
+  const { m, runs } = ctx;
+  const same = (a, b) => canonicalEvent(a) === canonicalEvent(b);
+  const list = runs.flatMap((r) => messageOutcomes(r, same).map((x) => ({ ...x, run: r })));
+  if (!list.length) return null;
+  const t = m.ui.messages;
+  const word = (x) => (x.outcome === "nothing" ? t.nothing : t[x.outcome](x.relay.kind, x.relay.name, x.relay.ms));
+  const items = list.map((x) => `<li>${code(x.name)}<span class="inv-n">${esc(x.origin)}</span>${plain(esc(m.ui.party[x.party === "site" ? "first" : "third"]))}${x.outcome === "nothing" ? badge("info", word(x)) : plain(esc(word(x)))}<span class="inv-n">${esc(`${x.run.journeyId} · ${x.run.steps?.[x.step]?.label ?? x.step}`)}</span></li>`).join("");
+  const silent = list.filter((x) => x.outcome === "nothing").length;
+  return `<li><details class="card inv" id="inv-messages"><summary><span class="t">${esc(m.ui.messagesTitle)}</span>${plain(n(list.length))}${silent ? badge("info", `${t.nothing.split(":")[0]}: ${silent}`) : ""}</summary><div class="body"><p class="xs muted">${esc(m.ui.messagesIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
+}
+
 function inventorySection(ctx) {
   const { m, runs } = ctx;
   const t = m.html.scope;
@@ -235,7 +248,8 @@ function inventorySection(ctx) {
   const skipped = skippedTotals(runs);
   const containers = containersCard(ctx);
   const widgets = widgetsCard(ctx);
-  if (!lines.length && !skipped.length && !containers && !widgets) return sectionBlock("inventory", esc(m.html.shell.sections.inventory), `<p class="muted">${esc(m.ui.noInventory)}</p>`);
+  const messages = messagesCard(ctx);
+  if (!lines.length && !skipped.length && !containers && !widgets && !messages) return sectionBlock("inventory", esc(m.html.shell.sections.inventory), `<p class="muted">${esc(m.ui.noInventory)}</p>`);
   const counts = (x) => `<span class="inv-m">${t.requests(x.requests, bold(x.requests))}</span><span class="inv-m">${t.pages(x.pages.size, bold(x.pages.size))}</span><span class="inv-m${x.cookies.length ? "" : " zero"}">${t.cookies(x.cookies.length, bold(x.cookies.length))}</span>`;
   const out = lines.map((x) => {
     const id = `inv-${safeKey(x.p)}`;
@@ -251,6 +265,7 @@ function inventorySection(ctx) {
 <div role="tabpanel" id="${tid("pages")}" data-label="${esc(m.ui.pagesCol)}">${pages ? `<ul class="inv-list">${pages}</ul>` : none}</div>
 <div role="tabpanel" id="${tid("cookies")}" data-label="${esc(m.ui.cookiesCol)}">${x.cookies.length ? `<ul class="inv-list">${x.cookies.map((ck) => `<li>${code(ck)}</li>`).join("")}</ul>` : none}</div></div></div></details></li>`;
   });
+  if (messages) out.unshift(messages);
   if (widgets) out.unshift(widgets);
   if (containers) out.unshift(containers);
   const skippedN = skipped.reduce((a, [, k]) => a + k, 0);

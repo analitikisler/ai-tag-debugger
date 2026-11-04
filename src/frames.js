@@ -154,3 +154,50 @@ export function widgetSummaries(runs, same = (a, b) => plainName(a) === plainNam
     };
   });
 }
+
+// A message counts as an event when it is dataLayer-shaped ({ event: ... }) or its name reads like one; frame
+// housekeeping (resizing, ready and heartbeat pings, scroll and focus) never does.
+const EVENT_KEYS = new Set(["event", "eventName", "event_name"]);
+const EVENT_WORDS = /(submit|complete|success|confirm|purchase|order|lead|book|reserv|sign.?up|register|checkout|payment|paid|conversion|subscribe|contact|quote|enquir|inquir|apply|download|add.?to.?cart)/i;
+const HOUSEKEEPING = /^(resize|height|setheight|size|ready|loaded|load|init|initialized|heartbeat|ping|pong|scroll|focus|blur|close|open|visible|hidden|iframeresizer.*|.*resize.*)$/i;
+
+/** Whether an iframe's message reads as an event the page might need to track. */
+export function isEventMessage(m) {
+  const name = String(m.name ?? "");
+  if (!name || HOUSEKEEPING.test(name.replace(/[^a-z0-9]/gi, ""))) return false;
+  return EVENT_KEYS.has(m.nameKey) || EVENT_WORDS.test(name);
+}
+
+// How long after a message the page has to react for the reaction to count as its relay under another name.
+export const RELAY_WINDOW_MS = 3000;
+
+/**
+ * What the page did after each event message an iframe posted to it, one per iframe, name and step:
+ * { origin, party, name, keys, step, t, outcome, relay? }. outcome "relayed": the page pushed or sent the same event
+ * (relay: { kind: "push"|"hit", name, ms }); "followed": within RELAY_WINDOW_MS it pushed another event or sent a hit,
+ * maybe the same event under another name; "nothing": neither. Only the page's own pushes and the site's own hits
+ * count (not an iframe's). same(a, b) compares event names, as in widgetSummaries.
+ */
+export function messageOutcomes(run, same = (a, b) => plainName(a) === plainName(b)) {
+  const pushes = (run.dataLayerLog ?? []).filter((e) => !e.frame && pushedEvent(e.value)).map((e) => ({ kind: "push", name: pushedEvent(e.value), t: e.t ?? 0 }));
+  const hits = (run.hits ?? []).filter((h) => !h.frame).map((h) => ({ kind: "hit", name: h.name, t: h.t ?? 0 }));
+  const after = [...pushes, ...hits].sort((a, b) => a.t - b.t);
+  const seen = new Set();
+  const out = [];
+  for (const m of run.frameMessages ?? []) {
+    if (!isEventMessage(m)) continue;
+    const k = `${m.origin}|${m.name}|${m.step}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const later = after.filter((x) => x.t >= m.t);
+    const exact = later.find((x) => same(x.name, m.name));
+    const near = later.find((x) => x.t - m.t <= RELAY_WINDOW_MS);
+    const hit = exact ?? near;
+    out.push({
+      origin: m.origin, party: m.party, name: m.name, keys: m.keys ?? [], step: m.step, t: m.t,
+      outcome: exact ? "relayed" : near ? "followed" : "nothing",
+      ...(hit ? { relay: { kind: hit.kind, name: hit.name, ms: Math.max(0, hit.t - m.t) } } : {}),
+    });
+  }
+  return out;
+}

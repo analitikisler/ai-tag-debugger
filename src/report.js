@@ -6,7 +6,7 @@ import { canonicalEvent, groupFindings, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { buildInventory } from "./inventory.js";
 import { containerRows } from "./containers.js";
-import { widgetSummaries } from "./frames.js";
+import { messageOutcomes, widgetSummaries } from "./frames.js";
 import { computeMetrics } from "./metrics.js";
 import { historySummaryLines, sparkline } from "./history.js";
 import { cardIds } from "./html/lib.js";
@@ -404,6 +404,22 @@ export function scriptCell(c, r) {
   return [r.version && c.version(r.version), r.bytes && c.size(r.bytes), r.ms != null && c.loadTime(r.ms)].filter(Boolean).join(", ");
 }
 
+/** The events iframes posted to the page and what the page did next, one row each. Omitted when there were none. */
+function mdMessages(m, runs) {
+  const same = (a, b) => canonicalEvent(a) === canonicalEvent(b);
+  const list = runs.flatMap((r) => messageOutcomes(r, same));
+  if (!list.length) return [];
+  const t = m.ui.messages;
+  const lines = [`## ${m.ui.messagesTitle}`, "", `| ${m.ui.messageCol} | ${m.ui.fromCol} | ${m.ui.outcomeCol} |`, "|---|---|---|"];
+  for (const x of list.slice(0, MD_INVENTORY_ROWS)) {
+    const what = x.outcome === "nothing" ? t.nothing : t[x.outcome](x.relay.kind, x.relay.name, x.relay.ms);
+    lines.push(`| ${mdText(x.name)} | ${mdText(x.origin)} (${m.ui.party[x.party === "site" ? "first" : "third"]}) | ${mdText(what)} |`);
+  }
+  if (list.length > MD_INVENTORY_ROWS) lines.push("", m.ui.md.moreIn(list.length - MD_INVENTORY_ROWS, "report.html"));
+  lines.push("");
+  return lines;
+}
+
 /** The embedded widgets, one row each: where they were embedded, their tracking and their own dataLayer events. Omitted when none. */
 function mdWidgets(m, runs) {
   const widgets = widgetSummaries(runs, (a, b) => canonicalEvent(a) === canonicalEvent(b));
@@ -489,6 +505,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   lines.push(...mdInventory(m, runs));
   lines.push(...mdContainers(m, runs));
   lines.push(...mdWidgets(m, runs));
+  lines.push(...mdMessages(m, runs));
   // A report with its own name or logo carries no Analitik İşler credit; the ai tag debugger one stays.
   if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
   else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");

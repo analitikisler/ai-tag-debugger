@@ -5,7 +5,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders, PROVIDERS } from "./parsers.js";
-import { redactBody, redactParams, redactPush, redactUrl } from "./redact.js";
+import { redactBody, redactParams, redactPush, redactUrl, siteOf } from "./redact.js";
 import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
@@ -36,7 +36,7 @@ export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk
 // Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
-const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500 };
+const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500, frameMessages: 1000 };
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
@@ -111,6 +111,33 @@ const CONTAINER_HOOK = `
   } catch {}
 `;
 
+// Runs inside INIT_SCRIPT, in the page itself only: records each message an iframe posts to the page, through
+// window.__atdMessage. Only a name and the field names are kept, never the values, since a form iframe's message
+// can carry what the visitor typed. A message with nothing that reads as a name is not reported.
+const MESSAGE_HOOK = `
+  if (window === window.top) {
+    const nameKeys = ["event", "eventName", "event_name", "type", "action", "name", "message"];
+    const summarize = (data) => {
+      let d = data;
+      if (typeof d === "string") {
+        try { d = JSON.parse(d); } catch {
+          return d.length <= 80 && /^[\\w.:\\- ]+$/.test(d) ? { name: d, keys: [] } : null;
+        }
+      }
+      if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+      const key = nameKeys.find((k) => typeof d[k] === "string" && d[k] && d[k].length <= 80);
+      return key ? { name: d[key], nameKey: key, keys: Object.keys(d).slice(0, 20) } : null;
+    };
+    addEventListener("message", (e) => {
+      try {
+        if (e.source === window || !window.__atdMessage) return;
+        const info = summarize(e.data);
+        if (info) window.__atdMessage({ origin: String(e.origin), ...info });
+      } catch {}
+    }, true);
+  }
+`;
+
 const INIT_SCRIPT = `(() => {
   const record = (entry, layer = "dataLayer") => {
     let value = entry;
@@ -172,6 +199,7 @@ const INIT_SCRIPT = `(() => {
   };
   watch("dataLayer");
 ${CONTAINER_HOOK}
+${MESSAGE_HOOK}
 })();`;
 
 // Labels the interactive elements of one frame with numeric refs, starting at
@@ -549,6 +577,7 @@ export class AuditSession {
     this.dataLayerLog = [];
     this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
     this.containerScripts = []; // each container script's answer: status, version, size and load time
+    this.frameMessages = []; // each named message an iframe posted to the page: origin, name and field names, never values
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.landing = null; // the first page: { step, requested, chain, final }
@@ -595,6 +624,7 @@ export class AuditSession {
       this.lastTrackingAt = Date.now();
       this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
+    await this.context.exposeBinding("__atdMessage", (source, m) => this.recordMessage(m, source?.frame));
     await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
@@ -871,6 +901,27 @@ export class AuditSession {
       ...(body ? { bytes: body.length } : {}),
       ...(sizes?.responseBodySize > 0 ? { transferBytes: sizes.responseBodySize } : {}),
       ...(ms !== null ? { ms } : {}),
+    });
+  }
+
+  /**
+   * A message an iframe posted to the page: the iframe's origin, whether it is on the site's own site, the name the
+   * message carries and the names of its fields. The page's main frame reports it; values never leave the page.
+   */
+  recordMessage(m, frame) {
+    if (!m || (frame && frame !== this.page?.mainFrame())) return;
+    let party = "third";
+    try {
+      party = siteOf(new URL(m.origin).hostname) === siteOf(new URL(this.page.url()).hostname) ? "site" : "third";
+    } catch { /* an opaque origin ("null"): a sandboxed iframe, someone else's */ }
+    this.record("frameMessages", {
+      origin: String(m.origin).slice(0, 200),
+      party,
+      name: String(m.name ?? "").slice(0, 80),
+      ...(m.nameKey ? { nameKey: String(m.nameKey).slice(0, 20) } : {}),
+      keys: (Array.isArray(m.keys) ? m.keys : []).slice(0, 20).map((k) => String(k).slice(0, 40)),
+      step: this.currentStep,
+      t: Date.now(),
     });
   }
 
