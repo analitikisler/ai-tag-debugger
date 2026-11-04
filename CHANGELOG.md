@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.3 (2026-11-04)
+
+- Runs can report a finding 0.22.2 did not on the same site (`widget_events_unshared`). A baseline written with 0.22.2 can then list new entries; `--update-baseline` rewrites it.
+- New **Embedded widgets** card under the inventory and a table in `report.md`: per third-party widget (a booking, chat or payment widget, a video), the pages it was embedded in, the containers it loaded, the tracking it sent to its own accounts and to the site's, the events and consent commands in its own dataLayer, and the events it pushed that never reached the site's accounts.
+- New check `widget_events_unshared` (info): a widget pushed events to its own dataLayer, such as a completed booking, that none of its hits to the site's accounts carried. The page's tags can't read a widget's dataLayer, so those conversions can be missing from the site's analytics and ad accounts.
+- MCP: the new `get_widgets` tool lists the embedded widgets an open audit's pages had so far. `finish_audit` and `run_audit` end with them, `get_report` returns them with `part: "widgets"`, and the JSON timeline lists a widget's dataLayer events per step under `widget_pushes`.
+
 ## 0.22.2 (2026-11-04)
 
 - Runs can report a finding 0.22.1 did not on the same site (`container_failed`). A baseline written with 0.22.1 can then list new entries; `--update-baseline` rewrites it.
