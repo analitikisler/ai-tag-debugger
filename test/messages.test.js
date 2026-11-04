@@ -115,6 +115,10 @@ test("each reaction of the page answers one message, whatever order the iframes 
   // And the other way round: the widget's message after everything the page did.
   const later = { ...widget, t: 400 };
   assert.deepEqual(outcomes({ frameMessages: [form[0], form[2], later], dataLayerLog: [form[1], form[3]] }), expected);
+  // A message, the page's push answering it and the next message often share a millisecond: the recording order decides.
+  const tie = (seq, x) => ({ ...x, t: 500, seq });
+  const sameMs = { frameMessages: [tie(1, form[0]), tie(3, form[2])], dataLayerLog: [tie(2, form[1]), tie(4, form[3])] };
+  assert.deepEqual(outcomes(sameMs), ["form_submitted followed generate_lead", "sign_up relayed sign_up"]);
   // A hit right after a relayed push is a second effect of the same message, not an answer to an earlier one.
   const hitAfter = { frameMessages: [widget, form[2]], dataLayerLog: [form[3]], hits: [{ platform: "ga4", name: "sign_up_hit", t: 350 }] };
   assert.deepEqual(outcomes(hitAfter), ["booking_complete nothing", "sign_up relayed sign_up"]);

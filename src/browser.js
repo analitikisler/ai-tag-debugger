@@ -578,6 +578,9 @@ export class AuditSession {
     this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
     this.containerScripts = []; // each container script's answer: status, version, size and load time
     this.frameMessages = []; // each named message an iframe posted to the page: origin, name and field names, never values
+    // The order hits, dataLayer pushes and iframe messages were recorded in. Several often share a millisecond, and
+    // telling which came first matters: a page's push answers the message just before it (see messageOutcomes).
+    this.seq = 0;
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.landing = null; // the first page: { step, requested, chain, final }
@@ -622,7 +625,7 @@ export class AuditSession {
       const frame = frameInfo(source?.frame);
       if (frame) entry = { ...entry, frame };
       this.lastTrackingAt = Date.now();
-      this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
+      this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now(), seq: ++this.seq });
     });
     await this.context.exposeBinding("__atdMessage", (source, m) => this.recordMessage(m, source?.frame));
     await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
@@ -656,7 +659,7 @@ export class AuditSession {
       const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now(), ...(frame ? { frame } : {}) };
+        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -922,6 +925,7 @@ export class AuditSession {
       keys: (Array.isArray(m.keys) ? m.keys : []).slice(0, 20).map((k) => String(k).slice(0, 40)),
       step: this.currentStep,
       t: Date.now(),
+      seq: ++this.seq,
     });
   }
 
