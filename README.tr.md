@@ -309,6 +309,26 @@ Kontrol edilen plan sitenin ilk planı değilse, rapor başlığı onu bir önce
 
 Her raporda ayrıca bir **etiket envanteri** bulunur: sitenin istek gönderdiği her sağlayıcı; istekleri sitenin kendi alan adına gittiyse birinci taraf, sağlayıcıya gittiyse üçüncü taraf, ikisine de gittiyse ikisi olarak işaretlenir. Sağlayıcının görüldüğü sayfa sayısını ve ona bağlı çerezleri gösterir. Hiçbir sağlayıcıya ait olmayan çerezler ayrıca birinci ya da üçüncü taraf olarak listelenir. Yalnızca çerez adları kaydedilir, değerleri asla; kopyalanmayıp türetilen iki istisna dışında: `_ga`'nın tuttuğu GA4 istemci kimliği (GA4 istekleri onu zaten taşır) ve `_gcl_aw` ile `_fbc`'nin açılış sayfasının açıldığı tıklama kimliklerini tutup tutmadığı. Her adım ayrıca eklediği, değiştirdiği ya da sildiği çerezleri adlarıyla, **Yolculuklar** altındaki **Çerezler** sekmesinde not eder. Envanter `report.html` içindeki **Envanter** bölümünde, `report.md` içinde ise bir tablo olarak yer alır.
 
+### Google container'ları
+
+Envanterin altında **Google container'ları**, sayfaların yüklediği her GTM container'ını (`gtm.js`) ve Google etiketini (`gtag/js`) ve her birinin sayfaya nasıl geldiğini listeler. Tarayıcı her container betiğini eklendiği anda not eder ve onu bir betik eklediyse o anda hangi betiklerin çalıştığını kaydeder; böylece kaynak ağ isteklerinden tahmin edilmez, sayfanın kendisinden okunur:
+
+| Kaynak | Anlamı |
+|---|---|
+| Sayfanın HTML'indeki bir script etiketi | `gtag.js` snippet'i ya da doğrudan eklenmiş `gtm.js` |
+| Sayfadaki satır içi kod | GTM snippet'i ya da elle yazılmış bir yükleyici |
+| Sayfadaki başka bir betik | Bir onay platformu, sitenin paketi ya da başka bir etiket yöneticisi; adresi verilir |
+| GTM-… içindeki bir Özel HTML etiketi | O container'daki bir Özel HTML etiketi ekledi |
+| GTM-… içindeki bir Google etiketi | O container'daki bir Google etiketi ya da şablonu, GTM'in `load_google_tags` API'siyle |
+| GTM-… kendisi | Bir GTM container'ı başka birini yükledi: bir Zone ya da etiket şablonu |
+| Bir `gtag('config')` komutu | Sayfa hedefi yapılandırdığı için Google etiketi onu yükledi |
+| config olmadan bir olayın `send_to` değeri | Google etiketi hedefi yalnızca ona bir olay gönderildiği için yükledi |
+| Google etiketinin bir hedefi | Google etiketi onu sayfada bir komut olmadan yükledi, örneğin bağlı bir hedef |
+
+Her satır ayrıca container'ın okuduğu dataLayer'ı (`l=`), Google'dan mı yoksa sitenin kendi alan adından mı (Google etiket ağ geçidi ya da bir sunucu container'ı) geldiğini, snippet bir GTM ortamı adlandırıyorsa onu ve yüklendiği sayfaları verir. Başka adlı bir dataLayer okuyan container'ın push'ları da o adla işaretlenerek kaydedilir. `report.md` aynı tabloyu içerir. MCP'de adım sonuçları ve `get_step` her adımın yüklediği container'ları listeler, `get_containers` denetim açıkken hepsini listeler, `finish_audit` ve `run_audit` sonuçları onlarla biter, `get_report` onları `part: "containers"` ile döndürür ve JSON zaman akışı onları adım adım taşır. `capture.json` yüklemeleri `containerLoads` altında saklar. Ortam belirteci (`gtm_auth`) ve sayfanın sorgu dizesi asla saklanmaz.
+
+Dört kontrol bunu okur: aynı sayfaya birden fazla kez yüklenen bir container için `container_duplicate` (uyarı), Live yerine yüklenen bir GTM ortamı (`gtm_preview`, `gtm_auth`) için `container_environment` (uyarı), aynı sayfada farklı dataLayer'ları okuyan container'lar için `datalayer_split` (bilgi) ve kendisi için `gtag('config')` olmadan yalnızca bir olayın `send_to` değeriyle yüklenen bir hedef için `container_send_to_only` (bilgi).
+
 ### Klasör yapısı ve plan kimlikleri
 
 Planlar ve çalıştırmalar, aracı çalıştırdığınız klasördeki `aitd/` içinde tutulur:
@@ -604,7 +624,7 @@ jq -r '.verdict.status + " " + (.score | tostring)' aitd/example.com/runs/*/summ
   - **Yolculuklar**: her seferinde bir yolculuk ve ekran. Solda sayfalara göre adlandırılmış ("Ana sayfayı aç", "Sepete ekle") ve sayfaya göre gruplanmış adımlar, her adımın ürettiği isteklerle; sağda seçili adım, **İstekler**, **Data Layer** ve **Ağ** sekmeleriyle. Her istek event'ini, temel parametrelerini ve çerez onayı durumunu gösterir; çözülmüş parametrelere, ürün kartlarına ve ham isteğe açılır. Toplu bir GA4 isteği içindeki her event'i gösterir. Sorunlu ilk adımda açılır.
   - **Onay**: her platform için bir satır: seçimden önce, kabulden sonra ve retten sonra ne aldığı; Consent Mode varsayılanı ve güncellemeleri zamanlamalarıyla; ve [onay senaryoları](#onay-senaryoları) tablosu.
   - **Kapsam**: planlanan her event'in her yolculukta gönderilip gönderilmediği, hâlâ ihtiyaç duyduğu parametrelerle; dönüşüm bütünlüğü; ve `--against` ile [Plan ve site](#plan-ve-site) kovaları.
-  - **Envanter**: [etiket envanteri](#etiket-envanteri), platform başına bir satır; sunucularına, sayfalarına ve çerezlerine açılır.
+  - **Envanter**: [etiket envanteri](#etiket-envanteri), platform başına bir satır; sunucularına, sayfalarına ve çerezlerine açılır; ayrıca her birinin sayfaya nasıl geldiğiyle [Google container'ları](#google-containerları).
   - **Çalıştırma**: çalıştırmanın künyesi (site, sürüm, yapay zekâ sağlayıcısı ve modeli, plan, yolculuklar, ekranlar, platformlar, süreler, dosyalar) ve sitenin önceki çalıştırmaları varsa **Eğilim**.
 
   Özet dışında her kart kapalı başlar; her bölümde Tümünü aç ve Tümünü kapat düğmeleri vardır. Sayfada şerit, filtreler, sekmeler ve derin bağlantılar için, sayfanın Content Security Policy'sinde özetiyle izin verilmiş küçük bir betik bulunur; JavaScript olmadan bölümler tek bir belge olarak alt alta dizilir, yazdırma düzeni de budur. Klavye: `[` şeridi katlar, `1`–`7` bir bölüme atlar. Logolar gömülüdür, bu yüzden internetten hiçbir şey yüklenmez. `--no-branding`, Analitik İşler logosunu ve kredi satırını çıkarır.
@@ -637,7 +657,8 @@ Sunucunun sunduğu araçlar:
 | `get_step` | Önceki bir adımın (`step`) yakaladıklarını `browser_action`'ın gösterdiği gibi yeniden gösterir; geç gelip o adıma eklenen page_view da dahil. |
 | `finish_audit` | Her şeyi ölçümleme planınıza (JSON) ya da `against` olarak verilen kayıtlı bir plana (`latest`, `first`, bir plan kimliği ya da yerel bir sunucuda bir yol) ya da hazır yolculuğun event'lerine karşı kontrol eder; isterseniz yalnızca adını verdiğiniz `events` için, ve zaman akışıyla birlikte tam HTML raporunu yazar. Site denetimden alınır. Sonuç, adım başına bir kayıt içeren kısa bir JSON zaman akışıyla biter: onay durumlarıyla istekler, onay komutları, diğer takip çağrıları, değiştiğinde Google etiketinin onay durumu, değişen çerezler ve kimlikler. |
 | `consent_matrix` | Bir sitenin başlangıç sayfasını her onay seçimi için (seçim yapmadan sonraki sayfa, tümünü kabul, tümünü reddet, yalnızca analitik) bir reklam tıklaması gibi, her seferinde yeni bir tarayıcıda açar; her seçimden sonra hangi etiketlerin gönderdiğini ve [onay matrisini](#onay-senaryoları) döndürür. `campaign` kontrol edilecek kampanya parametrelerini (`start_audit`'teki gibi), `concurrency` aynı anda kaç seçimin çalışacağını alır (varsayılan 2, en fazla 4). Yaklaşık yarım dakika sürer. |
-| `get_report` | Bu sunucunun yazdığı bir raporu, `finish_audit` ya da `run_audit`'in verdiği adla okur: `part` `markdown` (varsayılan, `report.md`), `summary` (`summary.json`) ya da `timeline` (her yolculuğun JSON zaman akışı). Yalnızca bu sunucunun kendi raporları, HTTP üzerinden de. |
+| `get_containers` | Açık denetimin sayfalarının şimdiye kadar yüklediği her GTM container'ını ve Google etiketini, her birinin sayfaya nasıl geldiğiyle ([Google container'ları](#google-containerları)), dataLayer'ı, sunucusu, GTM ortamı ve yüklendiği adımla birlikte metin ve JSON olarak listeler. |
+| `get_report` | Bu sunucunun yazdığı bir raporu, `finish_audit` ya da `run_audit`'in verdiği adla okur: `part` `markdown` (varsayılan, `report.md`), `summary` (`summary.json`), `timeline` (her yolculuğun JSON zaman akışı; her adımın yüklediği container'larla) ya da `containers` (sayfaya nasıl geldiğiyle her Google container'ı, JSON olarak). Yalnızca bu sunucunun kendi raporları, HTTP üzerinden de. |
 | `run_audit` | Bir ayar dosyasını baştan sona çalıştırır. `against` ile çalıştırmayı kayıtlı bir plana karşı kontrol eder; ayar dosyasında yolculuk yoksa, plandan türetilen yolculukları gezer. `concurrency` o kadar yolculuğu aynı anda, her birini kendi tarayıcısında çalıştırır (varsayılan 1); `baseline`, `--update-baseline` ile yazılmış kabul edilen bulgular dosyasını adlandırır (varsayılan: ayar dosyasındaki `baseline`; bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin)). Dosya yolları yalnızca yerelde çalışır. |
 
 `against`, CLI'deki `--against` ile aynı değerleri alır. HTTP üzerinden yalnızca `latest`, `first` ya da bir plan kimliği kabul edilir, asla bir yol değil. Planlar, `aitd plan --site <url>` ya da `make_plan` ile kaydedilmiş olanlardır. Neyin takip edileceğini öğrenmek için plan, sitenin ne gönderdiğini öğrenmek için denetim isteyin.

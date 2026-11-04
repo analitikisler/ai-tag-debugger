@@ -10,6 +10,7 @@ import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
+import { callersOf, containerOf } from "./containers.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -34,7 +35,7 @@ export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk
 // Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
-const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000 };
+const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500 };
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
@@ -60,8 +61,57 @@ const hostOf = (url) => {
   }
 };
 
+// Runs inside INIT_SCRIPT: records each Google container script (gtm.js, gtag/js) the page adds, through
+// window.__atdLoad, with how it got there. One set by a script carries that moment's call stack, whose script
+// addresses tell who asked for it (see src/containers.js); one the HTML parser inserted never passes through
+// the setters, so a MutationObserver reports it. A container reading another dataLayer gets it watched.
+const CONTAINER_HOOK = `
+  const docUrl = location.href;
+  const doc = Math.random().toString(36).slice(2, 10);
+  const isContainer = (src) => /\\/(gtm\\.js|gtag\\/js)\\?/.test(String(src)) && /[?&]id=/.test(String(src));
+  const seen = new WeakSet();
+  const report = (el, src, how) => {
+    try {
+      const abs = new URL(String(src), document.baseURI).href;
+      if (!isContainer(abs) || !window.__atdLoad) return;
+      const layer = new URL(abs).searchParams.get("l") || "dataLayer";
+      watch(layer);
+      let frames = [];
+      if (how === "script") {
+        const limit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 50;
+        const stack = String(new Error().stack || "");
+        Error.stackTraceLimit = limit;
+        // The first two frames are report() and the setter, both from this script; injected inline code
+        // (a Custom HTML tag) has no address and shows as <anonymous>.
+        frames = stack.split("\\n").filter((line) => /^\\s+at /.test(line)).slice(2)
+          .map((line) => (line.match(/(https?:\\/\\/[^\\s()]+?):\\d+:\\d+/) || [])[1] || (/<anonymous>/.test(line) ? "inline" : null))
+          .filter(Boolean);
+      }
+      window.__atdLoad({ src: abs, how, frames, documentUrl: docUrl, page: location.href, doc });
+    } catch {}
+  };
+  try {
+    const desc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
+    Object.defineProperty(HTMLScriptElement.prototype, "src", {
+      ...desc,
+      set(v) { if (!seen.has(this)) { seen.add(this); report(this, v, "script"); } return desc.set.call(this, v); },
+    });
+    const setAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, v) {
+      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === "src" && !seen.has(this)) { seen.add(this); report(this, v, "script"); }
+      return setAttribute.call(this, name, v);
+    };
+    new MutationObserver((list) => {
+      for (const m of list) for (const n of m.addedNodes) {
+        if (n instanceof HTMLScriptElement && n.src && !seen.has(n)) { seen.add(n); report(n, n.src, "parser"); }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  } catch {}
+`;
+
 const INIT_SCRIPT = `(() => {
-  const record = (entry) => {
+  const record = (entry, layer = "dataLayer") => {
     let value = entry;
     try {
       // gtag() pushes an arguments object; store it as a plain array.
@@ -95,22 +145,32 @@ const INIT_SCRIPT = `(() => {
       };
       value = JSON.parse(JSON.stringify(copy(value, [])));
     } catch { value = String(entry); }
-    if (window.__atdRecord) window.__atdRecord({ url: location.href, value });
+    if (window.__atdRecord) window.__atdRecord({ url: location.href, value, ...(layer === "dataLayer" ? {} : { layer }) });
   };
-  const wrap = (dl) => {
-    if (!dl || dl.__atdWrapped) return dl;
-    dl.forEach(record);
+  const wrap = (dl, layer) => {
+    if (!dl || dl.__atdWrapped || typeof dl.push !== "function") return dl;
+    dl.forEach((e) => record(e, layer));
     const push = dl.push.bind(dl);
-    dl.push = (...items) => { items.forEach(record); return push(...items); };
+    dl.push = (...items) => { items.forEach((e) => record(e, layer)); return push(...items); };
     dl.__atdWrapped = true;
     return dl;
   };
-  let current = wrap(window.dataLayer || []);
-  Object.defineProperty(window, "dataLayer", {
-    configurable: true,
-    get: () => current,
-    set: (v) => { current = wrap(v); },
-  });
+  const watched = new Set();
+  // A container can read a dataLayer of another name (gtm.js?l=myDataLayer); it is watched once one is seen.
+  const watch = (layer) => {
+    if (watched.has(layer) || !/^[A-Za-z_$][\\w$]*$/.test(layer)) return;
+    watched.add(layer);
+    try {
+      let current = layer === "dataLayer" ? wrap(window[layer] || [], layer) : wrap(window[layer], layer);
+      Object.defineProperty(window, layer, {
+        configurable: true,
+        get: () => current,
+        set: (v) => { current = wrap(v, layer); },
+      });
+    } catch { /* a property the page made unconfigurable */ }
+  };
+  watch("dataLayer");
+${CONTAINER_HOOK}
 })();`;
 
 // Labels the interactive elements of one frame with numeric refs, starting at
@@ -486,6 +546,7 @@ export class AuditSession {
     this.refusedScripts = new Map(); // step -> how many of the page's scripts were refused for coming back as HTML
     this.errors = [];
     this.dataLayerLog = [];
+    this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
     this.network = [];
     this.providers = resolveProviders(this.opts.providers);
     this.landing = null; // the first page: { step, requested, chain, final }
@@ -530,6 +591,7 @@ export class AuditSession {
       this.lastTrackingAt = Date.now();
       this.record("dataLayerLog", { ...this.redactEntry(entry), step: this.currentStep, t: Date.now() });
     });
+    await this.context.exposeBinding("__atdLoad", (_source, entry) => this.recordLoad(entry));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
     this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
@@ -754,6 +816,25 @@ export class AuditSession {
     }
     this.bodyBytes += body.length;
     return { postData: this.opts.keepBodies ? body : redactBody(body).text };
+  }
+
+  /**
+   * A container script the page added: its ID, dataLayer and host, whether the HTML parser inserted it or a
+   * script did and, for a script, the callers on the stack. Only addresses without their query are kept, so
+   * the environment token (gtm_auth) and user data in a page's query string never reach the capture.
+   */
+  recordLoad(entry) {
+    const container = containerOf(entry?.src);
+    if (!container) return;
+    this.record("containerLoads", {
+      ...container,
+      how: entry.how === "parser" ? "parser" : "script",
+      ...(entry.how === "parser" ? {} : { callers: callersOf(entry.frames, entry.documentUrl) }),
+      page: pagePath(entry.page),
+      doc: String(entry.doc ?? "").slice(0, 16),
+      step: this.currentStep,
+      t: Date.now(),
+    });
   }
 
   /** Adds an entry to one of the logs, up to its limit. Returns false once the limit is reached. */

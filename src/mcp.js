@@ -33,6 +33,7 @@ import { decodeGcd, DEFAULT_PROVIDERS, googleConsent, isCollectionEndpoint, pars
 import { hitParams } from "./hit-params.js";
 import { CAMPAIGN_PARAMS, campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { cmpFacts } from "./cmp.js";
+import { containerRows, loadSources } from "./containers.js";
 import { consentMatrixMarkdown, consentTable, runConsentScenarios } from "./consent.js";
 import { expectEvents, filterFindings, JOURNEY_PRESETS, onlyEvents, presetFor, withPresetEvents } from "./journeys.js";
 
@@ -102,13 +103,15 @@ function describeHit(h, steps, index) {
 
 /** A consent command in full, as key=value; any other push as JSON, cut, with its page address fields whole. */
 function describePush(p) {
+  // Pushes to a dataLayer of another name (a container's l=) say which.
+  const layer = p.layer ? `[${p.layer}] ` : "";
   if (isConsentCommand(p, "default") || isConsentCommand(p, "update")) {
     const signals = p.value[2] && typeof p.value[2] === "object" ? Object.entries(p.value[2]).map(([k, v]) => `${k}=${show(v)}`).join(" ") : show(p.value[2]);
-    return `- consent ${p.value[1]}: ${signals}`;
+    return `- ${layer}consent ${p.value[1]}: ${signals}`;
   }
   const json = JSON.stringify(p.value) ?? String(p.value);
   const whole = json.length > PUSH_LIMIT ? wholeFieldsIn(p.value) : [];
-  return `- ${cut(json, PUSH_LIMIT)}${whole.length ? ` (${whole.map(([k, v]) => `${k}=${v}`).join(", ")})` : ""}`;
+  return `- ${layer}${cut(json, PUSH_LIMIT)}${whole.length ? ` (${whole.map(([k, v]) => `${k}=${v}`).join(", ")})` : ""}`;
 }
 
 /** A call to a tracking endpoint that carries no event the tool reads, such as a Consent Mode ping, with its consent. */
@@ -150,6 +153,13 @@ function cookieLines(session, step) {
   return lines;
 }
 
+/** One container load in words: its ID, what inserted it, its dataLayer and where it came from. */
+function describeLoad(l) {
+  const c = messages("en").ui.containers;
+  const extra = [l.layer !== "dataLayer" && `dataLayer ${l.layer}`, l.served === "site" && `served from ${l.host}`, l.environment && c.environment(l.environment)].filter(Boolean);
+  return `  ${l.id} (${c.script[l.script]}): ${c.kinds[l.kind](l.by)}${extra.length ? `; ${extra.join(", ")}` : ""}`;
+}
+
 export function stepCapture(audit, step) {
   const { session } = audit;
   const hits = session.hits.filter((h) => h.step === step);
@@ -168,6 +178,8 @@ export function stepCapture(audit, step) {
   if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
   if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
   if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
+  const loads = loadSources({ containerLoads: (session.containerLoads ?? []).filter((l) => l.step === step), dataLayerLog: session.dataLayerLog });
+  if (loads.length) lines.push("Google containers loaded:", ...loads.map(describeLoad));
   lines.push(...cookieLines(session, step));
   const tag = session.steps[step]?.tagConsent;
   if (tag) {
@@ -214,6 +226,31 @@ export function hitDetail(audit, step, index) {
  * hits it sent with their consent, its consent commands and other tracking calls, the Google tag's consent when it
  * changed, and the cookies and ids that changed.
  */
+/** A container load or row as compact JSON: the ID, its source, and the dataLayer, host and environment when they are not the usual ones. */
+function containerJson(l) {
+  return {
+    id: l.id, source: l.kind, ...(l.by ? { by: l.by } : {}),
+    ...(l.layer !== "dataLayer" ? { data_layer: l.layer } : {}),
+    ...(l.served === "site" ? { served_from: l.host } : {}),
+    ...(l.environment ? { gtm_environment: l.environment } : {}),
+    ...(l.pages ? { pages: l.pages } : {}),
+  };
+}
+
+/** The Google containers of the runs and how each reached the page, as lines for a tool result; [] when none loaded. */
+export function containerLines(runs) {
+  const rows = containerRows(runs);
+  if (!rows.length) return [];
+  const c = messages("en").ui.containers;
+  return [
+    "Google containers (how each reached the page):",
+    ...rows.map((r) => {
+      const extra = [r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
+      return `  ${r.id} (${c.script[r.script]}): ${c.kinds[r.kind](r.by)}; ${extra.join(", ")}`;
+    }),
+  ];
+}
+
 export function timelineOf(run) {
   let lastIds = null;
   return (run.steps ?? []).map((st) => {
@@ -230,6 +267,8 @@ export function timelineOf(run) {
     if (st.tagConsent) entry.tag_consent = Object.fromEntries(Object.entries(st.tagConsent.entries).map(([k, e]) => [k, e.update ?? e.default ?? null]));
     const cookies = Object.fromEntries(["added", "changed", "removed"].map((k) => [k, names(k)]).filter(([, list]) => list.length));
     if (Object.keys(cookies).length) entry.cookies = cookies;
+    const loads = loadSources({ containerLoads: (run.containerLoads ?? []).filter((l) => l.step === st.index), dataLayerLog: run.dataLayerLog });
+    if (loads.length) entry.containers = loads.map(containerJson);
     if (st.identity && JSON.stringify(st.identity) !== JSON.stringify(lastIds)) entry.ids = st.identity;
     if (st.identity) lastIds = st.identity;
     return entry;
@@ -467,14 +506,32 @@ export function buildServer(opts) {
   );
 
   server.registerTool(
+    "get_containers",
+    {
+      title: "List the Google containers loaded so far",
+      description:
+        "Returns every GTM container (gtm.js) and Google tag (gtag/js) this audit's pages loaded so far, and how each reached the page: a script tag in the HTML, the inline snippet, another script (named by its address, such as a consent platform), a Custom HTML tag or a Google tag in another GTM container, a container loading another itself (a Zone or a tag template), a gtag('config') command, an event's send_to with no config, or a destination of the Google tag. Also the dataLayer each reads, whether it was served from the site's own domain, the GTM environment when one is named, and the step it loaded at. Duplicates, GTM environments and split dataLayers are flagged by finish_audit.",
+      inputSchema: { audit_id: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ audit_id }) => {
+      const { session } = getAudit(audit_id);
+      const loads = loadSources({ containerLoads: session.containerLoads ?? [], dataLayerLog: session.dataLayerLog });
+      if (!loads.length) return text("No GTM container or Google tag script has loaded on this audit's pages yet.");
+      const lines = loads.map((l) => `Step ${l.step} ("${session.steps[l.step]?.label ?? ""}"), ${l.page ?? "?"}:\n${describeLoad(l)}`);
+      return text(`${loads.length} container ${loads.length === 1 ? "load" : "loads"}:\n${lines.join("\n")}\n\nAs JSON: ${JSON.stringify(loads.map((l) => ({ step: l.step, page: l.page, ...containerJson(l) })))}`);
+    },
+  );
+
+  server.registerTool(
     "get_report",
     {
       title: "Read a report this server wrote",
       description:
-        "Returns a report finish_audit or run_audit wrote, so it can be read without access to the computer running this server. part markdown (default): report.md, the verdict, findings, consent and journeys in about 120 lines. summary: summary.json, the counts, journeys and findings as JSON. timeline: one JSON entry per step of each journey (hits with their consent, consent commands, the Google tag's consent, cookies and ids).",
+        "Returns a report finish_audit or run_audit wrote, so it can be read without access to the computer running this server. part markdown (default): report.md, the verdict, findings, consent and journeys in about 120 lines. summary: summary.json, the counts, journeys and findings as JSON. timeline: one JSON entry per step of each journey (hits with their consent, consent commands, the Google tag's consent, cookies and ids, the Google containers loaded). containers: every GTM container and Google tag the journeys loaded as JSON, with how each reached the page (source html, inline, script, custom_html, google_tag, nested, config, send_to or destination, and by: the container or script that loaded it), its dataLayer, host, GTM environment and pages.",
       inputSchema: {
         report: z.string().describe("The report name finish_audit or run_audit gave."),
-        part: z.enum(["markdown", "summary", "timeline"]).optional().describe("Default markdown."),
+        part: z.enum(["markdown", "summary", "timeline", "containers"]).optional().describe("Default markdown."),
       },
       annotations: { readOnlyHint: true },
     },
@@ -485,6 +542,7 @@ export function buildServer(opts) {
         if (part === "markdown") return text(await readFile(path.join(dir, "report.md"), "utf8"));
         if (part === "summary") return text(await readFile(path.join(dir, "summary.json"), "utf8"));
         const capture = JSON.parse(await readFile(path.join(dir, "capture.json"), "utf8"));
+        if (part === "containers") return text(JSON.stringify(containerRows(capture.runs ?? []).map(containerJson)));
         return text(JSON.stringify((capture.runs ?? []).map((r) => ({ journey: r.journeyId, viewport: r.viewport, steps: timelineOf(r) }))));
       } catch (err) {
         return fail(`Could not read the report: ${err.message}`);
@@ -594,13 +652,14 @@ export function buildServer(opts) {
         `${run.hits.length} tracking hits, ${run.dataLayerLog.length} dataLayer pushes and ${run.network.length} analytics or ad network calls captured over ${run.steps.length} steps.`,
         skippedLine(run),
         ...((platform) => (platform ? [`Consent platform: ${platform.vendor}. ${platform.facts.join(" ")}`] : []))(cmpFacts(messages("en"), [run])),
+        ...containerLines([run]),
         opts.allowFiles
           ? `Full report with the event timeline: ${reportPath}`
           : opts.reportsUrl
             ? `Full report with the event timeline: ${opts.reportsUrl}/${path.basename(outDir)}/report.html`
             : "",
         "",
-        `To read the report here: get_report with report "${path.basename(outDir)}" (markdown, summary or timeline).`,
+        `To read the report here: get_report with report "${path.basename(outDir)}" (markdown, summary, timeline or containers).`,
         "Explain each problem to the user with its likely cause and fix.",
       ];
       return {
@@ -746,8 +805,9 @@ export function buildServer(opts) {
             ...(result.baseline ? [`${result.baseline.accepted} accepted from the baseline${result.baseline.partial ? `, ${result.baseline.partial} accepted in some places only (still counted)` : ""}, ${result.baseline.stale.length} stale baseline entries`] : []),
             ...result.runs.map((r) => `${r.journeyId} (${r.viewport}): ${r.completed ? "completed" : "not completed"}, ${r.note}`),
             ...grouped.map((f) => `- ${m.severity[f.severity]}${f.accepted ? ` (${m.ui.accepted})` : ""}: ${f.detail}`),
+            ...containerLines(result.runs),
             `Report: ${result.reportPath}`,
-            `To read the report here: get_report with report "${path.basename(result.outDir)}" (markdown, summary or timeline).`,
+            `To read the report here: get_report with report "${path.basename(result.outDir)}" (markdown, summary, timeline or containers).`,
           ].join("\n"),
         );
       },
