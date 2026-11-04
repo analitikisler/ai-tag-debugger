@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.7 (2026-11-04)
+
+- Audits can run in your own Google Chrome. Start Chrome with a debugging port and a profile folder for audits (README: Using your own Chrome), then add `--connect http://127.0.0.1:9222` to `aitd run` or `aitd plan`, or set `connect` in the config or on a local MCP server's `start_audit`. Each journey gets a fresh private window in that Chrome, as clean as the tool's own browser, which closes when the journey ends while Chrome keeps running. Capture, the answered tracking requests, the host limits and logins work as usual. Only a Chrome on the same computer is accepted, an HTTP MCP server never connects to one, and when no Chrome answers, the message gives the command that starts it.
+
 ## 0.22.6 (2026-11-04)
 
 - Journeys can log in. Set a test account in `AITD_LOGIN_EMAIL` (or `AITD_LOGIN_USERNAME`) and `AITD_LOGIN_PASSWORD`: the model fills login forms with the placeholders `{{login.email}}`, `{{login.username}}` and `{{login.password}}`, and the browser types the real values, only into the audited site's pages, never into a frame from another site. The values are turned back into their placeholders in everything the tool keeps or shows (page views, steps, hits, dataLayer pushes, network calls, saved steps and reports), a password field's value is never read into the page view, and the browser doesn't get them in its environment. Over MCP, `start_audit` says whether a test account is set up.

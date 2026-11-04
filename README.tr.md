@@ -421,6 +421,21 @@ Model bunları hiç görmez. Giriş formlarını `{{login.email}}`, `{{login.use
 
 **Kaydedilmiş bir oturum**, bir insan gerektiren girişler için: bir CAPTCHA, telefona gelen bir kod ya da tek oturum açma (SSO). `aitd login --site https://magazaniz.com` siteyi bir tarayıcı penceresinde açar; elle giriş yapın, terminalde Enter'a basın; oturum (çerezler ve depolama) yalnızca sizin okuyabileceğiniz `aitd/<alan-adı>/session.json` dosyasına kaydedilir. `aitd run … --session saved`, yapılandırmadaki `session_file` ya da yerel bir MCP sunucusunda `start_audit` için `session: "saved"` her yolculuğu giriş yapılmış olarak başlatır. Dosya canlı bir oturum tutar: gizli tutun ve oturum sona erdiğinde yeniden kaydedin.
 
+### Kendi Chrome'unuzu kullanmak
+
+Denetimler normalde aracın kendi Chromium'unda çalışır. Bunun yerine onları kendi Google Chrome'unuzda, bilgisayarınızın kendi ağında izlemek için Chrome'u bir hata ayıklama bağlantı noktası ve denetimlere ayrılmış bir profil klasörüyle başlatın (Chrome günlük profilinizde uzaktan hata ayıklamaya izin vermez; ayrı bir klasör de denetimleri ondan uzak tutar):
+
+```bash
+# macOS
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"
+# Windows
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%USERPROFILE%\aitd-chrome"
+# Linux
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"
+```
+
+Ardından `aitd run` ya da `aitd plan` komutuna `--connect http://127.0.0.1:9222` ekleyin (ya da yapılandırmada `connect`, yerel bir MCP sunucusunda `start_audit` için `connect`). Her yolculuk o Chrome'da aracın kendi tarayıcısı kadar temiz, yeni bir gizli pencere açar; böylece her denetim, kalan çerez ya da onay seçimi olmayan bir ilk ziyarettir. Yolculuk bitince pencere kapanır, Chrome çalışmaya devam eder. Geri kalan her şey her zamanki gibi çalışır: takip istekleri tarayıcının içinde yanıtlanır, sitenin ana makine sınırları geçerlidir ve bir [test hesabı ya da kaydedilmiş oturum](#giriş-yapmak) giriş yapar. Yalnızca aynı bilgisayardaki bir Chrome (`127.0.0.1` ya da `localhost`) kabul edilir ve bir HTTP MCP sunucusu hiçbir zaman ona bağlanmaz.
+
 Ne test edeceğinizden emin değil misiniz? `aitd plan --site https://yoursite.com` bir ölçümleme planı taslağı çıkarır, `--against latest` de siteyi buna göre kontrol eder.
 
 ### API kullanımını düşük tutmak
@@ -515,6 +530,7 @@ Dosyada her bulgu için bir kayıt bulunur: çalıştırmanın eşleştirme yapt
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. Bunlar yoksa `--scripted`, sitenin o yolculuğu son tamamlayan çalıştırmasının adımlarını tekrarlar. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
 | `session_file` | `aitd login` ile kaydedilmiş bir oturum; her yolculuk giriş yapılmış olarak başlar: sitenin kendi oturumu için `"saved"` ya da bir dosya yolu. Bkz. [Giriş yapmak](#giriş-yapmak). |
+| `connect` | Kendi Chrome'unuzun hata ayıklama adresi, örneğin `http://127.0.0.1:9222`: her yolculuk onun yeni bir penceresinde çalışır. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
 | `campaign_checks` | Varsayılan `true`. Her çalıştırma ilk sayfayı bir reklam tıklaması gibi açar (UTM parametreleri, `gclid`, `fbclid` ya da başlangıç adresinde zaten olanlar) ve bunların yönlendirmelerden geçip isteklere ulaştığını denetler. Düz adresi açmak için `false` yapın. |
 | `block_hits` | Varsayılan `true`. Takip isteklerinin gerçek uç noktalarınıza ulaşmasına izin vermek için `false` yapın. |
@@ -569,7 +585,7 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--
          [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <liste>] [--data-dir <dir>]
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <dosya>] [--update-baseline]
-         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>] [--session saved|<dosya>]
+         [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>] [--session saved|<dosya>] [--connect <url>]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live]
@@ -614,6 +630,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--allow-host <ana makine>` | run | Yolculukların ziyaret edebileceği başka bir ana makine (tekrarlanabilir). `allowed_hosts` ile aynıdır. |
 | `--session saved\|<dosya>` | run | Her yolculuğu, `aitd login`'in kaydettiği oturumdan (`saved`) ya da bir oturum dosyasından giriş yapılmış olarak başlatır. `session_file` ile aynı. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `--save <dosya>` | login | `aitd login`'in oturumu nereye kaydedeceği (varsayılan `aitd/<alan-adı>/session.json`). |
+| `--connect <url>` | run, plan | Bir hata ayıklama bağlantı noktasıyla başlatılmış kendi Chrome'unuzda çalıştırır, örneğin `http://127.0.0.1:9222`. `connect` ile aynı. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
 | `--keep-bodies` | run | Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden sakla. |
 | `--no-branding` | plan, run | Logo ve kredi satırını raporlardan ve `plan.html` dosyasından çıkar. |
 | `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | Aşağıdaki MCP bölümüne bakın. |
@@ -683,7 +700,7 @@ Sunucunun sunduğu araçlar:
 |---|---|
 | `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
 | `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
-| `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. `live: true`, takip isteklerini sitenin gerçek hesaplarına geçirir; böylece GA4 Realtime ya da DebugView, Meta Events Manager veya Tag Assistant'ta kontrol edilebilirler. Test trafiği o zaman sitenin raporlarında görünür; sonuçlar ve rapor çalıştırmanın canlı olduğunu söyler. HTTP üzerinden sunucunun bunun için `--allow-live` ile başlatılması gerekir. İlk sayfa bir reklam tıklaması gibi, test kampanya parametreleriyle (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …) açılır; böylece `finish_audit` bunların yönlendirmelerden sağ çıkıp isteklere ulaştığını kontrol eder. `campaign: false` URL'yi olduğu gibi açar, `campaign: {"utm_source": "newsletter", "gclid": "test123"}` ise sizin değerlerinizi kullanır. Sunucunun bilgisayarında ayarlı bir test hesabı yer tutucularıyla kullanılır; `session: "saved"` ise `aitd login`'in kaydettiği oturumdan başlar (yalnızca yerel sunucular); bkz. [Giriş yapmak](#giriş-yapmak). |
+| `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. `live: true`, takip isteklerini sitenin gerçek hesaplarına geçirir; böylece GA4 Realtime ya da DebugView, Meta Events Manager veya Tag Assistant'ta kontrol edilebilirler. Test trafiği o zaman sitenin raporlarında görünür; sonuçlar ve rapor çalıştırmanın canlı olduğunu söyler. HTTP üzerinden sunucunun bunun için `--allow-live` ile başlatılması gerekir. İlk sayfa bir reklam tıklaması gibi, test kampanya parametreleriyle (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …) açılır; böylece `finish_audit` bunların yönlendirmelerden sağ çıkıp isteklere ulaştığını kontrol eder. `campaign: false` URL'yi olduğu gibi açar, `campaign: {"utm_source": "newsletter", "gclid": "test123"}` ise sizin değerlerinizi kullanır. Sunucunun bilgisayarında ayarlı bir test hesabı yer tutucularıyla kullanılır; `session: "saved"` ise `aitd login`'in kaydettiği oturumdan başlar (yalnızca yerel sunucular); bkz. [Giriş yapmak](#giriş-yapmak). `connect` onu kendi Chrome'unuzun yeni bir penceresinde çalıştırır (yalnızca yerel sunucular; bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak)). |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Adım numarasını, sayfayı, o adımın gönderdiği takip isteklerini (her biri bir `[h]` numarası, onay durumu — `gcs`'den, `ad_user_data` ve `ad_personalization` için `gcd`'den — ve GA4'ün onunla gönderdiği kimlik ve işaretlerle: `cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), dataLayer push'larını (Consent Mode komutları `anahtar=değer` olarak eksiksiz, sayfa adresleri hiç kesilmeden) ve event olarak okunmayan çağrıları (ör. `gcs`, `gcd` ve tıklama kimlikleriyle Consent Mode ping'leri: `gclid`, reklam verisi karartma açıksa `gclid=0 (redacted)`, `_gcl_aw`'dan `gclaw`), ayrıca adımın eklediği, değiştirdiği ya da sildiği çerezleri adlarıyla, değiştiğinde de GA4 istemci kimliğini ve `_gcl_aw` ile `_fbc`'nin açılış tıklama kimliklerini tutup tutmadığını döndürür. Sonraki bir bekleme ya da kaydırma sırasında gelen page_view, sayfasını yükleyen adımda gecikmeli olarak işaretlenip gösterilir. Uzun oturumlar en eski sonuçlarını kaybettiği için sayfa görünümü varsayılan olarak kısadır: ekranın üstünde ya da altında en fazla 40 öğe; sayfa metni ya da öğe listesi son görünümden beri değişmediyse yerine bir not. Hepsi için `detail: "full"` verin. |
 | `get_page` | Geçerli sayfayı eksiksiz gösterir: her öğe ve sayfanın tüm metni. |
 | `get_hit` | Bir isteği `step` ve `[h]` numarasıyla eksiksiz gösterir: isteğin taşıdığı her parametre, toplu bir istekteki sırası, nereye gönderildiği ve her onay sinyali için çözümlenmiş `gcd` (varsayılan ve güncelleme). |

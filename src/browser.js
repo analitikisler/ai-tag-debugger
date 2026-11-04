@@ -53,6 +53,36 @@ export const VIEWPORTS = {
 // Runs in the page before any site script: reports every dataLayer push
 // (including gtag consent commands) to Node through an exposed binding, so the
 // log survives page navigations.
+// How to start Chrome for --connect, per system: a debugging port, and a profile folder of its own, which Chrome
+// requires for remote debugging and which keeps the audits away from the everyday profile.
+export const CHROME_START = {
+  darwin: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"`,
+  win32: `"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="%USERPROFILE%\\aitd-chrome"`,
+  linux: `google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/aitd-chrome"`,
+};
+
+/**
+ * Connects to a Chrome the user started with a debugging port. Only a Chrome on this computer: the address must be
+ * a loopback one, so a config or a chat can't point the tool at someone else's browser.
+ */
+export async function connectToChrome(endpoint, { connect = (url) => chromium.connectOverCDP(url, { timeout: 10_000 }), platform = process.platform } = {}) {
+  let u;
+  try {
+    u = new URL(String(endpoint));
+  } catch {
+    throw new Error(`"${endpoint}" is not an address. Use the debugging address Chrome was started with, e.g. http://127.0.0.1:9222`);
+  }
+  if (!["http:", "https:", "ws:", "wss:"].includes(u.protocol) || !["127.0.0.1", "localhost", "[::1]", "::1"].includes(u.hostname)) {
+    throw new Error(`Only a Chrome on this computer can be connected to (127.0.0.1 or localhost), not ${u.host}.`);
+  }
+  try {
+    return await connect(u.href);
+  } catch (err) {
+    if (!/ECONNREFUSED|ECONNRESET|socket hang up|404|retrieving websocket url/i.test(String(err?.message))) throw err;
+    throw new Error(`No Chrome answers at ${u.href}. Start Chrome with a debugging port and a profile folder for audits, then try again:\n  ${CHROME_START[platform] ?? CHROME_START.linux}`);
+  }
+}
+
 /** A page address without its hash, for matching page_location to navigations. */
 const pageKey = (url) => String(url ?? "").split("#")[0];
 /** The host of a URL, or null. */
@@ -623,6 +653,18 @@ export class AuditSession {
     if (this.opts.storageState && !existsSync(this.opts.storageState)) throw new Error(`No saved login session at ${this.opts.storageState}. Save one with: aitd login --site <url>`);
     const device = VIEWPORTS[this.opts.viewport];
     if (!device) throw new Error(`Unknown viewport "${this.opts.viewport}". Use: ${Object.keys(VIEWPORTS).join(", ")}`);
+    if (this.opts.connect) {
+      // The user's own Chrome: only the browser is theirs. The audit gets a fresh private window (a new context) in
+      // it, exactly as clean as a launched browser, and close() closes that window and disconnects, leaving Chrome.
+      if (this.opts.blockPrivate) throw new Error("Connecting to your own Chrome works only from the CLI or a local MCP server, not over HTTP.");
+      if (this.opts.replayHar) throw new Error("A saved site replays in the tool's own browser; leave --connect out.");
+      this.browser = await connectToChrome(this.opts.connect);
+    } else await this.launchBrowser();
+    await this.setUpContext(device);
+  }
+
+  /** Launches the tool's own Chromium, through the egress proxy when private addresses are blocked. */
+  async launchBrowser() {
     const launch = { headless: this.opts.headless, env: browserEnv() };
     if (this.opts.blockPrivate) {
       // Every connection, WebSockets included, goes to an address the proxy checked.
@@ -643,6 +685,10 @@ export class AuditSession {
       await installBrowser();
       this.browser = await chromium.launch(launch);
     }
+  }
+
+  /** The audit's own context (fresh cookies and storage, or a saved session) with the capture hooks and routes. */
+  async setUpContext(device) {
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     // A session saved with `aitd login`: the browser starts logged in, for sites whose login needs a person.
     const session = this.opts.storageState ? { storageState: this.opts.storageState } : {};
