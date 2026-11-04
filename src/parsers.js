@@ -125,6 +125,8 @@ export function parseGa4(url, postData) {
       protocol: protocolOf(merged),
       ...(items.length ? { items } : {}),
       ...(autoEvents.length ? { autoEvents } : {}),
+      // Whether the hit carried the site's user ID (uid), not the ID itself: the login check only needs to know.
+      ...(merged.get("uid") ? { hasUserId: true } : {}),
       ...(user.length ? { userFields: Object.fromEntries(user) } : {}),
       url,
     };

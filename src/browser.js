@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "playwright";
@@ -12,6 +13,7 @@ import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
 import { callersOf, containerOf, containerVersion, isContainerId } from "./containers.js";
 import { frameInfo } from "./frames.js";
+import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginScrubber, scrubDeep } from "./login.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -40,7 +42,7 @@ const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLo
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
-const SECRET_ENV = /(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_KEY|_KEY$|^AWS_|^AZURE_|^GOOGLE_APPLICATION)/i;
+const SECRET_ENV = /(API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_KEY|_KEY$|^AWS_|^AZURE_|^GOOGLE_APPLICATION|^AITD_LOGIN)/i;
 export const browserEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([k]) => !SECRET_ENV.test(k)));
 
 export const VIEWPORTS = {
@@ -224,7 +226,7 @@ function snapshotInPage({ first, limit, textLimit, frameBox, offscreenLimit = nu
     const forLabel = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.innerText : "";
     const img = el.querySelector?.("img[alt], svg title");
     return clean(
-      el.getAttribute("aria-label") || byId || el.innerText || el.value || forLabel || el.getAttribute("placeholder") ||
+      el.getAttribute("aria-label") || byId || el.innerText || (el.type === "password" ? "" : el.value) || forLabel || el.getAttribute("placeholder") ||
         el.getAttribute("title") || (img ? img.getAttribute("alt") || img.textContent : "") || el.getAttribute("name") || "",
     ).slice(0, 80);
   };
@@ -575,6 +577,10 @@ export class AuditSession {
     this.opts = { blockHits: true, headless: true, ...opts };
     this.log = this.opts.log ?? (() => {});
     this.scope = this.opts.site ? hostScope(this.opts.site, this.opts.allowedHosts) : null;
+    // The test account (see src/login.js): typed only where a placeholder asks for it, and scrubbed from everything kept.
+    this.login = this.opts.login !== undefined ? this.opts.login : loginFromEnv();
+    this.scrub = loginScrubber(this.login);
+    this.loginStep = null; // the first step that typed the test account's password
     this.isBlockedAddress = typeof this.opts.blockPrivate === "function" ? this.opts.blockPrivate : isPrivateAddress;
     this.isPrivate = this.opts.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
     this.blocked = null;
@@ -613,6 +619,8 @@ export class AuditSession {
   }
 
   async start() {
+    // Checked before anything launches, so a wrong path leaves no browser behind.
+    if (this.opts.storageState && !existsSync(this.opts.storageState)) throw new Error(`No saved login session at ${this.opts.storageState}. Save one with: aitd login --site <url>`);
     const device = VIEWPORTS[this.opts.viewport];
     if (!device) throw new Error(`Unknown viewport "${this.opts.viewport}". Use: ${Object.keys(VIEWPORTS).join(", ")}`);
     const launch = { headless: this.opts.headless, env: browserEnv() };
@@ -636,7 +644,9 @@ export class AuditSession {
       this.browser = await chromium.launch(launch);
     }
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
-    this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record });
+    // A session saved with `aitd login`: the browser starts logged in, for sites whose login needs a person.
+    const session = this.opts.storageState ? { storageState: this.opts.storageState } : {};
+    this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record, ...session });
     await this.context.exposeBinding("__atdRecord", (source, entry) => {
       const frame = frameInfo(source?.frame);
       if (frame) entry = { ...entry, frame };
@@ -647,7 +657,7 @@ export class AuditSession {
     await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
-    this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: err.message }));
+    this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: this.scrub(err.message) }));
     // A script that comes back as an HTML page (a bot check, or files a new deployment no longer has) is refused.
     this.page.on("console", (msg) => {
       if (msg.type() === "error" && /^Refused to execute script from .*MIME type \('text\/html'\)/.test(msg.text())) this.refusedScripts.set(this.currentStep, (this.refusedScripts.get(this.currentStep) ?? 0) + 1);
@@ -675,7 +685,7 @@ export class AuditSession {
       const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.page.url(), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
+        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.scrub(this.page.url()), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -704,10 +714,10 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
-        pageUrl: this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url,
+        pageUrl: this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url),
         t: Date.now(),
         method: request.method(),
-        url: this.opts.keepBodies ? request.url() : redactUrl(request.url()).url,
+        url: this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url),
         type: request.resourceType(),
         vendor,
         provider: provider.key,
@@ -847,7 +857,16 @@ export class AuditSession {
     return true;
   }
 
-  redactHit({ userFields, ...hit }) {
+  /** A copy with the test account's values turned back into placeholders; the value itself when there is no test account. */
+  keepOut(value) {
+    return this.login ? scrubDeep(value, this.scrub) : value;
+  }
+
+  redactHit(raw) {
+    return this.keepOut(this.redactUserData(raw));
+  }
+
+  redactUserData({ userFields, ...hit }) {
     const found = { fields: [], plain: [] };
     const site = hostOf(hit.params?.page_location) ?? hostOf(this.page.url());
     const url = redactUrl(hit.url, found, site).url;
@@ -861,9 +880,9 @@ export class AuditSession {
   /** A dataLayer entry with user data redacted, and userData: { fields, plain } when there was any. */
   redactEntry(entry) {
     const found = redactPush(entry.value, undefined, hostOf(this.page.url()));
-    if (!found.fields.length) return entry;
+    if (!found.fields.length) return this.keepOut(entry);
     const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
-    return this.opts.keepBodies ? { ...entry, userData } : { ...entry, value: found.value, userData };
+    return this.keepOut(this.opts.keepBodies ? { ...entry, userData } : { ...entry, value: found.value, userData });
   }
 
   /** { postData } for a tracking POST, redacted, within the per-audit budget; { bodyDropped } past it. */
@@ -875,7 +894,7 @@ export class AuditSession {
       return { bodyDropped: true };
     }
     this.bodyBytes += body.length;
-    return { postData: this.opts.keepBodies ? body : redactBody(body).text };
+    return { postData: this.scrub(this.opts.keepBodies ? body : redactBody(body).text) };
   }
 
   /**
@@ -942,7 +961,7 @@ export class AuditSession {
     this.record("frameMessages", {
       origin: String(m.origin).slice(0, 200),
       party,
-      name: String(m.name ?? "").slice(0, 80),
+      name: this.scrub(String(m.name ?? "")).slice(0, 80),
       ...(m.nameKey ? { nameKey: String(m.nameKey).slice(0, 20) } : {}),
       keys: (Array.isArray(m.keys) ? m.keys : []).slice(0, 20).map((k) => String(k).slice(0, 40)),
       step: this.currentStep,
@@ -1099,9 +1118,10 @@ export class AuditSession {
       }
       if (more) lines.push(`(more elements not listed: scroll to bring them on screen, or use text to click something by its visible text)`);
       const note = this.steps[this.currentStep]?.note;
-      return { url: main.url, title: main.title, elements: lines.join("\n"), text: main.text, note };
+      // What the model reads never holds the test account: a username a page shows back reads as its placeholder.
+      return { url: this.scrub(main.url), title: this.scrub(main.title), elements: this.scrub(lines.join("\n")), text: this.scrub(main.text), note };
     } catch (err) {
-      return { url: this.page.url(), title: "", elements: "", text: `(snapshot failed: ${err.message})` };
+      return { url: this.scrub(this.page.url()), title: "", elements: "", text: `(snapshot failed: ${this.scrub(err.message)})` };
     }
   }
 
@@ -1233,10 +1253,13 @@ export class AuditSession {
    * @param {{ action: string, ref?: number, selector?: string, text?: string, value?: string, url?: string, reason?: string, accepts_consent?: boolean, rejects_consent?: boolean }} a
    */
   async act(a) {
-    const error = await this.perform(a);
+    const error = this.scrub(await this.perform(a));
     await this.observe();
     // A scripted replay of this step may fail the same way, which must not end the journey there.
     if (error) this.steps[this.currentStep].error = error;
+    // A saved step keeps placeholders, never the test account (a click's text can be a username the page shows).
+    const step = this.steps[this.currentStep];
+    if (step.replay) step.replay = this.keepOut(step.replay);
     this.steps[this.currentStep].pagePath = pagePath(this.page.url());
     this.steps[this.currentStep].endedAt = Date.now(); // when the step was reported, so a late hit can say how late
     return error;
@@ -1316,7 +1339,20 @@ export class AuditSession {
           } else return `${a.action} needs a ref or the element's visible text.`;
           step.replay = { action: a.action, ...(await replayTarget(a, target)), ...(a.value !== undefined ? { value: a.value } : {}) };
           if (a.action === "click") await this.click(target);
-          else if (a.action === "fill") await target.fill(a.value ?? "", { timeout: 10000 });
+          else if (a.action === "fill" && hasLoginPlaceholder(a.value)) {
+            // The test account is typed only into the audited site's own pages, never a frame from elsewhere.
+            const host = await target.evaluate(() => location.hostname).catch(() => "");
+            if (this.scope && !this.scope.allows(host)) return `The test account is only filled in on ${this.scope.hosts.join(", ")}, not on ${host || "this frame"}.`;
+            let value;
+            try {
+              value = fillLoginValue(a.value, this.login);
+            } catch (err) {
+              if (err.code === "NO_LOGIN") return err.message;
+              throw err;
+            }
+            await target.fill(value, { timeout: 10000 });
+            if (/login\.password/.test(a.value) && this.loginStep === null) this.loginStep = this.currentStep;
+          } else if (a.action === "fill") await target.fill(a.value ?? "", { timeout: 10000 });
           else await target.selectOption(a.value ?? "", { timeout: 10000 });
           break;
         }

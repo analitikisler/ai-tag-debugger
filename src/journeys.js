@@ -39,6 +39,12 @@ export const JOURNEY_PRESETS = {
       { platform: "meta", name: "Lead" },
     ],
   },
+  login: {
+    goal: "Accept cookies, open the login or sign-in page, and log in with the test account: fill {{login.email}} (or {{login.username}} where the site asks for a username) and {{login.password}}, then submit. Stop when the site shows you are logged in.",
+    events: [
+      { platform: "ga4", name: "login" },
+    ],
+  },
   search: {
     goal: "Accept cookies, use the site search to search for a common product or topic, and open the first result.",
     events: [
@@ -52,7 +58,7 @@ export const JOURNEY_PRESETS = {
   },
 };
 
-const ALIASES = { checkout: "purchase", order: "purchase", cart: "add_to_cart", signup: "sign_up", decline: "decline_cookies", reject: "decline_cookies", reject_cookies: "decline_cookies", consent: "decline_cookies", register: "sign_up", registration: "sign_up", contact: "lead", form: "lead" };
+const ALIASES = { signin: "login", sign_in: "login", log_in: "login", checkout: "purchase", order: "purchase", cart: "add_to_cart", signup: "sign_up", decline: "decline_cookies", reject: "decline_cookies", reject_cookies: "decline_cookies", consent: "decline_cookies", register: "sign_up", registration: "sign_up", contact: "lead", form: "lead" };
 
 /** The preset for a name like "purchase" or "signup", or null. */
 export function presetFor(name) {
@@ -168,6 +174,7 @@ const PRESET_BY_EVENT = [
   ["purchase", ["purchase", "add_payment_info", "add_shipping_info", "begin_checkout"]],
   ["add_to_cart", ["add_to_cart", "view_cart"]],
   ["sign_up", ["sign_up"]],
+  ["login", ["login"]],
   ["lead", ["generate_lead"]],
   ["search", ["search", "view_search_results"]],
 ];

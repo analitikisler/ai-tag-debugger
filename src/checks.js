@@ -403,6 +403,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       : { ...base, severity: "warning", check: "container_not_run", step: stepLabel(c.step), detail: d.containerNotRun(c.id, c.kind) });
   }
 
+  // Logged in with the test account: GA4 hits from then on should carry the site's user ID.
+  if (Number.isInteger(run.loginStep)) {
+    const after = run.hits.filter((h) => h.platform === "ga4" && h.step > run.loginStep);
+    if (after.length && !after.some((h) => h.hasUserId)) {
+      findings.push({ ...base, severity: "info", check: "user_id_missing", platform: "ga4", step: stepLabel(after[0].step), detail: d.userIdMissing(after.length) });
+    }
+  }
+
   // Widgets that tracked on their own, left out of the plan checks: said once per widget, so nothing goes missing silently.
   for (const w of widgetsOf(run.widgetHits ?? [])) {
     const first = (run.widgetHits ?? []).find((h) => h.frame.origin === w.origin);

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, runAudit } from "./audit.js";
@@ -10,9 +11,47 @@ import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { readBaseline, writeBaseline } from "./baseline.js";
 import { savePlan } from "./plan.js";
 import { DEFAULT_DATA_DIR } from "./workspace.js";
+import { resolveSessionFile, sessionFileFor } from "./login.js";
 import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
 
 const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+
+/**
+ * `aitd login`: opens the site in a visible browser for the user to log in by hand (a CAPTCHA, two-factor login or
+ * single sign-on are fine), then saves the session (cookies and storage) for runs to start from with --session saved.
+ * The file holds a live login, so only its owner may read it.
+ */
+async function saveLoginSession(values) {
+  if (!values.site) throw new Error("login needs --site <url>: aitd login --site https://www.example.com");
+  try {
+    new URL(values.site);
+  } catch {
+    throw new Error(`"${values.site}" is not a full URL. Use e.g. https://www.example.com`);
+  }
+  const file = path.resolve(values.save ?? sessionFileFor(values.site, values["data-dir"] ?? DEFAULT_DATA_DIR));
+  const { AuditSession } = await import("./browser.js");
+  const session = new AuditSession({ viewport: "desktop", site: values.site, allowedHosts: values["allow-host"], headless: false, login: null });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url: values.site });
+    console.log("Log in to the site in the browser window. When you are logged in, come back here and press Enter (Ctrl+C cancels).");
+    console.log(`The browser stays on ${session.scope.hosts.join(", ")}; for a login on another host (single sign-on), add --allow-host <host>.`);
+    await new Promise((resolve) => {
+      process.stdin.resume();
+      process.stdin.once("data", () => {
+        process.stdin.pause();
+        resolve();
+      });
+    });
+    await mkdir(path.dirname(file), { recursive: true });
+    await session.context.storageState({ path: file });
+    await chmod(file, 0o600);
+    console.log(`Saved the logged-in session to ${file}. It holds a live login: keep it private.`);
+    console.log(`Start a run from it with: aitd run --site ${values.site} --session ${values.save ? file : "saved"} --journey <id>`);
+  } finally {
+    await session.close();
+  }
+}
 
 async function main(args = process.argv.slice(2)) {
   const { values, positionals } = parseArgs({
@@ -31,6 +70,8 @@ async function main(args = process.argv.slice(2)) {
       platforms: { type: "string", multiple: true },
       providers: { type: "string", multiple: true },
       "allow-host": { type: "string", multiple: true },
+      session: { type: "string" },
+      save: { type: "string" },
       "allow-private-network": { type: "boolean", default: false },
       "allow-live": { type: "boolean", default: false },
       scripted: { type: "boolean", default: false },
@@ -81,6 +122,10 @@ async function main(args = process.argv.slice(2)) {
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
     await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"] });
+    return;
+  }
+  if (command === "login" && !values.help) {
+    await saveLoginSession(values);
     return;
   }
   if (command === "replay" && !values.help) {
@@ -191,6 +236,9 @@ async function main(args = process.argv.slice(2)) {
   }
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
+  // A session saved with `aitd login` ("saved") or a file: every journey starts logged in.
+  const sessionArg = values.session ?? loaded.config.session_file;
+  if (sessionArg) loaded.config = { ...loaded.config, session_file: resolveSessionFile(sessionArg, { site: loaded.config.site, dataDir: values["data-dir"] ?? DEFAULT_DATA_DIR }) };
   try {
     new URL(loaded.config.site);
   } catch {
