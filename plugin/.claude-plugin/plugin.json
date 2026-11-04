@@ -1,6 +1,6 @@
 {
   "name": "ai-tag-debugger",
-  "version": "0.22.7",
+  "version": "0.22.8",
   "description": "QA-test a website's analytics, ad and consent tracking (GA4, GTM, Google Ads, Meta, TikTok, Consent Mode) from chat: a local browser walks the journey and every tag is checked.",
   "author": {
     "name": "Analitik İşler",

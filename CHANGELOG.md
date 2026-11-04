@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.8 (2026-11-04)
+
+- Reproducible installs from npm: the package ships an `npm-shrinkwrap.json`, so `npx`, `npm install -g` and the Claude plugin install the exact dependency versions this release was tested with, each checked against its checksum, instead of resolving the version ranges afresh. A newer release of a dependency, or anything it ships, no longer reaches users until a release of ai-tag-debugger takes it. The shrinkwrap holds only the runtime packages (development tools such as ESLint are left out), and is written when the package is packed, from `package-lock.json`.
+
 ## 0.22.7 (2026-11-04)
 
 - Audits can run in your own Google Chrome. Start Chrome with a debugging port and a profile folder for audits (README: Using your own Chrome), then add `--connect http://127.0.0.1:9222` to `aitd run` or `aitd plan`, or set `connect` in the config or on a local MCP server's `start_audit`. Each journey gets a fresh private window in that Chrome, as clean as the tool's own browser, which closes when the journey ends while Chrome keeps running. Capture, the answered tracking requests, the host limits and logins work as usual. Only a Chrome on the same computer is accepted, an HTTP MCP server never connects to one, and when no Chrome answers, the message gives the command that starts it.
