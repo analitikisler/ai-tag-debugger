@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- ai-tag-debugger is a Claude plugin: `/plugin install ai-tag-debugger --marketplace analitikisler/ai-tag-debugger` in Claude Code adds the MCP server and an `audit-tracking` skill that walks Claude through an audit: what to ask first, which tool answers which question, how to walk the journey and how to explain the findings. The plugin lives in `plugin/`, pins the npm version it starts, and is ready for Anthropic's plugin directory. Its README lists everything it runs, fetches and writes.
+
 ## 0.22.5 (2026-11-04)
 
 - Runs can report findings 0.22.4 did not on the same site (`container_not_run`, `container_held`). A baseline written with 0.22.4 can then list new entries; `--update-baseline` rewrites it.

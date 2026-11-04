@@ -28,7 +28,7 @@ npm run demo                      # scripted, no-AI run against it, saved under 
 - Comments say why something is there, not what the code does.
 - All user-visible strings live in `src/i18n.js` and exist in every language in `LANGUAGES` (`en` and `tr`).
 - Every new flag, config field or MCP parameter gets a row in README's tables, and every user-visible change gets a line in CHANGELOG.md.
-- `server.json` carries the same version as `package.json` in two places; `test/server-json.test.js` enforces it.
+- `server.json` carries the same version as `package.json` in two places; `test/server-json.test.js` enforces it. The Claude plugin in `plugin/` does too: `version` in `plugin/.claude-plugin/plugin.json` and the pinned `npx` package in `plugin/.mcp.json`, enforced by `test/plugin.test.js`.
 - Commit messages are one imperative sentence about what changed for the user.
 
 ## Do not

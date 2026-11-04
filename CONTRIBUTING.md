@@ -151,12 +151,14 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 - Every option is documented in README's tables: "All options" for flags, the config table for config fields, the MCP tools table for tool parameters. README.tr.md gets the same change.
 - Every user-visible change gets a CHANGELOG line under the version it ships in. Entries are one sentence each, in the README's voice.
 - `server.json` must say the same version as `package.json`, in `version` and in `packages[0].version`, and its description must stay within 100 characters; `test/server-json.test.js` fails otherwise.
+- The Claude plugin in `plugin/` pins the same version: `version` in `plugin/.claude-plugin/plugin.json` and the package in `plugin/.mcp.json` (`@analitikisler/ai-tag-debugger@<version>`; the plugin directory refuses an unpinned `npx` launcher). `test/plugin.test.js` fails otherwise. Check the plugin with `claude plugin validate plugin --profile directory --strict` and the marketplace with `claude plugin validate . --strict`.
 - Commit messages are one imperative sentence saying what changed for the user.
 
 ## Releasing
 
-1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), both version fields in `server.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
+1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), both version fields in `server.json`, the plugin's `version` and pinned package in `plugin/.claude-plugin/plugin.json` and `plugin/.mcp.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
 2. Add the `## x.y.z (date)` section at the top of CHANGELOG.md with the lines collected for it. Update the version in README's Playwright install commands if Playwright changed.
 3. Run `npm test`, then merge to `main` with a commit such as `Release 0.16.0`.
 4. `.github/workflows/publish.yml` runs on every push to `main` that touches `package.json` (or by hand from the Actions tab). Its `check` job looks the version up on npm and stops if it is already there; otherwise `test` runs `npm ci`, installs Chromium and runs `npm test` on Node 22, and `publish` publishes with npm trusted publishing (OIDC, no stored token) from the `npm` environment with `npm publish --access public`.
 5. The MCP Registry is updated by hand: once the version is on npm, run `.github/workflows/publish-mcp-registry.yml` from the Actions tab. It checks that `server.json`'s package version exists on npm, then signs in to the registry with GitHub OIDC and publishes `server.json` as it is on `main`.
+6. The Claude plugin directory picks up the new plugin version from `main` once it is pushed, after its automated checks. A version that runs a pinned `npx` package is held for a reviewer before it goes live, and the listing keeps serving the previous version until then.

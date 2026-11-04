@@ -1,0 +1,17 @@
+{
+  "name": "ai-tag-debugger",
+  "owner": {
+    "name": "Analitik İşler",
+    "url": "https://analitikisler.com"
+  },
+  "metadata": {
+    "description": "QA-test a website's analytics, ad and consent tracking from Claude: GA4, Google Tag Manager, Google Ads, Meta, TikTok and Consent Mode."
+  },
+  "plugins": [
+    {
+      "name": "ai-tag-debugger",
+      "source": "./plugin",
+      "description": "QA-test a website's analytics, ad and consent tracking from chat."
+    }
+  ]
+}
