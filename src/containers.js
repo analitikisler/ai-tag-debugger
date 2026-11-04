@@ -7,6 +7,9 @@
 // Container and destination IDs gtm.js and gtag/js are loaded with.
 const CONTAINER_ID = /^(GTM|G|GT|AW|DC|MC|HA)-[A-Z0-9]+$/;
 
+/** Whether a string is a container or Google tag ID: GTM-…, G-…, GT-…, AW-…, DC-… and the like. */
+export const isContainerId = (id) => CONTAINER_ID.test(String(id));
+
 /**
  * The container a script URL loads, or null: its ID, gtm or gtag, the dataLayer it reads (`l`), the host it
  * came from (Google's, or the site's own through the Google tag gateway or a server container) and the GTM
@@ -148,13 +151,16 @@ export function loadSources(run) {
 
 /**
  * One row per container and source across runs, in the order first seen: { id, script, layer, served, host,
- * environment?, kind, by?, frame?, version?, bytes?, transferBytes?, ms?, failed?, pages, journeys }. frame is the
- * iframe it loaded in; version to failed are its script's answer (see scriptFacts), from the first load in the row.
+ * environment?, kind, by?, frame?, version?, bytes?, transferBytes?, ms?, failed?, ran?, pages, journeys }. frame is
+ * the iframe it loaded in; version to failed are its script's answer (see scriptFacts), from the first load in the
+ * row; ran says whether Google's registry held it on some step (left out for captures that didn't record it).
+ * Containers the page asked for without the tool seeing a script added are rows too (see unseenContainers).
  */
 export function containerRows(runs) {
   const rows = new Map();
   for (const run of runs) {
-    for (const l of loadSources(run)) {
+    const ran = Array.isArray(run.containersRunning) ? new Set(run.containersRunning.map((c) => c.id)) : null;
+    for (const l of [...loadSources(run), ...unseenContainers(run)]) {
       const k = [l.id, l.kind, l.by ?? "", l.host, l.layer, l.environment ?? "", l.frame?.origin ?? ""].join("|");
       const row = rows.get(k) ?? {
         id: l.id, script: l.script, layer: l.layer, served: l.served, host: l.host,
@@ -165,10 +171,61 @@ export function containerRows(runs) {
       };
       if (l.page) row.pages.add(l.page);
       row.journeys.add(`${run.journeyId} (${run.viewport})`);
+      // Whether it ran (Google's registry held it) in any run that recorded the registry; unknown for older captures.
+      if (ran) row.ran = Boolean(row.ran) || ran.has(l.id);
       rows.set(k, row);
     }
   }
   return [...rows.values()].map((r) => ({ ...r, pages: [...r.pages].sort(), journeys: [...r.journeys] }));
+}
+
+/**
+ * Containers a run met without seeing a script added for them: a script the page requested or preloaded, or an ID
+ * that ran (Google's registry held it), with no load recorded. kind "preload": only a <link rel="preload"> asked for
+ * it, which downloads a script without running it; "unseen": something added it in a way the tool couldn't follow,
+ * as when a consent platform's auto-blocking replaces the browser's own functions. One per container and host.
+ */
+export function unseenContainers(run) {
+  const loads = run.containerLoads ?? [];
+  const loaded = (id, host) => loads.some((l) => l.id === id && (!host || l.host === host));
+  const preloads = run.containerPreloads ?? [];
+  const out = new Map();
+  // The page a step was on: the preload's own, else the step's (see pagePath in browser.js).
+  const pageAt = (step, page) => page ?? run.steps?.[step]?.pagePath ?? undefined;
+  const add = (id, host, kind, step, facts = {}, page) => {
+    const k = `${id}|${host ?? ""}`;
+    if (out.has(k) || loaded(id, host)) return;
+    const at = pageAt(step, page);
+    out.set(k, {
+      id, script: id.startsWith("GTM-") ? "gtm" : "gtag", layer: null,
+      ...(host ? { host, served: /(^|\.)googletagmanager\.com$/.test(host) ? "google" : "site" } : {}),
+      kind, step, ...(at ? { page: at } : {}), ...facts,
+    });
+  };
+  for (const sc of run.containerScripts ?? []) {
+    const pre = preloads.find((p) => p.id === sc.id && p.host === sc.host);
+    add(sc.id, sc.host, pre ? "preload" : "unseen", pre?.step ?? sc.step, scriptFacts(sc), pre?.page);
+  }
+  for (const p of preloads) add(p.id, p.host, "preload", p.step, {}, p.page);
+  for (const c of run.containersRunning ?? []) {
+    if (!loaded(c.id) && ![...out.values()].some((x) => x.id === c.id)) add(c.id, null, "unseen", c.step);
+  }
+  return [...out.values()];
+}
+
+/**
+ * GTM containers a run downloaded or asked for that never ran: Google's registry never held them on any step. Only
+ * GTM containers, whose registry entry is certain; [] for captures that didn't record the registry.
+ */
+export function containersNotRun(run) {
+  if (!Array.isArray(run.containersRunning)) return [];
+  const ran = new Set(run.containersRunning.map((c) => c.id));
+  const seen = new Map();
+  for (const l of [...loadSources(run), ...unseenContainers(run)]) {
+    if (!l.id.startsWith("GTM-") || ran.has(l.id) || l.failed || l.frame?.party === "third" || seen.has(l.id)) continue;
+    seen.set(l.id, { id: l.id, kind: l.kind, step: l.step ?? 0 });
+  }
+  return [...seen.values()];
 }
 
 /** The containers loaded more than once into one page, as [{ id, loads }] with the loads in order. */

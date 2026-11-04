@@ -5,7 +5,7 @@ import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
 import { CONSENT_SIGNALS } from "./parsers.js";
-import { duplicateLoads, loadSources, scriptFailed, splitLayers } from "./containers.js";
+import { containersNotRun, duplicateLoads, loadSources, scriptFailed, splitLayers } from "./containers.js";
 import { messageOutcomes, widgetSummaries, widgetsOf } from "./frames.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
@@ -392,6 +392,15 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // A container script that failed to load: none of its tags ran. Said once per container and host.
   for (const sc of (run.containerScripts ?? []).filter((x, i, all) => scriptFailed(x) && all.findIndex((y) => scriptFailed(y) && y.id === x.id && y.host === x.host) === i)) {
     findings.push({ ...base, severity: "warning", check: "container_failed", step: stepLabel(sc.step), detail: d.containerFailed(sc.id, sc.host, String(sc.status)) });
+  }
+
+  // A GTM container downloaded or asked for that never ran. Expected while a consent platform holds it back and the
+  // run never consented; otherwise none of its tags fired.
+  const consented = consentGrantedStep(run) !== null;
+  for (const c of containersNotRun(run)) {
+    findings.push(run.cmp?.vendor && !consented
+      ? { ...base, severity: "info", check: "container_held", step: stepLabel(c.step), detail: d.containerHeld(c.id, run.cmp.vendor) }
+      : { ...base, severity: "warning", check: "container_not_run", step: stepLabel(c.step), detail: d.containerNotRun(c.id, c.kind) });
   }
 
   // Widgets that tracked on their own, left out of the plan checks: said once per widget, so nothing goes missing silently.

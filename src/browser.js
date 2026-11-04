@@ -10,7 +10,7 @@ import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
-import { callersOf, containerOf, containerVersion } from "./containers.js";
+import { callersOf, containerOf, containerVersion, isContainerId } from "./containers.js";
 import { frameInfo } from "./frames.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
@@ -106,6 +106,9 @@ const CONTAINER_HOOK = `
     new MutationObserver((list) => {
       for (const m of list) for (const n of m.addedNodes) {
         if (n instanceof HTMLScriptElement && n.src && !seen.has(n)) { seen.add(n); report(n, n.src, "parser"); }
+        // A preload hint downloads a container without running it; caught as it is added, since a page's own code
+        // can rewrite <head> and take it out again.
+        else if (n instanceof HTMLLinkElement && /(^|\\s)(preload|modulepreload|prefetch)(\\s|$)/i.test(n.rel) && n.href && !seen.has(n)) { seen.add(n); report(n, n.href, "preload"); }
       }
     }).observe(document, { childList: true, subtree: true });
   } catch {}
@@ -517,6 +520,17 @@ export function googleConsentStateInPage() {
 }
 
 /**
+ * Runs in the page: the IDs Google's own registry (window.google_tag_manager) holds, which are the containers and
+ * Google tags that actually ran, however their script got in; and the addresses the page only preloads
+ * (<link rel="preload">, "modulepreload", "prefetch"), which download a script without running it.
+ */
+export function containersInPage() {
+  const registry = window.google_tag_manager && typeof window.google_tag_manager === "object" ? Object.keys(window.google_tag_manager) : [];
+  const preloads = [...document.querySelectorAll('link[rel~="preload"], link[rel~="modulepreload"], link[rel~="prefetch"]')].map((l) => l.href).filter(Boolean);
+  return { registry: registry.slice(0, 200), preloads: preloads.slice(0, 200) };
+}
+
+/**
  * Runs in the page: whether it is something other than the site, so what a step captured there says nothing about
  * the site's tracking. A bot challenge in its place (Cloudflare, DataDome, HUMAN, Akamai), or a page that crashed in
  * the browser (the error screen a Next.js app shows when its scripts fail). Null for a page that looks like itself.
@@ -577,6 +591,8 @@ export class AuditSession {
     this.dataLayerLog = [];
     this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
     this.containerScripts = []; // each container script's answer: status, version, size and load time
+    this.containersRunning = new Map(); // container ID -> the step it was first seen running at (google_tag_manager)
+    this.containerPreloads = new Map(); // "id|host" -> { id, host, step } for containers the page only preloaded
     this.frameMessages = []; // each named message an iframe posted to the page: origin, name and field names, never values
     // The order hits, dataLayer pushes and iframe messages were recorded in. Several often share a millisecond, and
     // telling which came first matters: a page's push answers the message just before it (see messageOutcomes).
@@ -870,6 +886,12 @@ export class AuditSession {
   recordLoad(entry, frame = null) {
     const container = containerOf(entry?.src);
     if (!container) return;
+    // A preload hint is not a load: it downloads the script without running it (see unseenContainers).
+    if (entry.how === "preload") {
+      const k = `${container.id}|${container.host}`;
+      if (!frame && !this.containerPreloads.has(k)) this.containerPreloads.set(k, { id: container.id, host: container.host, step: this.currentStep, page: pagePath(entry.page) });
+      return;
+    }
     this.record("containerLoads", {
       ...container,
       how: entry.how === "parser" ? "parser" : "script",
@@ -1240,6 +1262,15 @@ export class AuditSession {
     const tagConsent = await this.evaluateWithin(googleConsentStateInPage);
     const before = this.steps.slice(0, this.currentStep).map((st) => st.tagConsent).filter(Boolean).at(-1);
     if (tagConsent && JSON.stringify(tagConsent) !== JSON.stringify(before)) this.steps[this.currentStep].tagConsent = tagConsent;
+    // Which containers ran, and which the page only preloaded: a container can download and never run.
+    const found = await this.evaluateWithin(containersInPage);
+    for (const id of (found?.registry ?? []).map((k) => String(k).toUpperCase()).filter(isContainerId)) {
+      if (!this.containersRunning.has(id)) this.containersRunning.set(id, this.currentStep);
+    }
+    for (const c of (found?.preloads ?? []).map(containerOf).filter(Boolean)) {
+      const k = `${c.id}|${c.host}`;
+      if (!this.containerPreloads.has(k)) this.containerPreloads.set(k, { id: c.id, host: c.host, step: this.currentStep, page: pagePath(this.page.url()) });
+    }
   }
 
   async perform(a) {

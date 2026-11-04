@@ -398,10 +398,10 @@ function mdInventory(m, runs) {
   return lines;
 }
 
-/** A container row's version, size and load time, or that it failed to load, in a few words. */
+/** A container row's version, size and load time, or that it failed to load, and whether it never ran, in a few words. */
 export function scriptCell(c, r) {
   if (r.failed) return c.failed(r.failed);
-  return [r.version && c.version(r.version), r.bytes && c.size(r.bytes), r.ms != null && c.loadTime(r.ms)].filter(Boolean).join(", ");
+  return [r.version && c.version(r.version), r.bytes && c.size(r.bytes), r.ms != null && c.loadTime(r.ms), r.ran === false && c.neverRan].filter(Boolean).join(", ");
 }
 
 /** The events iframes posted to the page and what the page did next, one row each. Omitted when there were none. */
@@ -444,8 +444,8 @@ function mdContainers(m, runs) {
   const c = m.ui.containers;
   const lines = [`## ${m.ui.containersTitle}`, "", `| ${m.ui.containerCol} | ${m.ui.sourceCol} | ${m.ui.layerCol} | ${m.ui.servedCol} | ${m.ui.scriptCol} | ${m.ui.pagesCol} |`, "|---|---|---|---|---|---|"];
   for (const r of rows.slice(0, MD_INVENTORY_ROWS)) {
-    const served = r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`;
-    lines.push(`| ${mdText(r.id)} (${c.script[r.script]}) | ${mdText(c.kinds[r.kind](r.by))}${r.frame ? `, ${mdText(c.iframe(r.frame.origin, r.frame.party))}` : ""}${r.environment ? `, ${mdText(c.environment(r.environment))}` : ""} | ${mdText(r.layer)} | ${mdText(served)} | ${mdText(scriptCell(c, r)) || "–"} | ${r.pages.length} |`);
+    const served = !r.served ? "–" : r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`;
+    lines.push(`| ${mdText(r.id)} (${c.script[r.script]}) | ${mdText(c.kinds[r.kind](r.by))}${r.frame ? `, ${mdText(c.iframe(r.frame.origin, r.frame.party))}` : ""}${r.environment ? `, ${mdText(c.environment(r.environment))}` : ""} | ${r.layer ? mdText(r.layer) : "–"} | ${mdText(served)} | ${mdText(scriptCell(c, r)) || "–"} | ${r.pages.length} |`);
   }
   if (rows.length > MD_INVENTORY_ROWS) lines.push("", m.ui.md.moreIn(rows.length - MD_INVENTORY_ROWS, "report.html"));
   lines.push("");
