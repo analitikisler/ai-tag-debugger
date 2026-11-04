@@ -3,6 +3,7 @@
 // handling (which runs check which platform, the funnel cells, the inventory's parties and cookies, the skipped
 // vendors, the trend) is the 0.17 renderer's, so the numbers match the Markdown report and the CLI.
 import { buildInventory } from "../inventory.js";
+import { containerRows } from "../containers.js";
 import { providerOf } from "../parsers.js";
 import { siteOf } from "../redact.js";
 import { VERSION, BUCKET_ORDER, coverageLines, pcSort, planChangeItems, routeList } from "../report-shared.js";
@@ -193,12 +194,24 @@ function inventoryLines(ctx) {
   return { lines, otherCookies: inv.otherCookies };
 }
 
+/** The Google containers card: one line per container and the way it reached the page. Null when none was recorded. */
+function containersCard(ctx) {
+  const { m, runs } = ctx;
+  const rows = containerRows(runs);
+  if (!rows.length) return null;
+  const c = m.ui.containers;
+  const items = rows.map((r) => `<li>${code(r.id)}${plain(esc(c.script[r.script]))}<span>${esc(c.kinds[r.kind](r.by))}</span>${plain(`${esc(m.ui.layerCol)} ${code(r.layer)}`)}${plain(esc(r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`))}${r.environment ? badge("warning", c.environment(r.environment)) : ""}<span class="inv-n">${m.html.scope.pages(r.pages.length, bold(r.pages.length))}</span></li>`).join("");
+  const ids = uniq(rows.map((r) => r.id));
+  return `<li><details class="card inv" id="inv-containers"><summary><span class="t">${esc(m.ui.containersTitle)}</span>${plain(n(ids.length))}<span class="inv-m">${esc(ids.slice(0, 3).join(", "))}${ids.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.containersIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
+}
+
 function inventorySection(ctx) {
   const { m, runs } = ctx;
   const t = m.html.scope;
   const { lines, otherCookies } = inventoryLines(ctx);
   const skipped = skippedTotals(runs);
-  if (!lines.length && !skipped.length) return sectionBlock("inventory", esc(m.html.shell.sections.inventory), `<p class="muted">${esc(m.ui.noInventory)}</p>`);
+  const containers = containersCard(ctx);
+  if (!lines.length && !skipped.length && !containers) return sectionBlock("inventory", esc(m.html.shell.sections.inventory), `<p class="muted">${esc(m.ui.noInventory)}</p>`);
   const counts = (x) => `<span class="inv-m">${t.requests(x.requests, bold(x.requests))}</span><span class="inv-m">${t.pages(x.pages.size, bold(x.pages.size))}</span><span class="inv-m${x.cookies.length ? "" : " zero"}">${t.cookies(x.cookies.length, bold(x.cookies.length))}</span>`;
   const out = lines.map((x) => {
     const id = `inv-${safeKey(x.p)}`;
@@ -214,6 +227,7 @@ function inventorySection(ctx) {
 <div role="tabpanel" id="${tid("pages")}" data-label="${esc(m.ui.pagesCol)}">${pages ? `<ul class="inv-list">${pages}</ul>` : none}</div>
 <div role="tabpanel" id="${tid("cookies")}" data-label="${esc(m.ui.cookiesCol)}">${x.cookies.length ? `<ul class="inv-list">${x.cookies.map((ck) => `<li>${code(ck)}</li>`).join("")}</ul>` : none}</div></div></div></details></li>`;
   });
+  if (containers) out.unshift(containers);
   const skippedN = skipped.reduce((a, [, k]) => a + k, 0);
   if (skipped.length) {
     out.push(`<li><details class="card inv" id="inv-out-of-scope"><summary><span class="t">${esc(m.ui.outOfScopeStatus)}</span>${plain(t.requests(skippedN, bold(skippedN)))}<span class="inv-m">${esc(skipped.slice(0, 3).map(([v]) => v).join(", "))}${skipped.length > 3 ? " …" : ""}</span></summary><div class="body"><ul class="inv-list">${skipped.map(([v, k]) => `<li><span>${esc(v)}</span>${badge("muted", m.ui.outOfScopeStatus)}<span class="inv-n">${t.requests(k, bold(k))}</span></li>`).join("")}</ul></div></details></li>`);

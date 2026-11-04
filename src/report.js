@@ -5,6 +5,7 @@ import { createProvider } from "./providers.js";
 import { canonicalEvent, groupFindings, summarize } from "./checks.js";
 import { messages } from "./i18n.js";
 import { buildInventory } from "./inventory.js";
+import { containerRows } from "./containers.js";
 import { computeMetrics } from "./metrics.js";
 import { historySummaryLines, sparkline } from "./history.js";
 import { cardIds } from "./html/lib.js";
@@ -396,6 +397,21 @@ function mdInventory(m, runs) {
   return lines;
 }
 
+/** The Google containers and how each reached the page, one row per container and source. Omitted when none loaded. */
+function mdContainers(m, runs) {
+  const rows = containerRows(runs);
+  if (!rows.length) return [];
+  const c = m.ui.containers;
+  const lines = [`## ${m.ui.containersTitle}`, "", `| ${m.ui.containerCol} | ${m.ui.sourceCol} | ${m.ui.layerCol} | ${m.ui.servedCol} | ${m.ui.pagesCol} |`, "|---|---|---|---|---|"];
+  for (const r of rows.slice(0, MD_INVENTORY_ROWS)) {
+    const served = r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`;
+    lines.push(`| ${mdText(r.id)} (${c.script[r.script]}) | ${mdText(c.kinds[r.kind](r.by))}${r.environment ? `, ${mdText(c.environment(r.environment))}` : ""} | ${mdText(r.layer)} | ${mdText(served)} | ${r.pages.length} |`);
+  }
+  if (rows.length > MD_INVENTORY_ROWS) lines.push("", m.ui.md.moreIn(rows.length - MD_INVENTORY_ROWS, "report.html"));
+  lines.push("");
+  return lines;
+}
+
 /** The trend in up to five lines: the text sparkline with the direction, then the open-longest and flapping lines. */
 function mdTrend(m, trend, lang) {
   if (!trend || trend.runs < 2) return [];
@@ -447,6 +463,7 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   lines.push(...mdJourneys(m, runs, rows));
   lines.push(...mdNotChecked(m, runs, rows, plan, consentScenarios));
   lines.push(...mdInventory(m, runs));
+  lines.push(...mdContainers(m, runs));
   // A report with its own name or logo carries no Analitik İşler credit; the ai tag debugger one stays.
   if (brand?.name || brand?.logo) lines.push("---", "", `_${brand.name ? `${brand.name} · ` : ""}${m.ui.generatedBy}_`, "");
   else if (branding) lines.push("---", "", `_${m.ui.generatedBy} · [analitikisler.com](https://analitikisler.com)_`, "");

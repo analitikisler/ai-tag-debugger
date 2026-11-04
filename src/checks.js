@@ -5,6 +5,7 @@ import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
 import { CONSENT_SIGNALS } from "./parsers.js";
+import { duplicateLoads, loadSources, splitLayers } from "./containers.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
 const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
@@ -364,6 +365,22 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     for (const [, hit] of noId) {
       findings.push({ ...base, severity: "info", check: "dedup_id_missing", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: d.dedupIdMissing(hit.platform, hit.name) });
     }
+  }
+
+  // Google containers and how each got onto the page (src/containers.js). Runs saved by older versions have none.
+  const ui = messages(lang).ui.containers;
+  const source = (l) => ui.kinds[l.kind](l.by);
+  for (const dup of duplicateLoads(run).filter((x, i, all) => all.findIndex((y) => y.id === x.id) === i)) {
+    findings.push({ ...base, severity: "warning", check: "container_duplicate", step: stepLabel(dup.loads[1].step), detail: d.containerDuplicate(dup.id, dup.loads.map(source), stepLabel(dup.loads[1].step)), evidence: dup.loads.map((l) => `${l.id} ${l.kind}${l.by ? ` ${l.by}` : ""} ${l.page ?? ""}`).join("\n") });
+  }
+  const loads = loadSources(run);
+  for (const l of loads.filter((x, i, all) => x.environment && all.findIndex((y) => y.environment && y.id === x.id) === i)) {
+    findings.push({ ...base, severity: "warning", check: "container_environment", step: stepLabel(l.step), detail: d.containerEnvironment(l.id, l.environment) });
+  }
+  const split = splitLayers(run)[0];
+  if (split) findings.push({ ...base, severity: "info", check: "datalayer_split", step: stepLabel(split.step), detail: d.dataLayerSplit(split.layers.map((x) => `${x.id} → ${x.layer}`), stepLabel(split.step)) });
+  for (const l of loads.filter((x, i, all) => x.kind === "send_to" && !all.some((y) => y.id === x.id && y.kind !== "send_to") && all.findIndex((y) => y.kind === "send_to" && y.id === x.id) === i)) {
+    findings.push({ ...base, severity: "info", check: "container_send_to_only", platform: l.id.startsWith("G-") ? "ga4" : "google_ads", step: stepLabel(l.step), detail: d.sendToOnly(l.id, l.by) });
   }
 
   // One event ID on two different events: the platform keeps the first and drops the other as its

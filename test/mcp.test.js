@@ -34,7 +34,7 @@ const refIn = (text, pattern) => Number(text.split("\n").find((l) => /^\[\d+\]/.
 test("a chat app can drive an audit through the MCP tools", async () => {
   const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
   const { client, call } = await connect({ allowFiles: true, reportsDir });
-  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "get_hit", "get_step", "get_report", "consent_matrix", "finish_audit", "make_plan", "what_changed", "run_audit"]);
+  assert.deepEqual((await client.listTools()).tools.map((t) => t.name), ["start_audit", "browser_action", "get_page", "get_hit", "get_step", "get_containers", "get_report", "consent_matrix", "finish_audit", "make_plan", "what_changed", "run_audit"]);
 
   let page = await call("start_audit", { site: `http://localhost:${PORT}/`, journey: "browse" });
   const id = page.match(/audit_id: (\w+)/)[1];
