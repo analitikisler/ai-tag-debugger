@@ -329,6 +329,14 @@ Each row also gives the dataLayer the container reads (`l=`), whether it came fr
 
 Four checks read it: `container_duplicate` (warning) for a container loaded more than once into one page, `container_environment` (warning) for a GTM environment (`gtm_preview`, `gtm_auth`) loaded instead of Live, `datalayer_split` (info) for containers on one page reading different dataLayers, and `container_send_to_only` (info) for a destination that only an event's `send_to` loaded, with no `gtag('config')` for it.
 
+### Embedded widgets and iframes
+
+Hits, dataLayer pushes, vendor calls and container loads sent from inside an iframe record which iframe: its origin, the page it is embedded in, and whether it is on the site's own site (a checkout or form on a subdomain) or someone else's (a booking or chat widget, a payment form, a video). A hit from a third-party iframe still counts as the site's when it goes to an account the site's own tags use: a GA4 ID, Ads conversion ID, pixel or container the page or a same-site iframe uses or configures, as when a booking engine is set up with the site's GA4 ID. Otherwise it is the widget's own tracking.
+
+A widget's own hits are left out of everything that judges the site's tracking: plan matching, coverage, duplicates, unplanned events and the scores. A widget's `purchase` to its vendor's property can't pass for the site's, and its events aren't listed as the site's. They still count for consent and personal data, since the site answers for what the widgets it embeds collect; those findings begin with "In an embedded widget from …". Each widget that tracked is named once in a `widget_tracking` (info) finding with its accounts and events, and a container running in a same-site iframe beside one in the page is noted as `iframe_container` (info): the page's dataLayer pushes and consent never reach it. A widget's dataLayer pushes are kept apart too, so its consent commands don't stand in for the site's.
+
+`capture.json` keeps the widget's hits under `widgetHits` and its pushes under `widgetDataLayerLog`, and every iframe entry has a `frame`. The Google containers card says which ran in an iframe. Over MCP, step results mark each hit from an iframe and whether the plan checks will count it, pushes from an iframe are prefixed with it, and the JSON timeline lists a widget's hits per step under `widget_hits`. Captures from older versions have no frames, so all of their hits stay the site's.
+
 ### Folder layout and plan IDs
 
 Plans and runs are kept in `aitd/` in the folder you run the tool from:

@@ -329,6 +329,14 @@ Her satır ayrıca container'ın okuduğu dataLayer'ı (`l=`), Google'dan mı yo
 
 Dört kontrol bunu okur: aynı sayfaya birden fazla kez yüklenen bir container için `container_duplicate` (uyarı), Live yerine yüklenen bir GTM ortamı (`gtm_preview`, `gtm_auth`) için `container_environment` (uyarı), aynı sayfada farklı dataLayer'ları okuyan container'lar için `datalayer_split` (bilgi) ve kendisi için `gtag('config')` olmadan yalnızca bir olayın `send_to` değeriyle yüklenen bir hedef için `container_send_to_only` (bilgi).
 
+### Gömülü widget'lar ve iframe'ler
+
+Bir iframe içinden gönderilen istekler, dataLayer push'ları, sağlayıcı çağrıları ve container yüklemeleri hangi iframe'den geldiklerini kaydeder: kaynağını, gömülü olduğu sayfayı ve sitenin kendi sitesinde mi (bir alt alan adındaki ödeme ya da form) yoksa başkasının mı (bir rezervasyon ya da sohbet widget'ı, bir ödeme formu, bir video) olduğunu. Üçüncü taraf bir iframe'den gelen istek, sitenin kendi etiketlerinin kullandığı bir hesaba gidiyorsa yine sitenindir: sayfanın ya da aynı sitedeki bir iframe'in kullandığı veya yapılandırdığı bir GA4 kimliği, Ads dönüşüm kimliği, piksel ya da container; örneğin sitenin GA4 kimliğiyle kurulmuş bir rezervasyon motoru. Aksi hâlde widget'ın kendi izlemesidir.
+
+Bir widget'ın kendi istekleri, sitenin izlemesini değerlendiren her şeyin dışında tutulur: plan eşleştirme, kapsam, tekrarlar, planda olmayan olaylar ve puanlar. Widget'ın sağlayıcısının mülküne giden bir `purchase` sitenin yerine geçemez ve olayları sitenin olayları olarak listelenmez. Yine de onay ve kişisel veri için sayılırlar, çünkü site gömdüğü widget'ların topladıklarından sorumludur; bu bulgular "… kaynaklı gömülü bir widget içinde:" ile başlar. İzleme yapan her widget, hesapları ve olaylarıyla bir kez `widget_tracking` (bilgi) bulgusunda adlandırılır; sayfadakinin yanında aynı sitedeki bir iframe'de çalışan container ise `iframe_container` (bilgi) olarak not edilir: sayfanın dataLayer push'ları ve onayı ona hiç ulaşmaz. Widget'ın dataLayer push'ları da ayrı tutulur, böylece onay komutları sitenin komutlarının yerine geçmez.
+
+`capture.json` widget'ın isteklerini `widgetHits`, push'larını `widgetDataLayerLog` altında saklar ve her iframe kaydında bir `frame` bulunur. Google container'ları kartı hangilerinin bir iframe'de çalıştığını söyler. MCP'de adım sonuçları iframe'den gelen her isteği ve plan kontrollerinin onu sayıp saymayacağını işaretler, iframe'den gelen push'ların başına iframe yazılır ve JSON zaman akışı bir widget'ın isteklerini adım adım `widget_hits` altında listeler. Eski sürümlerin kayıtlarında frame bilgisi yoktur, bu yüzden tüm istekleri sitenin olarak kalır.
+
 ### Klasör yapısı ve plan kimlikleri
 
 Planlar ve çalıştırmalar, aracı çalıştırdığınız klasördeki `aitd/` içinde tutulur:

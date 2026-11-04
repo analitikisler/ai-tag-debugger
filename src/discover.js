@@ -1,5 +1,6 @@
 import { AuditSession } from "./browser.js";
 import { runAgentJourney, StepTimeout } from "./agent.js";
+import { splitRun } from "./frames.js";
 
 /** The goal of the browsing part: one page of each type, nothing submitted. */
 export const DISCOVER_GOAL = `Explore this site to draft its analytics measurement plan. You are not completing a purchase or any other task: visit ONE example of each kind of page that exists here and look at what a visitor can do on it, then call finish with success true.
@@ -169,14 +170,16 @@ export async function discoverPlan(opts) {
   const pages = pagesSeen(snapshots);
   if (!pages.length) throw new Error("The explorer saw no pages, so there is nothing to plan from.");
   log(`\nExplored ${pages.length} pages${outcome.completed ? "" : ` (${outcome.note})`}. Drafting the plan…`);
-  const existing = [...new Set(session.hits.map((h) => `${h.platform}:${h.name}`))];
+  // An embedded widget's hits are not the site's tracking, so the plan leaves them out.
+  const ownHits = splitRun(session).hits;
+  const existing = [...new Set(ownHits.map((h) => `${h.platform}:${h.name}`))];
   const result = await opts.provider.json({
     system: topic ? `${PLAN_SYSTEM}\nThis plan covers only ${opts.topic}. Propose only ${topic.propose}.` : PLAN_SYSTEM,
     texts: [`Site: ${opts.site}`, `Pages visited:\n${JSON.stringify(pages, null, 1)}`, `Tracking hits the site already sends: ${existing.length ? existing.join(", ") : "none"}`],
     schema: PLAN_SCHEMA,
   });
   if (result.error) throw new Error(`The model did not return a plan (${result.error}).`);
-  const plan = toPlan(opts.site, result.value, session.hits);
+  const plan = toPlan(opts.site, result.value, ownHits);
   if (topic) plan.events = plan.events.filter(topic.keep);
   const coverage = pageTypeCoverage(plan.pages);
   log(`Page types found: ${coverage.found.join(", ") || "none"}`);

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { AuditSession } from "./browser.js";
+import { splitRun } from "./frames.js";
 import { withCampaignParams } from "./campaign.js";
 import { messages } from "./i18n.js";
 import { createProvider, PROVIDERS } from "./providers.js";
@@ -237,7 +238,7 @@ export const journeyError = (err) => `The journey stopped with an error: ${err?.
 export function failedRun(journey, viewport, err, providers) {
   return {
     journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
-    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
+    cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }
 
@@ -246,7 +247,8 @@ export function collect(session, journey, viewport) {
     journeyId: journey.id,
     viewport,
     ...(journey.goal ? { goal: journey.goal } : {}),
-    hits: session.hits,
+    // The site's own hits and pushes; an embedded widget's are kept apart (see src/frames.js).
+    ...splitRun(session),
     steps: session.steps,
     consentStep: session.consentStep,
     rejectStep: session.rejectStep,
@@ -255,7 +257,6 @@ export function collect(session, journey, viewport) {
     cmp: session.cmp,
     // Hits let through to the real accounts (block_hits false, or a live MCP audit): the reports say so.
     ...(session.opts.blockHits === false ? { live: true } : {}),
-    dataLayerLog: session.dataLayerLog,
     containerLoads: session.containerLoads,
     network: session.network,
     providers: session.providers,

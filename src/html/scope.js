@@ -200,7 +200,7 @@ function containersCard(ctx) {
   const rows = containerRows(runs);
   if (!rows.length) return null;
   const c = m.ui.containers;
-  const items = rows.map((r) => `<li>${code(r.id)}${plain(esc(c.script[r.script]))}<span>${esc(c.kinds[r.kind](r.by))}</span>${plain(`${esc(m.ui.layerCol)} ${code(r.layer)}`)}${plain(esc(r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`))}${r.environment ? badge("warning", c.environment(r.environment)) : ""}<span class="inv-n">${m.html.scope.pages(r.pages.length, bold(r.pages.length))}</span></li>`).join("");
+  const items = rows.map((r) => `<li>${code(r.id)}${plain(esc(c.script[r.script]))}<span>${esc(c.kinds[r.kind](r.by))}</span>${plain(`${esc(m.ui.layerCol)} ${code(r.layer)}`)}${plain(esc(r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`))}${r.frame ? plain(esc(c.iframe(r.frame.origin, r.frame.party))) : ""}${r.environment ? badge("warning", c.environment(r.environment)) : ""}<span class="inv-n">${m.html.scope.pages(r.pages.length, bold(r.pages.length))}</span></li>`).join("");
   const ids = uniq(rows.map((r) => r.id));
   return `<li><details class="card inv" id="inv-containers"><summary><span class="t">${esc(m.ui.containersTitle)}</span>${plain(n(ids.length))}<span class="inv-m">${esc(ids.slice(0, 3).join(", "))}${ids.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.containersIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
 }
