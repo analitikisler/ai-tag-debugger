@@ -19,6 +19,8 @@ import { buildServer } from "../src/mcp.js";
 const add = (src) => `(function(){var s=document.createElement("script");s.async=true;s.src=${JSON.stringify(src)};document.head.appendChild(s);})();`;
 const SCRIPTS = {
   "/gtm.js?id=GTM-MAIN": [
+    // Published data opens gtm.js and gtag/js; its version is what the report shows.
+    'var data = {\n\n"resource": {\n  "version":"153",\n  "macros":[]\n}};',
     // Like gtm.js, a second copy of the same container does not run again.
     "if (!window.__main) { window.__main = true;",
     add("/gtag/js?id=G-INGTM&l=dataLayer&cx=c"),
@@ -38,6 +40,7 @@ const PAGE = `<!doctype html><title>shop</title>
 <script async src="/gtag/js?id=G-HTML&l=myDataLayer"></script>
 <script>window.myDataLayer = window.myDataLayer || []; function gtag(){myDataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-HTML'); gtag('config', 'AW-111'); gtag('event', 'conversion', { send_to: 'AW-222/abcDEF' });</script>
 <script src="/cmp.js"></script>
+<script async src="/gtm.js?id=GTM-GONE"></script>
 <p>shop</p>`;
 
 let server;
@@ -45,6 +48,8 @@ let url;
 before(async () => {
   server = createServer((req, res) => {
     if (req.url === "/" || req.url.startsWith("/?")) return res.writeHead(200, { "content-type": "text/html" }).end(PAGE);
+    // A container whose ID is wrong: Google answers 404.
+    if (req.url === "/gtm.js?id=GTM-GONE") return res.writeHead(404).end();
     res.writeHead(200, { "content-type": "application/javascript" }).end(SCRIPTS[req.url] ?? "");
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -59,7 +64,7 @@ test("each container load is recorded with the way it reached the page", async (
   try {
     await session.act({ action: "goto", url: `${url}?email=someone@example.com` });
     await session.act({ action: "wait", ms: 400 });
-    run = { journeyId: "j", viewport: "desktop", dataLayerLog: session.dataLayerLog, containerLoads: session.containerLoads };
+    run = { journeyId: "j", viewport: "desktop", dataLayerLog: session.dataLayerLog, containerLoads: session.containerLoads, containerScripts: session.containerScripts };
   } finally {
     await session.close();
   }
@@ -71,6 +76,7 @@ test("each container load is recorded with the way it reached the page", async (
     "G-INGTM google_tag GTM-MAIN",
     "G-LINKED destination G-HTML",
     "GTM-CHTML custom_html GTM-MAIN",
+    "GTM-GONE html",
     "GTM-MAIN inline",
     "GTM-MAIN script /cmp.js",
     "GTM-ZONE nested GTM-MAIN",
@@ -88,7 +94,15 @@ test("each container load is recorded with the way it reached the page", async (
   const found = checkRun({ events: [] }, { ...run, completed: true, hits: [], steps: [{ index: 0, label: "start" }, { index: 1, label: "goto" }, { index: 2, label: "wait" }], consentStep: null, cookieLog: [] })
     .filter((f) => f.check.startsWith("container_") || f.check === "datalayer_split")
     .map((f) => `${f.severity}:${f.check}`);
-  assert.deepEqual(found.sort(), ["info:container_send_to_only", "info:datalayer_split", "warning:container_duplicate", "warning:container_environment"]);
+  assert.deepEqual(found.sort(), ["info:container_send_to_only", "info:datalayer_split", "warning:container_duplicate", "warning:container_environment", "warning:container_failed"]);
+
+  // Each container script's answer: the version its data was published as, its size and how long it took, or its failure.
+  const main = loadSources(run).find((l) => l.id === "GTM-MAIN");
+  assert.equal(main.version, "153");
+  assert.equal(main.bytes, Buffer.byteLength(SCRIPTS["/gtm.js?id=GTM-MAIN"]));
+  assert.ok(Number.isInteger(main.ms) && main.ms >= 0, `load time ${main.ms}`);
+  assert.equal(loadSources(run).find((l) => l.id === "GTM-GONE").failed, "404");
+  assert.equal(loadSources(run).find((l) => l.id === "GTM-ZONE").version, undefined, "a script without published data has no version");
 });
 
 test("a container URL gives its ID, script, dataLayer and host, without the environment token", () => {
@@ -139,6 +153,10 @@ const savedRun = () => ({
     { id: "G-XY34", script: "gtag", layer: "myDataLayer", host: "shop.example", served: "site", how: "parser", page: "https://shop.example/", doc: "d1", step: 1, t: 2 },
     { id: "G-XY34", script: "gtag", layer: "dataLayer", host: "www.googletagmanager.com", served: "google", how: "script", callers: [{ container: "GTM-AB12" }], page: "https://shop.example/", doc: "d1", step: 1, t: 3 },
   ],
+  containerScripts: [
+    { id: "GTM-AB12", host: "www.googletagmanager.com", step: 1, status: 200, version: "164", bytes: 458445, transferBytes: 120330, ms: 93 },
+    { id: "G-XY34", host: "shop.example", step: 1, status: 404 },
+  ],
 });
 
 test("the report and report.md list the containers with their sources, in both languages", async () => {
@@ -149,25 +167,27 @@ test("the report and report.md list the containers with their sources, in both l
   const input = { title: "t", generatedAt: "now", findings: checkRun({ events: [] }, runs[0]), explained: null, runs };
   const html = render(context(input));
   assert.match(html, /id="inv-containers"><summary><span class="t">Google containers<\/span>/);
-  assert.match(html, /<code>GTM-AB12<\/code><span class="chip plain">GTM container<\/span><span>Inline code in the page \(the snippet\)<\/span>/);
+  assert.match(html, /<code>GTM-AB12<\/code><span class="chip plain">GTM container<\/span><span>Inline code in the page \(the snippet\)<\/span>.*<span class="chip plain mono">version 164<\/span><span class="chip plain mono">447\.7 KB<\/span><span class="chip plain">loaded in 93 ms<\/span>/);
+  assert.match(html, /<code>G-XY34<\/code>.*<span class="badge sev-broken">.*failed to load \(HTTP 404\)<\/span>/);
   assert.match(html, /<code>G-XY34<\/code>.*A Google tag in GTM-AB12 \(load_google_tags\)/);
   assert.match(html, /The site&#39;s own domain \(shop\.example\)|The site's own domain \(shop\.example\)/);
   const md = renderMarkdown(input);
-  assert.match(md, /## Google containers\n\n\| Container \| Loaded by \| dataLayer \| Served from \| Pages \|/);
-  assert.match(md, /\| G-XY34 \(Google tag\) \| A script tag in the page's HTML \| myDataLayer \| The site's own domain \(shop\.example\) \| 1 \|/);
+  assert.match(md, /## Google containers\n\n\| Container \| Loaded by \| dataLayer \| Served from \| Version and size \| Pages \|/);
+  assert.match(md, /\| GTM-AB12 \(GTM container\) \| Inline code in the page \(the snippet\) \| dataLayer \| Google \| version 164, 447\.7 KB, loaded in 93 ms \| 1 \|/);
+  assert.match(md, /\| G-XY34 \(Google tag\) \| A script tag in the page's HTML \| myDataLayer \| The site's own domain \(shop\.example\) \| failed to load \(HTTP 404\) \| 1 \|/);
   const tr = renderMarkdown({ ...input, lang: "tr" });
   assert.match(tr, /## Google container'ları/);
   assert.match(tr, /GTM-AB12 içindeki bir Google etiketi/);
   // The same container twice on one page, and two dataLayers.
-  assert.deepEqual(input.findings.filter((f) => /container|datalayer/.test(f.check)).map((f) => `${f.severity}:${f.check}`), ["warning:container_duplicate", "info:datalayer_split"]);
+  assert.deepEqual(input.findings.filter((f) => /container|datalayer/.test(f.check)).map((f) => `${f.severity}:${f.check}`).sort(), ["info:datalayer_split", "warning:container_duplicate", "warning:container_failed"]);
 });
 
 test("a run saved without container loads renders and checks as before", async () => {
   const { context } = await import("../src/html/shell.js");
   const { render } = await import("../src/html/scope.js");
   const { renderMarkdown } = await import("../src/report.js");
-  const { containerLoads, ...old } = savedRun();
-  assert.ok(containerLoads.length);
+  const { containerLoads, containerScripts, ...old } = savedRun();
+  assert.ok(containerLoads.length && containerScripts.length);
   const input = { title: "t", generatedAt: "now", findings: checkRun({ events: [] }, old), explained: null, runs: [old] };
   assert.doesNotMatch(render(context(input)), /inv-containers/);
   assert.doesNotMatch(renderMarkdown(input), /Google containers/);
@@ -179,7 +199,7 @@ test("MCP step results list the containers the step loaded", async () => {
   const run = savedRun();
   const session = { ...run, network: [], hits: [], cookieChanges: [], steps: run.steps };
   const text = stepCapture({ session }, 1);
-  assert.match(text, /Google containers loaded:\n {2}GTM-AB12 \(GTM container\): Inline code in the page \(the snippet\)\n {2}G-XY34 \(Google tag\): A script tag in the page's HTML; dataLayer myDataLayer, served from shop\.example\n {2}G-XY34 \(Google tag\): A Google tag in GTM-AB12 \(load_google_tags\)/);
+  assert.match(text, /Google containers loaded:\n {2}GTM-AB12 \(GTM container\): Inline code in the page \(the snippet\); version 164, 447\.7 KB, loaded in 93 ms\n {2}G-XY34 \(Google tag\): A script tag in the page's HTML; failed to load \(HTTP 404\), dataLayer myDataLayer, served from shop\.example\n {2}G-XY34 \(Google tag\): A Google tag in GTM-AB12 \(load_google_tags\)/);
 });
 
 test("over MCP: get_containers during the audit, then finish_audit, its timeline and get_report", async () => {
@@ -194,9 +214,9 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
 
   const listed = (await call("get_containers", { audit_id: id }))[0].text;
   // The test server is the site, so every script counts as served from the site's own domain.
-  assert.match(listed, /GTM-MAIN \(GTM container\): Inline code in the page \(the snippet\); served from 127\.0\.0\.1/);
-  assert.match(listed, /GTM-CHTML \(GTM container\): A Custom HTML tag in GTM-MAIN; served from 127\.0\.0\.1, GTM environment env-3/);
-  assert.match(listed, /G-HTML \(Google tag\): A script tag in the page's HTML; dataLayer myDataLayer, served from 127\.0\.0\.1/);
+  assert.match(listed, /GTM-MAIN \(GTM container\): Inline code in the page \(the snippet\); version 153, [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1/);
+  assert.match(listed, /GTM-CHTML \(GTM container\): A Custom HTML tag in GTM-MAIN; loaded in \d+ ms, served from 127\.0\.0\.1, GTM environment env-3/);
+  assert.match(listed, /G-HTML \(Google tag\): A script tag in the page's HTML; [\d.]+ KB, loaded in \d+ ms, dataLayer myDataLayer, served from 127\.0\.0\.1/);
   const json = JSON.parse(listed.split("As JSON: ")[1]);
   assert.ok(json.some((l) => l.id === "AW-222" && l.source === "send_to" && l.by === "G-HTML"));
   assert.doesNotMatch(listed, /SECRET/);
@@ -204,13 +224,22 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
 
   const [result, timeline] = await call("finish_audit", { audit_id: id, completed: true, note: "Loaded.", measurement_plan: JSON.stringify({ events: [] }) });
   assert.match(result.text, /^Google containers \(how each reached the page\):$/m);
-  assert.match(result.text, /^ {2}GTM-MAIN \(GTM container\): Another script on the page: http:\/\/127\.0\.0\.1:\d+\/cmp\.js; served from 127\.0\.0\.1, 1 page$/m);
+  assert.match(result.text, /^ {2}GTM-MAIN \(GTM container\): Another script on the page: http:\/\/127\.0\.0\.1:\d+\/cmp\.js; version 153, [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1, 1 page$/m);
   assert.match(result.text, /loaded 2 times into one page/);
   assert.match(result.text, /GTM environment \(gtm_preview=env-3\)/);
   const steps = JSON.parse(timeline.text.replace(/^Timeline \(JSON, one entry per step\):\n/, ""));
   assert.ok(steps.flatMap((s) => s.containers ?? []).some((c) => c.id === "G-HTML" && c.source === "html" && c.data_layer === "myDataLayer"));
   const name = result.text.match(/get_report with report "([^"]+)"/)[1];
   const rows = JSON.parse((await call("get_report", { report: name, part: "containers" }))[0].text);
-  assert.deepEqual(rows.find((r) => r.id === "GTM-CHTML"), { id: "GTM-CHTML", source: "custom_html", by: "GTM-MAIN", served_from: "127.0.0.1", gtm_environment: "env-3", pages: [url] });
+  // An empty stand-in script still has a load time, and a few bytes on the wire from chunked encoding.
+  const { load_ms: chtmlMs, transfer_bytes: _wire, ...chtml } = rows.find((r) => r.id === "GTM-CHTML");
+  assert.ok(Number.isInteger(chtmlMs));
+  assert.deepEqual(chtml, { id: "GTM-CHTML", source: "custom_html", by: "GTM-MAIN", served_from: "127.0.0.1", gtm_environment: "env-3", pages: [url] });
+  const mainRow = rows.find((r) => r.id === "GTM-MAIN" && r.source === "inline");
+  assert.equal(mainRow.version, "153");
+  assert.ok(mainRow.size_bytes > 0);
+  assert.equal(rows.find((r) => r.id === "GTM-GONE").failed, "404");
+  assert.match(result.text, /^ {2}GTM-GONE \(GTM container\): A script tag in the page's HTML; failed to load \(HTTP 404\)/m);
+  assert.match(result.text, /The GTM-GONE script from 127\.0\.0\.1 was answered with HTTP 404, so none of its tags ran on that page\./);
   await client.close();
 });

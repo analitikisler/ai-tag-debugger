@@ -23,7 +23,7 @@ import { loadConfig, readJson, runAudit, writeReports } from "./audit.js";
 import { validatePlan } from "./schema.js";
 import { readBaseline } from "./baseline.js";
 import { MAX_CONCURRENCY } from "./pool.js";
-import { scriptCspSource } from "./report.js";
+import { scriptCell, scriptCspSource } from "./report.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
 import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
@@ -166,7 +166,8 @@ function cookieLines(session, step) {
 /** One container load in words: its ID, what inserted it, its dataLayer and where it came from. */
 function describeLoad(l) {
   const c = messages("en").ui.containers;
-  const extra = [l.layer !== "dataLayer" && `dataLayer ${l.layer}`, l.served === "site" && `served from ${l.host}`, l.environment && c.environment(l.environment), l.frame && c.iframe(l.frame.origin, l.frame.party)].filter(Boolean);
+  const script = scriptCell(c, l);
+  const extra = [script,l.layer !== "dataLayer" && `dataLayer ${l.layer}`, l.served === "site" && `served from ${l.host}`, l.environment && c.environment(l.environment), l.frame && c.iframe(l.frame.origin, l.frame.party)].filter(Boolean);
   return `  ${l.id} (${c.script[l.script]}): ${c.kinds[l.kind](l.by)}${extra.length ? `; ${extra.join(", ")}` : ""}`;
 }
 
@@ -189,7 +190,7 @@ export function stepCapture(audit, step) {
   if (lateHere.length) lines.push(`Arrived during this step but belong to the step that loaded their page: ${lateHere.map((h) => `${h.platform} ${h.name} (step "${session.steps[h.step]?.label ?? h.step}")`).join(", ")}`);
   if (pings.length) lines.push("Other calls to analytics and ad endpoints, not read as events (Consent Mode pings, resends, remarketing):", ...pings.map(describeCall));
   if (pushes.length) lines.push("dataLayer pushes:", ...pushes.map(describePush));
-  const loads = loadSources({ containerLoads: (session.containerLoads ?? []).filter((l) => l.step === step), dataLayerLog: session.dataLayerLog });
+  const loads = loadSources({ containerLoads: (session.containerLoads ?? []).filter((l) => l.step === step), containerScripts: session.containerScripts, dataLayerLog: session.dataLayerLog });
   if (loads.length) lines.push("Google containers loaded:", ...loads.map(describeLoad));
   lines.push(...cookieLines(session, step));
   const tag = session.steps[step]?.tagConsent;
@@ -245,6 +246,11 @@ function containerJson(l) {
     ...(l.served === "site" ? { served_from: l.host } : {}),
     ...(l.environment ? { gtm_environment: l.environment } : {}),
     ...(l.frame ? { iframe: { origin: l.frame.origin, party: l.frame.party } } : {}),
+    ...(l.version ? { version: l.version } : {}),
+    ...(l.bytes ? { size_bytes: l.bytes } : {}),
+    ...(l.transferBytes ? { transfer_bytes: l.transferBytes } : {}),
+    ...(l.ms != null ? { load_ms: l.ms } : {}),
+    ...(l.failed ? { failed: l.failed } : {}),
     ...(l.pages ? { pages: l.pages } : {}),
   };
 }
@@ -257,7 +263,7 @@ export function containerLines(runs) {
   return [
     "Google containers (how each reached the page):",
     ...rows.map((r) => {
-      const extra = [r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), r.frame && c.iframe(r.frame.origin, r.frame.party), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
+      const extra = [scriptCell(c, r), r.layer !== "dataLayer" && `dataLayer ${r.layer}`, r.served === "site" && `served from ${r.host}`, r.environment && c.environment(r.environment), r.frame && c.iframe(r.frame.origin, r.frame.party), `${r.pages.length} ${r.pages.length === 1 ? "page" : "pages"}`].filter(Boolean);
       return `  ${r.id} (${c.script[r.script]}): ${c.kinds[r.kind](r.by)}; ${extra.join(", ")}`;
     }),
   ];
@@ -282,7 +288,7 @@ export function timelineOf(run) {
     if (st.tagConsent) entry.tag_consent = Object.fromEntries(Object.entries(st.tagConsent.entries).map(([k, e]) => [k, e.update ?? e.default ?? null]));
     const cookies = Object.fromEntries(["added", "changed", "removed"].map((k) => [k, names(k)]).filter(([, list]) => list.length));
     if (Object.keys(cookies).length) entry.cookies = cookies;
-    const loads = loadSources({ containerLoads: (run.containerLoads ?? []).filter((l) => l.step === st.index), dataLayerLog: run.dataLayerLog });
+    const loads = loadSources({ containerLoads: (run.containerLoads ?? []).filter((l) => l.step === st.index), containerScripts: run.containerScripts, dataLayerLog: run.dataLayerLog });
     if (loads.length) entry.containers = loads.map(containerJson);
     if (st.identity && JSON.stringify(st.identity) !== JSON.stringify(lastIds)) entry.ids = st.identity;
     if (st.identity) lastIds = st.identity;
@@ -531,7 +537,7 @@ export function buildServer(opts) {
     },
     async ({ audit_id }) => {
       const { session } = getAudit(audit_id);
-      const loads = loadSources({ containerLoads: session.containerLoads ?? [], dataLayerLog: session.dataLayerLog });
+      const loads = loadSources({ containerLoads: session.containerLoads ?? [], containerScripts: session.containerScripts, dataLayerLog: session.dataLayerLog });
       if (!loads.length) return text("No GTM container or Google tag script has loaded on this audit's pages yet.");
       const lines = loads.map((l) => `Step ${l.step} ("${session.steps[l.step]?.label ?? ""}"), ${l.page ?? "?"}:\n${describeLoad(l)}`);
       return text(`${loads.length} container ${loads.length === 1 ? "load" : "loads"}:\n${lines.join("\n")}\n\nAs JSON: ${JSON.stringify(loads.map((l) => ({ step: l.step, page: l.page, ...containerJson(l) })))}`);

@@ -5,7 +5,7 @@ import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
 import { CONSENT_SIGNALS } from "./parsers.js";
-import { duplicateLoads, loadSources, splitLayers } from "./containers.js";
+import { duplicateLoads, loadSources, scriptFailed, splitLayers } from "./containers.js";
 import { widgetsOf } from "./frames.js";
 
 const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
@@ -387,6 +387,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   if (split) findings.push({ ...base, severity: "info", check: "datalayer_split", step: stepLabel(split.step), detail: d.dataLayerSplit(split.layers.map((x) => `${x.id} → ${x.layer}`), stepLabel(split.step)) });
   for (const l of loads.filter((x, i, all) => x.kind === "send_to" && !all.some((y) => y.id === x.id && y.kind !== "send_to") && all.findIndex((y) => y.kind === "send_to" && y.id === x.id) === i)) {
     findings.push({ ...base, severity: "info", check: "container_send_to_only", platform: l.id.startsWith("G-") ? "ga4" : "google_ads", step: stepLabel(l.step), detail: d.sendToOnly(l.id, l.by) });
+  }
+
+  // A container script that failed to load: none of its tags ran. Said once per container and host.
+  for (const sc of (run.containerScripts ?? []).filter((x, i, all) => scriptFailed(x) && all.findIndex((y) => scriptFailed(y) && y.id === x.id && y.host === x.host) === i)) {
+    findings.push({ ...base, severity: "warning", check: "container_failed", step: stepLabel(sc.step), detail: d.containerFailed(sc.id, sc.host, String(sc.status)) });
   }
 
   // Widgets that tracked on their own, left out of the plan checks: said once per widget, so nothing goes missing silently.
