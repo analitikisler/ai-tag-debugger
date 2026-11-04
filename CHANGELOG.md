@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.5 (2026-11-04)
+
+- Runs can report findings 0.22.4 did not on the same site (`container_not_run`, `container_held`). A baseline written with 0.22.4 can then list new entries; `--update-baseline` rewrites it.
+- After every step the tool reads Google's own registry of the containers that ran (`google_tag_manager`), so the Google containers card, `report.md` and MCP say when a container never ran, however its script got into the page.
+- New check `container_not_run` (warning): a GTM container was downloaded or asked for but never ran on any page of the run, so none of its tags fired. When a consent platform held it back and the run never consented, `container_held` (info) says so instead.
+- Fixed: a container the page only preloaded (`<link rel="preload">`, as Next.js does before its own code adds the script) or that ran without the tool seeing it added (as when a consent platform's auto-blocking replaces the browser's own functions) was missing from the containers card. It now has a row saying which.
+- Found on a live Next.js site: GTM was only preloaded and never ran, because the site's own scripts were served as HTML and its app crashed on start. `page_crashed` reported the crash; the containers card now also shows that GTM never ran.
+
 ## 0.22.4 (2026-11-04)
 
 - Runs can report a finding 0.22.3 did not on the same site (`iframe_message_unhandled`). A baseline written with 0.22.3 can then list new entries; `--update-baseline` rewrites it.
