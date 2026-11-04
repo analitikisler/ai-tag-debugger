@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.22.0 (2026-11-04)
 
+- Runs can report findings 0.21.0 did not on the same site (`container_duplicate`, `container_environment`, `datalayer_split`, `container_send_to_only`). A baseline written with 0.21.0 can then list new entries; `--update-baseline` rewrites it.
 - New **Google containers** card in the Inventory section and a table in `report.md`: every GTM container and Google tag the pages loaded, with how it got there (a script tag in the HTML, the inline snippet, another script such as a consent platform, a Custom HTML tag or a Google tag in another container, a Zone or template, a `gtag('config')` command, an event's `send_to`, or a destination of the Google tag), the dataLayer it reads, whether it was served by Google or from the site's own domain, and the GTM environment when one is named. The source is read from the page as each script is added, not guessed from network requests. `capture.json` keeps them under `containerLoads`.
 - MCP: the new `get_containers` tool lists the Google containers an open audit's pages loaded so far, with their sources. Step results and `get_step` list the containers each step loaded, `finish_audit` and `run_audit` end with them, the JSON timeline carries them per step, and `get_report` returns them with `part: "containers"`.
 - Pushes to a dataLayer of another name that a container reads (`l=myDataLayer`) are recorded, marked with that name.
-- New checks: `container_duplicate` (warning) for a container loaded more than once into one page, `container_environment` (warning) for a GTM environment loaded instead of Live, `datalayer_split` (info) for containers on one page reading different dataLayers, and `container_send_to_only` (info) for a destination only an event's `send_to` loaded. A baseline written before can then list new entries; `--update-baseline` rewrites it.
+- New checks: `container_duplicate` (warning) for a container loaded more than once into one page, `container_environment` (warning) for a GTM environment loaded instead of Live, `datalayer_split` (info) for containers on one page reading different dataLayers, and `container_send_to_only` (info) for a destination only an event's `send_to` loaded.
 - Development: the guide for coding agents is `AGENTS.md`, the name agents of any vendor read, instead of `CLAUDE.md`, and CONTRIBUTING.md points to it.
 - Development: ESLint's `minimatch` is held at 11 through `overrides` in package.json, for the globparts denial-of-service advisory (GHSA-g3hv-75wg-m249) that no 3.x or 10.x release fixes; ESLint itself still ships an older one. The tool as installed from npm was never affected: `minimatch` is only a development dependency. `npm audit` reports none.
 
