@@ -3,3 +3,4 @@ reports/
 aitd/
 .env
 saved/
+npm-shrinkwrap.json

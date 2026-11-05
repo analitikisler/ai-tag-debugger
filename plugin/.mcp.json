@@ -2,7 +2,7 @@
   "mcpServers": {
     "ai-tag-debugger": {
       "command": "npx",
-      "args": ["-y", "@analitikisler/ai-tag-debugger@0.22.7", "mcp"]
+      "args": ["-y", "@analitikisler/ai-tag-debugger@0.22.8", "mcp"]
     }
   }
 }

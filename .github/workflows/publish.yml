@@ -1,7 +1,8 @@
 name: Publish to npm
 # Publishes when the version in package.json on main is not on npm yet.
 # Uses npm trusted publishing (OIDC): no token is stored, and npm adds provenance.
-# Only the publish job can get the publish credential; it runs no install scripts or tests.
+# Only the publish job can get the publish credential; it runs no install scripts or tests. npm publish runs the
+# package's own prepack (scripts/shrinkwrap.js, Node built-ins only), which writes the shrinkwrap the package ships.
 on:
   push:
     branches: [main]

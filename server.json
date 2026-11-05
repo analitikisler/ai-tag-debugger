@@ -7,12 +7,12 @@
     "url": "https://github.com/analitikisler/ai-tag-debugger",
     "source": "github"
   },
-  "version": "0.22.7",
+  "version": "0.22.8",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@analitikisler/ai-tag-debugger",
-      "version": "0.22.7",
+      "version": "0.22.8",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
