@@ -1,12 +1,12 @@
 // What the Markdown and the HTML renderers share: the version, escaping, the grouped findings, platform names and
 // order, the plan-check lines and the verdict sentence. src/report.js and src/html/*.js both import from here and
 // this module imports neither, so the two renderers never import each other.
-import { readFileSync } from "node:fs";
 import { groupFindings } from "./checks.js";
 import { messages } from "./i18n.js";
 import { PROVIDERS } from "./parsers.js";
+import { VERSION } from "./version.js";
 
-export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+export { VERSION };
 
 const SEVERITIES = ["broken", "risk", "warning", "info"];
 

@@ -14,6 +14,19 @@
 
 The tests for these are in `test/security.test.js`, `test/redact.test.js` and `test/scope.test.js`.
 
+## The Chrome extension
+
+The extension in `extension/` (AITD Recorder) records a tab you browse yourself, in your own Chrome profile, so it is built to collect less than the CLI:
+
+- **Access is asked for when you first press Record**, not at install: `http` and `https` hosts are optional permissions. Its page hook and bridge are registered only for the origins being recorded and unregistered when recording stops.
+- **Only the recorded tab is read.** The service worker ignores requests from every other tab, and keeps only requests to known tracking, tag and consent vendors (`providerOf` in `src/parsers.js`).
+- **Values are kept as sent inside the browser and redacted on the way out.** A debugger has to show what was sent, so the panel and the recordings in the extension's IndexedDB keep parameter values, client and session IDs included, the way `--keep-bodies` keeps them in the CLI; user data is marked (`userData`) but not replaced. Every export (`capture.json`, `report.html`) goes through `redactRun` in `extension/lib/run.js`, which uses the same `src/redact.js` functions as `AuditSession`. Cookies are recorded by name and a 16-character hash of the value, never the value.
+- **Nothing leaves the browser.** There is no server, no telemetry and no model call; the checks are the deterministic ones. Recordings stay in the extension's own storage, the last 20 per site.
+- **Page content is data.** The page hook only observes; the page can send the same events it does, so the worker stores them as data and accepts commands (start, stop, step) only from the extension's own pages. Bodies are capped at 32 KB each and 2 MB per recording, and each log has the CLI's limits.
+- **The report runs sandboxed.** Extension pages may not run inline scripts, so the report tab shows the report in a sandboxed page (`extension/report/sandbox.html`) that has no extension APIs and keeps the report's own Content-Security-Policy.
+
+Reports about the extension are in scope: a way for a page to start or steer a recording, to read another tab's requests, or to get unredacted user data into an exported file.
+
 ## What is in scope
 
 Please report:

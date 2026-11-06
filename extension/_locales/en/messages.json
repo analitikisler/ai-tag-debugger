@@ -1,0 +1,5 @@
+{
+  "name": { "message": "AITD Recorder" },
+  "description": { "message": "Record a site's analytics and ad tags as you browse, and check them against your measurement plan. From ai-tag-debugger." },
+  "action": { "message": "Open AITD Recorder" }
+}

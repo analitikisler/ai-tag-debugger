@@ -1,5 +1,5 @@
 // How each Google container got onto the page: GTM (gtm.js) and Google tag (gtag/js) scripts, with what
-// inserted them. The browser records every container script as it is added (see CONTAINER_HOOK in browser.js):
+// inserted them. The browser records every container script as it is added (see CONTAINER_HOOK in page-hook.js):
 // parser-inserted from the HTML, or set by a script, with the scripts on the call stack at that moment. This
 // module turns that into a load source: the snippet, a script tag in the HTML, another script on the page,
 // a tag or Zone in another container, or a gtag config or send_to command the Google tag acted on.

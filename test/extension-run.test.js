@@ -1,0 +1,126 @@
+// The Chrome extension's recording pipeline, without a browser: raw events as the service worker and the page hook
+// store them, turned into the run object the CLI's checks read, then checked, rendered and exported.
+import { test, before } from "node:test";
+import assert from "node:assert/strict";
+import { gzipSync } from "node:zlib";
+import { copyCore } from "../scripts/extension.js";
+
+let run, lib, analyze, body;
+before(async () => {
+  // The extension imports the shared modules from extension/core/, which the copy step writes.
+  await copyCore();
+  lib = await import("../extension/lib/run.js");
+  analyze = await import("../extension/lib/analyze.js");
+  body = await import("../extension/lib/body.js");
+  run = lib.buildRun(EVENTS, { site: "https://shop.example", startedAt: 1000 });
+});
+
+const GA = "https://region1.google-analytics.com/g/collect?v=2&tid=G-TEST1&cid=111.222&dl=https%3A%2F%2Fshop.example%2Fproduct";
+const EVENTS = [
+  { t: 1000, seq: 1, kind: "cookies", cookies: [{ name: "_ga", domain: ".shop.example", hash: "aaa" }] },
+  { t: 1100, seq: 2, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+  { t: 1200, seq: 3, kind: "push", top: true, frameUrl: "https://shop.example/", entry: { url: "https://shop.example/", value: ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }] } },
+  { t: 1300, seq: 4, kind: "request", requestId: "r1", method: "GET", type: "ping", frameId: 0, url: `${GA}&en=page_view` },
+  { t: 1350, seq: 5, kind: "status", requestId: "r1", status: 204 },
+  { t: 2000, seq: 6, kind: "step", action: "navigate", url: "https://shop.example/product", label: "Opened /product" },
+  // A GA4 batch: three events in one POST body, one carrying an email address in a custom parameter.
+  { t: 2100, seq: 7, kind: "request", requestId: "r2", method: "POST", type: "ping", frameId: 0, url: GA, body: "en=view_item&cu=EUR&epn.value=10\nen=scroll&epn.percent_scrolled=90\nen=sign_up&ep.contact=jane%40mail.example" },
+  { t: 2150, seq: 8, kind: "status", requestId: "r2", status: 503 },
+  { t: 2200, seq: 9, kind: "push", top: true, frameUrl: "https://shop.example/product", entry: { url: "https://shop.example/product", value: { event: "view_item", ecommerce: { value: 10, currency: "EUR" } } } },
+  { t: 2300, seq: 10, kind: "load", top: true, frameUrl: "https://shop.example/product", entry: { src: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123", how: "parser", page: "https://shop.example/product?x=1", doc: "d1" } },
+  { t: 2400, seq: 11, kind: "step", action: "manual", label: "Added to cart" },
+  { t: 2500, seq: 12, kind: "cookies", cookies: [{ name: "_ga", domain: ".shop.example", hash: "bbb" }, { name: "_fbp", domain: ".shop.example", hash: "ccc" }] },
+  // Not a tracking request: never recorded as a hit or a call.
+  { t: 2600, seq: 13, kind: "request", requestId: "r3", method: "GET", type: "image", frameId: 0, url: "https://shop.example/logo.png" },
+];
+
+test("events become the CLI's run shape, one step per page load and named step", () => {
+  assert.deepEqual(run.steps.map((s) => s.label), ["Start", "Opened /", "Opened /product", "Added to cart"]);
+  assert.deepEqual(run.steps.map((s) => s.index), [0, 1, 2, 3]);
+  for (const key of ["hits", "dataLayerLog", "network", "cookieLog", "cookieChanges", "containerLoads", "frameMessages", "providers", "pageErrors"]) assert.ok(Array.isArray(run[key]), key);
+  assert.equal(run.completed, true);
+  assert.equal(run.live, true, "a hand recording's hits reached the real accounts");
+});
+
+test("a GA4 batch gives one hit per event, on the step it was sent in", () => {
+  assert.deepEqual(run.hits.map((h) => [h.name, h.step]), [["page_view", 1], ["view_item", 2], ["scroll", 2], ["sign_up", 2]]);
+  assert.deepEqual(run.providers, ["ga4"]);
+  assert.equal(run.hits[1].params.currency, "EUR");
+});
+
+test("each tracking call keeps its HTTP status, so a 503 shows as a failure", () => {
+  assert.deepEqual(run.network.map((c) => [c.method, c.status, c.provider]), [["GET", 204, "ga4"], ["POST", 503, "ga4"]]);
+  assert.ok(run.network[1].postData.includes("en=sign_up"));
+});
+
+test("values stay as sent in the run, with user data marked, and redactRun replaces it for exports", () => {
+  const signUp = run.hits.find((h) => h.name === "sign_up");
+  assert.ok(signUp.userData, "the email is marked");
+  assert.ok(JSON.stringify(signUp.params).includes("jane@mail.example"), "the panel shows what was sent");
+  const safe = lib.redactRun(run);
+  assert.ok(!JSON.stringify(safe).includes("jane@mail.example"), "nothing leaves with the address");
+  assert.ok(!JSON.stringify(safe.network).includes("jane%40mail.example"));
+  // IDs are not user data: the client id stays, in the panel and in exports.
+  assert.ok(safe.hits[0].url.includes("cid=111.222"));
+});
+
+test("dataLayer pushes, container loads and cookie changes are recorded like the CLI records them", () => {
+  assert.deepEqual(run.dataLayerLog.map((p) => p.step), [1, 2]);
+  assert.equal(run.containerLoads[0].id, "GTM-ABC123");
+  assert.equal(run.containerLoads[0].page, "https://shop.example/product", "no query string");
+  assert.deepEqual(run.cookieLog.map((c) => c.name), ["_ga", "_fbp"]);
+  assert.deepEqual(run.cookieChanges.map((c) => `${c.name}:${c.change}`), ["_ga:added", "_ga:changed", "_fbp:added"]);
+});
+
+test("the CLI's checks run on the recording, with and without a plan", () => {
+  const plan = { events: [{ platform: "ga4", name: "purchase" }, { platform: "ga4", name: "view_item", required_params: ["value", "currency"] }] };
+  const withPlan = analyze.analyze(run, { plan, lang: "en" });
+  assert.ok(withPlan.findings.some((f) => f.check === "missing_event" && f.event === "purchase"));
+  assert.ok(withPlan.planCheck);
+  const without = analyze.analyze(run, { lang: "tr" });
+  assert.equal(without.planCheck, null);
+  assert.ok(without.verdict.statusText && without.verdict.headline);
+});
+
+test("the report renders in English and Turkish, and an exported one carries no user data", () => {
+  const opts = { plan: null, site: "https://shop.example", generatedAt: new Date("2026-11-06T12:00:00Z") };
+  const local = analyze.reportHtml(run, { ...opts, lang: "en" });
+  assert.match(local, /^<!doctype html>/i);
+  assert.ok(local.includes("shop.example"));
+  assert.ok(analyze.reportHtml(run, { ...opts, lang: "tr" }).includes('lang="tr"'));
+  assert.ok(!analyze.reportHtml(run, { ...opts, lang: "en" }, { redacted: true }).includes("jane@mail.example"));
+});
+
+test("capture.json is what the CLI writes, marked as from the extension and redacted", () => {
+  const capture = JSON.parse(analyze.captureJson(run, { site: "https://shop.example", lang: "en", extensionVersion: "0.1.0" }));
+  assert.equal(capture.config.source, "extension");
+  assert.equal(capture.config.extension_version, "0.1.0");
+  assert.equal(capture.runs.length, 1);
+  assert.ok(Array.isArray(capture.findings));
+  assert.ok(!JSON.stringify(capture).includes("jane@mail.example"));
+});
+
+test("readPlan takes a plan's JSON and refuses anything else", () => {
+  assert.deepEqual(analyze.readPlan('{"events":[{"name":"purchase"}]}').plan.events[0].name, "purchase");
+  assert.equal(analyze.readPlan("not json").error, "planInvalid");
+  assert.equal(analyze.readPlan('{"events":[{}]}').error, "planInvalid");
+  assert.equal(analyze.readPlan("[]").error, "planInvalid");
+});
+
+test("request bodies decode from raw bytes, gzip and form data", async () => {
+  const bytes = (s) => [{ bytes: new TextEncoder().encode(s).buffer }];
+  assert.equal(await body.bodyText({ raw: bytes("en=page_view\nen=scroll") }), "en=page_view\nen=scroll");
+  const gz = gzipSync(Buffer.from("en=add_to_cart&cu=TRY"));
+  assert.equal(await body.bodyText({ raw: [{ bytes: gz.buffer.slice(gz.byteOffset, gz.byteOffset + gz.length) }] }), "en=add_to_cart&cu=TRY");
+  assert.equal(await body.bodyText({ formData: { a: ["1", "2"], b: ["x y"] } }), "a=1&a=2&b=x+y");
+  assert.equal(await body.bodyText(undefined), null);
+  assert.equal(await body.bodyText({ error: "Unknown error." }), null);
+  assert.equal((await body.bodyText({ raw: bytes("x".repeat(100)) }, 10)).length, 10);
+});
+
+test("a recording stops growing at the CLI's limits", () => {
+  const many = Array.from({ length: lib.LIMITS.hits + 5 }, (_, i) => ({ t: 10 + i, seq: i, kind: "request", requestId: `q${i}`, method: "GET", frameId: 0, url: `${GA}&en=e${i}` }));
+  const big = lib.buildRun(many, { site: "https://shop.example" });
+  assert.equal(big.hits.length, lib.LIMITS.hits);
+  assert.ok(big.pageErrors.some((e) => /Recording limit reached/.test(e.message)));
+});

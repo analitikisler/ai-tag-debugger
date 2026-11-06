@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Chrome extension preview, **AITD Recorder** (`extension/`): record a site's tracking while you browse it yourself in Chrome, then run the CLI's checks on it and open the same HTML report, in English or Turkish, from Chrome's side panel. Hits show live, grouped by step, with their parameters and HTTP status; dataLayer pushes are recorded from the first one, with or without a GTM container; a measurement plan can be chosen per site; and the run exports as a redacted `capture.json` and `report.html`. Not in the Chrome Web Store yet: `npm run extension`, then load `extension/` unpacked (README: Chrome extension).
+- The extension shows values as they were sent, client and session IDs included, and redacts user data only in what leaves it (exports). The CLI and the MCP server still redact at capture.
+- The HTML report no longer needs Node to render: its script hash, the brand colours and the consent tables moved into modules the extension shares (`src/sha256.js`, `src/brand-css.js`, `src/consent-table.js`), and the version is read from `src/version.js`. Reports are unchanged.
+
 ## 0.22.8 (2026-11-04)
 
 - Reproducible installs from npm: the package ships an `npm-shrinkwrap.json`, so `npx`, `npm install -g` and the Claude plugin install the exact dependency versions this release was tested with, each checked against its checksum, instead of resolving the version ranges afresh. A newer release of a dependency, or anything it ships, no longer reaches users until a release of ai-tag-debugger takes it. The shrinkwrap holds only the runtime packages (development tools such as ESLint are left out), and is written when the package is packed, from `package-lock.json`.

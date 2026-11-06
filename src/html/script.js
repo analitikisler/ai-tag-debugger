@@ -1,7 +1,7 @@
 // The report's one inline script, allowed by its hash in the page's CSP and the MCP server's header. Every behavior
 // hangs off data attributes (CONTRACT-IMPL.md lists them); every word it shows comes from the markup, so the script is
 // the same in every language and its hash never changes with the report's content.
-import { createHash } from "node:crypto";
+import { sha256Base64 } from "../sha256.js";
 
 // ---------- shell: routing, rail, tabs, filters, single select, expand all, theme ----------
 const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select, expand all, theme. The only script on the page,
@@ -297,4 +297,5 @@ const JOURNEYS = `/* Journeys: what the generic behaviors do not do. shell.js ke
 export const SCRIPT = [SHELL, JOURNEYS].join("\n");
 
 /** The CSP source for the inline script, for the page's meta tag and the MCP server's Content-Security-Policy header. */
-export const scriptCspSource = () => `'sha256-${createHash("sha256").update(SCRIPT).digest("base64")}'`;
+let cspSource = null;
+export const scriptCspSource = () => (cspSource ??= `'sha256-${sha256Base64(SCRIPT)}'`);
