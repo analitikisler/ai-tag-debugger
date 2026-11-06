@@ -34,6 +34,29 @@ const base = `http://localhost:${server.address().port}`;
 let context;
 try {
   await copyCore();
+  const launch = (dir, profile) => chromium.launchPersistentContext(path.join(work, profile), {
+    channel: "chromium", headless: !process.argv.includes("--headed"),
+    args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`, "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"],
+  });
+
+  // As shipped, before any site access is granted: the panel must know the tab's site and offer Record, which is
+  // what asks for access. (A panel that can't read the address until access is granted never gets to ask.)
+  const shipped = await launch(path.join(ROOT, "extension"), "profile-shipped");
+  try {
+    const sw = shipped.serviceWorkers()[0] ?? (await shipped.waitForEvent("serviceworker"));
+    const page = await shipped.newPage();
+    await page.goto(`${base}/`);
+    const tab = await sw.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/*` }))[0]?.id, base);
+    assert.ok(tab, "the worker can find the tab by its address");
+    const p = await shipped.newPage();
+    await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html?tab=${tab}`);
+    await p.waitForFunction(() => document.getElementById("host").textContent !== "");
+    assert.equal(await p.textContent("#host"), "localhost", "the panel names the site before access is granted");
+    assert.equal(await p.isEnabled("#record"), true, "Record can be pressed before access is granted");
+  } finally {
+    await shipped.close();
+  }
+
   const ext = path.join(work, "extension");
   await cp(path.join(ROOT, "extension"), ext, { recursive: true });
   const manifest = JSON.parse(await readFile(path.join(ext, "manifest.json"), "utf8"));
@@ -41,10 +64,7 @@ try {
   delete manifest.optional_host_permissions;
   await writeFile(path.join(ext, "manifest.json"), JSON.stringify(manifest));
 
-  context = await chromium.launchPersistentContext(path.join(work, "profile"), {
-    channel: "chromium", headless: !process.argv.includes("--headed"),
-    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"],
-  });
+  context = await launch(ext, "profile");
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
   const id = new URL(worker.url()).host;
 
