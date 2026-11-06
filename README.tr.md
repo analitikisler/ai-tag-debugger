@@ -765,6 +765,35 @@ HTTP modunda sunucu yerelde olduğundan daha kısıtlıdır:
 
 Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://analitikisler.com) Cloud sürümünün bir parçasıdır.
 
+## Chrome eklentisi (önizleme)
+
+**AITD Recorder**, siteyi kendi Chrome'unuzda kendiniz gezerken izlemeyi kaydeder ve durdurduğunuzda CLI ile aynı kontrolleri çalıştırır. Elle daha hızlı olan işler için kullanın: giriş gerektiren bir alan, gerçek bir test kartıyla bir ödeme, yapay zekânın ulaşamadığı bir sayfa ya da yayından önce hızlı bir bakış. Hiçbir yapay zekâ modeli kullanılmaz; kontroller CLI'ın deterministik kontrolleridir ve siz dışa aktarmadıkça hiçbir şey tarayıcınızdan çıkmaz.
+
+Henüz Chrome Web Mağazası'nda değil. Kaynaktan yüklemek için:
+
+```bash
+npm run extension   # paylaşılan kontrol ve rapor kodunu extension/core/ klasörüne kopyalar
+```
+
+Sonra `chrome://extensions` adresini açın, Geliştirici modunu açın, **Paketlenmemiş öğe yükle**'yi seçin ve `extension/` klasörünü gösterin. Yan paneli açmak için araç çubuğundaki simgeye tıklayın.
+
+1. Sitenizi açın ve **Kaydet**'e basın. Chrome sitelere ve izleme isteklerine erişim için bir kez izin ister. İlk sayfanın etiketleri de kaydedilsin diye sayfa yeniden yüklenir.
+2. İsterseniz bir ölçüm planı (`measurement-plan.json`) seçin; site başına saklanır.
+3. Gezinin. Her sayfa yüklemesi ve tek sayfalı uygulama rotası bir adımdır; "Sepete eklendi" gibi bir anı işaretlemek için bir ad yazıp **Yeni adım**'a basın. İstekler geldikçe, adıma göre gruplanmış olarak parametreleri ve HTTP durumlarıyla görünür; başarısız olan ya da 503 alan bir istek hemen fark edilir. dataLayer push'ları, bir GTM konteyneri olsun ya da olmasın, ilkinden itibaren kaydedilir.
+4. **Durdur**'a basın. Karar ve bulgular panelde görünür; **Tam raporu aç**, CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir.
+
+| Panel denetimi | Ne yapar |
+| --- | --- |
+| Kaydet / Durdur | Geçerli sekmenin kaydını başlatır ve durdurur. |
+| Ölçüm planı | Karşılaştırılacak plan dosyası, site başına saklanır. Plan yoksa kontroller plansız çalışır. |
+| Yeni adım | Adı olan bir adım başlatır; bulgular olayın nerede olduğunu söyler. |
+| Dil | Panelin ve raporun dili: Türkçe ya da İngilizce. Başta Chrome'un dilini izler. |
+| Kişisel verileri ekranda gizle | Ekran paylaşımı için paneldeki e-postaları, telefonları ve adları gizler. |
+| capture.json / report.html dışa aktar | Çalıştırmayı ve raporu maskelenmiş olarak indirir. |
+| Kayıtlar | Sitenin bu tarayıcıda saklanan son 20 kaydı. |
+
+CLI'dan farkları: tarayıcıyı siz kullandığınız için yapay zekâ yolculukları ve onay senaryoları yoktur; kayıt, içinde bulunduğunuz onay durumunu kontrol eder. İstekler, her ziyarette olduğu gibi sitenin gerçek analitik ve reklam hesaplarına ulaşır ve rapor bunu söyler. Panelde değerler, istemci ve oturum kimlikleri dahil, gönderildiği gibi gösterilir, çünkü hata ayıkladığınız şey budur; dışa aktarılan dosyalar CLI'ın dosyaları gibi maskelenir.
+
 ## Güvenlik
 
 - Ajana kolay test verisi kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir yolculuk gerçek bir ödeme ya da hesap gerektiriyorsa durur ve bunu bildirir.
@@ -776,6 +805,7 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 - Bir [test hesabı](#giriş-yapmak) yalnızca denetlenen sitenin sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
 - **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
 - Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
+- Chrome eklentisi sitelere erişim iznini yalnızca Kaydet'e ilk bastığınızda ister, sayfa kancasını yalnızca kaydettiğiniz sitede çalıştırır, yalnızca kaydedilen sekmenin izleme isteklerini okur ve kayıtları tarayıcınızda tutar. Sunucusu yoktur ve hiçbir yere bir şey göndermez; dışa aktardığı dosyalar maskelenir.
 - Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.
 - HTTP sunucusunu başkaları için barındırıyor musunuz? Ek bir savunma katmanı olarak özel ve bulut meta veri adres aralıklarını ağ düzeyinde de engelleyin (bir çıkış güvenlik duvarı ya da yalıtılmış bir ağ).
 
@@ -792,6 +822,8 @@ npm run setup   # Node'u denetler, bağımlılıkları ve Chromium'u kurar, bir 
 npm test        # ayrıştırıcılar, kontroller, her AI sağlayıcısı ve MCP sunucusu; demo mağazaya karşı uçtan uca
 npm run test:unit   # yalnızca tarayıcı gerektirmeyen testler, yaklaşık on saniyede
 npm run lint    # ESLint, yalnızca önerilen kurallar: tanımsız adlar, kullanılmayan import'lar ve benzerleri
+npm run extension        # paylaşılan kodu extension/core/ klasörüne kopyalar (--pack ayrıca Chrome Web Mağazası için bir zip yazar)
+npm run test:extension   # Chrome eklentisini Chromium'da yükler ve demo mağazada bir yolculuk kaydeder
 ```
 
 Depoda ayrıca bir geliştirme konteyneri (`.devcontainer/devcontainer.json`) vardır. VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açın; Chromium'un sistem kütüphaneleri dahil `npm run setup`'ı sizin yerinize çalıştırır. Oradaki bir AI modelini kullanmak için anahtarınızı bir Codespaces sırrı olarak ekleyin ya da konteynerin terminalinde dışa aktarın.

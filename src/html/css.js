@@ -3,7 +3,7 @@
 // only its own constant, so parallel changes never touch the same lines.
 // No url(data:...) anywhere (test/html-shell.test.js checks it): icons come from the inline sprite. The search icon the
 // mockup drew as a data URI in the filter bar is the sprite's ui-search, placed by the filter bar's markup.
-import { brandCss } from "../whitelabel.js";
+import { brandCss } from "../brand-css.js";
 
 // ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts, motion ----------
 const TOKENS = `/* Tally design system tokens, under the names the builders already use. Light on :root; dark twice

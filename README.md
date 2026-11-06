@@ -765,6 +765,35 @@ In HTTP mode, the server is more locked down than locally:
 
 A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](https://analitikisler.com) Cloud version.
 
+## Chrome extension (preview)
+
+**AITD Recorder** records a site's tracking while you browse it yourself, in your own Chrome, and runs the same checks as the CLI when you stop. Use it for what is quicker by hand: a logged-in area, a checkout with a real test card, a page the AI can't reach, or a quick look before a release. No AI model is involved; the checks are the CLI's deterministic ones, and nothing leaves your browser unless you export it.
+
+It is not in the Chrome Web Store yet. To load it from source:
+
+```bash
+npm run extension   # copies the shared checks and report code into extension/core/
+```
+
+Then open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick the `extension/` folder. Click the toolbar icon to open the side panel.
+
+1. Open your site and press **Record**. Chrome asks once for access to sites and their tracking requests. The page reloads, so the first page's tags are recorded too.
+2. Optionally choose a measurement plan (`measurement-plan.json`); it is kept per site.
+3. Browse. Each page load and single-page-app route is a step; type a name and press **New step** to mark a moment such as "Added to cart". Hits show as they land, grouped by step, with their parameters and HTTP status, so a request that failed or got a 503 stands out. dataLayer pushes are recorded from the first one, with or without a GTM container.
+4. Press **Stop**. The verdict and findings appear in the panel; **Open full report** shows the same HTML report the CLI writes, in English or Turkish.
+
+| Panel control | What it does |
+| --- | --- |
+| Record / Stop | Starts and stops recording the current tab. |
+| Measurement plan | A plan file to check against, kept per site. Without one, the checks run plan-free. |
+| New step | Starts a named step, so findings say where things happened. |
+| Language | The panel's and report's language: English or Turkish. Follows Chrome's language at first. |
+| Mask personal data on screen | Hides emails, phone numbers and names in the panel, for screen sharing. |
+| Export capture.json / report.html | Downloads the run and the report, redacted. |
+| Recordings | The last 20 recordings of the site, kept in this browser. |
+
+Differences from the CLI: you drive, so there are no AI journeys and no consent scenarios; the recording checks the consent state you were in. Hits reach the site's real analytics and ad accounts, as with any visit, and the report says so. In the panel, values are shown as they were sent, client and session IDs included, because that is what you are debugging; exports are redacted like the CLI's files.
+
 ## Safety
 
 - The agent is told to use obvious test data and **never to enter real payment details**. If a journey needs a real payment or account, it stops and reports that instead.
@@ -776,6 +805,7 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 - A [test account](#logging-in) is typed only into the audited site's pages, never shown to the model, and turned back into its placeholders in everything the tool keeps. A saved login session is readable only by you and is never used by an HTTP server.
 - **User data sent for ad matching is redacted** before it is stored in `capture.json` or shown in the report: emails, phone numbers, names, addresses and user ids in GA4 and Google Ads enhanced conversions (`em`, `ph`, `uid`, …), Meta advanced matching (`ud[*]`, `udff[*]`), TikTok `context.user`, and the `user_data` the site pushes to the dataLayer for enhanced conversions. Any value that looks like an email address is redacted whatever its field is called, except the audited site's own address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, …), such as a contact link in a GTM click event, which is not visitor data. Each value becomes a marker such as `[redacted: 64 chars, looks hashed]`, and a value that wasn't hashed is reported as a personal data risk. `--keep-bodies` (`"keep_bodies": true`) stores requests as sent, for debugging.
 - Stored request bodies are capped at 32 KB per request and 2 MB per journey. Past that, the report says the body wasn't stored.
+- The Chrome extension asks for access to sites only when you first press Record, runs its page hook only on the site you are recording, reads only the recorded tab's tracking requests, and keeps recordings in your browser. It has no server and sends nothing anywhere; the files it exports are redacted.
 - Only run it against sites you own or are authorized to test.
 - Hosting the HTTP server for other people? Also block private and cloud metadata address ranges at the network level (an egress firewall or an isolated network), as defense in depth.
 
@@ -792,6 +822,8 @@ npm run setup   # checks Node, installs the dependencies and Chromium, says whet
 npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
 npm run test:unit   # only the tests that need no browser, in about ten seconds
 npm run lint    # ESLint, the recommended rules only: undefined names, unused imports and the like
+npm run extension        # copies the shared code into extension/core/ (--pack also writes a zip for the Chrome Web Store)
+npm run test:extension   # loads the Chrome extension in Chromium and records a journey on the demo shop
 ```
 
 The repository also has a dev container (`.devcontainer/devcontainer.json`). Open it in VS Code with the Dev Containers extension, or in GitHub Codespaces, and it runs `npm run setup` for you, Chromium's system libraries included. To use an AI model there, add your key as a Codespaces secret or export it in the container's terminal.

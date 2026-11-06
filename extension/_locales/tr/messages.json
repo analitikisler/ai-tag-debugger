@@ -1,0 +1,5 @@
+{
+  "name": { "message": "AITD Recorder" },
+  "description": { "message": "Siteyi gezerken analitik ve reklam etiketlerini kaydedin, ölçüm planınızla karşılaştırın. ai-tag-debugger'dan." },
+  "action": { "message": "AITD Recorder'ı aç" }
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AITD Recorder</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f3f0e8; font: 14px system-ui, sans-serif; color: #17140f; }
+  @media (prefers-color-scheme: dark) { html, body { background: #151310; color: #f1ece2; } }
+  #status { padding: 24px; }
+  iframe { display: block; border: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<p id="status"></p>
+<iframe id="frame" title="Report" hidden></iframe>
+<script type="module" src="report.js"></script>
+</body>
+</html>

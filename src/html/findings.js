@@ -3,7 +3,7 @@
 // Filtering, tabs, groups and cards are the shell script's generic behaviors, driven by attributes; this module only
 // writes markup. The evidence, GTM, verify and "fine on" data are read the way the 0.17 finding card read them.
 import { verifyLinks } from "../verify.js";
-import { consentTable } from "../consent.js";
+import { consentTable } from "../consent-table.js";
 import { changeLabel, fixSteps, platformRank, summaryParts } from "../report-shared.js";
 import {
   PLATFORM_ART, OWNERS, alsoFineOn, badge, chip, detailHtml, esc, fmt, hitAnchor, hitFor, hitsOf, hostPath, missingParamRows, ownerOf,

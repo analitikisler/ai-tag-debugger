@@ -1,4 +1,4 @@
-import { AD_PLATFORMS, consentMatrixMarkdown, consentTable } from "./consent.js";
+import { AD_PLATFORMS, consentMatrixMarkdown, consentTable } from "./consent-table.js";
 import { cmpFacts } from "./cmp.js";
 import { ownerOf, verifyLinks } from "./verify.js";
 import { createProvider } from "./providers.js";

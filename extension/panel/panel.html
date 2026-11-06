@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AITD Recorder</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><img src="../icons/32.png" alt="" width="20" height="20"><span>AITD Recorder</span></div>
+  <select id="lang" aria-label="Language"></select>
+</header>
+
+<main>
+  <section class="card" id="state">
+    <div class="site"><span id="host" class="host"></span><span id="pill" class="pill"></span></div>
+    <p id="hint" class="hint"></p>
+    <div class="actions">
+      <button id="record" class="primary" type="button"></button>
+      <button id="stop" class="danger" type="button" hidden></button>
+    </div>
+  </section>
+
+  <section class="card" id="plan">
+    <h2 data-t="plan"></h2>
+    <p id="planInfo" class="hint"></p>
+    <div class="actions">
+      <label class="button" for="planFile"><span data-t="choosePlan"></span></label>
+      <input id="planFile" type="file" accept=".json,application/json" hidden>
+      <button id="planClear" type="button" class="quiet" hidden data-t="clearPlan"></button>
+    </div>
+    <p id="planError" class="error" hidden></p>
+  </section>
+
+  <section class="card" id="live" hidden>
+    <div class="counts"><span id="cHits"></span><span id="cPushes"></span><span id="cSteps"></span></div>
+    <form id="stepForm" class="step-form">
+      <input id="stepName" type="text" maxlength="120" autocomplete="off">
+      <button type="submit" data-t="newStep"></button>
+    </form>
+    <h2 data-t="live"></h2>
+    <ol id="feed" class="feed"></ol>
+    <p id="feedEmpty" class="hint" data-t="noHits"></p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <p id="checking" class="hint" data-t="checking"></p>
+    <p id="verdict" class="verdict"></p>
+    <div id="sev" class="sev"></div>
+    <ol id="findings" class="findings"></ol>
+    <div class="actions wrap">
+      <button id="openReport" class="primary" type="button" data-t="openReport"></button>
+      <button id="exportCapture" type="button" data-t="exportCapture"></button>
+      <button id="exportHtml" type="button" data-t="exportHtml"></button>
+    </div>
+    <p class="hint" data-t="exportNote"></p>
+  </section>
+
+  <section class="card" id="history">
+    <h2 data-t="history"></h2>
+    <ol id="recordings" class="recordings"></ol>
+    <p id="historyEmpty" class="hint" data-t="noHistory"></p>
+  </section>
+</main>
+
+<footer class="bar foot">
+  <label class="toggle"><input id="mask" type="checkbox"><span data-t="maskOnScreen"></span></label>
+</footer>
+<script type="module" src="panel.js"></script>
+</body>
+</html>

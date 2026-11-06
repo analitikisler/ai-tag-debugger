@@ -5,7 +5,7 @@
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
 import { canonicalEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
-import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent.js";
+import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent-table.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
 

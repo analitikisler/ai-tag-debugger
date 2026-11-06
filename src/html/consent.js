@@ -1,6 +1,6 @@
 // The Consent section: one status line per platform, the Consent Mode card and the scenarios card. Denied is red,
 // granted green and "no signal" grey, all by token through chip("consent", ...).
-import { consentMatrix, consentTable, IGNORE, SCENARIO_COLUMNS } from "../consent.js";
+import { consentMatrix, consentTable, IGNORE, SCENARIO_COLUMNS } from "../consent-table.js";
 import { cmpFacts } from "../cmp.js";
 import { isConsentEntry } from "../report-shared.js";
 import { tagConsentStates } from "../checks.js";

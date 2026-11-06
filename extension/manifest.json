@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_name__",
+  "short_name": "AITD Recorder",
+  "description": "__MSG_description__",
+  "version": "0.1.0",
+  "default_locale": "en",
+  "minimum_chrome_version": "116",
+  "homepage_url": "https://github.com/analitikisler/ai-tag-debugger",
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "action": { "default_title": "__MSG_action__", "default_icon": { "16": "icons/16.png", "32": "icons/32.png" } },
+  "side_panel": { "default_path": "panel/panel.html" },
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "scripting", "webRequest", "webNavigation", "cookies"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "sandbox": { "pages": ["report/sandbox.html"] },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'",
+    "sandbox": "sandbox allow-scripts allow-popups allow-modals; default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'unsafe-inline'"
+  }
+}
