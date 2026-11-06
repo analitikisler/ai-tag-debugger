@@ -5,7 +5,7 @@ import { fold } from "../model.js";
 import { redactPush } from "../../core/redact.js";
 import { PROVIDERS } from "../../core/parsers.js";
 import { badge, stepBlock } from "./common.js";
-import { stepCollapsed, toggleStep } from "./events.js";
+import { stepCollapsed, toggleStep, orderToggle } from "./events.js";
 
 const isGtm = (p) => /^gtm\./.test(String(p.name));
 const shownValue = (v) => (state.mask ? redactPush(v).value : v);
@@ -24,8 +24,8 @@ export function dataLayerToolbar(model) {
   const { gtm } = filtered(model);
   const sw = (id, label, checked, onchange) => el("label", { class: "switch", for: id }, el("input", { id, type: "checkbox", checked, onchange: (e) => onchange(e.target.checked) }), el("i"), label);
   return el("div", { class: "toolbar" },
-    el("label", { class: "search" }, icon("search"), el("input", { id: "dlSearch", type: "search", placeholder: t.search, "aria-label": t.search, value: state.dl.search,
-      oninput: (e) => { state.dl.search = e.target.value; render(); }, onkeydown: (e) => { if (e.key === "Escape") { state.dl.search = ""; render(); } } }), el("span", { class: "kbd", text: "/" })),
+    el("div", { class: "toprow" }, el("label", { class: "search" }, icon("search"), el("input", { id: "dlSearch", type: "search", placeholder: t.search, "aria-label": t.search, value: state.dl.search,
+      oninput: (e) => { state.dl.search = e.target.value; render(); }, onkeydown: (e) => { if (e.key === "Escape") { state.dl.search = ""; render(); } } }), el("span", { class: "kbd", text: "/" })), orderToggle()),
     el("div", { class: "toggle-row" },
       sw("hideGtm", t.hideGtm(gtm), state.dl.hideGtm, (v) => { state.dl.hideGtm = v; render(); }),
       sw("showFired", t.showFired, state.dl.showFired, (v) => { state.dl.showFired = v; render(); })));
@@ -77,7 +77,7 @@ function firedLine(push, model) {
   const t = m().dataLayer;
   const fired = firedShown(push, model);
   if (!fired.length) return null;
-  const parts = fired.map((f, i) => [i ? ", " : "", el("b", { text: `${PROVIDERS[f.platform] ?? f.platform} ${f.name}` }), ` +${(f.ms / 1000).toFixed(1)}s`]);
+  const parts = fired.map((f, i) => [i ? ", " : "", el("b", { text: `${PROVIDERS[f.platform] ?? f.platform} ${f.name}` }), ` ${f.ms < 1000 ? m().units.ms(f.ms) : m().units.s((f.ms / 1000).toFixed(1))}`]);
   const same = fired.every((f) => f.same);
   return el("div", { class: "firedline" }, icon("info", "s"), el("span", {}, `${same ? t.fired : t.after}: `, parts, ". ",
     button(t.showInEvents, () => actions.showRow(fired[0].key), { cls: "linkbtn" })));
@@ -112,8 +112,10 @@ export function dataLayerList(model) {
   const { list } = filtered(model);
   const keep = new Set(list.map((p) => p.key));
   const out = [];
-  for (const step of model.steps) {
-    const pushes = step.pushes.filter((p) => keep.has(p.key));
+  const newest = state.order === "newest";
+  for (const step of newest ? [...model.steps].reverse() : model.steps) {
+    const kept = step.pushes.filter((p) => keep.has(p.key));
+    const pushes = newest ? kept.reverse() : kept;
     if (!step.pushes.length && step.action === "start") continue;
     const collapsed = stepCollapsed(step, model);
     out.push(stepBlock(step, { collapsed, count: t.pushes(pushes.length), status: false, onToggle: () => toggleStep(step, model),

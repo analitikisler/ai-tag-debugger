@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `before_consent` now compares times within the step the visitor accepted in, so a pixel that fired on page load, before the banner was answered on the same page, is reported.
 - Fixed: GA4's user ID (`uid`, `user_id`) was reported as unhashed personal data. It is the site's own pseudonymous ID, sent as it is by design; it is still masked, and is flagged only when its value is an email address or a phone number.
 - New check `hit_failed` (broken) on live runs: tracking requests that failed or got an HTTP error, so those events never reached the platform.
 - Fixed: a consent platform's auto-blocking (such as efilli's on a Next.js site) made one Google container read as loaded several times, so runs reported a false `container_duplicate`. A container script now counts as loaded only once it is added to the page as a script that runs. The duplicate warning names each source once, with how many times it loaded.

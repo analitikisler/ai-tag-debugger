@@ -1,10 +1,10 @@
 // An opened hit (§5.4, §5.7): the meta line, the view switch, then Readable (labelled cards), All parameters
 // (every key that arrived, grouped by the platform's dictionary) or Raw (the request as sent, one key=value a line).
 import { state, m, render, actions, save } from "../state.js";
-import { el, icon, button, copy, since, upper, infoButton, pathOf } from "../ui.js";
+import { el, icon, button, copy, since, upper, infoButton } from "../ui.js";
 import { groupsOf, isCustomParam, paramGroup, paramHint, paramLabel, paramTip, RECOMMENDED_ORDER } from "../../core/glossary.js";
 import { isUserDataKey, redactParams } from "../../core/redact.js";
-import { CONSENT_SIGNALS } from "../../core/parsers.js";
+import { CONSENT_SIGNALS, decodeGcd } from "../../core/parsers.js";
 import { card, statePill, GOOGLE, sentBeforeConsent, cookieless } from "./common.js";
 import { itemsCard } from "./items.js";
 
@@ -30,17 +30,30 @@ export function typeOf(key, value) {
   return "str";
 }
 
-function tipContent(key, platform) {
-  return () => {
-    const p = m().params;
-    const text = paramTip(key, state.lang, platform) ?? p.noTip;
-    return [el("span", { class: "tk", text: `${key} · ${paramLabel(key, state.lang, platform)}` }), text,
-      key === "gcd" ? el("span", { class: "src", text: p.gcdSource(m().name) }) : null];
-  };
+let ctxKey = ""; // the hit being drawn, so each ⓘ names its own row
+
+/** The explanation under a parameter row: the key and label, the dictionary's text, and for gcd where its letters come from. */
+function tipLine(key, platform) {
+  const p = m().params;
+  const text = paramTip(key, state.lang, platform) ?? p.noTip;
+  return el("div", { class: "tipline", id: "tipline", role: "note" }, el("span", { class: "tk", text: `${key} · ${paramLabel(key, state.lang, platform)}` }), text,
+    key === "gcd" ? el("span", { class: "src", text: p.gcdSource(m().name) }) : null);
+}
+
+/** This hit's gcd, decoded: one line per signal with its default and its update (§5.7). */
+function gcdTable(value) {
+  const g = decodeGcd(value);
+  if (!g) return null;
+  const d = m().detail;
+  const word = (v) => (v === "granted" ? `✓ ${d.granted}` : v === "denied" ? `✕ ${d.denied}` : "–");
+  return el("table", { class: "gcdt" }, el("thead", {}, el("tr", {}, el("th", { text: m().consent.signal }), el("th", { text: m().consent.default }), el("th", { text: m().consent.update }))),
+    el("tbody", {}, Object.entries(g).map(([signal, s]) => el("tr", {}, el("td", { text: `${signal} · ${s.letter}` }),
+      el("td", { class: s.default ?? "", text: s.known ? word(s.default) : "?" }), el("td", { class: s.update ?? "", text: s.known ? word(s.update) : "?" })))));
 }
 
 /**
- * One label-over-key row of a parameter grid. opts: label (else the dictionary's), custom, absent, changed, hint.
+ * One label-over-key row of a parameter grid, and its explanation under it when its ⓘ is open. opts: label (else
+ * the dictionary's), custom, absent, changed, hint, extra, title, keepKey.
  */
 export function kvRow(key, value, platform, opts = {}) {
   const p = m().params;
@@ -50,15 +63,19 @@ export function kvRow(key, value, platform, opts = {}) {
   const custom = opts.custom ?? isCustomParam(key, platform);
   const v = shown(key, value);
   const hint = opts.hint === false ? null : paramHint(key, v, state.lang, platform);
+  const id = `${ctxKey}|${key}`;
   const lab = el("div", { class: "lab", "data-param": key, title: opts.title ?? null },
-    label, infoButton(key, tipContent(key, platform)),
+    label, infoButton(key, id),
     el("span", { class: "w" }, key, custom ? el("span", { class: "tag-custom", text: d.custom }) : null));
   const val = opts.absent
     ? el("div", { class: "val absent" }, el("span", { class: "x", text: opts.absentText ?? d.notSent }))
     : el("div", { class: "val" }, el("span", { class: `x${v === "" ? " muted" : ""}` }, v === "" ? d.empty : v, hint ? el("span", { class: "hint2", text: ` · ${hint}` }) : null, opts.extra ?? null),
-      el("span", { class: "ty", text: d.types[typeOf(key, value)] }));
+    el("span", { class: "ty", text: d.types[typeOf(key, value)] }));
   if (opts.changed) { lab.classList.add("chg"); val.classList.add("chg"); }
-  return [lab, val];
+  // gcd decoded in place, across the whole row so its three columns have room.
+  const decoded = key === "gcd" && !opts.absent ? gcdTable(value) : null;
+  const out = [lab, val, decoded ? el("div", { class: "gcdrow" }, decoded) : null].filter(Boolean);
+  return state.tipOpen === id ? [...out, tipLine(key, platform)] : out;
 }
 
 const wireOf = (row) => row.wire ?? [];
@@ -304,13 +321,14 @@ export function hitDetail(row, step) {
   const d = m().detail;
   const model = actions.model();
   const view = row.kind === "call" ? "readable" : state.detailView;
+  ctxKey = row.key;
   const all = view === "all" ? allParams(row) : view === "raw" ? raw(row) : null;
   const content = all ? all.content : readable(row, model);
   const json = () => JSON.stringify(row.hit ? { platform: row.platform, name: row.name, id: row.hit.id, params: row.hit.params, items: row.items, consent: row.hit.consent, url: row.e.url } : { url: row.e.url }, (k, v) => (typeof v === "string" ? shown(k, v) : v), 2);
   const push = row.push ? model.pushes.find((p) => p.key === row.push) : null;
-  if (!state.hints.labels && row.kind === "hit" && !state.hintRow) state.hintRow = row.key;
-  const hint = state.hintRow === row.key ? el("div", { class: "note", style: { margin: "6px 12px 0" } }, icon("info"), el("span", { text: m().hints.labels })) : null;
-  if (hint) actions.seenHint("labels");
+  // The one-time hint: on the first hit opened, in Readable only, gone with the next click.
+  if (!state.hints.labels && row.kind === "hit" && view === "readable") { state.hintRow = row.key; actions.seenHint("labels"); }
+  const hint = state.hintRow === row.key && view === "readable" ? el("div", { class: "note", style: { margin: "6px 12px 0" } }, icon("info"), el("span", { text: m().hints.labels })) : null;
   return el("div", { class: "detail", role: "group", "aria-labelledby": `row-${CSS.escape(row.key)}`, onclick: (e) => e.stopPropagation() },
     metaLine(row, step), row.kind === "hit" ? viewSwitch(row) : null, hint, content,
     el("div", { class: "d-actions", style: { paddingTop: "8px" } },
@@ -319,4 +337,3 @@ export function hitDetail(row, step) {
       push ? button(d.fromPush(push.index + 1), () => actions.showPush(push.key), { cls: "btn" }) : null));
 }
 
-export { pathOf };

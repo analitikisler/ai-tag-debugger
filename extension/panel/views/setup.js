@@ -69,10 +69,9 @@ export function setupView() {
     el("div", { class: "note danger", role: "alert", style: { marginTop: 0 } }, icon("lock"),
       el("div", {}, el("b", { style: { display: "block", color: "var(--fg)" }, text: e.deniedTitle }), el("span", { text: e.deniedBody(m().name) }),
         el("div", { class: "acts" }, button(m().onboarding.allow, () => actions.askAccess(), { cls: "btn primary" }), button(e.why, () => actions.tourTo(2), { cls: "linkbtn muted" }))))) : null;
-  const detectedOff = s.detected.filter((k) => !s.platforms.includes(k));
   const platforms = el("section", { class: "setup-sec" },
     el("div", { class: "row" }, el("h2", { class: "h3", text: `1 · ${t.q1}` }),
-      s.detected.length && detectedOff.length ? button(t.selectDetected, () => actions.selectDetected(), { cls: "linkbtn" }) : null),
+      s.detected.length ? button(t.selectDetected, () => actions.selectDetected(), { cls: "linkbtn" }) : null),
     PLATFORM_GROUPS.map(([group, keys]) => el("div", { class: "grp", role: "group", "aria-label": t.groups[group] }, el("div", { class: "gl", text: t.groups[group] }), el("div", { class: "picks" }, keys.map(pick)))),
     s.platforms.length ? null : el("p", { class: "hintline", role: "status", text: t.pickOne }),
     el("div", { class: "note" }, icon("info"), el("span", { text: t.note })));

@@ -605,10 +605,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   const beforeConsent = new Map();
+  // Within the step consent was granted in, the update's own time decides: a hand recording often loads the page,
+  // fires its tags and gets the visitor's answer all in one step.
+  const grantPush = run.dataLayerLog.find((e) => isConsentCommand(e, "update") && e.value[2]?.ad_storage === "granted" && e.step === granted);
+  const beforeGrantInStep = (hit) => hit.step === granted && typeof hit.t === "number" && typeof grantPush?.t === "number" && hit.t < grantPush.t;
   for (const hit of legalHits) {
     // Hits from the reject click on are covered by the after_reject check.
     if (rejectStep !== null && hit.step >= rejectStep) continue;
-    const early = granted === null || hit.step < granted;
+    const early = granted === null || hit.step < granted || beforeGrantInStep(hit);
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);
     if (adPlatform || claimsGranted(hit)) {

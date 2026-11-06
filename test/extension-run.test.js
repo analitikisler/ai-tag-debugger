@@ -172,6 +172,20 @@ test("a tracking request that failed on a live recording is a broken finding", (
   assert.equal(failed.length, 1);
   assert.equal(failed[0].severity, "broken");
   assert.match(failed[0].detail, /^1 GA4 request got HTTP 503, the first at "Opened \/product"/);
+  const onlyFailed = lib.buildRun([EVENTS[1], { ...EVENTS[3], url: `${GA}&en=page_view` }, { t: 1350, seq: 5, kind: "status", requestId: "r1", status: 503 }], { site: "https://shop.example" });
+  assert.match(analyze.analyze(onlyFailed).verdict.headline, /GA4 delivery is broken/);
   // The CLI's own runs answer tracking requests in the browser, so the check stays off there.
   assert.equal(analyze.analyze({ ...run, live: false }).findings.some((f) => f.check === "hit_failed"), false);
+});
+
+test("a pixel sent before the visitor accepted, in the same step, is a before-consent risk", () => {
+  const events = [
+    { t: 1, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 2, seq: 2, kind: "push", top: true, entry: { url: "https://shop.example/", value: ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }] } },
+    { t: 800, seq: 3, kind: "request", requestId: "m", method: "GET", frameId: 0, url: "https://www.facebook.com/tr/?id=1&ev=PageView" },
+    { t: 6400, seq: 4, kind: "push", top: true, entry: { url: "https://shop.example/", value: ["consent", "update", { ad_storage: "granted", analytics_storage: "granted" }] } },
+    { t: 7000, seq: 5, kind: "request", requestId: "m2", method: "GET", frameId: 0, url: "https://www.facebook.com/tr/?id=1&ev=ViewContent" },
+  ];
+  const found = analyze.analyze(lib.buildRun(events, { site: "https://shop.example" })).findings.filter((f) => f.check === "before_consent");
+  assert.deepEqual(found.map((f) => f.event), ["PageView"]);
 });

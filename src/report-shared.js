@@ -72,7 +72,8 @@ function mdScope(m, runs, lead) {
 function mdHeadline(m, runs, rows, metrics) {
   const v = metrics.verdict;
   const lead = mdLead(rows, metrics);
-  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
+  const subject = lead && !lead.event && lead.platform ? m.ui.md.platformSubject[lead.check] : null;
+  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : subject ? subject(platformLabel(lead.platform)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
   const scope = mdScope(m, runs, lead);
   const incomplete = runs.find((r) => !r.completed);
   const ctx = { key: v.headline, what, scope, journey: incomplete ? String(incomplete.journeyId) : "", events: metrics.coverage?.checkable ?? 0, journeys: runs.length, counts: v.counts, lead };

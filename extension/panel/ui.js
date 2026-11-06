@@ -1,6 +1,6 @@
 // Small DOM helpers the views share: element building, the icon sprite, times, copying, toasts, the ⓘ tooltip and
 // the polite live region. Strings come from the callers; nothing here is user-visible text of its own.
-import { state, m } from "./state.js";
+import { state, m, render } from "./state.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -43,7 +43,11 @@ export const clock = (ms) => {
 };
 /** Seconds since a moment, one decimal, the way rows are timed within their step. */
 export const secs = (t, from) => Math.max(0, (t - from) / 1000).toFixed(1);
-export const since = (t, from) => `+${secs(t, from)}s`;
+/** "+2.3s", or "+12 ms" under a second: a page load's hits all land in its first second, where tenths say nothing. */
+export const since = (t, from) => {
+  const ms = Math.max(0, Math.round(t - from));
+  return ms < 1000 ? m().units.ms(ms) : m().units.s(secs(t, from));
+};
 export const locale = () => (state.lang === "tr" ? "tr-TR" : "en-GB");
 /** Today 14:32 / Yesterday 11:05 / 5 Nov 17:48 in the panel's language. */
 export function when(t) {
@@ -100,56 +104,30 @@ export async function copy(text) {
 export const button = (label, onclick, { cls = "btn", ico = null, id = null, kbd = null, title = null, type = "button", disabled = false } = {}) =>
   el("button", { class: cls, type, id, title, disabled, onclick }, ico ? icon(ico) : null, label, kbd ? el("span", { class: "kbd", text: kbd }) : null);
 
-// ---------- the ⓘ tooltip ----------
+// ---------- the ⓘ explanation ----------
 
-let tipEl = null;
-let tipFor = null;
-let pinned = false;
-let hoverTimer = null;
-export function closeTip() {
-  tipEl?.remove();
-  tipEl = null;
-  tipFor?.classList.remove("act");
-  tipFor?.removeAttribute("aria-describedby");
-  tipFor = null;
-  pinned = false;
-}
-function openTip(btn, content) {
-  closeTip();
-  tipFor = btn;
-  btn.classList.add("act");
-  tipEl = el("div", { class: "tip below", role: "tooltip", id: "tip" }, content());
-  btn.setAttribute("aria-describedby", "tip");
-  document.body.append(tipEl);
-  const r = btn.getBoundingClientRect();
-  const w = Math.min(250, window.innerWidth - 16);
-  tipEl.style.width = `${w}px`;
-  const left = Math.max(8, Math.min(r.left - 14, window.innerWidth - w - 8));
-  tipEl.style.left = `${left}px`;
-  let top = r.bottom + 8;
-  if (top + tipEl.offsetHeight > window.innerHeight - 8) { top = r.top - tipEl.offsetHeight - 8; tipEl.className = "tip above"; }
-  tipEl.style.top = `${top}px`;
-  tipEl.style.setProperty("--arrow", `${r.left - left + 2}px`);
-}
 /**
- * The ⓘ button next to a parameter label. Hover (after 300 ms) and keyboard focus open it, a click pins it until Esc,
- * an outside click or another ⓘ.
+ * The ⓘ button next to a parameter label. It opens the explanation inline, under its own row, so it never covers
+ * other rows; a click or Enter toggles it, Esc closes it. id names the row (the hit and the key).
  */
-export function infoButton(key, content) {
-  const b = el("button", { class: "ii", type: "button", "aria-label": m().params.about(key), text: "i" });
-  b.addEventListener("mouseenter", () => { if (!pinned) hoverTimer = setTimeout(() => openTip(b, content), 300); });
-  b.addEventListener("mouseleave", () => { clearTimeout(hoverTimer); if (!pinned && tipFor === b) closeTip(); });
-  b.addEventListener("focus", () => { if (!pinned) openTip(b, content); });
-  b.addEventListener("blur", () => { if (!pinned && tipFor === b) closeTip(); });
-  b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (pinned && tipFor === b) return closeTip();
-    openTip(b, content);
-    pinned = true;
-  });
-  return b;
+export function infoButton(key, id) {
+  const open = state.tipOpen === id;
+  return el("button", { class: `ii${open ? " act" : ""}`, type: "button", "aria-label": m().params.about(key), "aria-expanded": String(open), "aria-controls": open ? "tipline" : null, text: "i",
+    onclick: (e) => { e.stopPropagation(); state.tipOpen = open ? null : id; render(); } });
 }
-document.addEventListener("click", (e) => { if (pinned && tipEl && !tipEl.contains(e.target)) closeTip(); });
+export function closeTip() {
+  if (state.tipOpen) { state.tipOpen = null; render(); }
+}
+
+/** A one-time hint next to the control it explains; any click or key dismisses it. */
+export function coachMark(anchor, text) {
+  const r = anchor.getBoundingClientRect();
+  const tip = el("div", { class: "hinttip", role: "status", style: { left: `${Math.max(8, r.left)}px`, bottom: `${window.innerHeight - r.top + 8}px`, maxWidth: `${Math.min(260, r.width)}px` }, text });
+  document.body.append(tip);
+  const done = () => { tip.remove(); document.removeEventListener("pointerdown", done, true); document.removeEventListener("keydown", done, true); };
+  setTimeout(() => { document.addEventListener("pointerdown", done, true); document.addEventListener("keydown", done, true); }, 0);
+  setTimeout(done, 8000);
+}
 
 // ---------- the live region ----------
 

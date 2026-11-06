@@ -55,7 +55,8 @@ test("planned events for unselected providers are listed in an info line, platfo
   const run = { journeyId: "j", viewport: "desktop", completed: true, hits: [{ platform: "ga4", name: "purchase", params: {}, step: 1, url: "https://x/g/collect" }], steps: [{ index: 0, label: "start" }, { index: 1, label: "Buy" }], consentStep: null, dataLayerLog: [], providers: ["ga4"] };
   const findings = checkRun(plan, run);
   assert.ok(!findings.some((f) => f.check === "missing_event"), "GA4 in capitals matches ga4 hits");
-  assert.match(findings.find((f) => f.check === "planned_out_of_scope").detail, /1 planned event was not checked.*pinterest:checkout/);
+  // Named the way a person reads it, "Pinterest checkout", not the internal "pinterest:checkout" key.
+  assert.match(findings.find((f) => f.check === "planned_out_of_scope").detail, /1 planned event was not checked.*Pinterest checkout/);
   assert.deepEqual(resolveProviders(undefined, plan), ["ga4", "google_ads", "meta", "tiktok", "pinterest"]);
   assert.deepEqual(resolveProviders(["meta"], plan), ["meta"]);
 });

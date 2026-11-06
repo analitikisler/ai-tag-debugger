@@ -327,7 +327,7 @@ export const groupsOf = (platform) => PARAM_GROUPS[platform] ?? PARAM_GROUPS.ga4
 
 /** GA4's recommended event parameters, labelled in the Readable view without a CUSTOM tag. */
 const RECOMMENDED = {
-  value: ["Value", "Değer"], currency: ["Currency", "Para birimi"], transaction_id: ["Transaction ID", "İşlem kimliği"], coupon: ["Coupon", "Kupon"],
+  currency: ["Currency", "Para birimi"], value: ["Value", "Değer"], transaction_id: ["Transaction ID", "İşlem kimliği"], coupon: ["Coupon", "Kupon"],
   shipping: ["Shipping", "Kargo"], tax: ["Tax", "Vergi"], item_list_id: ["Item list ID", "Ürün listesi kimliği"], item_list_name: ["Item list name", "Ürün listesi adı"],
   promotion_id: ["Promotion ID", "Promosyon kimliği"], promotion_name: ["Promotion name", "Promosyon adı"], creative_name: ["Creative name", "Kreatif adı"],
   creative_slot: ["Creative slot", "Kreatif alanı"], payment_type: ["Payment type", "Ödeme türü"], shipping_tier: ["Shipping tier", "Kargo seçeneği"],
@@ -336,7 +336,7 @@ const RECOMMENDED = {
   page_location: ["Page URL", "Sayfa adresi"], page_referrer: ["Referrer", "Önceki sayfa"], page_title: ["Page title", "Sayfa başlığı"],
   first_open_time: ["First open time", "İlk açılış zamanı"], user_id: ["User ID (as property)", "Kullanıcı kimliği (özellik olarak)"],
 };
-/** The order recommended parameters are listed in, before custom ones. */
+/** The order recommended parameters are listed in, before custom ones: currency first, as All parameters lists cu. */
 export const RECOMMENDED_ORDER = Object.keys(RECOMMENDED);
 
 /**

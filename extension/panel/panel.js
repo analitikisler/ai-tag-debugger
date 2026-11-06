@@ -9,19 +9,21 @@ import { canonicalEvent } from "../core/checks.js";
 import { buildModel, OFFERED } from "./model.js";
 import { platformsInPage } from "./detect.js";
 import { state, m, setRender, actions, load, save } from "./state.js";
-import { $, el, icon, button, clock, hostOf, isWeb, send, download, when, favicon, announceNew, closeTip, toast } from "./ui.js";
+import { $, el, icon, button, clock, hostOf, isWeb, send, download, when, favicon, announceNew, closeTip, toast, coachMark } from "./ui.js";
 import { onboardingView, SITES } from "./views/onboarding.js";
 import { setupView } from "./views/setup.js";
 import { eventsToolbar, eventsList, notSelectedPopover, visibleRows } from "./views/events.js";
 import { dataLayerToolbar, dataLayerList, visiblePushes } from "./views/datalayer.js";
 import { consentView, consentDot } from "./views/consent.js";
-import { findingsView } from "./views/findings.js";
+import { findingsView, findingCards, coverageOf } from "./views/findings.js";
 import { historyView } from "./views/history.js";
 import { menu, resetSheet, shortcutsSheet, notWebView } from "./views/layers.js";
 import { installKeys } from "./keys.js";
 
 const TABS = ["events", "dataLayer", "consent", "findings", "history"];
 const SEVERITIES = ["broken", "risk", "warning", "info"];
+// Checks about an event or a setup that is missing: there is no hit to jump to.
+const ABSENT = new Set(["missing_event", "ga4_automatic_event", "planned_out_of_scope", "journey_incomplete", "consent_default_missing", "page_blocked", "page_crashed", "container_not_run", "container_failed", "container_held"]);
 const DEFAULT_PLATFORMS = ["ga4", "google_ads", "meta"];
 // Opened as a page (panel.html?tab=<id>) instead of in the side panel, it follows that tab: for a separate window,
 // and for the end-to-end test, which cannot open Chrome's side panel.
@@ -235,17 +237,20 @@ function renderTabs(md, mdl) {
   const count = (text, cls = "") => el("span", { class: `cnt ${cls}`.trim(), text: String(text) });
   const extras = {};
   if (state.recording) {
+    // One source per number: the hits on screen, and out of how many captured when the filter hides some.
     const { rows, total } = visibleRows(mdl);
     const shown = [...rows.keys()].filter((k) => mdl.rows.find((r) => r.key === k)?.kind === "hit").length;
-    extras.events = count(shown === total ? total : `${shown} / ${total}`);
+    extras.events = count(shown === total ? total : `${shown}/${total}`);
     extras.dataLayer = count(visiblePushes(mdl));
     const dot = consentDot(mdl);
     extras.consent = el("span", { class: `tabdot ${dot}`, role: "img", "aria-label": m().consent.dot[dot] });
     const a = state.analysis?.result;
     if (a && !state.live) {
-      const problems = a.findings.filter((f) => SEVERITIES.slice(0, 3).includes(f.severity));
-      const worst = SEVERITIES.find((s) => problems.some((f) => f.severity === s));
-      if (problems.length) extras.findings = count(problems.length, worst);
+      // The problem cards the tab shows (broken, risk, warning), counted from the same list.
+      const { counts } = findingCards(a, mdl);
+      const n = counts.broken + counts.risk + counts.warning;
+      const worst = SEVERITIES.find((s) => counts[s]);
+      if (n) extras.findings = count(n, worst);
     }
   }
   nav.replaceChildren(...TABS.map((k, i) => el("button", {
@@ -320,7 +325,9 @@ function draw() {
   const md = mode();
   const mdl = state.recording ? model() : EMPTY;
   const main = $("main");
-  const atBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 40;
+  // "At the newest end": the bottom when oldest is first, the top when newest is first.
+  const atBottom = state.order === "newest" ? main.scrollTop < 40 : main.scrollHeight - main.scrollTop - main.clientHeight < 40;
+  const toNewest = () => { main.scrollTop = state.order === "newest" ? 0 : main.scrollHeight; };
   const scroll = lastView === `${md}|${state.view}` ? main.scrollTop : 0;
   lastView = `${md}|${state.view}`;
   const focus = focusKey();
@@ -355,7 +362,7 @@ function draw() {
     state.pendingScroll = null;
     if (target) { target.tabIndex = 0; target.scrollIntoView({ block: "center" }); target.focus({ preventScroll: true }); }
   } else if (following && atBottom && arrived) {
-    main.scrollTop = main.scrollHeight;
+    toNewest();
     unseen = 0;
   } else {
     main.scrollTop = scroll;
@@ -363,7 +370,7 @@ function draw() {
   }
   document.querySelector(".jump")?.remove();
   if (unseen && following) {
-    $("app").append(el("button", { class: "jump", type: "button", onclick: () => { unseen = 0; main.scrollTop = main.scrollHeight; render(); } }, icon("arrow-d", "s"), m().events.jump(unseen)));
+    $("app").append(el("button", { class: `jump${state.order === "newest" ? " top" : ""}`, type: "button", style: state.order === "newest" ? { top: `${main.offsetTop + 10}px`, bottom: "auto" } : null, onclick: () => { unseen = 0; toNewest(); render(); } }, el("span", { class: state.order === "newest" ? "flip" : null }, icon("arrow-d", "s")), m().events.jump(unseen)));
   }
   // The first row of the tree takes Tab; the others are reached with the arrow keys (roving tabindex).
   const first = main.querySelector('[role="treeitem"]');
@@ -377,7 +384,8 @@ let lastRec = null;
 
 $("main").addEventListener("scroll", () => {
   const main = $("main");
-  if (unseen && main.scrollHeight - main.scrollTop - main.clientHeight < 40) { unseen = 0; document.querySelector(".jump")?.remove(); }
+  const atNewest = state.order === "newest" ? main.scrollTop < 40 : main.scrollHeight - main.scrollTop - main.clientHeight < 40;
+  if (unseen && atNewest) { unseen = 0; document.querySelector(".jump")?.remove(); }
 });
 
 // ---------- analysis ----------
@@ -400,7 +408,7 @@ function runAnalysis() {
       const summary = {
         counts: result.counts, status: result.verdict.status, score: result.verdict.score, verdict: `${result.verdict.statusText}: ${result.verdict.headline}`,
         hits: mdl.rows.filter((x) => x.kind === "hit").length, steps: mdl.steps.length, platforms: Object.keys(mdl.counts),
-        ...(cov?.planned ? { coverage: { seen: cov.checkable - (cov.counts.missing ?? 0), total: cov.checkable } } : {}),
+        ...(cov?.planned ? { coverage: coverageOf(cov) } : {}),
       };
       // The report tab and History read the verdict from the recording.
       if (r.stoppedAt) {
@@ -459,6 +467,7 @@ Object.assign(actions, {
     render();
   },
   async setMask(on) { state.mask = on; await save({ mask: on }); render(); },
+  async setOrder(order) { state.order = order; unseen = 0; $("main").scrollTop = 0; await save({ order }); render(); },
   seenHint(id) { if (!state.hints[id]) { state.hints[id] = true; save({ hints: state.hints }); } },
 
   togglePlatform(key) {
@@ -591,11 +600,17 @@ Object.assign(actions, {
     render();
   },
   rowForFinding(f) {
-    if (!f.platform && !f.event) return null;
     const mdl = model();
+    const step = mdl.steps.find((s) => s.label === f.step);
+    // A failed request points at the failed row itself.
+    if (f.check === "hit_failed") {
+      const bad = mdl.rows.filter((r) => r.kind === "hit" && r.platform === f.platform && (r.status === "failed" || r.status >= 400));
+      return (step ? bad.find((r) => r.step === step.index) : null) ?? bad[0] ?? null;
+    }
+    // Findings about something that never happened have no hit to show.
+    if (ABSENT.has(f.check) || (!f.platform && !f.event)) return null;
     const same = (r) => !f.event || canonicalEvent(r.name) === canonicalEvent(f.event) || (r.platform === "google_ads" && /^conversion/.test(r.name) && /conversion/i.test(f.event));
     const hits = mdl.rows.filter((r) => r.kind === "hit" && (!f.platform || r.platform === f.platform) && same(r));
-    const step = mdl.steps.find((s) => s.label === f.step);
     return (step ? hits.find((r) => r.step === step.index) : null) ?? hits[0] ?? null;
   },
   saveFilter() { if (state.setup.host) filters.set(state.setup.host, { ...state.filter }); },
@@ -663,6 +678,9 @@ Object.assign(actions, {
 
 // ---------- the header and footer controls ----------
 
+// The one-time "labels" hint in an opened hit goes away with the next click anywhere.
+document.addEventListener("pointerdown", () => { if (state.hintRow) { state.hintRow = null; render(); } }, true);
+
 $("stop").onclick = () => actions.stop();
 $("startOver").onclick = () => actions.askStartOver();
 $("more").onclick = () => { state.layer = state.layer?.kind === "menu" ? null : { kind: "menu" }; render(); };
@@ -697,10 +715,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.event.kind === "step" && msg.event.action === "manual" && !state.hints.mark) {
     // The first named step: one hint on what naming is for, once ever.
     actions.seenHint("mark");
-    const r = $("stepName").getBoundingClientRect();
-    const tip = el("div", { class: "hinttip", role: "status", style: { left: `${r.left}px`, bottom: `${window.innerHeight - r.top + 8}px` }, text: m().hints.mark });
-    document.body.append(tip);
-    setTimeout(() => tip.remove(), 6000);
+    coachMark($("stepName").closest(".input"), m().hints.mark);
   }
   render();
 });
@@ -713,7 +728,8 @@ setInterval(() => { if (state.live && state.view === "events" && !model().rows.l
 
 // ---------- start ----------
 
-const stored = await load(["lang", "theme", "mask", "onboarded", "detailView", "groupsOpen", "hints"]);
+const stored = await load(["lang", "theme", "mask", "onboarded", "detailView", "groupsOpen", "hints", "order"]);
+state.order = stored.order === "newest" ? "newest" : "oldest";
 state.lang = stored.lang && LANGUAGES[stored.lang] ? stored.lang : chrome.i18n.getUILanguage().toLowerCase().startsWith("tr") ? "tr" : "en";
 state.theme = ["light", "dark"].includes(stored.theme) ? stored.theme : "system";
 state.mask = Boolean(stored.mask);

@@ -11,8 +11,12 @@ const at = (model, c) => ({ step: c.step + 1, time: ((c.t - (model.steps[c.step]
 /** The Consent tab's dot: ok (nothing sent against consent), bad (something was) or none (no consent mode seen). */
 export function consentDot(model) {
   const r = consentReport(model, model.chosen);
-  if (!r.default) return "none";
-  return r.platforms.some((p) => p.verdict === "violated") ? "bad" : "ok";
+  if (r.platforms.some((p) => p.verdict === "violated")) return "bad";
+  // Green only once something was checked: hits went out and the visitor answered (or the recording ended).
+  // While the default is still denied and nothing broke it yet, there is nothing to call good.
+  const hits = model.rows.some((x) => x.kind === "hit" && (!model.chosen || model.chosen.includes(x.platform)));
+  if (!r.default || !hits || (state.live && !r.grantAt)) return "none";
+  return "ok";
 }
 
 /** The updates that changed something: a CMP repeating the same choice on every page adds no column. */
@@ -48,7 +52,7 @@ function flowLine(model, r) {
   const pill = (summary) => (summary === "denied" ? statePill("denied") : summary === "granted" ? statePill("granted") : el("span", { class: "cs u", text: c.partly }));
   const label = (summary) => { const p = pill(summary); p.lastChild.textContent = summary === "denied" ? c.allDeniedPill : summary === "granted" ? c.allGrantedPill : c.partly; return p; };
   return el("div", { class: "flowline" }, c.default, label(r.default.summary),
-    r.updates.slice(0, 3).map((u) => [el("span", { class: "arrow" }, icon("route", "s")), `${c.update} +${at(model, u).time}s`, label(u.summary)]));
+    r.updates.slice(0, 3).map((u) => [el("span", { class: "arrow" }, icon("route", "s")), `${c.update} ${m().units.s(at(model, u).time)}`, label(u.summary)]));
 }
 
 function stateTable(model, r) {

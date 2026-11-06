@@ -56,7 +56,7 @@ export function statePill(value) {
 
 /** Whether a hit went out while the visitor had not allowed what it needs. */
 export function sentBeforeConsent(row) {
-  if (!row.hit || !row.consentAt) return false;
+  if (!row.hit || !row.consentAt || !row.beforeGrant) return false;
   if (GOOGLE.has(row.platform)) return row.consentAt.ad_storage === "denied" && Object.values(row.hit.consent ?? {}).some((v) => v === "granted");
   return row.consentAt.ad_storage === "denied";
 }

@@ -3,10 +3,40 @@
 import { state, m, all, render, actions } from "../state.js";
 import { el, icon, button, upper } from "../ui.js";
 import { PROVIDERS } from "../../core/parsers.js";
-import { stepNo } from "./common.js";
+import { stepNo, stepInfo } from "./common.js";
 
 const SEVERITIES = ["broken", "risk", "warning", "info"];
 const firstSentence = (s) => String(s ?? "").match(/^.*?[.!?](?=\s|$)/s)?.[0] ?? String(s ?? "");
+/** "meta:PageView" → "Meta PageView": the checks key events by platform, readers name them. */
+const readable = (s) => String(s ?? "").replace(/\b([a-z_]+):([\w.-]+)/g, (all, p, name) => (PROVIDERS[p] ? `${PROVIDERS[p]} ${name}` : all));
+
+/**
+ * The cards the tab shows, one per distinct finding, worst first; the tab's count and the severity pills are
+ * counted from this same list, so the numbers always agree with what is on screen.
+ */
+export function findingCards(a, model) {
+  const seen = new Set();
+  const uniq = (f) => {
+    const k = [f.severity, f.check, f.platform, f.event, f.step, f.detail].join("|");
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  };
+  const stepAt = (f) => model.steps.findIndex((s) => s.label === f.step);
+  const problems = a.findings.filter((f) => SEVERITIES.includes(f.severity)).filter(uniq)
+    .sort((x, y) => SEVERITIES.indexOf(x.severity) - SEVERITIES.indexOf(y.severity) || stepAt(x) - stepAt(y));
+  const passed = a.findings.filter((f) => f.severity === "ok").filter(uniq);
+  const unselected = model.chosen ? Object.keys(model.counts).filter((k) => !model.chosen.includes(k)) : [];
+  const counts = Object.fromEntries([...SEVERITIES, "ok"].map((sv) => [sv, sv === "ok" ? passed.length : problems.filter((f) => f.severity === sv).length]));
+  if (unselected.length) counts.info += 1;
+  return { problems, passed, unselected, counts };
+}
+
+/** Plan coverage over the plan's own events: how many of them were seen, out of all of them. */
+export function coverageOf(cov) {
+  const c = cov.counts ?? {};
+  return { seen: (c.implemented ?? 0) + (c.missing_params ?? 0) + (c.wrong_values ?? 0), total: cov.planned };
+}
 
 function beforeStop(model) {
   const t = m().findings;
@@ -17,13 +47,13 @@ function beforeStop(model) {
       : el("p", { class: "small", text: t.noLive }));
 }
 
-function verdictBlock(a) {
+function verdictBlock(a, counts) {
   const t = m().findings;
   const sev = all().severity;
   const v = a.verdict;
   const tone = v.status === "pass" ? "ok" : v.status === "fail" ? "broken" : "warning";
   const pills = [...SEVERITIES, "ok"].map((s) => {
-    const n = a.counts[s] ?? 0;
+    const n = counts[s] ?? 0;
     const label = s === "ok" ? t.passedPill(n) : `${n} ${sev[s]}`;
     return el("button", { type: "button", class: `sv ${n ? s : "zero"}`, "aria-pressed": String(state.findingsFilter === s), disabled: !n,
       onclick: () => { state.findingsFilter = state.findingsFilter === s ? null : s; if (s === "ok") state.passedOpen = true; render(); } }, label);
@@ -35,15 +65,16 @@ function verdictBlock(a) {
       el("div", { class: "vhead", text: v.headline }), el("div", { class: "sevs" }, pills)));
 }
 
-function findingCard(f, a, model) {
+function findingCard(f, model, showFix) {
   const t = m().findings;
   const sev = all().severity;
   const step = model.steps.find((s) => s.label === f.step) ?? null;
-  const where = el("span", { class: "where" }, step ? stepNo(step) : null, [step ? (step.action === "manual" ? step.label : (step.title || step.label)) : f.step ?? t.whole, f.platform ? PROVIDERS[f.platform] ?? f.platform : null].filter(Boolean).join(" · "));
+  const where = el("span", { class: "where" }, step ? stepNo(step) : null, [step ? stepInfo(step).title : f.step ?? t.whole, f.platform ? PROVIDERS[f.platform] ?? f.platform : null].filter(Boolean).join(" · "));
   const row = actions.rowForFinding(f);
-  const title = firstSentence(f.detail);
-  const rest = String(f.detail ?? "").slice(title.length).trim() || all().consequence[f.check] || "";
-  const fix = all().fix[f.check];
+  const detail = readable(f.detail);
+  const title = firstSentence(detail);
+  const rest = detail.slice(title.length).trim() || all().consequence[f.check] || "";
+  const fix = showFix ? all().fix[f.check] : null;
   return el("article", { class: `find ${f.severity}` },
     el("div", { class: "top" }, el("span", { class: `sevlab ${f.severity}`, text: upper(sev[f.severity]) }), where,
       row ? el("button", { class: "goto", type: "button", onclick: () => actions.showRow(row.key) }, t.showHit, icon("chev-r", "s")) : null),
@@ -51,9 +82,8 @@ function findingCard(f, a, model) {
     fix ? el("div", { class: "fix" }, el("b", { text: t.fix }), ` ${fix}`) : null);
 }
 
-function unselectedCard(model) {
+function unselectedCard(keys) {
   const t = m().findings;
-  const keys = model.chosen ? Object.keys(model.counts).filter((k) => !model.chosen.includes(k)) : [];
   if (!keys.length) return null;
   const names = keys.map((k) => PROVIDERS[k] ?? k);
   return el("article", { class: "find info" },
@@ -69,28 +99,34 @@ export function findingsView(model) {
   if (state.analysisError) return el("div", { class: "before" }, el("div", { class: "note danger", role: "alert" }, icon("warn"), el("span", { text: m().errors.analysis })));
   const a = actions.analysis();
   if (!a) return el("div", { class: "checking", role: "status" }, el("span", { class: "spinner" }), t.checking);
-  const problems = a.findings.filter((f) => SEVERITIES.includes(f.severity))
-    .sort((x, y) => SEVERITIES.indexOf(x.severity) - SEVERITIES.indexOf(y.severity) || (model.steps.findIndex((s) => s.label === x.step) - model.steps.findIndex((s) => s.label === y.step)));
-  const passed = a.findings.filter((f) => f.severity === "ok");
+  const { problems, passed, unselected, counts } = findingCards(a, model);
   const list = state.findingsFilter && state.findingsFilter !== "ok" ? problems.filter((f) => f.severity === state.findingsFilter) : state.findingsFilter === "ok" ? [] : problems;
+  // A fix several cards share (three events missing for the same reason) is written once, under the first.
+  const fixShown = new Set();
   const cov = a.metrics?.coverage;
   let coverage = null;
   if (cov && cov.planned) {
-    const seen = cov.checkable - (cov.counts.missing ?? 0);
+    const { seen, total } = coverageOf(cov);
     const missing = (cov.events ?? []).filter((e) => e.bucket === "missing").map((e) => e.name);
     coverage = el("div", { class: "coverage" },
-      el("div", { class: "row" }, el("span", {}, el("b", { text: t.coverage }), state.recording.plan?.name ? el("span", { class: "small", text: ` · ${state.recording.plan.name}` }) : null), el("span", { class: "small", text: t.seen(seen, cov.checkable) })),
-      el("div", { class: "bar" }, el("i", { style: { width: `${cov.checkable ? Math.round((seen / cov.checkable) * 100) : 0}%` } })),
+      el("div", { class: "row" }, el("span", {}, el("b", { text: t.coverage }), state.recording.plan?.name ? el("span", { class: "small", text: ` · ${state.recording.plan.name}` }) : null), el("span", { class: "small", text: t.seen(seen, total) })),
+      el("div", { class: "bar" }, el("i", { style: { width: `${total ? Math.round((seen / total) * 100) : 0}%` } })),
       missing.length ? el("div", { class: "small", text: t.notReached(missing.join(", ")) }) : null);
   }
   const passedBtn = el("button", { class: "passed", type: "button", "aria-expanded": String(state.passedOpen), onclick: () => { state.passedOpen = !state.passedOpen; render(); } },
     icon("check"), t.checksPassed(passed.length), el("span", { class: "chev" }, icon(state.passedOpen ? "chev-d" : "chev-r", "s")));
   const passList = state.passedOpen ? el("ul", { class: "passlist" }, passed.map((f) => el("li", { text: `✓ ${firstSentence(f.detail)}` }))) : null;
   return el("div", { class: "findings", role: "region", "aria-label": m().tabs.findings },
-    verdictBlock(a),
-    list.map((f) => findingCard(f, a, model)),
-    state.findingsFilter ? null : unselectedCard(model),
-    !problems.length ? el("div", { class: "passed", text: t.none }) : null,
+    verdictBlock(a, counts),
+    list.map((f) => {
+      // Info cards say what was seen; a fix (and the CLI's "re-run this journey") belongs to problems only.
+      const fix = f.severity === "info" ? null : all().fix[f.check];
+      const first = Boolean(fix) && !fixShown.has(fix);
+      fixShown.add(fix);
+      return findingCard(f, model, first);
+    }),
+    !state.findingsFilter || state.findingsFilter === "info" ? unselectedCard(unselected) : null,
+    !problems.length && !state.findingsFilter ? el("div", { class: "passed", text: t.none }) : null,
     passedBtn, passList, coverage,
     el("div", { class: "actions" },
       button(t.openReport, () => actions.openReport(), { cls: "btn primary lg block", ico: "ext" }),

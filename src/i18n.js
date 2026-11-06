@@ -11,6 +11,11 @@ import { PROVIDERS } from "./parsers.js";
 const q = (s) => `"${s}"`;
 /** The platform's label (GA4, Meta) for the key the checks pass (ga4, meta); anything else passes through. */
 const label = (p) => PROVIDERS[p] ?? String(p);
+/** "meta:PageView" as a reader says it: "Meta PageView". The checks key events by platform:name. */
+const eventLabel = (k) => {
+  const [p, ...rest] = String(k).split(":");
+  return rest.length && PROVIDERS[p] ? `${label(p)} ${rest.join(":")}` : String(k);
+};
 // Parameters in one fixed order, so the same bug reads the same on every card: value, currency,
 // transaction_id, items, then alphabetical. The plan's order would make two cards look like two problems.
 const PARAM_ORDER = ["value", "currency", "transaction_id", "items"];
@@ -304,6 +309,8 @@ const en = {
       },
       tracking: (event) => `${event} tracking`,
       setup: (check) => `the ${check} check`,
+      // A lead problem that is about one platform rather than one event or setting.
+      platformSubject: { hit_failed: (platform) => `${platform} delivery` },
       onViewport: (viewport) => ` on ${viewport}`,
       onJourney: (journey) => ` on ${journey}`,
       everywhere: " on every journey",
@@ -412,7 +419,7 @@ const en = {
     unplanned: (list) => `Events sent that are not in the measurement plan: ${list.join(", ")}.`,
     piiUnhashed: (platform, name, fields) => `${q(name)} sent user data to ${label(platform)} without hashing it (${fields.join(", ")}). Ad platforms expect these values SHA-256 hashed.`,
     piiDataLayer: (fields) => `The dataLayer holds user data that isn't hashed (${fields.join(", ")}). This is a valid setup for Google enhanced conversions, but every other tag and script on the page can read it too. Check that only the tags that should use it do.`,
-    plannedOutOfScope: (list) => `${list.length} planned ${list.length === 1 ? "event was" : "events were"} not checked because ${list.length === 1 ? "its platform was" : "their platforms were"} not selected for this run: ${list.join(", ")}.`,
+    plannedOutOfScope: (list) => `${list.length} planned ${list.length === 1 ? "event was" : "events were"} not checked because ${list.length === 1 ? "its platform was" : "their platforms were"} not selected for this run: ${list.map(eventLabel).join(", ")}.`,
     matches: (list) => `${list.length} planned events matched the plan: ${list.join(", ")}.`,
   },
   // Why a GTM tag did or did not fire, judged from the captured dataLayer.
@@ -541,7 +548,7 @@ const en = {
     journey_incomplete: "Read the note for why the browser stopped (a blocked click, a missing element, an error), fix the page or the step, and re-run the journey.",
     unplanned_events: "Add the events to the measurement plan if they are wanted, or remove the tags that send them.",
     ga4_automatic_event: "No fix is needed. Keep the event in the plan for reference, or remove it, since no tag has to send it.",
-    planned_out_of_scope: "Include their platforms in the next run's providers so they are checked.",
+    planned_out_of_scope: "Add their platforms to the platforms to check, so they are checked next time.",
     matches_plan: "Nothing to fix.",
   },
   // What kind of damage a check reports: money (revenue, ad spend, attribution), legal (consent, personal
@@ -916,6 +923,7 @@ const en = {
     name: "ai tag debugger",
     // Where a label is needed beside the name, it says what the product is.
     label: "Chrome extension", languages: { en: "English", tr: "Türkçe" }, close: "Close",
+    units: { s: (v) => `+${v}s`, ms: (v) => `+${v} ms` },
     // Words the run builder and the worker write into recordings.
     stepStart: "Before the first page",
     runGoal: "Recorded by hand in Chrome",
@@ -987,6 +995,8 @@ const en = {
       allDenied: "all denied", allGranted: "all granted",
       someDenied: (denied, granted) => `${denied} denied; ${granted} granted`,
       viaGtag: "via gtag consent update", viaCmp: (name) => `via ${name}`,
+      failedTip: "The request failed: this event never reached the platform.",
+      anyRoute: "All routes", orderLabel: "Order of the list", oldestFirst: "Oldest first", newestFirst: "Newest first",
       other: "Other", platformFilter: "Platform filter", soloHint: "Alt-click or double-click to show only this platform", hide: "Hide",
       sentTo: "Sent to", any: "Any", serverSide: "Server-side", direct: "Direct", showThem: "Show them",
       setCookie: "Set cookie: the server sets first-party cookies, no event",
@@ -1417,6 +1427,7 @@ const tr = {
       },
       tracking: (event) => `${event} izlemesi`,
       setup: (check) => `${check} kontrolü`,
+      platformSubject: { hit_failed: (platform) => `${platform} iletimi` },
       onViewport: (viewport) => ` (${viewport})`,
       onJourney: (journey) => ` (${journey})`,
       everywhere: " (her yolculukta)",
@@ -1524,7 +1535,7 @@ const tr = {
     unplanned: (list) => `Ölçüm planında olmayan olaylar gönderildi: ${list.join(", ")}.`,
     piiUnhashed: (platform, name, fields) => `${q(name)}, ${label(platform)} platformuna kullanıcı verisini karma (hash) yapmadan gönderdi (${fields.join(", ")}). Reklam platformları bu değerleri SHA-256 ile karma yapılmış bekler.`,
     piiDataLayer: (fields) => `dataLayer karma (hash) yapılmamış kullanıcı verisi içeriyor (${fields.join(", ")}). Bu, Google gelişmiş dönüşümleri için geçerli bir kurulum, ancak sayfadaki diğer tüm etiketler ve betikler de bu veriyi okuyabilir. Yalnızca kullanması gereken etiketlerin kullandığını kontrol edin.`,
-    plannedOutOfScope: (list) => `Plandaki ${list.length} olay, platformu bu çalıştırmada seçilmediği için kontrol edilmedi: ${list.join(", ")}.`,
+    plannedOutOfScope: (list) => `Plandaki ${list.length} olay, platformu bu çalıştırmada seçilmediği için kontrol edilmedi: ${list.map(eventLabel).join(", ")}.`,
     matches: (list) => `Plandaki ${list.length} olay plana uygun çalıştı: ${list.join(", ")}.`,
   },
   // Bir GTM etiketinin neden çalışıp çalışmadığı, yakalanan dataLayer'dan okunur. Cümleler
@@ -1650,7 +1661,7 @@ const tr = {
     journey_incomplete: "Tarayıcının neden durduğunu nottan okuyun (engellenen bir tıklama, bulunamayan bir öğe, bir hata), sayfayı ya da adımı düzeltin ve yolculuğu yeniden çalıştırın.",
     unplanned_events: "İstenen olayları ölçüm planına ekleyin ya da onları gönderen etiketleri kaldırın.",
     ga4_automatic_event: "Düzeltme gerekmez. Olayı başvuru için planda tutabilir ya da kaldırabilirsiniz; hiçbir etiketin göndermesi gerekmez.",
-    planned_out_of_scope: "Kontrol edilmeleri için platformlarını bir sonraki çalıştırmanın sağlayıcılarına ekleyin.",
+    planned_out_of_scope: "Bir sonraki kayıtta kontrol edilmeleri için platformlarını kontrol edilecek platformlara ekleyin.",
     matches_plan: "Düzeltilecek bir şey yok.",
   },
   // Dil fark etmeksizin aynı: kategori bir etiket, çevirisi categoryLabel'da.
@@ -2018,6 +2029,7 @@ const tr = {
   extension: {
     name: "ai tag debugger",
     label: "Chrome eklentisi", languages: { en: "English", tr: "Türkçe" }, close: "Kapat",
+    units: { s: (v) => `+${String(v).replace(".", ",")} sn`, ms: (v) => `+${v} ms` },
     stepStart: "İlk sayfadan önce",
     runGoal: "Chrome'da elle kaydedildi",
     runNote: "Chrome'da elle kaydedildi.",
@@ -2088,6 +2100,8 @@ const tr = {
       allDenied: "tümü reddedildi", allGranted: "tümüne izin verildi",
       someDenied: (denied, granted) => `${denied} reddedildi; ${granted} izinli`,
       viaGtag: "gtag consent update ile", viaCmp: (name) => `${name} üzerinden`,
+      failedTip: "İstek başarısız oldu: bu olay platforma hiç ulaşmadı.",
+      anyRoute: "Tüm yollar", orderLabel: "Liste sırası", oldestFirst: "Önce en eski", newestFirst: "Önce en yeni",
       other: "Diğer", platformFilter: "Platform filtresi", soloHint: "Yalnızca bu platformu göstermek için Alt ile ya da çift tıklayın", hide: "Gizle",
       sentTo: "Gönderildiği yer", any: "Hepsi", serverSide: "Sunucu tarafı", direct: "Doğrudan", showThem: "Göster",
       setCookie: "Çerez yazma: sunucu birinci taraf çerezleri yazar, olay değildir",

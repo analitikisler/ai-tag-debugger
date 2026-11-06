@@ -47,7 +47,7 @@ export function visibleRows(model) {
     if (!found.has(r.key)) continue;
     if (shown.has(r.kind === "call" ? "other" : r.platform)) rows.set(r.key, found.get(r.key));
   }
-  return { rows, total: model.rows.filter((r) => r.kind === "hit" && (model.chosen ? model.chosen.includes(r.platform) : true)).length };
+  return { rows, total: model.rows.filter((r) => r.kind === "hit").length };
 }
 
 // ---------- toolbar ----------
@@ -71,6 +71,14 @@ function toggle(model, key, solo) {
   render();
 }
 
+/** Oldest first or newest first, for Events and dataLayer alike; remembered for the panel. */
+export function orderToggle() {
+  const t = m().events;
+  const newest = state.order === "newest";
+  return el("button", { class: "btn ghost mini", type: "button", id: "order", "aria-label": t.orderLabel, title: t.orderLabel,
+    onclick: () => actions.setOrder(newest ? "oldest" : "newest") }, el("span", { class: newest ? "flip" : null }, icon("arrow-d", "s")), newest ? t.newestFirst : t.oldestFirst);
+}
+
 export function eventsToolbar(model) {
   const t = m().events;
   const found = searched(model);
@@ -85,13 +93,14 @@ export function eventsToolbar(model) {
       onkeydown: (e) => { if (e.key === "Escape") { state.filter.search = ""; render(); } } }),
     el("span", { class: "kbd", text: "/" }));
   const chips = el("div", { class: "chips", role: "group", "aria-label": t.platformFilter },
-    chip({ key: "all", label: t.all, count: allKeys.reduce((n, k) => n + count(k), 0), pressed: everything, onclick: () => {
+    chip({ key: "all", label: t.all, count: model.rows.filter((r) => r.kind === "hit" && found.has(r.key)).length, pressed: everything, onclick: () => {
       state.filter.on = new Set([...selected, ...unselected]);
       state.filter.extra = new Set(allKeys);
       actions.saveFilter();
       render();
     } }),
-    selected.map((k) => chip({ key: k, label: platformName(k).replace(/^Microsoft /, "MS "), count: count(k), pressed: shown.has(k), swatch: k in BADGE ? k : "other", title: t.soloHint,
+    // The short badge names (G Ads, MS Ads) keep every chip on one row at 400 px; the full name is in the tooltip.
+    selected.map((k) => chip({ key: k, label: BADGE[k] ?? platformName(k), count: count(k), pressed: shown.has(k), swatch: k in BADGE ? k : "other", title: `${platformName(k)} · ${t.soloHint}`,
       onclick: (e) => toggle(model, k, e.altKey), ondblclick: () => toggle(model, k, true) })),
     unselected.length || allKeys.includes("other") ? chip({ key: "notSelected", label: t.notSelected, count: [...unselected, "other"].reduce((n, k) => n + count(k), 0), dashed: true,
       onclick: (e) => { state.layer = { kind: "notSelected", anchor: e.currentTarget.getBoundingClientRect() }; render(); } }) : null);
@@ -102,13 +111,14 @@ export function eventsToolbar(model) {
   const servers = model.rows.some((r) => SERVER.has(r.route?.kind));
   let sentTo = null;
   if (servers) {
+    // Only when a server route was seen, and as one compact control: most sites have none.
     const inShown = model.rows.filter((r) => r.kind === "hit" && shown.has(r.platform) && matchRow(r, state.filter.search) !== null);
     const s = inShown.filter((r) => SERVER.has(r.route?.kind)).length;
-    const opt = (key, label, n, extra) => el("button", { class: "chip", type: "button", "aria-pressed": String(state.filter.sentTo === key), onclick: () => { state.filter.sentTo = key; render(); } }, extra, label, el("span", { class: "n", text: String(n) }));
-    sentTo = el("div", { class: "chips", role: "group", "aria-label": t.sentTo }, el("span", { class: "lbl", text: t.sentTo }),
-      opt("any", t.any, inShown.length), opt("server", t.serverSide, s, el("span", { class: "route", text: m().routes.badge.sgtm })), opt("direct", t.direct, inShown.length - s));
+    sentTo = el("select", { class: "minisel", id: "sentTo", "aria-label": t.sentTo, title: t.sentTo, onchange: (e) => { state.filter.sentTo = e.target.value; render(); } },
+      [["any", t.anyRoute], ["server", `${t.serverSide} ${s}`], ["direct", `${t.direct} ${inShown.length - s}`]]
+        .map(([v, label]) => el("option", { value: v, selected: state.filter.sentTo === v, text: label })));
   }
-  return el("div", { class: "toolbar" }, search, chips, note, sentTo);
+  return el("div", { class: "toolbar" }, el("div", { class: "toprow" }, search, sentTo, orderToggle()), chips, note);
 }
 
 /** The popover behind "+ Not selected": each unselected platform and other requests, with Show and Add to platforms. */
@@ -167,21 +177,42 @@ function eventRow(row, step, match, batchPos) {
   el("span", { class: "nm" }, el("b", { text: row.kind === "call" ? row.name.split("/").filter(Boolean).slice(-2).join("/") || row.name : row.name }), sum.text ? el("span", { class: `sum${sum.cls ? ` ${sum.cls}` : ""}`, text: sum.text }) : null),
   el("span", { class: "rt" },
     (row.flags ?? []).map((f) => el("span", { class: "flag", title: t.flags[f], text: f === "_nsi" ? "NSI" : f.slice(1).toUpperCase() })),
-    routeBadge(row), checkIcon(row),
-    failed(row.status) ? el("span", { class: "err", text: row.status === "failed" ? t.failed : String(row.status) }) : null,
+    // A request that failed never reached the platform: its error is the row's state, and the plan check (which
+    // only says what was sent) stays inside the detail.
+    routeBadge(row), failed(row.status) ? el("span", { class: "err", title: t.failedTip }, "✕ ", row.status === "failed" ? t.failed : String(row.status)) : checkIcon(row),
     el("span", { class: "t", text: since(row.t, step.t) }),
     el("span", { class: "chv" }, icon("chev-d", "s"))));
   return open ? [node, hitDetail(row, step)] : [node];
 }
 
-function divider(c, step, model) {
+/**
+ * Which consent commands become dividers: the first default in full, then a one-line divider each time the state
+ * really changes. A site that repeats the same default and update on every page load shows them once.
+ */
+function consentShown(model) {
+  const show = new Map();
+  let first = null;
+  let cur = null;
+  for (const c of model.consent) {
+    if (!first && c.mode === "default") { first = c; cur = { ...c.signals }; show.set(c.key, "full"); continue; }
+    if (c.mode === "default" && first && JSON.stringify(c.signals) === JSON.stringify(first.signals)) continue;
+    const next = { ...(cur ?? {}), ...c.signals };
+    if (cur && Object.keys(next).every((k) => next[k] === cur[k])) continue;
+    show.set(c.key, cur ? "line" : "full");
+    cur = next;
+  }
+  return show;
+}
+
+function divider(c, step, model, kind) {
   const t = m().events;
   const what = consentWords(c.signals);
   const tone = c.summary === "denied" ? "denied" : c.summary === "granted" ? "granted" : "partly";
   const second = c.mode === "default" ? Object.keys(c.signals).filter((k) => c.signals[k] === "denied").join(", ") : model.cmp ? t.viaCmp(model.cmp) : t.viaGtag;
-  return el("div", { class: `cdiv ${tone}`, role: "treeitem", "aria-level": "2", tabindex: "-1", "data-key": c.key },
-    el("span", { class: "ic" }, icon(tone === "granted" ? "shield-c" : tone === "denied" ? "shield-x" : "shield", "l")),
-    el("span", { class: "grow" }, el("b", { text: c.mode === "default" ? t.dividerDefault(what) : t.dividerUpdate(what) }), second ? [el("br"), el("span", { class: "sig", text: second })] : null),
+  const line = kind === "line";
+  return el("div", { class: `cdiv ${tone}${line ? " slim" : ""}`, role: "treeitem", "aria-level": "2", tabindex: "-1", "data-key": c.key },
+    el("span", { class: "ic" }, icon(tone === "granted" ? "shield-c" : tone === "denied" ? "shield-x" : "shield", line ? "" : "l")),
+    el("span", { class: "grow" }, el("b", { text: c.mode === "default" ? t.dividerDefault(what) : t.dividerUpdate(what) }), second ? [line ? " · " : el("br"), el("span", { class: "sig", text: second })] : null),
     el("span", { class: "t", text: since(c.t, step.t) }));
 }
 
@@ -215,16 +246,19 @@ export function eventsList(model) {
   const routes = routesOf(model);
   if (routes) out.push(routesCard(routes, model));
   const shown = shownSet(model);
+  const dividers = consentShown(model);
+  const newest = state.order === "newest";
   const names = [...shown].filter((k) => k !== "other").map((k) => BADGE[k] ?? k).join(", ");
-  for (const step of model.steps) {
-    const entries = step.entries.filter((e) => e.kind === "consent" || visible.has(e.key));
+  for (const step of newest ? [...model.steps].reverse() : model.steps) {
+    const kept = step.entries.filter((e) => (e.kind === "consent" ? dividers.has(e.key) : visible.has(e.key)));
+    const entries = newest ? kept.reverse() : kept;
     const hits = entries.filter((e) => e.kind !== "consent");
     const all = step.entries.filter((e) => e.kind !== "consent").length;
     const collapsed = stepCollapsed(step, model);
     const children = [];
     if (!collapsed) {
       entries.forEach((e, i) => {
-        if (e.kind === "consent") return children.push(divider(e, step, model));
+        if (e.kind === "consent") return children.push(divider(e, step, model, dividers.get(e.key)));
         // The bracket joins the rows of one request: GA4 batches several events in one POST.
         const same = (o) => o && o.kind !== "consent" && o.e === e.e;
         const pos = same(entries[i - 1]) || same(entries[i + 1]) ? (!same(entries[i - 1]) ? "first" : !same(entries[i + 1]) ? "last" : "mid") : null;
@@ -239,7 +273,8 @@ export function eventsList(model) {
   }
   const anyHit = model.rows.some((r) => r.kind === "hit");
   if (state.live) {
-    out.push(el("div", { class: "waiting" }, el("span", { class: "pulse" }), t.listening));
+    const waiting = el("div", { class: "waiting" }, el("span", { class: "pulse" }), t.listening);
+    if (newest) out.splice(routes ? 1 : 0, 0, waiting); else out.push(waiting);
     if (!anyHit && Date.now() - (state.recording?.startedAt ?? Date.now()) > 15000) out.push(nothingYet(model, false));
   } else if (!anyHit && state.recording) out.push(nothingYet(model, true));
   return el("div", { class: "list", role: "tree", "aria-label": m().tabs.events }, out);

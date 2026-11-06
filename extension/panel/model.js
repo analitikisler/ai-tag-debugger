@@ -204,7 +204,13 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     }
   }
   // The consent each hit was sent under, as far as the dataLayer says (Google hits also carry their own gcs/gcd).
-  for (const r of hitRows) r.consentAt = consentAt(consent, r.t);
+  // Before or after the visitor first accepted: sites push a denied default on every page load and restore the
+  // stored choice a moment later, so a hit on a later page is not "before consent" just because it beat that restore.
+  const firstGrant = consent.find((c) => c.mode === "update" && (c.signals.ad_storage === "granted" || c.signals.analytics_storage === "granted"));
+  for (const r of hitRows) {
+    r.consentAt = consentAt(consent, r.t);
+    r.beforeGrant = !firstGrant || r.t < firstGrant.t;
+  }
   // A user property that changes value between hits (guest, then premium after login) is worth pointing at.
   const lastProp = new Map();
   for (const r of hitRows) {

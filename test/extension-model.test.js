@@ -174,3 +174,18 @@ test("user properties are read from the request, and a changed one is pointed at
   assert.deepEqual(second.userProps.map(([k]) => k), ["uid", "up.user_type", "upn.orders"]);
   assert.deepEqual(second.propChanges, { "up.user_type": { was: "guest", step: 0 } });
 });
+
+test("a hit on a later page is not before consent because the page re-pushed a denied default", () => {
+  const later = [
+    ...EVENTS,
+    { t: 2000, seq: 20, kind: "step", action: "navigate", url: "https://shop.example/cart", label: "Opened /cart" },
+    { t: 2001, seq: 21, kind: "push", entry: { value: ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }] } },
+    { t: 2010, seq: 22, kind: "request", requestId: "m9", method: "GET", url: "https://www.facebook.com/tr/?id=1&ev=PageView" },
+    { t: 2200, seq: 23, kind: "push", entry: { value: ["consent", "update", { ad_storage: "granted", analytics_storage: "granted" }] } },
+  ];
+  const m = M.buildModel(later);
+  const [first, second] = m.rows.filter((r) => r.name === "PageView");
+  assert.equal(first.beforeGrant, true);
+  assert.equal(second.beforeGrant, false);
+  assert.equal(M.consentReport(m).platforms.find((p) => p.platform === "meta").violations.length, 1);
+});
