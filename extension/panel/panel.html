@@ -7,65 +7,81 @@
 <link rel="stylesheet" href="panel.css">
 </head>
 <body>
-<header class="bar">
-  <div class="brand"><img src="../icons/32.png" alt="" width="20" height="20"><span>AITD Recorder</span></div>
-  <select id="lang" aria-label="Language"></select>
+<header class="top">
+  <img class="logo" src="../icons/32.png" alt="" width="20" height="20">
+  <div class="site">
+    <div id="host" class="host">—</div>
+    <div id="status" class="status"><span class="dot"></span><span id="statusText"></span></div>
+  </div>
+  <button id="record" class="btn primary" type="button"></button>
+  <button id="stop" class="btn stop" type="button" hidden></button>
 </header>
 
+<div class="planbar">
+  <span class="label" data-t="plan"></span>
+  <span id="planInfo" class="planinfo"></span>
+  <label class="link" for="planFile"><span id="planChoose"></span></label>
+  <input id="planFile" type="file" accept=".json,application/json" hidden>
+  <button id="planClear" class="link" type="button" hidden data-t="clearPlan"></button>
+</div>
+<p id="notice" class="notice" hidden></p>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="events"><span data-t="tabs.events"></span><span id="nEvents" class="count"></span></button>
+  <button role="tab" data-tab="dataLayer"><span data-t="tabs.dataLayer"></span><span id="nPushes" class="count"></span></button>
+  <button role="tab" data-tab="findings"><span data-t="tabs.findings"></span><span id="nFindings" class="count"></span></button>
+  <button role="tab" data-tab="history"><span data-t="tabs.history"></span></button>
+</nav>
+
 <main>
-  <section class="card" id="state">
-    <div class="site"><span id="host" class="host"></span><span id="pill" class="pill"></span></div>
-    <p id="hint" class="hint"></p>
-    <div class="actions">
-      <button id="record" class="primary" type="button"></button>
-      <button id="stop" class="danger" type="button" hidden></button>
+  <section id="tab-events" class="pane">
+    <div class="toolbar">
+      <div id="filters" class="chips"></div>
     </div>
+    <div id="eventsList" class="steps"></div>
+    <p id="eventsEmpty" class="empty"></p>
   </section>
 
-  <section class="card" id="plan">
-    <h2 data-t="plan"></h2>
-    <p id="planInfo" class="hint"></p>
-    <div class="actions">
-      <label class="button" for="planFile"><span data-t="choosePlan"></span></label>
-      <input id="planFile" type="file" accept=".json,application/json" hidden>
-      <button id="planClear" type="button" class="quiet" hidden data-t="clearPlan"></button>
+  <section id="tab-dataLayer" class="pane" hidden>
+    <div class="toolbar"><label class="check"><input id="hideGtm" type="checkbox" checked><span data-t="hideGtm"></span></label></div>
+    <div id="pushList" class="steps"></div>
+    <p id="pushEmpty" class="empty" data-t="noPushes"></p>
+  </section>
+
+  <section id="tab-findings" class="pane" hidden>
+    <div id="verdict" class="verdict" hidden>
+      <div id="score" class="score"></div>
+      <div>
+        <div id="verdictStatus" class="vstatus"></div>
+        <div id="verdictHeadline" class="vheadline"></div>
+        <div id="sev" class="sev"></div>
+      </div>
     </div>
-    <p id="planError" class="error" hidden></p>
-  </section>
-
-  <section class="card" id="live" hidden>
-    <div class="counts"><span id="cHits"></span><span id="cPushes"></span><span id="cSteps"></span></div>
-    <form id="stepForm" class="step-form">
-      <input id="stepName" type="text" maxlength="120" autocomplete="off">
-      <button type="submit" data-t="newStep"></button>
-    </form>
-    <h2 data-t="live"></h2>
-    <ol id="feed" class="feed"></ol>
-    <p id="feedEmpty" class="hint" data-t="noHits"></p>
-  </section>
-
-  <section class="card" id="result" hidden>
-    <p id="checking" class="hint" data-t="checking"></p>
-    <p id="verdict" class="verdict"></p>
-    <div id="sev" class="sev"></div>
     <ol id="findings" class="findings"></ol>
-    <div class="actions wrap">
-      <button id="openReport" class="primary" type="button" data-t="openReport"></button>
-      <button id="exportCapture" type="button" data-t="exportCapture"></button>
-      <button id="exportHtml" type="button" data-t="exportHtml"></button>
+    <p id="findingsEmpty" class="empty"></p>
+    <div id="reportActions" class="actions" hidden>
+      <button id="openReport" class="btn primary" type="button" data-t="openReport"></button>
+      <button id="exportCapture" class="btn" type="button" data-t="exportCapture"></button>
+      <button id="exportHtml" class="btn" type="button" data-t="exportHtml"></button>
+      <p class="fine" data-t="exportNote"></p>
     </div>
-    <p class="hint" data-t="exportNote"></p>
   </section>
 
-  <section class="card" id="history">
-    <h2 data-t="history"></h2>
+  <section id="tab-history" class="pane" hidden>
     <ol id="recordings" class="recordings"></ol>
-    <p id="historyEmpty" class="hint" data-t="noHistory"></p>
+    <p id="historyEmpty" class="empty" data-t="noHistory"></p>
   </section>
 </main>
 
-<footer class="bar foot">
-  <label class="toggle"><input id="mask" type="checkbox"><span data-t="maskOnScreen"></span></label>
+<footer class="foot">
+  <form id="stepForm" class="stepform" hidden>
+    <input id="stepName" type="text" maxlength="120" autocomplete="off">
+    <button class="btn" type="submit" data-t="newStep"></button>
+  </form>
+  <div class="settings">
+    <label class="check"><input id="mask" type="checkbox"><span data-t="maskOnScreen"></span></label>
+    <select id="lang"></select>
+  </div>
 </footer>
 <script type="module" src="panel.js"></script>
 </body>

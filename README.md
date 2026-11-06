@@ -779,14 +779,15 @@ Then open `chrome://extensions`, turn on Developer mode, choose **Load unpacked*
 
 1. Open your site and press **Record**. Chrome asks once for access to sites and their tracking requests. The page reloads, so the first page's tags are recorded too.
 2. Optionally choose a measurement plan (`measurement-plan.json`); it is kept per site.
-3. Browse. Each page load and single-page-app route is a step; type a name and press **New step** to mark a moment such as "Added to cart". Hits show as they land, grouped by step, with their parameters and HTTP status, so a request that failed or got a 503 stands out. dataLayer pushes are recorded from the first one, with or without a GTM container.
-4. Press **Stop**. The verdict and findings appear in the panel; **Open full report** shows the same HTML report the CLI writes, in English or Turkish.
+3. Browse. Each page load and single-page-app route is a step; type a name and press **Mark step** to name the next moment, such as "Add to cart". Hits show as they land, page by page, with their parameters, decoded GA4 items and consent; a request that failed or got a 503 is marked, others are not. The panel stays with the recorded site while you look at other tabs. dataLayer pushes are recorded from the first one, with or without a GTM container.
+4. Press **Stop**. The score, verdict and findings appear under **Findings**; **Open full report** shows the same HTML report the CLI writes, in English or Turkish.
 
 | Panel control | What it does |
 | --- | --- |
 | Record / Stop | Starts and stops recording the current tab. |
 | Measurement plan | A plan file to check against, kept per site. Without one, the checks run plan-free. |
-| New step | Starts a named step, so findings say where things happened. |
+| Mark step | Starts a named step, so findings say where things happened. |
+| Events, dataLayer, Findings, History | The hits page by page (filter by platform, open a row for its parameters, items, consent and request), the dataLayer pushes (gtm.* events hidden by default), the checks' result, and the site's past recordings. |
 | Language | The panel's and report's language: English or Turkish. Follows Chrome's language at first. |
 | Mask personal data on screen | Hides emails, phone numbers and names in the panel, for screen sharing. |
 | Export capture.json / report.html | Downloads the run and the report, redacted. |

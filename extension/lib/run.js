@@ -5,7 +5,7 @@
 import { parseTrackingRequest, providerOf, vendorOf } from "../core/parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl, siteOf } from "../core/redact.js";
 import { splitRun } from "../core/frames.js";
-import { callersOf, containerOf } from "../core/containers.js";
+import { callersOf, containerOf, isContainerId } from "../core/containers.js";
 import { messages } from "../core/i18n.js";
 
 /** The same caps as AuditSession's LOG_LIMITS and body budget, so a long recording cannot grow without bound. */
@@ -53,7 +53,7 @@ export const labelsFor = (lang) => {
 };
 
 /** Event kinds a recording stores; see extension/worker.js and extension/bridge.js. */
-export const KINDS = ["step", "request", "status", "push", "load", "message", "cookies", "error"];
+export const KINDS = ["step", "request", "status", "push", "load", "message", "cookies", "page", "error"];
 
 /**
  * The run for one recording.
@@ -70,6 +70,8 @@ export function buildRun(events, info) {
   const network = [];
   const containerLoads = [];
   const containerPreloads = new Map();
+  const containersRunning = new Map();
+  let readPages = false;
   const frameMessages = [];
   const cookieLog = [];
   const cookieChanges = [];
@@ -194,6 +196,21 @@ export function buildRun(events, info) {
       cookieHashes = now;
       continue;
     }
+    if (e.kind === "page") {
+      readPages = true;
+      // Google's registry of the containers that ran, the preload hints, the Google tag's consent state and a page
+      // that is a bot challenge or crashed: what AuditSession.observe reads after each step.
+      for (const id of (e.registry ?? []).map((k) => String(k).toUpperCase()).filter(isContainerId)) if (!containersRunning.has(id)) containersRunning.set(id, current());
+      for (const c of (e.preloads ?? []).map(containerOf).filter(Boolean)) {
+        const k = `${c.id}|${c.host}`;
+        if (!containerPreloads.has(k)) containerPreloads.set(k, { id: c.id, host: c.host, step: current(), page: pagePath(topUrl) });
+      }
+      const st = steps[current()];
+      const before = steps.slice(0, current()).map((x) => x.tagConsent).filter(Boolean).at(-1);
+      if (e.tagConsent && JSON.stringify(e.tagConsent) !== JSON.stringify(st.tagConsent ?? before)) st.tagConsent = e.tagConsent;
+      if (e.problem) st.pageProblem = e.problem;
+      continue;
+    }
     if (e.kind === "error") pageErrors.push({ step: current(), message: String(e.message ?? "").slice(0, 300) });
   }
   if (!steps.length) step(labels.start, { t: info.startedAt ?? Date.now(), action: "start", url: topUrl });
@@ -216,7 +233,8 @@ export function buildRun(events, info) {
     live: true,
     containerLoads,
     containerScripts: [],
-    containersRunning: [],
+    // Unknown (left out) when the page was never read, so no check takes "none ran" from a recording that never looked.
+    ...(readPages ? { containersRunning: [...containersRunning].map(([id, step]) => ({ id, step })) } : {}),
     containerPreloads: [...containerPreloads.values()],
     frameMessages,
     network,

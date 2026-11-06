@@ -124,3 +124,21 @@ test("a recording stops growing at the CLI's limits", () => {
   assert.equal(big.hits.length, lib.LIMITS.hits);
   assert.ok(big.pageErrors.some((e) => /Recording limit reached/.test(e.message)));
 });
+
+test("Google's container registry, read from the page, decides whether a container ran", () => {
+  const load = { t: 1200, seq: 3, kind: "load", top: true, frameUrl: "https://shop.example/", entry: { src: "https://www.googletagmanager.com/gtm.js?id=GTM-RAN1", how: "parser", page: "https://shop.example/", doc: "d1" } };
+  const nav = { t: 1100, seq: 2, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" };
+  const notRun = (r) => analyze.analyze(r).findings.some((f) => f.check === "container_not_run");
+  // Never read: unknown, so no finding claims the container never ran.
+  const unread = lib.buildRun([nav, load], { site: "https://shop.example" });
+  assert.equal(unread.containersRunning, undefined);
+  assert.equal(notRun(unread), false);
+  // Read and present in the registry: it ran.
+  const ran = lib.buildRun([nav, load, { t: 1500, seq: 4, kind: "page", registry: ["GTM-RAN1", "G-ABC"], preloads: [], tagConsent: { entries: { ad_storage: { default: "denied" } } }, problem: null }], { site: "https://shop.example" });
+  assert.deepEqual(ran.containersRunning, [{ id: "GTM-RAN1", step: 0 }, { id: "G-ABC", step: 0 }]);
+  assert.equal(ran.steps[0].tagConsent.entries.ad_storage.default, "denied");
+  assert.equal(notRun(ran), false);
+  // Read and missing from it: it never ran, which is worth a finding.
+  const missing = lib.buildRun([nav, load, { t: 1500, seq: 4, kind: "page", registry: [], preloads: [] }], { site: "https://shop.example" });
+  assert.equal(notRun(missing), true);
+});

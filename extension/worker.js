@@ -5,6 +5,7 @@
 import { providerOf } from "./core/parsers.js";
 import { siteOf } from "./core/redact.js";
 import { messages } from "./core/i18n.js";
+import { containersInPage, googleConsentStateInPage, pageProblemInPage } from "./core/page-hook.js";
 import { bodyText } from "./lib/body.js";
 import { addEvents, prune, putRecording, getRecording } from "./lib/store.js";
 
@@ -83,6 +84,25 @@ async function snapshotCookies(rec, tabId, url) {
   await record(rec, { kind: "cookies", cookies: out }, tabId);
 }
 
+/**
+ * What the CLI reads after every step (AuditSession.observe): the containers Google's registry holds (the ones that
+ * ran), the preload hints, the Google tag's consent state and whether the page is a bot challenge or crashed. Read
+ * in the page itself, top frame only, with the same functions the CLI uses.
+ */
+async function readPage(rec, tabId) {
+  const run = (func) => chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, world: "MAIN", func })
+    .then(([r]) => r?.result ?? null, () => null);
+  const [found, tagConsent, problem] = await Promise.all([run(containersInPage), run(googleConsentStateInPage), run(pageProblemInPage)]);
+  if (!found && !tagConsent && !problem) return;
+  await record(rec, { kind: "page", registry: found?.registry ?? [], preloads: found?.preloads ?? [], tagConsent, problem }, tabId);
+}
+
+/** Reads the page now and again a little later: GTM often registers after the load event. */
+function readPageSoon(rec, tabId) {
+  readPage(rec, tabId).catch(() => {});
+  setTimeout(() => readPage(rec, tabId).catch(() => {}), 2500);
+}
+
 const pathOf = (url) => {
   try { const u = new URL(url); return u.pathname + (u.search ? "?…" : ""); } catch { return url; }
 };
@@ -135,12 +155,15 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (d) => {
   if (!a) return;
   const m = messages(await language()).extension;
   await record(a.rec, { kind: "step", action: "route", url: d.url, label: m.stepRoute(pathOf(d.url)) }, d.tabId);
+  setTimeout(() => readPage(a.rec, d.tabId).catch(() => {}), 1500);
 });
 
 chrome.webNavigation.onCompleted.addListener(async (d) => {
   if (d.frameId !== 0) return;
   const a = await recordingFor(d.tabId);
-  if (a) await snapshotCookies(a.rec, d.tabId, d.url);
+  if (!a) return;
+  await snapshotCookies(a.rec, d.tabId, d.url);
+  readPageSoon(a.rec, d.tabId);
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
@@ -176,6 +199,7 @@ async function stop(tabId) {
   if (!a) return { rec: null };
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab?.url) await snapshotCookies(a.rec, tabId, tab.url);
+  await readPage(a.rec, tabId).catch(() => {});
   delete map[tabId];
   await setActive(map);
   const recording = await getRecording(a.rec);
@@ -202,10 +226,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (msg.type === "step") {
       const a = await recordingFor(msg.tabId);
       if (!a) return { ok: false };
+      // The step that ends gets the page's state as it was, the way the CLI reads it at the end of each step.
+      await readPage(a.rec, msg.tabId).catch(() => {});
       await record(a.rec, { kind: "step", action: "manual", label: String(msg.label ?? "").slice(0, 120) }, msg.tabId);
       return { ok: true };
     }
     if (msg.type === "state") return { recording: await recordingFor(msg.tabId) };
+    if (msg.type === "active") return { active: await active() };
     return { error: "unknown message" };
   };
   run().then(reply, (err) => reply({ error: String(err?.message ?? err) }));

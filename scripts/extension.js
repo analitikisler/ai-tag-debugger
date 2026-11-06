@@ -24,6 +24,7 @@ export const EXTENSION_ROOTS = [
   "src/report-shared.js",
   "src/html/shell.js",
   "src/version.js",
+  "src/page-hook.js",
 ];
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)\s[^;]*?\sfrom\s+["']([^"']+)["']|(?:^|\n)\s*import\s+["']([^"']+)["']/g;

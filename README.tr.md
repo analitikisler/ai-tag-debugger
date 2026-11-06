@@ -779,14 +779,15 @@ Sonra `chrome://extensions` adresini açın, Geliştirici modunu açın, **Paket
 
 1. Sitenizi açın ve **Kaydet**'e basın. Chrome sitelere ve izleme isteklerine erişim için bir kez izin ister. İlk sayfanın etiketleri de kaydedilsin diye sayfa yeniden yüklenir.
 2. İsterseniz bir ölçüm planı (`measurement-plan.json`) seçin; site başına saklanır.
-3. Gezinin. Her sayfa yüklemesi ve tek sayfalı uygulama rotası bir adımdır; "Sepete eklendi" gibi bir anı işaretlemek için bir ad yazıp **Yeni adım**'a basın. İstekler geldikçe, adıma göre gruplanmış olarak parametreleri ve HTTP durumlarıyla görünür; başarısız olan ya da 503 alan bir istek hemen fark edilir. dataLayer push'ları, bir GTM konteyneri olsun ya da olmasın, ilkinden itibaren kaydedilir.
-4. **Durdur**'a basın. Karar ve bulgular panelde görünür; **Tam raporu aç**, CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir.
+3. Gezinin. Her sayfa yüklemesi ve tek sayfalı uygulama rotası bir adımdır; "Sepete ekle" gibi bir sonraki anı adlandırmak için bir ad yazıp **Adımı işaretle**'ye basın. İstekler geldikçe, sayfa sayfa; parametreleri, çözülmüş GA4 ürünleri ve onay durumuyla görünür; başarısız olan ya da 503 alan bir istek işaretlenir, diğerleri işaretlenmez. Siz başka sekmelere bakarken panel kaydedilen sitede kalır. dataLayer push'ları, bir GTM konteyneri olsun ya da olmasın, ilkinden itibaren kaydedilir.
+4. **Durdur**'a basın. Puan, karar ve bulgular **Bulgular** sekmesinde görünür; **Tam raporu aç**, CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir.
 
 | Panel denetimi | Ne yapar |
 | --- | --- |
 | Kaydet / Durdur | Geçerli sekmenin kaydını başlatır ve durdurur. |
 | Ölçüm planı | Karşılaştırılacak plan dosyası, site başına saklanır. Plan yoksa kontroller plansız çalışır. |
-| Yeni adım | Adı olan bir adım başlatır; bulgular olayın nerede olduğunu söyler. |
+| Adımı işaretle | Adı olan bir adım başlatır; bulgular olayın nerede olduğunu söyler. |
+| Olaylar, dataLayer, Bulgular, Geçmiş | Sayfa sayfa istekler (platforma göre süzün, parametreleri, ürünleri, onayı ve isteği görmek için bir satırı açın), dataLayer push'ları (gtm.* olayları varsayılan olarak gizli), kontrollerin sonucu ve sitenin geçmiş kayıtları. |
 | Dil | Panelin ve raporun dili: Türkçe ya da İngilizce. Başta Chrome'un dilini izler. |
 | Kişisel verileri ekranda gizle | Ekran paylaşımı için paneldeki e-postaları, telefonları ve adları gizler. |
 | capture.json / report.html dışa aktar | Çalıştırmayı ve raporu maskelenmiş olarak indirir. |

@@ -50,7 +50,7 @@ try {
     assert.ok(tab, "the worker can find the tab by its address");
     const p = await shipped.newPage();
     await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html?tab=${tab}`);
-    await p.waitForFunction(() => document.getElementById("host").textContent !== "");
+    await p.waitForFunction(() => document.getElementById("host").textContent === "localhost", null, { timeout: 10_000 }).catch(() => {});
     assert.equal(await p.textContent("#host"), "localhost", "the panel names the site before access is granted");
     assert.equal(await p.isEnabled("#record"), true, "Record can be pressed before access is granted");
   } finally {

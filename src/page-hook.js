@@ -145,3 +145,62 @@ export const INIT_SCRIPT = `(() => {
 ${CONTAINER_HOOK}
 ${MESSAGE_HOOK}
 })();`;
+
+// The page readers below run in the page after a load (Playwright's page.evaluate in the CLI, chrome.scripting in the
+// extension), so each is self-contained: no closure over this module.
+
+/**
+ * Runs in the page: the Google tag's own consent state (google_tag_data.ics), or null before a Google tag loaded.
+ * Per consent type the default and update it holds, and whether it applied a default and an update at all, whether
+ * the default came after a tag had already read consent (wasSetLate), and whether wait_for_update ran out. It is how
+ * the tag sees consent, wherever it was set: gtag() in the page, or a consent platform's GTM template, which never
+ * shows in the dataLayer. Not documented by Google; read defensively.
+ */
+export function googleConsentStateInPage() {
+  const ics = window.google_tag_data?.ics;
+  if (!ics || typeof ics !== "object") return null;
+  const word = (v) => (v === true ? "granted" : v === false ? "denied" : undefined);
+  const entries = {};
+  for (const [type, e] of Object.entries(ics.entries ?? {})) {
+    if (!e || typeof e !== "object") continue;
+    const d = word(e.default);
+    const u = word(e.update);
+    entries[type] = { ...(d ? { default: d } : {}), ...(u ? { update: u } : {}) };
+  }
+  return { entries, usedDefault: Boolean(ics.usedDefault), usedUpdate: Boolean(ics.usedUpdate), wasSetLate: Boolean(ics.wasSetLate), waitPeriodTimedOut: Boolean(ics.waitPeriodTimedOut) };
+}
+
+/**
+ * Runs in the page: the IDs Google's own registry (window.google_tag_manager) holds, which are the containers and
+ * Google tags that actually ran, however their script got in; and the addresses the page only preloads
+ * (<link rel="preload">, "modulepreload", "prefetch"), which download a script without running it.
+ */
+export function containersInPage() {
+  const registry = window.google_tag_manager && typeof window.google_tag_manager === "object" ? Object.keys(window.google_tag_manager) : [];
+  const preloads = [...document.querySelectorAll('link[rel~="preload"], link[rel~="modulepreload"], link[rel~="prefetch"]')].map((l) => l.href).filter(Boolean);
+  return { registry: registry.slice(0, 200), preloads: preloads.slice(0, 200) };
+}
+
+/**
+ * Runs in the page: whether it is something other than the site, so what a step captured there says nothing about
+ * the site's tracking. A bot challenge in its place (Cloudflare, DataDome, HUMAN, Akamai), or a page that crashed in
+ * the browser (the error screen a Next.js app shows when its scripts fail). Null for a page that looks like itself.
+ * @returns {null | { kind: "challenge"|"crash", vendor?: string }}
+ */
+export function pageProblemInPage() {
+  const title = (document.title || "").trim();
+  const text = (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 3000);
+  const has = (selector) => {
+    try {
+      return Boolean(document.querySelector(selector));
+    } catch {
+      return false;
+    }
+  };
+  if (/^just a moment\.\.\.$|^attention required! \| cloudflare$/i.test(title) || has("#challenge-form, #challenge-running, #cf-challenge-running")) return { kind: "challenge", vendor: "Cloudflare" };
+  if (has('iframe[src*="captcha-delivery.com"]')) return { kind: "challenge", vendor: "DataDome" };
+  if (has("#px-captcha")) return { kind: "challenge", vendor: "HUMAN" };
+  if (/^access denied$/i.test(title) && /reference\s*#\s*[\d.a-f]+/i.test(text)) return { kind: "challenge", vendor: "Akamai" };
+  if (/^application error: a client-side exception has occurred/i.test(text)) return { kind: "crash", vendor: "Next.js" };
+  return null;
+}

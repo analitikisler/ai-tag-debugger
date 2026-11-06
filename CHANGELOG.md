@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Chrome extension preview, **AITD Recorder** (`extension/`): record a site's tracking while you browse it yourself in Chrome, then run the CLI's checks on it and open the same HTML report, in English or Turkish, from Chrome's side panel. Hits show live, grouped by step, with their parameters and HTTP status; dataLayer pushes are recorded from the first one, with or without a GTM container; a measurement plan can be chosen per site; and the run exports as a redacted `capture.json` and `report.html`. Not in the Chrome Web Store yet: `npm run extension`, then load `extension/` unpacked (README: Chrome extension).
+- The extension reads Google's container registry and the Google tag's consent state from the page, as the CLI does after each step, so it no longer reports a container that ran as never run.
 - The extension shows values as they were sent, client and session IDs included, and redacts user data only in what leaves it (exports). The CLI and the MCP server still redact at capture.
 - The HTML report no longer needs Node to render: its script hash, the brand colours and the consent tables moved into modules the extension shares (`src/sha256.js`, `src/brand-css.js`, `src/consent-table.js`), and the version is read from `src/version.js`. Reports are unchanged.
 
