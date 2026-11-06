@@ -1,5 +1,5 @@
 {
-  "name": { "message": "AITD Recorder" },
-  "description": { "message": "Record a site's analytics and ad tags as you browse, and check them against your measurement plan. From ai-tag-debugger." },
-  "action": { "message": "Open AITD Recorder" }
+  "name": { "message": "ai tag debugger – GA4, dataLayer, Consent Mode & pixel checker" },
+  "description": { "message": "Records GA4, Google Ads, Meta and TikTok hits, dataLayer pushes and consent while you browse, then checks them against the plan." },
+  "action": { "message": "Open ai tag debugger" }
 }

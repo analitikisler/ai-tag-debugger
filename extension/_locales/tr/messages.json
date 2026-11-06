@@ -1,5 +1,5 @@
 {
-  "name": { "message": "AITD Recorder" },
-  "description": { "message": "Siteyi gezerken analitik ve reklam etiketlerini kaydedin, ölçüm planınızla karşılaştırın. ai-tag-debugger'dan." },
-  "action": { "message": "AITD Recorder'ı aç" }
+  "name": { "message": "ai tag debugger – GA4, dataLayer, Consent Mode ve piksel denetimi" },
+  "description": { "message": "Site gezilirken GA4, Ads, Meta ve TikTok hit’leri, dataLayer push’ları ve onay durumu kaydedilir, ölçüm planıyla karşılaştırılır." },
+  "action": { "message": "ai tag debugger’ı aç" }
 }

@@ -767,7 +767,7 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 
 ## Chrome eklentisi (önizleme)
 
-**AITD Recorder**, siteyi kendi Chrome'unuzda kendiniz gezerken izlemeyi kaydeder ve durdurduğunuzda CLI ile aynı kontrolleri çalıştırır. Elle daha hızlı olan işler için kullanın: giriş gerektiren bir alan, gerçek bir test kartıyla bir ödeme, yapay zekânın ulaşamadığı bir sayfa ya da yayından önce hızlı bir bakış. Hiçbir yapay zekâ modeli kullanılmaz; kontroller CLI'ın deterministik kontrolleridir ve siz dışa aktarmadıkça hiçbir şey tarayıcınızdan çıkmaz.
+**ai tag debugger** (Chrome eklentisi), siteyi kendi Chrome'unuzda kendiniz gezerken izlemeyi kaydeder ve durdurduğunuzda CLI ile aynı kontrolleri çalıştırır. Elle daha hızlı olan işler için kullanın: giriş gerektiren bir alan, gerçek bir test kartıyla bir ödeme, yapay zekânın ulaşamadığı bir sayfa ya da yayından önce hızlı bir bakış. Hiçbir yapay zekâ modeli kullanılmaz; kontroller CLI'ın deterministik kontrolleridir ve siz dışa aktarmadıkça hiçbir şey tarayıcınızdan çıkmaz.
 
 Henüz Chrome Web Mağazası'nda değil. Kaynaktan yüklemek için:
 
@@ -777,19 +777,21 @@ npm run extension   # paylaşılan kontrol ve rapor kodunu extension/core/ klas�
 
 Sonra `chrome://extensions` adresini açın, Geliştirici modunu açın, **Paketlenmemiş öğe yükle**'yi seçin ve `extension/` klasörünü gösterin. Yan paneli açmak için araç çubuğundaki simgeye tıklayın.
 
-1. Sitenizi açın ve **Kaydet**'e basın. Chrome sitelere ve izleme isteklerine erişim için bir kez izin ister. İlk sayfanın etiketleri de kaydedilsin diye sayfa yeniden yüklenir.
-2. İsterseniz bir ölçüm planı (`measurement-plan.json`) seçin; site başına saklanır.
+1. Siteyi açın. İlk kullanımda kısa bir tur gösterilir. Kurulumda test edilecek platformları seçin (sayfada bulunanlar "sayfada" diye işaretlenir; diğerleri yine kaydedilir ve "Seçilmeyenler" filtresinin arkasında durur), isterseniz bir ölçüm planı (`measurement-plan.json`) ekleyin ve **Kaydı başlat**'a basın. Chrome sitelere ve izleme isteklerine erişim için bir kez izin ister. İlk sayfanın etiketleri de kaydedilsin diye sayfa yeniden yüklenir; platformlar ve plan site başına saklanır.
+2. Seçenekler: kayıt başlarken sayfayı yeniden yükle (varsayılan olarak açık) ve ilk kez gelen bir ziyaretçi gibi test etmek için önce sitenin çerezlerini temizle.
 3. Gezinin. Her sayfa yüklemesi ve tek sayfalı uygulama rotası bir adımdır; "Sepete ekle" gibi bir sonraki anı adlandırmak için bir ad yazıp **Adımı işaretle**'ye basın. İstekler geldikçe, sayfa sayfa; parametreleri, çözülmüş GA4 ürünleri ve onay durumuyla görünür; başarısız olan ya da 503 alan bir istek işaretlenir, diğerleri işaretlenmez. Siz başka sekmelere bakarken panel kaydedilen sitede kalır. dataLayer push'ları, bir GTM konteyneri olsun ya da olmasın, ilkinden itibaren kaydedilir.
-4. **Durdur**'a basın. Puan, karar ve bulgular **Bulgular** sekmesinde görünür; **Tam raporu aç**, CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir.
+4. **Durdur**'a basın. Puan, karar ve bulgular **Bulgular** sekmesinde görünür; **İsteği göster** bulgunun ilgili olduğu isteğe gider, **Tam raporu aç** ise CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir. **Baştan başla** kuruluma döner; işareti kaldırılmadıkça kayıt Geçmiş'te kalır.
 
 | Panel denetimi | Ne yapar |
 | --- | --- |
-| Kaydet / Durdur | Geçerli sekmenin kaydını başlatır ve durdurur. |
+| Kaydı başlat / Durdur / Baştan başla | Geçerli sekmenin kaydını başlatır, durdurur ve kuruluma döner (Alt+R, Alt+N). |
+| Platformlar | Kontrol edilen ve gösterilen platformlar; kurulumda seçilir, site başına saklanır. |
 | Ölçüm planı | Karşılaştırılacak plan dosyası, site başına saklanır. Plan yoksa kontroller plansız çalışır. |
 | Adımı işaretle | Adı olan bir adım başlatır; bulgular olayın nerede olduğunu söyler. |
-| Olaylar, dataLayer, Bulgular, Geçmiş | Sayfa sayfa istekler (platforma göre süzün, parametreleri, ürünleri, onayı ve isteği görmek için bir satırı açın), dataLayer push'ları (gtm.* olayları varsayılan olarak gizli), kontrollerin sonucu ve sitenin geçmiş kayıtları. |
+| Olaylar, dataLayer, İzin, Bulgular, Geçmiş | Sayfa sayfa istekler (platforma ve gönderildiği yere göre süzün; etiketli parametreler, kullanıcı özellikleri, ürünler, izin ve istek için, açıklamalı tüm parametreler ya da ham istek için bir satırı açın), dataLayer push'ları ve her birinin tetiklediği istekler (gtm.* olayları varsayılan olarak gizli), izin durumu ve etiketlerin buna uyup uymadığı, kontrollerin sonucu ve sitenin geçmiş kayıtları. |
+| Tema | Sistem, açık ya da koyu. |
 | Dil | Panelin ve raporun dili: Türkçe ya da İngilizce. Başta Chrome'un dilini izler. |
-| Kişisel verileri ekranda gizle | Ekran paylaşımı için paneldeki e-postaları, telefonları ve adları gizler. |
+| Kişisel verileri ekranda gizle | Ekran paylaşımı için paneldeki e-postaları, telefonları ve kullanıcı kimliklerini gizler. |
 | capture.json / report.html dışa aktar | Çalıştırmayı ve raporu maskelenmiş olarak indirir. |
 | Kayıtlar | Sitenin bu tarayıcıda saklanan son 20 kaydı. |
 
@@ -806,7 +808,7 @@ CLI'dan farkları: tarayıcıyı siz kullandığınız için yapay zekâ yolculu
 - Bir [test hesabı](#giriş-yapmak) yalnızca denetlenen sitenin sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
 - **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
 - Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
-- Chrome eklentisi sitelere erişim iznini yalnızca Kaydet'e ilk bastığınızda ister, sayfa kancasını yalnızca kaydettiğiniz sitede çalıştırır, yalnızca kaydedilen sekmenin izleme isteklerini okur ve kayıtları tarayıcınızda tutar. Sunucusu yoktur ve hiçbir yere bir şey göndermez; dışa aktardığı dosyalar maskelenir.
+- Chrome eklentisi sitelere erişim iznini yalnızca Kaydı başlat'a ilk bastığınızda ister, sayfa kancasını yalnızca kaydettiğiniz sitede çalıştırır, yalnızca kaydedilen sekmenin izleme isteklerini okur ve kayıtları tarayıcınızda tutar. Sunucusu yoktur ve hiçbir yere bir şey göndermez; dışa aktardığı dosyalar maskelenir.
 - Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.
 - HTTP sunucusunu başkaları için barındırıyor musunuz? Ek bir savunma katmanı olarak özel ve bulut meta veri adres aralıklarını ağ düzeyinde de engelleyin (bir çıkış güvenlik duvarı ya da yalıtılmış bir ağ).
 

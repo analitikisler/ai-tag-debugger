@@ -4,7 +4,7 @@
 //
 //   node scripts/extension.js          copy into extension/core/ (run before loading extension/ unpacked)
 //   node scripts/extension.js --pack   also write dist/aitd-recorder-<version>.zip for the Chrome Web Store
-import { mkdir, readFile, readdir, rm, writeFile, copyFile, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile, copyFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -25,6 +25,8 @@ export const EXTENSION_ROOTS = [
   "src/html/shell.js",
   "src/version.js",
   "src/page-hook.js",
+  "src/glossary.js",
+  "src/cmp.js",
 ];
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)\s[^;]*?\sfrom\s+["']([^"']+)["']|(?:^|\n)\s*import\s+["']([^"']+)["']/g;
@@ -79,14 +81,22 @@ export function pageHookSource(initScript) {
 export async function copyCore() {
   const { files, outside } = await browserSafeFiles();
   if (outside.length) throw new Error(`The extension cannot load these imports:\n${outside.map((o) => `  ${o.file} imports "${o.spec}"`).join("\n")}`);
-  await rm(CORE, { recursive: true, force: true });
-  for (const rel of files) {
-    const to = path.join(CORE, path.relative("src", rel));
+  // Test files run in parallel and each copies first, so nothing is deleted wholesale and each file lands by rename:
+  // a module another process is importing is always either the old copy or the new one, never half written.
+  const keep = new Set(files.map((rel) => path.relative("src", rel).split(path.sep).join("/")).concat("page-hook-main.js"));
+  const atomic = async (to, write) => {
     await mkdir(path.dirname(to), { recursive: true });
-    await copyFile(path.join(ROOT, rel), to);
-  }
+    const tmp = `${to}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    await write(tmp);
+    await rename(tmp, to);
+  };
+  for (const rel of files) await atomic(path.join(CORE, path.relative("src", rel)), (tmp) => copyFile(path.join(ROOT, rel), tmp));
   const { INIT_SCRIPT } = await import(pathToFileURL(path.join(ROOT, "src", "page-hook.js")).href);
-  await writeFile(path.join(CORE, "page-hook-main.js"), pageHookSource(INIT_SCRIPT));
+  await atomic(path.join(CORE, "page-hook-main.js"), (tmp) => writeFile(tmp, pageHookSource(INIT_SCRIPT)));
+  // A module removed from src/ goes from core/ too; another process's temporary files are left to it.
+  for (const rel of await walk(CORE).catch(() => [])) {
+    if (!keep.has(rel) && !rel.endsWith(".tmp")) await rm(path.join(CORE, rel), { force: true });
+  }
   return [...files, "page-hook-main.js"];
 }
 

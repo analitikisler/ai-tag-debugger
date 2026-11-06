@@ -87,7 +87,7 @@ One module per concern in `src/`, in the order a run goes through them.
 
 **Chrome extension** (`extension/`)
 
-- AITD Recorder, a Manifest V3 extension: `worker.js` (the service worker: tracking requests, page loads, cookies), `bridge.js` (the content script that passes the page hook's events on), `panel/` (the side panel), `report/` (the report tab and its sandbox), `lib/run.js` (raw events into the run object `checkRun` reads, and `redactRun` for exports), `lib/analyze.js` (checks and report), `lib/store.js` (IndexedDB) and `lib/body.js` (request bodies).
+- The ai tag debugger Chrome extension, Manifest V3: `worker.js` (the service worker: tracking requests, page loads, cookies), `bridge.js` (the content script that passes the page hook's events on), `panel/` (the side panel), `report/` (the report tab and its sandbox), `lib/run.js` (raw events into the run object `checkRun` reads, and `redactRun` for exports), `lib/analyze.js` (checks and report), `lib/store.js` (IndexedDB) and `lib/body.js` (request bodies).
 - It imports the shared modules from `extension/core/`, which `npm run extension` (`scripts/extension.js`) copies from `src/` unchanged; Chrome loads only files inside the extension's folder. `extension/core/` is gitignored. `test/browser-safe.test.js` fails when a module the extension needs imports Node, Playwright or an npm package, so keep `checks.js`, `parsers.js`, `redact.js`, `i18n.js`, `metrics.js` and `html/` free of those.
 - To work on it: `npm run extension`, then load `extension/` unpacked at `chrome://extensions` (Developer mode) and reload it there after each change. `npm run test:extension` records a journey on the demo shop in Chromium; `test/extension-run.test.js` covers the pipeline without a browser.
 

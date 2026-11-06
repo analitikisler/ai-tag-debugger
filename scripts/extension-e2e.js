@@ -48,6 +48,8 @@ try {
     await page.goto(`${base}/`);
     const tab = await sw.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/*` }))[0]?.id, base);
     assert.ok(tab, "the worker can find the tab by its address");
+    // The first-run tour is skipped, as a returning user would have; the panel then opens on setup.
+    await sw.evaluate(() => globalThis.chrome.storage.local.set({ onboarded: true }));
     const p = await shipped.newPage();
     await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html?tab=${tab}`);
     await p.waitForFunction(() => document.getElementById("host").textContent === "localhost", null, { timeout: 10_000 }).catch(() => {});
@@ -71,11 +73,15 @@ try {
   const shop = await context.newPage();
   await shop.goto(`${base}/`);
   const tabId = await worker.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/*` }))[0].id, base);
+  await worker.evaluate(() => globalThis.chrome.storage.local.set({ onboarded: true }));
   const panel = await context.newPage();
   const errors = [];
   panel.on("pageerror", (e) => errors.push(e.message));
   await panel.goto(`chrome-extension://${id}/panel/panel.html?tab=${tabId}`);
+  // Setup: the plan, then Start recording (the platforms are the ones found on the page, or the defaults).
+  await panel.waitForSelector("#record");
   await panel.setInputFiles("#planFile", path.join(ROOT, "examples", "measurement-plan.json"));
+  await panel.waitForSelector(".file");
   await panel.click("#record");
   await panel.waitForSelector("#stop:not([hidden])");
 
@@ -86,7 +92,7 @@ try {
   await shop.waitForLoadState("load");
   await shop.locator("button", { hasText: /add to cart/i }).first().click();
   await panel.fill("#stepName", "Cart");
-  await panel.click("#stepForm button");
+  await panel.click("#stepForm button[type=submit]");
   await shop.goto(`${base}/cart.html`);
   await shop.click("#checkout-btn");
   await shop.waitForLoadState("load");

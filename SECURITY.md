@@ -16,7 +16,7 @@ The tests for these are in `test/security.test.js`, `test/redact.test.js` and `t
 
 ## The Chrome extension
 
-The extension in `extension/` (AITD Recorder) records a tab you browse yourself, in your own Chrome profile, so it is built to collect less than the CLI:
+The Chrome extension in `extension/` (ai tag debugger, run by hand) records a tab you browse yourself, in your own Chrome profile, so it is built to collect less than the CLI:
 
 - **Access is asked for when you first press Record**, not at install: `http` and `https` hosts are optional permissions. Its page hook and bridge are registered only for the origins being recorded and unregistered when recording stops.
 - **Only the recorded tab is read.** The service worker ignores requests from every other tab, and keeps only requests to known tracking, tag and consent vendors (`providerOf` in `src/parsers.js`).

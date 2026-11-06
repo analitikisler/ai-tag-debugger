@@ -18,7 +18,11 @@ test("emails, phones and user ids are replaced with a marker that keeps the leng
   assert.deepEqual(meta.plain, ["ud[em]"]);
   const ga4 = redactBody(`en=purchase&em=tv.1~em.${HASH}&uid=u-123\nen=x&ep.email=me@x.com`);
   assert.doesNotMatch(ga4.text, /me@x|u-123|aaaa/);
-  assert.deepEqual(ga4.plain, ["uid", "ep.email"]);
+  // GA4's uid is the site's own pseudonymous ID, sent as it is by design: masked, but not unhashed personal data.
+  assert.deepEqual(ga4.plain, ["ep.email"]);
+  assert.ok(ga4.fields.includes("uid"));
+  assert.deepEqual(redactBody("en=login&uid=jane%40mail.example").plain, ["uid"], "an email in uid is personal data");
+  assert.deepEqual(redactBody("en=login&uid=%2B905551234567").plain, ["uid"], "so is a phone number");
   const tiktok = redactBody(JSON.stringify({ event: "Purchase", context: { user: { email: "me@x.com", phone_number: HASH, ttp: "keep" } }, properties: { value: 5 } }));
   assert.deepEqual(JSON.parse(tiktok.text).context.user, { email: "[redacted: 8 chars, plain]", phone_number: "[redacted: 64 chars, looks hashed]", ttp: "keep" });
   // A body cut at the size limit is not valid JSON, and is still redacted.

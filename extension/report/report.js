@@ -20,7 +20,7 @@ if (!recording) {
 } else {
   const run = buildRun(await getEvents(recording.id), { site: recording.site, startedAt: recording.startedAt, labels: labelsFor(lang) });
   const html = reportHtml(run, { plan: recording.plan?.plan ?? null, lang, site: recording.site, generatedAt: new Date(recording.stoppedAt ?? Date.now()) });
-  document.title = `${recording.host} · AITD Recorder`;
+  document.title = `${recording.host} · ${m.name}`;
   const show = () => {
     frame.contentWindow.postMessage({ type: "aitd-report", html }, "*");
     status.hidden = true;

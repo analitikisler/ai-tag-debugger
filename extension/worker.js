@@ -6,6 +6,7 @@ import { providerOf } from "./core/parsers.js";
 import { siteOf } from "./core/redact.js";
 import { messages } from "./core/i18n.js";
 import { containersInPage, googleConsentStateInPage, pageProblemInPage } from "./core/page-hook.js";
+import { detectCmpInPage } from "./core/cmp.js";
 import { bodyText } from "./lib/body.js";
 import { addEvents, deleteRecording, prune, putRecording, getRecording } from "./lib/store.js";
 
@@ -74,13 +75,19 @@ async function hashOf(value) {
   return btoa(String.fromCharCode(...new Uint8Array(digest))).slice(0, 16);
 }
 
-/** The site's cookies by name and domain, with a short hash of each value so a change shows but the value never leaves. */
+/**
+ * The site's cookies by name and domain, with a short hash of each value so a change shows but the value never leaves.
+ * HttpOnly and the expiry come along: a server container's cookies (FPID) are HttpOnly, which is how the panel tells
+ * them from the ones a tag wrote in the page.
+ */
 async function snapshotCookies(rec, tabId, url) {
   let host;
   try { host = new URL(url).hostname; } catch { return; }
   const cookies = await chrome.cookies.getAll({ domain: siteOf(host) }).catch(() => []);
   const out = [];
-  for (const c of cookies) out.push({ name: c.name, domain: c.domain, hash: await hashOf(c.value) });
+  for (const c of cookies) {
+    out.push({ name: c.name, domain: c.domain, hash: await hashOf(c.value), httpOnly: c.httpOnly, secure: c.secure, ...(c.expirationDate ? { expirationDate: Math.round(c.expirationDate) } : {}) });
+  }
   await record(rec, { kind: "cookies", cookies: out }, tabId);
 }
 
@@ -92,9 +99,10 @@ async function snapshotCookies(rec, tabId, url) {
 async function readPage(rec, tabId) {
   const run = (func) => chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, world: "MAIN", func })
     .then(([r]) => r?.result ?? null, () => null);
-  const [found, tagConsent, problem] = await Promise.all([run(containersInPage), run(googleConsentStateInPage), run(pageProblemInPage)]);
+  const [found, tagConsent, problem, title, cmp] = await Promise.all([run(containersInPage), run(googleConsentStateInPage), run(pageProblemInPage), run(() => document.title), run(detectCmpInPage)]);
   if (!found && !tagConsent && !problem) return;
-  await record(rec, { kind: "page", registry: found?.registry ?? [], preloads: found?.preloads ?? [], tagConsent, problem }, tabId);
+  // Only the consent platform's name is kept: the panel says "Efilli banner detected", nothing more.
+  await record(rec, { kind: "page", registry: found?.registry ?? [], preloads: found?.preloads ?? [], tagConsent, problem, title: String(title ?? "").slice(0, 200), ...(cmp?.vendor ? { cmp: { vendor: String(cmp.vendor).slice(0, 60) } } : {}) }, tabId);
 }
 
 /** Reads the page now and again a little later: GTM often registers after the load event. */
@@ -116,7 +124,8 @@ chrome.webRequest.onBeforeRequest.addListener(
     // Returning nothing keeps the request untouched; the work happens after.
     (async () => {
       const a = await recordingFor(details.tabId);
-      if (!a || !providerOf(details.url)) return;
+      // A server container's or the tag gateway's /_/set_cookie call is kept too: it is how first-party cookies get set.
+      if (!a || (!providerOf(details.url) && !/\/_\/set_cookie\/?(\?|$)/.test(details.url))) return;
       recorded.add(details.requestId);
       const body = details.method === "POST" ? await bodyText(details.requestBody) : null;
       await record(a.rec, {
@@ -129,6 +138,12 @@ chrome.webRequest.onBeforeRequest.addListener(
   { urls: ["http://*/*", "https://*/*"] },
   ["requestBody"],
 );
+
+// The page's own HTTP status, for the step header (a 404 or 500 page explains a step that sent nothing).
+chrome.webRequest.onCompleted.addListener((d) => {
+  if (d.type !== "main_frame") return;
+  recordingFor(d.tabId).then((a) => a && record(a.rec, { kind: "doc", url: d.url, status: d.statusCode }, d.tabId)).catch(() => {});
+}, { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] });
 
 const onDone = (details, status) => {
   if (!recorded.has(details.requestId)) return;
@@ -173,7 +188,12 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 
 // ---------- the panel and the page hook ----------
 
-async function start(tabId, url, providers = null) {
+/** Clears a site's cookies and storage, so a recording starts as a first-time visitor and the consent banner shows. */
+async function clearSite(origin) {
+  await chrome.browsingData.remove({ origins: [origin] }, { cookies: true, localStorage: true, cacheStorage: true, indexedDB: true, serviceWorkers: true }).catch(() => {});
+}
+
+async function start(tabId, url, providers = null, { reload = true, clearCookies = false } = {}) {
   const u = new URL(url);
   const map = await active();
   if (map[tabId]) return { rec: map[tabId].rec };
@@ -187,9 +207,11 @@ async function start(tabId, url, providers = null) {
   await prune(host);
   map[tabId] = { rec, origin: u.origin, host };
   await setActive(map);
+  if (clearCookies) await clearSite(u.origin);
   await snapshotCookies(rec, tabId, url);
   // A reload records the page from its first request, with the hook in place before the site's scripts run.
-  await chrome.tabs.reload(tabId);
+  if (reload || clearCookies) await chrome.tabs.reload(tabId);
+  else await record(rec, { kind: "step", action: "navigate", url, label: messages(await language()).extension.stepOpened(pathOf(url)) }, tabId);
   return { rec };
 }
 
@@ -221,12 +243,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   // From the panel, an extension page: only those may start or stop a recording, never a web page's content script.
   if (!fromExtensionPage) return false;
   const run = async () => {
-    if (msg.type === "start") return start(msg.tabId, msg.url, msg.providers);
-    // Start over: the recording is stopped and deleted, as if it never happened.
-    if (msg.type === "discard") {
+    if (msg.type === "start") return start(msg.tabId, msg.url, msg.providers, { reload: msg.reload !== false, clearCookies: msg.clearCookies === true });
+    // Start over: stop, then keep the recording in History or delete it, and optionally clear the site's cookies.
+    if (msg.type === "reset") {
       const { rec } = await stop(msg.tabId);
       const id = rec ?? msg.rec;
-      if (id) await deleteRecording(id);
+      if (id && msg.keep === false) await deleteRecording(id);
+      if (msg.clearCookies && msg.origin) await clearSite(msg.origin);
       return { rec: null };
     }
     if (msg.type === "stop") return stop(msg.tabId);

@@ -35,7 +35,8 @@ const EVENTS = [
 ];
 
 test("events become the CLI's run shape, one step per page load and named step", () => {
-  assert.deepEqual(run.steps.map((s) => s.label), ["Start", "Opened /", "Opened /product", "Added to cart"]);
+  // The first step's name comes from the strings (labelsFor), so a copy change there doesn't break the shape check.
+  assert.deepEqual(run.steps.map((s) => s.label), [lib.labelsFor("en").start, "Opened /", "Opened /product", "Added to cart"]);
   assert.deepEqual(run.steps.map((s) => s.index), [0, 1, 2, 3]);
   for (const key of ["hits", "dataLayerLog", "network", "cookieLog", "cookieChanges", "containerLoads", "frameMessages", "providers", "pageErrors"]) assert.ok(Array.isArray(run[key]), key);
   assert.equal(run.completed, true);
@@ -157,4 +158,20 @@ test("platforms chosen before recording decide what is checked; the rest is coun
   assert.ok(onlyMeta.network.some((c) => c.provider === "gtm"), "the tag manager is kept");
   const all = lib.buildRun(events, { site: "https://shop.example" });
   assert.deepEqual(all.hits.map((h) => h.platform).sort(), ["ga4", "meta"]);
+});
+
+test("a planned event a hand recording never reached is unverified, not broken", () => {
+  const plan = { events: [{ platform: "ga4", name: "purchase", required_params: ["transaction_id"] }] };
+  const missing = analyze.analyze(run, { plan }).findings.find((f) => f.check === "missing_event" && f.event === "purchase");
+  assert.equal(missing.severity, "info");
+  assert.match(missing.detail, /not reached in this recording/);
+});
+
+test("a tracking request that failed on a live recording is a broken finding", () => {
+  const failed = analyze.analyze(run).findings.filter((f) => f.check === "hit_failed");
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].severity, "broken");
+  assert.match(failed[0].detail, /^1 GA4 request got HTTP 503, the first at "Opened \/product"/);
+  // The CLI's own runs answer tracking requests in the browser, so the check stays off there.
+  assert.equal(analyze.analyze({ ...run, live: false }).findings.some((f) => f.check === "hit_failed"), false);
 });

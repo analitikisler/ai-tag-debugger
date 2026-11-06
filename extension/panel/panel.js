@@ -1,67 +1,53 @@
-// The side panel. It stays with the site being recorded (or last recorded) while you look at other tabs, shows each
-// page as a step with its hits in the order they happened, and runs the CLI's checks when the recording stops.
-// Every string comes from core/i18n.js (src/i18n.js).
-import { LANGUAGES, messages } from "../core/i18n.js";
-import { parseTrackingRequest, PROVIDERS, providerOf, vendorOf } from "../core/parsers.js";
-import { redactParams, redactPush, redactUrl } from "../core/redact.js";
-import { decodeGa4Item } from "../core/glossary.js";
+// The side panel's flow: which site and recording it shows, the state machine (onboarding → setup → recording →
+// stopped, or an older recording opened from History), the header, the tabs, the keyboard, and what Start, Stop and
+// Start over do. The tabs themselves are in views/; every string comes from core/i18n.js (src/i18n.js).
+import { LANGUAGES } from "../core/i18n.js";
 import { buildRun, labelsFor } from "../lib/run.js";
 import { analyze, captureJson, readPlan, reportHtml } from "../lib/analyze.js";
 import { deleteRecording, getEvents, getRecording, listRecordings, putRecording } from "../lib/store.js";
+import { canonicalEvent } from "../core/checks.js";
+import { buildModel, OFFERED } from "./model.js";
+import { platformsInPage } from "./detect.js";
+import { state, m, setRender, actions, load, save } from "./state.js";
+import { $, el, icon, button, clock, hostOf, isWeb, send, download, when, favicon, announceNew, closeTip, toast } from "./ui.js";
+import { onboardingView, SITES } from "./views/onboarding.js";
+import { setupView } from "./views/setup.js";
+import { eventsToolbar, eventsList, notSelectedPopover, visibleRows } from "./views/events.js";
+import { dataLayerToolbar, dataLayerList, visiblePushes } from "./views/datalayer.js";
+import { consentView, consentDot } from "./views/consent.js";
+import { findingsView } from "./views/findings.js";
+import { historyView } from "./views/history.js";
+import { menu, resetSheet, shortcutsSheet, notWebView } from "./views/layers.js";
+import { installKeys } from "./keys.js";
 
-const $ = (id) => document.getElementById(id);
+const TABS = ["events", "dataLayer", "consent", "findings", "history"];
 const SEVERITIES = ["broken", "risk", "warning", "info"];
-// GA4 parameters about the page rather than the event; shown apart, under "Page and session".
-const PAGE_KEYS = new Set(["page_location", "page_referrer", "page_title", "language", "screen_resolution", "document_location", "document_referrer", "document_title"]);
-const BADGES = ["_fv", "_ss", "_nsi"];
+const DEFAULT_PLATFORMS = ["ga4", "google_ads", "meta"];
 // Opened as a page (panel.html?tab=<id>) instead of in the side panel, it follows that tab: for a separate window,
 // and for the end-to-end test, which cannot open Chrome's side panel.
 const PINNED_TAB = Number(new URLSearchParams(location.search).get("tab")) || null;
 
-const state = {
-  lang: "en", tab: null, live: null, rec: null, recording: null, events: [], view: "events",
-  filter: null, hideGtm: true, mask: false, plan: null, open: new Set(), closed: new Set(), analysis: null, notice: null,
-};
-const m = () => messages(state.lang).extension;
+// ---------- the model, built once per change ----------
 
-// ---------- helpers ----------
-
-const el = (tag, attrs = {}, ...children) => {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null || v === false) continue;
-    if (k === "class") n.className = v;
-    else if (k === "text") n.textContent = v;
-    else n.setAttribute(k, v === true ? "" : v);
+let modelCache = { key: null, model: null };
+function model() {
+  const key = `${state.rec}|${state.events.length}|${(state.recording?.providers ?? []).join(",")}|${state.recording?.plan?.name ?? ""}`;
+  if (modelCache.key !== key) {
+    const plan = state.recording?.plan?.plan ?? null;
+    const built = buildModel(state.events, { platforms: state.recording?.providers ?? null, plan });
+    built.plan = plan;
+    modelCache = { key, model: built };
   }
-  for (const c of children.flat()) if (c != null && c !== false) n.append(c);
-  return n;
-};
-const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
-const isWeb = (url) => /^https?:\/\//.test(url ?? "");
-const send = (msg) => chrome.runtime.sendMessage(msg).catch(() => ({}));
-const clock = (ms) => {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
-/** Seconds since the step began, as Analytics Debugger times rows within a page. */
-const since = (t, from) => `+${Math.max(0, (t - (from ?? state.recording?.startedAt ?? t)) / 1000).toFixed(1)}s`;
-const shown = (v) => (typeof v === "string" ? v : JSON.stringify(v));
-function download(name, text, type) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = el("a", { href: url, download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return modelCache.model;
 }
+const EMPTY = buildModel([], {});
 
 // ---------- which site the panel is about ----------
 
 /**
  * The tab the panel shows: a tab of this window that is recording wins, so opening the report or another tab keeps
- * the recording on screen; otherwise the active tab when it is a website; otherwise the one it already showed
- * (an extension page or chrome:// is never a site).
+ * the recording on screen; otherwise the active tab when it is a website; otherwise the one it already showed when
+ * an extension page (the report) is in front.
  */
 async function resolveTab() {
   if (PINNED_TAB) return chrome.tabs.get(PINNED_TAB).catch(() => null);
@@ -72,409 +58,670 @@ async function resolveTab() {
     if (t && t.windowId === current?.windowId) return t;
   }
   if (isWeb(current?.url)) return current;
-  return state.tab ?? current ?? null;
+  if (state.tab && isWeb(state.tab.url) && current?.url?.startsWith(chrome.runtime.getURL(""))) return state.tab;
+  return current ?? state.tab ?? null;
+}
+
+/** The recording a site shows when nothing is live: the one its last Stop left, until Start over. Per browser session. */
+async function currentFor(host) {
+  try { return (await chrome.storage.session.get("current")).current?.[host] ?? null; } catch { return null; }
+}
+async function setCurrent(host, rec) {
+  try {
+    const { current = {} } = await chrome.storage.session.get("current");
+    if (rec) current[host] = rec; else delete current[host];
+    await chrome.storage.session.set({ current });
+  } catch { /* the panel then opens on setup next time, nothing worse */ }
 }
 
 async function loadRecording(id) {
+  if (id === state.rec && (state.recording || !id)) return;
   state.rec = id;
   state.recording = id ? await getRecording(id) : null;
-  state.events = id ? (await getEvents(id)).sort((a, b) => a.t - b.t || a.seq - b.seq) : [];
+  state.events = id && state.recording ? (await getEvents(id)).sort((a, b) => a.t - b.t || a.seq - b.seq) : [];
+  if (!state.recording) state.rec = null;
   state.analysis = null;
-  state.open.clear();
-  state.closed.clear();
+  state.analysisError = false;
+  state.open.clear(); state.openSteps.clear(); state.closedSteps.clear(); state.openItems.clear(); state.dl.open.clear();
+  state.findingsFilter = null;
+  state.routesOpen = undefined;
+  state.newKeys = new Set();
 }
 
-async function refresh() {
+const filters = new Map(); // host -> the platform filter, kept for the browser session
+async function enterHost(host) {
+  if (state.setup.host === host) return;
+  if (state.setup.host) filters.set(state.setup.host, { ...state.filter });
+  state.setup.host = host;
+  state.filter = filters.get(host) ?? { search: "", on: null, extra: new Set(), sentTo: "any" };
+  const { platforms = {}, plans = {}, setupOptions = {} } = await load(["platforms", "plans", "setupOptions"]);
+  state.setup.plan = plans[host] ?? null;
+  state.setup.planError = null;
+  state.setup.reload = setupOptions.reload ?? true;
+  state.setup.clear = setupOptions.clear ?? false;
+  state.setup.denied = false;
+  state.setup.detected = [];
+  state.setup.remembered = Array.isArray(platforms[host]);
+  state.setup.platforms = state.setup.remembered ? platforms[host].filter((k) => OFFERED.includes(k)) : [...DEFAULT_PLATFORMS];
+  await detect();
+}
+
+/** "on page": the platforms the page's globals give away, read once with site access; nothing without it. */
+async function detect() {
+  const tab = state.tab;
+  state.setup.granted = await chrome.permissions.contains(SITES).catch(() => false);
+  if (!state.setup.granted || !isWeb(tab?.url)) return;
+  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [0] }, world: "MAIN", func: platformsInPage }).catch(() => []);
+  const found = Array.isArray(res?.result) ? res.result.filter((k) => OFFERED.includes(k)) : [];
+  state.setup.detected = found;
+  // A first visit to a site starts from what is on the page; a remembered choice is never overridden.
+  if (!state.setup.remembered && found.length) state.setup.platforms = OFFERED.filter((k) => found.includes(k));
+}
+
+let refreshing = null;
+function refresh() {
+  // Tab events come in bursts; one refresh at a time, the last request re-runs once the current one is done.
+  if (refreshing) { refreshing.again = true; return refreshing.done; }
+  const job = { again: false };
+  job.done = (async () => {
+    do { job.again = false; await refreshOnce(); } while (job.again);
+    refreshing = null;
+  })();
+  refreshing = job;
+  return job.done;
+}
+
+async function refreshOnce() {
   const tab = await resolveTab();
-  const changed = tab?.id !== state.tab?.id || hostOf(tab?.url) !== hostOf(state.tab?.url);
   state.tab = tab;
-  const { recording: live = null } = tab && isWeb(tab.url) ? await send({ type: "state", tabId: tab.id }) : {};
+  const web = isWeb(tab?.url);
+  const { recording: live = null } = web ? await send({ type: "state", tabId: tab.id }) : {};
+  const wasLive = state.live;
   state.live = live;
-  if (live && live.rec !== state.rec) await loadRecording(live.rec);
-  else if (!live && (changed || !state.rec)) {
-    // Not recording here: the site's last recording, so a result stays on screen after Stop or a reload.
-    const host = hostOf(tab?.url);
-    const last = host ? (await listRecordings()).find((r) => r.host === host && r.stoppedAt) : null;
-    if (last?.id !== state.rec) await loadRecording(last?.id ?? null);
-  } else if (!live && state.rec) state.recording = await getRecording(state.rec);
-  await loadPlan();
+  state.history.list = await listRecordings().catch(() => []);
+  if (live) {
+    state.viewing = null;
+    await enterHost(live.host);
+    await loadRecording(live.rec);
+    state.current = live.rec;
+  } else if (web) {
+    const host = hostOf(tab.url);
+    await enterHost(host);
+    state.current = await currentFor(host);
+    if (wasLive && state.rec) state.current = state.rec;
+    const want = state.viewing ?? state.current;
+    if (want !== state.rec) await loadRecording(want);
+    else if (state.rec) state.recording = await getRecording(state.rec);
+    if (!state.recording) { state.current = null; state.viewing = null; }
+  } else if (!state.historyOnly && !state.viewing) {
+    await loadRecording(null);
+  }
+  // The recording stopped without the Stop button: the tab was closed, so the result is shown at once.
+  if (wasLive && !live && state.recording) {
+    state.tabClosed = !state.stopping;
+    state.view = "findings";
+  }
+  if (live) state.tabClosed = false;
+  state.leftSite = live && web && hostOf(tab.url) !== live.host ? live.host : null;
   render();
 }
 
-// ---------- plan ----------
+// ---------- the state machine ----------
 
-async function loadPlan() {
-  const host = hostOf(state.tab?.url);
-  const { plans = {} } = await chrome.storage.local.get("plans");
-  state.plan = host ? plans[host] ?? null : null;
+/** onboarding | not-web | setup | workspace */
+function mode() {
+  if (state.tour !== null) return "onboarding";
+  if (state.recording || state.historyOnly) return "workspace";
+  if (isWeb(state.tab?.url)) return "setup";
+  return "not-web";
 }
 
-async function savePlan(entry) {
-  const host = hostOf(state.tab?.url);
-  if (!host) return;
-  const { plans = {} } = await chrome.storage.local.get("plans");
-  if (entry) plans[host] = entry;
-  else delete plans[host];
-  await chrome.storage.local.set({ plans });
-  await loadPlan();
-  state.analysis = null;
-  render();
-}
-
-// ---------- the recording as steps and rows ----------
-
-/** Steps with their rows (one per hit; a GA4 batch is several) and pushes, in the order they happened. */
-function model() {
-  const status = new Map(state.events.filter((e) => e.kind === "status").map((e) => [e.requestId, e.status]));
-  const steps = [];
-  let cur = null;
-  const open = (label, e) => { cur = { index: steps.length, label, url: e?.url ?? null, t: e?.t, rows: [], pushes: [] }; steps.push(cur); };
-  for (const e of state.events) {
-    if (e.kind === "step") {
-      // A reload as recording starts commits the same page twice; one step, as the run builder does it.
-      if (cur && e.action !== "manual" && cur.url === e.url && cur.action === e.action && e.t - cur.t < 2000) continue;
-      open(e.label, e);
-      cur.action = e.action;
-      continue;
-    }
-    if (!cur) open(m().stepStart, e);
-    if (e.kind === "request") {
-      const hits = parseTrackingRequest(e.url, e.body ?? null) ?? [];
-      const st = status.get(e.requestId);
-      if (hits.length) hits.forEach((hit, i) => cur.rows.push({ key: `${e.requestId}:${i}`, platform: hit.platform, label: PROVIDERS[hit.platform] ?? hit.platform, name: hit.name, hit, e, status: st }));
-      else {
-        const p = providerOf(e.url);
-        let path = e.url;
-        try { path = new URL(e.url).pathname; } catch { /* keep the address */ }
-        cur.rows.push({ key: e.requestId, platform: p?.key ?? "other", label: p?.label ?? vendorOf(e.url) ?? hostOf(e.url), name: path, e, status: st });
-      }
-    } else if (e.kind === "push") {
-      const v = e.entry?.value;
-      const name = Array.isArray(v) ? v.slice(0, 2).filter((x) => typeof x === "string").join(" ") : v?.event ?? Object.keys(v ?? {}).slice(0, 3).join(", ");
-      cur.pushes.push({ key: `p${e.seq}`, name: name || "(push)", value: v, layer: e.entry?.layer ?? "dataLayer", e });
-    }
+function statusText() {
+  const s = m().status;
+  const r = state.recording;
+  if (state.live && r) return s.recording(clock(Date.now() - r.startedAt), model().steps.length);
+  if (state.tabClosed && r) return s.tabClosed;
+  if (r && state.viewing) return s.viewing(when(r.startedAt));
+  if (r) {
+    const mdl = model();
+    return s.done(clock((r.stoppedAt ?? Date.now()) - r.startedAt), mdl.steps.length, mdl.rows.filter((x) => x.kind === "hit").length);
   }
-  return steps;
+  return isWeb(state.tab?.url) ? s.ready : s.notWeb;
 }
 
-const failed = (s) => s === "failed" || (typeof s === "number" && s >= 400);
-
-function kv(entries) {
-  const dl = el("dl", { class: "kv" });
-  for (const [k, v] of entries) dl.append(el("dt", { text: k }), el("dd", { text: shown(v) }));
-  return dl;
-}
-
-/** A hit opened: its event parameters, items, consent, page and session fields, and the request. */
-function hitDetail(row) {
-  const s = m().sections;
-  const out = [];
-  const params = state.mask ? redactParams(row.hit?.params ?? {}) : row.hit?.params ?? {};
-  if (row.hit) {
-    const event = Object.entries(params).filter(([k]) => !PAGE_KEYS.has(k) && k !== "items");
-    if (event.length) out.push(el("h4", { text: s.event }), kv(event));
-    if (row.hit.items?.length) {
-      const c = m().itemCols;
-      const table = el("table", { class: "items" }, el("tr", {}, el("th", { text: c.name }), el("th", { text: c.id }), el("th", { class: "num", text: c.price }), el("th", { class: "num", text: c.qty })));
-      for (const raw of row.hit.items.slice(0, 50)) {
-        const { fields, custom } = decodeGa4Item(raw);
-        const f = Object.fromEntries(fields);
-        const rest = [...fields.filter(([k]) => !["item_name", "item_id", "price", "quantity"].includes(k)), ...custom].map(([k, v]) => `${k}: ${v}`).join("\n");
-        table.append(el("tr", { title: rest || null }, el("td", { text: f.item_name ?? "" }), el("td", { text: f.item_id ?? "" }), el("td", { class: "num", text: f.price ?? "" }), el("td", { class: "num", text: f.quantity ?? "" })));
-      }
-      out.push(el("h4", { text: s.items }), table);
-    }
-    if (row.hit.consent) {
-      out.push(el("h4", { text: s.consent }), el("div", { class: "consent" }, Object.entries(row.hit.consent).map(([k, v]) => el("span", { class: v, text: `${k} ${v === "granted" ? "✓" : v === "denied" ? "✗" : "?"}` }))));
-    }
-    const page = [...Object.entries(params).filter(([k]) => PAGE_KEYS.has(k)), ...Object.entries(row.hit.protocol ?? {})];
-    if (page.length) out.push(el("h4", { text: s.page }), kv(page));
+function renderHeader(md) {
+  const hdr = $("hdr");
+  hdr.hidden = md === "onboarding";
+  if (hdr.hidden) return;
+  const url = state.recording?.site && !isWeb(state.tab?.url) ? state.recording.site : state.tab?.url;
+  const web = isWeb(url);
+  const fav = $("fav");
+  const favKey = web ? `${hostOf(url)}|${Boolean(state.tab?.favIconUrl)}` : "-";
+  if (fav.dataset.host !== favKey) {
+    fav.dataset.host = favKey;
+    const hasIcon = Boolean(state.tab?.favIconUrl) && hostOf(state.tab?.url) === hostOf(url);
+    fav.replaceChildren(web ? favicon(url, 20, hasIcon) : el("span", { class: "fav globe" }, icon("globe", "s")));
   }
-  const url = state.mask ? redactUrl(row.e.url).url : row.e.url;
-  out.push(el("h4", { text: s.request }), el("div", { class: "url", text: `${row.e.method ?? "GET"} ${typeof row.status === "number" ? row.status : row.status ?? ""}` }), el("div", { class: "url", text: url }));
-  return el("div", { class: "detail" }, out);
-}
-
-function pushDetail(p) {
-  const value = state.mask ? redactPush(p.value).value : p.value;
-  return el("div", { class: "detail" }, el("pre", { class: "json", text: JSON.stringify(value, null, 2) }));
-}
-
-/** A collapsible row; its detail is built when it is first opened, so long recordings stay quick. */
-function row(key, summary, detail) {
-  const d = el("details", { open: state.open.has(key) }, el("summary", {}, summary));
-  if (state.open.has(key)) d.append(detail());
-  d.addEventListener("toggle", () => {
-    if (d.open) { state.open.add(key); if (d.children.length === 1) d.append(detail()); } else state.open.delete(key);
-  });
-  return el("li", { class: "row" }, d);
-}
-
-function stepCard(st, rows, metaText) {
-  const d = el("details", { class: "step", open: !state.closed.has(st.index) },
-    el("summary", {}, el("span", { class: "stepno", text: String(st.index) }), el("span", { class: "steplabel", text: st.label, title: st.url ?? null }), el("span", { class: "stepmeta", text: metaText })),
-    el("ol", { class: "rows" }, rows));
-  d.addEventListener("toggle", () => (d.open ? state.closed.delete(st.index) : state.closed.add(st.index)));
-  return d;
-}
-
-function renderEvents(steps) {
-  const all = steps.flatMap((s) => s.rows);
-  const platforms = [...new Map(all.map((r) => [r.platform, r.label])).entries()];
-  const filters = $("filters");
-  filters.replaceChildren();
-  if (platforms.length > 1) {
-    const chip = (key, label) => {
-      const b = el("button", { class: "chip", type: "button", "aria-pressed": String(state.filter === key), text: label });
-      b.onclick = () => { state.filter = state.filter === key || key === null ? null : key; render(); };
-      return b;
-    };
-    filters.append(chip(null, m().filterAll), ...platforms.map(([k, label]) => chip(k, label)));
-  }
-  const list = $("eventsList");
-  list.replaceChildren();
-  for (const st of steps) {
-    const rows = st.rows.filter((r) => !state.filter || r.platform === state.filter);
-    // A page that sent nothing is worth seeing; the moment before the first page load is not.
-    if (!rows.length && (state.filter || st.action === "start" || !st.action)) continue;
-    list.append(stepCard(st, rows.map((r) => row(r.key, [
-      el("span", { class: `plat ${r.platform}`, text: r.label, title: r.label }),
-      el("span", { class: "name", title: r.name }, r.name),
-      el("span", { class: "right" },
-        BADGES.filter((b) => r.hit?.protocol?.[b] !== undefined).map((b) => el("span", { class: "badge", title: m().badges[b], text: b.slice(1).toUpperCase() })),
-        failed(r.status) ? el("span", { class: "bad", text: r.status === "failed" ? m().failed : String(r.status) }) : null,
-        el("span", { class: "time", text: since(r.e.t, st.t) })),
-    ], () => hitDetail(r))), String(rows.length)));
-  }
-  const empty = !all.length;
-  $("eventsEmpty").hidden = !empty;
-  $("eventsEmpty").textContent = !isWeb(state.tab?.url) ? m().notWebPage : state.live ? m().emptyRecording : m().emptyIdle;
-}
-
-function renderPushes(steps) {
-  const list = $("pushList");
-  list.replaceChildren();
-  let total = 0;
-  for (const st of steps) {
-    const pushes = st.pushes.filter((p) => !(state.hideGtm && p.name.startsWith("gtm.")));
-    total += pushes.length;
-    if (!pushes.length) continue;
-    list.append(stepCard(st, pushes.map((p) => row(p.key, [
-      el("span", { class: `plat ${Array.isArray(p.value) ? "gtag" : "push"}`, title: p.layer, text: p.layer !== "dataLayer" ? p.layer : Array.isArray(p.value) ? "gtag" : p.value?.event ? "event" : "object" }),
-      el("span", { class: "name", title: p.name }, p.name),
-      el("span", { class: "right" }, el("span", { class: "time", text: since(p.e.t, st.t) })),
-    ], () => pushDetail(p))), String(pushes.length)));
-  }
-  $("pushEmpty").hidden = total > 0;
-}
-
-// ---------- findings ----------
-
-function runOf() {
-  return buildRun(state.events, { site: state.recording.site, startedAt: state.recording.startedAt, labels: labelsFor(state.lang) });
-}
-
-function analysis() {
-  const key = `${state.rec}|${state.lang}|${state.events.length}|${state.plan?.name ?? ""}`;
-  if (state.analysis?.key !== key) {
-    const run = runOf();
-    state.analysis = { key, run, ...analyze(run, { plan: state.plan?.plan ?? null, lang: state.lang }) };
-    // The report tab and the history read the plan and the verdict from the recording.
-    putRecording({ ...state.recording, plan: state.plan, summary: { counts: state.analysis.counts, verdict: `${state.analysis.verdict.statusText}: ${state.analysis.verdict.headline}`, hits: run.hits.length, steps: run.steps.length } }).catch(() => {});
-  }
-  return state.analysis;
-}
-
-function renderFindings() {
-  const done = state.recording && !state.live && state.recording.stoppedAt;
-  $("verdict").hidden = !done;
-  $("reportActions").hidden = !done;
-  $("findings").replaceChildren();
-  $("findingsEmpty").hidden = Boolean(done);
-  $("findingsEmpty").textContent = state.recording ? m().findingsBefore : m().emptyIdle;
-  const count = $("nFindings");
-  count.textContent = "";
-  count.className = "count";
-  if (!done) return;
-  const a = analysis();
-  const sev = messages(state.lang).severity;
-  const v = a.verdict;
-  const ring = v.status === "pass" ? "var(--ok)" : v.status === "fail" ? "var(--broken)" : "var(--warning)";
-  const score = $("score");
-  score.textContent = v.score ?? "–";
-  score.style.setProperty("--pct", String(v.score ?? 0));
-  score.style.setProperty("--ring", ring);
-  score.title = m().score;
-  $("verdictStatus").textContent = v.statusText;
-  $("verdictStatus").style.color = ring;
-  $("verdictHeadline").textContent = v.headline;
-  $("sev").replaceChildren(...[...SEVERITIES, "ok"].filter((s) => a.counts[s]).map((s) => el("span", { class: `s-${s}`, text: `${a.counts[s]} ${sev[s]}` })));
-  const problems = a.findings.filter((f) => SEVERITIES.includes(f.severity)).sort((x, y) => SEVERITIES.indexOf(x.severity) - SEVERITIES.indexOf(y.severity));
-  const steps = a.run.steps;
-  for (const f of problems) {
-    const where = [f.step ?? (Number.isInteger(f.stepIndex) ? steps[f.stepIndex]?.label : null), f.platform ? PROVIDERS[f.platform] ?? f.platform : null].filter(Boolean).join(" · ");
-    $("findings").append(el("li", { class: `finding ${f.severity}` }, el("div", { class: "meta" }, el("span", { class: `s-${f.severity}`, text: sev[f.severity] }), where ? el("span", { class: "where", text: where }) : null), el("div", { class: "text", text: f.detail })));
-  }
-  if (!problems.length) $("findings").append(el("li", { class: "finding" }, el("div", { class: "text", text: m().noFindings })));
-  const worst = problems.find((f) => f.severity !== "info")?.severity;
-  count.textContent = problems.filter((f) => f.severity !== "info").length || "";
-  if (worst) count.classList.add(`sev-${worst}`);
-}
-
-// ---------- history ----------
-
-async function renderHistory() {
-  const host = hostOf(state.tab?.url);
-  const list = host ? (await listRecordings()).filter((r) => r.host === host && r.stoppedAt) : [];
-  $("recordings").replaceChildren(...list.map((r) => {
-    const when = new Date(r.startedAt).toLocaleString(state.lang === "tr" ? "tr-TR" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
-    const open = el("button", { class: "link", type: "button", text: m().open });
-    open.onclick = async () => { await loadRecording(r.id); state.view = "findings"; render(); };
-    const del = el("button", { class: "link", type: "button", text: m().delete });
-    del.onclick = async () => {
-      await deleteRecording(r.id);
-      if (state.rec === r.id) await loadRecording(null);
-      render();
-    };
-    const meta = [r.summary ? m().summaryLine(r.summary.hits ?? 0, r.summary.steps ?? 0) : null, r.summary?.verdict].filter(Boolean).join(" · ");
-    return el("li", { class: r.id === state.rec ? "current" : null }, el("div", { class: "what" }, el("div", { class: "when", text: `${when} · ${clock(r.stoppedAt - r.startedAt)}` }), el("div", { class: "meta", text: meta, title: meta })), open, del);
-  }));
-  $("historyEmpty").hidden = list.length > 0;
-}
-
-// ---------- the whole panel ----------
-
-function renderHeader() {
-  const web = isWeb(state.tab?.url);
-  $("host").textContent = web ? hostOf(state.tab.url) : "—";
-  const status = $("status");
-  status.classList.toggle("live", Boolean(state.live));
-  $("statusText").textContent = state.live && state.recording ? m().recordingFor(clock(Date.now() - state.recording.startedAt))
-    : state.recording?.stoppedAt ? m().stopped(clock(state.recording.stoppedAt - state.recording.startedAt))
-      : web ? m().ready : m().notWebPage;
-  $("record").hidden = Boolean(state.live);
-  $("record").disabled = !web;
+  $("host").textContent = state.live ? state.live.host : web ? hostOf(url) : state.tab?.title || "—";
+  $("status").className = `status${state.live ? " rec" : state.recording ? " done" : ""}`;
+  $("statusText").textContent = statusText();
   $("stop").hidden = !state.live;
-  $("stepForm").hidden = !state.live;
-  $("planInfo").textContent = state.plan ? m().planShort(state.plan.name, state.plan.plan.events.length) : m().planNone;
-  $("planChoose").textContent = state.plan ? m().changePlan : m().addPlan;
-  $("planClear").hidden = !state.plan;
-  $("notice").hidden = !state.notice;
-  $("notice").textContent = state.notice ?? "";
+  $("stopLabel").textContent = m().stop;
+  const so = $("startOver");
+  so.hidden = Boolean(state.live) || !state.recording;
+  so.replaceChildren(icon("restart"), state.viewing ? m().newRecording : m().startOver);
+  const more = $("more");
+  if (!more.firstChild) more.append(icon("dots"));
+  more.setAttribute("aria-label", m().menu.label);
+  more.setAttribute("aria-expanded", String(state.layer?.kind === "menu"));
 }
 
+function renderBanner() {
+  const parts = [];
+  if (state.viewing && state.recording) {
+    parts.push(el("div", { class: "banner" }, icon("info"), el("span", { class: "grow", text: m().history.viewingBanner(when(state.recording.startedAt)) }),
+      button(m().history.back, () => actions.backToLatest(), { cls: "linkbtn" })));
+  }
+  if (state.leftSite) parts.push(el("div", { class: "banner warn" }, icon("warn"), el("span", { class: "grow", text: m().errors.leftSite(state.leftSite) })));
+  $("banner").replaceChildren(...parts);
+}
+
+function renderTabs(md, mdl) {
+  const nav = $("tabs");
+  nav.hidden = md !== "workspace";
+  if (nav.hidden) return;
+  const t = m().tabs;
+  nav.setAttribute("aria-label", t.label);
+  const count = (text, cls = "") => el("span", { class: `cnt ${cls}`.trim(), text: String(text) });
+  const extras = {};
+  if (state.recording) {
+    const { rows, total } = visibleRows(mdl);
+    const shown = [...rows.keys()].filter((k) => mdl.rows.find((r) => r.key === k)?.kind === "hit").length;
+    extras.events = count(shown === total ? total : `${shown} / ${total}`);
+    extras.dataLayer = count(visiblePushes(mdl));
+    const dot = consentDot(mdl);
+    extras.consent = el("span", { class: `tabdot ${dot}`, role: "img", "aria-label": m().consent.dot[dot] });
+    const a = state.analysis?.result;
+    if (a && !state.live) {
+      const problems = a.findings.filter((f) => SEVERITIES.slice(0, 3).includes(f.severity));
+      const worst = SEVERITIES.find((s) => problems.some((f) => f.severity === s));
+      if (problems.length) extras.findings = count(problems.length, worst);
+    }
+  }
+  nav.replaceChildren(...TABS.map((k, i) => el("button", {
+    class: "tab", role: "tab", id: `tab-${k}`, type: "button", "data-tab": k, "aria-selected": String(state.view === k), "aria-controls": "main", tabindex: state.view === k ? "0" : "-1",
+    title: `${t[k]} (${i + 1})`, onclick: () => actions.showTab(k),
+  }, t[k], extras[k] ?? null)));
+}
+
+function renderFoot(md) {
+  const foot = $("foot");
+  foot.hidden = !(md === "workspace" && state.live);
+  if (foot.hidden) return;
+  const input = $("stepName");
+  const examples = m().mark.examples;
+  input.placeholder = m().mark.placeholder(examples[model().steps.length % examples.length]);
+  input.setAttribute("aria-label", m().mark.button);
+  if (!$("flagIcon").firstChild) $("flagIcon").append(icon("flag"));
+  $("markBtn").replaceChildren(m().mark.button, " ", el("span", { class: "kbd", text: "↵" }));
+}
+
+function renderLayers(mdl) {
+  document.querySelectorAll(".layer").forEach((n) => n.remove());
+  const l = state.layer;
+  if (!l) return;
+  let nodes = [];
+  if (l.kind === "menu") nodes = menu();
+  else if (l.kind === "reset") nodes = resetSheet();
+  else if (l.kind === "shortcuts") nodes = shortcutsSheet();
+  else if (l.kind === "notSelected") nodes = [el("div", { class: "scrim", style: { background: "transparent" }, onclick: () => { state.layer = null; render(); } }), notSelectedPopover(mdl)];
+  const wrap = el("div", { class: "layer" }, nodes);
+  $("app").append(wrap);
+  wrap.querySelector(l.kind === "reset" ? "#resetGo" : ".mi, .sheet button, .popover button")?.focus();
+}
+
+/** The focused control, so a render that rebuilds it can put the focus back where it was. */
+function focusKey() {
+  const a = document.activeElement;
+  if (!a || a === document.body || a.closest(".layer")) return null;
+  const d = a.dataset ?? {};
+  return { id: a.id || null, key: d.key ?? null, step: d.step ?? null, view: d.view ?? null, chip: d.chip ?? null, platform: d.platform ?? null, tab: d.tab ?? null, start: a.selectionStart ?? null };
+}
+function restoreFocus(f) {
+  if (!f || state.layer) return;
+  if (document.activeElement && document.activeElement !== document.body && document.contains(document.activeElement)) return;
+  const sel = f.id ? `#${CSS.escape(f.id)}` : f.key ? `[data-key="${CSS.escape(f.key)}"]` : f.step ? `[data-step="${f.step}"]` : f.view ? `[data-view="${f.view}"]`
+    : f.chip ? `[data-chip="${f.chip}"]` : f.platform ? `[data-platform="${f.platform}"]` : f.tab ? `[data-tab="${f.tab}"]` : null;
+  const n = sel ? document.querySelector(sel) : null;
+  if (!n) return;
+  if (n.matches('[role="treeitem"]')) n.tabIndex = 0;
+  n.focus({ preventScroll: true });
+  if (f.start !== null && typeof n.setSelectionRange === "function") {
+    try { n.setSelectionRange(f.start, f.start); } catch { /* not a text field */ }
+  }
+}
+
+let unseen = 0;
+let lastRowCount = 0;
+let lastView = null;
 let scheduled = false;
 function render() {
   if (scheduled) return;
   scheduled = true;
   requestAnimationFrame(() => {
     scheduled = false;
-    const main = document.querySelector("main");
-    // While recording, a list scrolled to its end follows new rows; one scrolled up stays where it is.
-    const follow = state.live && main.scrollHeight - main.scrollTop - main.clientHeight < 40;
-    renderHeader();
-    for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.view));
-    for (const v of ["events", "dataLayer", "findings", "history"]) $(`tab-${v}`).hidden = state.view !== v;
-    const steps = model();
-    $("nEvents").textContent = steps.reduce((n, s) => n + s.rows.length, 0) || "";
-    $("nPushes").textContent = steps.reduce((n, s) => n + s.pushes.length, 0) || "";
-    if (state.view === "events") renderEvents(steps);
-    if (state.view === "dataLayer") renderPushes(steps);
-    renderFindings();
-    if (state.view === "history") renderHistory();
-    if (follow) main.scrollTop = main.scrollHeight;
+    draw();
   });
 }
+setRender(render);
 
-function applyStrings() {
+function draw() {
   document.documentElement.lang = state.lang;
-  for (const n of document.querySelectorAll("[data-t]")) n.textContent = n.dataset.t.split(".").reduce((o, k) => o?.[k], m()) ?? "";
-  $("record").textContent = m().record;
-  $("stop").textContent = m().stop;
-  $("stepName").placeholder = m().stepPlaceholder;
-  $("lang").title = m().language;
+  const md = mode();
+  const mdl = state.recording ? model() : EMPTY;
+  const main = $("main");
+  const atBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 40;
+  const scroll = lastView === `${md}|${state.view}` ? main.scrollTop : 0;
+  lastView = `${md}|${state.view}`;
+  const focus = focusKey();
+  renderHeader(md);
+  renderBanner();
+  renderTabs(md, mdl);
+  let content;
+  let toolbar = null;
+  if (md === "onboarding") content = onboardingView();
+  else if (md === "setup") content = setupView();
+  else if (md === "not-web") content = notWebView();
+  else if (state.view === "history") content = historyView();
+  else if (!state.recording) content = el("div", { class: "empty-list", text: m().history.pick });
+  else if (state.view === "events") { toolbar = eventsToolbar(mdl); content = eventsList(mdl); }
+  else if (state.view === "dataLayer") { toolbar = dataLayerToolbar(mdl); content = dataLayerList(mdl); }
+  else if (state.view === "consent") content = consentView(mdl);
+  else content = findingsView(mdl);
+  $("bar").replaceChildren(...(toolbar ? [toolbar] : []));
+  main.setAttribute("role", md === "workspace" ? "tabpanel" : "main");
+  if (md === "workspace") main.setAttribute("aria-labelledby", `tab-${state.view}`); else main.removeAttribute("aria-labelledby");
+  main.replaceChildren(content);
+  renderFoot(md);
+  renderLayers(mdl);
+  // Follow mode: a list scrolled to its end sticks to the end as rows arrive; scrolled up, it stays and counts them.
+  const rows = mdl.rows.length;
+  const arrived = state.rec === lastRec ? Math.max(0, rows - lastRowCount) : 0;
+  lastRec = state.rec;
+  lastRowCount = rows;
+  const following = state.live && state.view === "events";
+  if (state.pendingScroll) {
+    const target = main.querySelector(state.pendingScroll);
+    state.pendingScroll = null;
+    if (target) { target.tabIndex = 0; target.scrollIntoView({ block: "center" }); target.focus({ preventScroll: true }); }
+  } else if (following && atBottom && arrived) {
+    main.scrollTop = main.scrollHeight;
+    unseen = 0;
+  } else {
+    main.scrollTop = scroll;
+    if (following && arrived && !atBottom) unseen += arrived;
+  }
+  document.querySelector(".jump")?.remove();
+  if (unseen && following) {
+    $("app").append(el("button", { class: "jump", type: "button", onclick: () => { unseen = 0; main.scrollTop = main.scrollHeight; render(); } }, icon("arrow-d", "s"), m().events.jump(unseen)));
+  }
+  // The first row of the tree takes Tab; the others are reached with the arrow keys (roving tabindex).
+  const first = main.querySelector('[role="treeitem"]');
+  if (first && !main.querySelector('[role="treeitem"][tabindex="0"]')) first.tabIndex = 0;
+  state.newKeys = new Set();
+  state.flash = null;
+  restoreFocus(focus);
+  if (md === "onboarding" && !focus) $("obTitle")?.focus();
+}
+let lastRec = null;
+
+$("main").addEventListener("scroll", () => {
+  const main = $("main");
+  if (unseen && main.scrollHeight - main.scrollTop - main.clientHeight < 40) { unseen = 0; document.querySelector(".jump")?.remove(); }
+});
+
+// ---------- analysis ----------
+
+function runAnalysis() {
+  const r = state.recording;
+  const key = `${state.rec}|${state.lang}|${state.events.length}|${r.plan?.name ?? ""}|${(r.providers ?? []).join(",")}`;
+  if (state.analysis?.key === key) return state.analysis.result ?? null;
+  state.analysis = { key, result: null };
+  // Off the click: the spinner shows first, then the checks run (they usually take well under a second).
+  setTimeout(() => {
+    if (state.analysis?.key !== key) return;
+    try {
+      const run = buildRun(state.events, { site: r.site, startedAt: r.startedAt, providers: r.providers ?? null, labels: labelsFor(state.lang) });
+      const result = { run, ...analyze(run, { plan: r.plan?.plan ?? null, lang: state.lang }) };
+      state.analysis = { key, result };
+      state.analysisError = false;
+      const cov = result.metrics?.coverage;
+      const mdl = model();
+      const summary = {
+        counts: result.counts, status: result.verdict.status, score: result.verdict.score, verdict: `${result.verdict.statusText}: ${result.verdict.headline}`,
+        hits: mdl.rows.filter((x) => x.kind === "hit").length, steps: mdl.steps.length, platforms: Object.keys(mdl.counts),
+        ...(cov?.planned ? { coverage: { seen: cov.checkable - (cov.counts.missing ?? 0), total: cov.checkable } } : {}),
+      };
+      // The report tab and History read the verdict from the recording.
+      if (r.stoppedAt) {
+        state.recording = { ...r, summary };
+        putRecording(state.recording).then(() => listRecordings()).then((list) => { state.history.list = list; render(); }).catch(() => {});
+      }
+    } catch (err) {
+      console.error(err);
+      state.analysisError = true;
+    }
+    render();
+  }, 30);
+  return null;
 }
 
-// ---------- wiring ----------
+// ---------- actions ----------
 
-$("record").onclick = async () => {
-  const tab = state.tab;
-  if (!isWeb(tab?.url)) return;
-  // Asked here, from the click, as Chrome requires: access to the site's pages and to the tracking hosts they call.
-  const granted = await chrome.permissions.request({ origins: ["http://*/*", "https://*/*"] }).catch(() => false);
-  state.notice = granted ? null : m().permissionDenied;
-  if (!granted) return render();
-  const { rec } = await send({ type: "start", tabId: tab.id, url: tab.url });
-  await loadRecording(rec ?? null);
-  state.view = "events";
-  await refresh();
-};
+async function savePlan(entry) {
+  const host = state.setup.host;
+  if (!host) return;
+  const { plans = {} } = await load("plans");
+  if (entry) plans[host] = entry; else delete plans[host];
+  await save({ plans });
+  state.setup.plan = entry;
+}
 
-$("stop").onclick = async () => {
-  await send({ type: "stop", tabId: state.tab.id });
-  state.view = "findings";
-  await refresh();
-};
+function applyTheme() {
+  if (state.theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = state.theme;
+}
 
+Object.assign(actions, {
+  model,
+  analysis: runAnalysis,
+
+  tourTo(i) { state.tour = i; state.layer = null; render(); requestAnimationFrame(() => requestAnimationFrame(() => $("obTitle")?.focus())); },
+  async finishTour(granted) {
+    state.tour = null;
+    state.onboarded = true;
+    await save({ onboarded: true });
+    if (granted === false) state.setup.denied = true;
+    if (granted) { state.setup.denied = false; await detect(); }
+    render();
+  },
+  async setLang(lang) {
+    if (!LANGUAGES[lang]) return;
+    state.lang = lang;
+    state.analysis = null;
+    await save({ lang });
+    render();
+  },
+  async setTheme(theme) {
+    state.theme = theme;
+    applyTheme();
+    await save({ theme });
+    render();
+  },
+  async setMask(on) { state.mask = on; await save({ mask: on }); render(); },
+  seenHint(id) { if (!state.hints[id]) { state.hints[id] = true; save({ hints: state.hints }); } },
+
+  togglePlatform(key) {
+    const list = state.setup.platforms;
+    state.setup.platforms = list.includes(key) ? list.filter((k) => k !== key) : OFFERED.filter((k) => k === key || list.includes(k));
+    render();
+  },
+  selectDetected() { state.setup.platforms = OFFERED.filter((k) => state.setup.platforms.includes(k) || state.setup.detected.includes(k)); render(); },
+  async setOption(name, value) {
+    state.setup[name] = value;
+    await save({ setupOptions: { reload: state.setup.reload, clear: state.setup.clear } });
+    render();
+  },
+  async loadPlanFile(file) {
+    const { plan, error } = readPlan(await file.text());
+    state.setup.planError = error ?? null;
+    if (!error) await savePlan({ name: file.name, plan });
+    render();
+  },
+  async removePlan() { await savePlan(null); render(); },
+  async askAccess() {
+    const granted = await chrome.permissions.request(SITES).catch(() => false);
+    state.setup.denied = !granted;
+    if (granted) await detect();
+    render();
+  },
+
+  async start() {
+    const tab = state.tab;
+    if (!isWeb(tab?.url) || !state.setup.platforms.length) return;
+    // Asked here, from the click, as Chrome requires: access to the site's pages and to the tracking hosts they call.
+    const granted = await chrome.permissions.request(SITES).catch(() => false);
+    state.setup.denied = !granted;
+    if (!granted) return render();
+    const host = hostOf(tab.url);
+    const { platforms = {} } = await load("platforms");
+    platforms[host] = state.setup.platforms;
+    await save({ platforms });
+    state.setup.remembered = true;
+    const { rec } = await send({ type: "start", tabId: tab.id, url: tab.url, providers: state.setup.platforms, reload: state.setup.reload, clearCookies: state.setup.clear });
+    if (!rec) return;
+    state.viewing = null;
+    state.historyOnly = false;
+    await setCurrent(host, rec);
+    await loadRecording(rec);
+    state.view = "events";
+    await refresh();
+  },
+  async stop() {
+    if (!state.live) return;
+    state.stopping = true;
+    await send({ type: "stop", tabId: state.tab.id });
+    state.view = "findings";
+    await refresh();
+    state.stopping = false;
+  },
+  askStartOver() {
+    if (!state.recording) { state.historyOnly = false; state.viewing = null; state.layer = null; return render(); }
+    const recorded = state.events.some((e) => e.kind === "request" || e.kind === "push");
+    // Nothing to keep or lose: no question to ask.
+    if (!recorded && !state.viewing) return actions.startOver({ keep: false, clearCookies: false });
+    state.layer = { kind: "reset" };
+    render();
+  },
+  async startOver({ keep, clearCookies }) {
+    state.layer = null;
+    const host = state.live?.host ?? state.recording?.host ?? hostOf(state.tab?.url);
+    // An older recording opened from History is never deleted by Start over: it is not the one being left.
+    await send({ type: "reset", tabId: state.tab?.id, rec: state.viewing ? null : state.rec, keep: state.viewing ? true : keep, clearCookies, origin: state.recording?.site ?? null });
+    await setCurrent(host, null);
+    state.viewing = null;
+    state.historyOnly = false;
+    state.tabClosed = false;
+    state.current = null;
+    await loadRecording(null);
+    state.view = "events";
+    await refresh();
+  },
+  toSetup() {
+    if (state.recording) return actions.askStartOver();
+    state.historyOnly = false;
+    render();
+  },
+  showTab(view) {
+    if (view === "history" && !state.recording) state.historyOnly = true;
+    state.view = view;
+    state.layer = null;
+    closeTip();
+    render();
+  },
+  toggleRow(key, keepOthers) {
+    if (state.open.has(key)) state.open.delete(key);
+    else {
+      if (!keepOthers) state.open.clear();
+      state.open.add(key);
+    }
+    closeTip();
+    render();
+  },
+  showRow(key) {
+    const mdl = model();
+    const row = mdl.rows.find((r) => r.key === key);
+    if (!row) return;
+    state.view = "events";
+    // The row must pass the filter to be seen: its platform is shown and the search cleared.
+    if (!visibleRows(mdl).rows.has(key)) {
+      state.filter.search = "";
+      state.filter.sentTo = "any";
+      state.filter.extra.add(row.kind === "call" ? "other" : row.platform);
+    }
+    state.closedSteps.delete(row.step);
+    state.openSteps.add(row.step);
+    state.open.clear();
+    state.open.add(key);
+    state.flash = key;
+    state.pendingScroll = `[data-key="${CSS.escape(key)}"]`;
+    render();
+  },
+  showPush(key) {
+    const p = model().pushes.find((x) => x.key === key);
+    if (!p) return;
+    state.view = "dataLayer";
+    if (/^gtm\./.test(p.name)) state.dl.hideGtm = false;
+    state.dl.search = "";
+    state.closedSteps.delete(p.step);
+    state.openSteps.add(p.step);
+    state.dl.open.add(key);
+    state.flash = key;
+    state.pendingScroll = `[data-key="${CSS.escape(key)}"]`;
+    render();
+  },
+  rowForFinding(f) {
+    if (!f.platform && !f.event) return null;
+    const mdl = model();
+    const same = (r) => !f.event || canonicalEvent(r.name) === canonicalEvent(f.event) || (r.platform === "google_ads" && /^conversion/.test(r.name) && /conversion/i.test(f.event));
+    const hits = mdl.rows.filter((r) => r.kind === "hit" && (!f.platform || r.platform === f.platform) && same(r));
+    const step = mdl.steps.find((s) => s.label === f.step);
+    return (step ? hits.find((r) => r.step === step.index) : null) ?? hits[0] ?? null;
+  },
+  saveFilter() { if (state.setup.host) filters.set(state.setup.host, { ...state.filter }); },
+  async addPlatform(key) {
+    const host = state.recording?.host ?? state.setup.host;
+    const { platforms = {} } = await load("platforms");
+    platforms[host] = [...new Set([...(platforms[host] ?? state.setup.platforms), key])];
+    await save({ platforms });
+    if (host === state.setup.host) state.setup.platforms = OFFERED.filter((k) => platforms[host].includes(k));
+    if (state.recording?.providers && !state.recording.providers.includes(key)) {
+      state.recording = { ...state.recording, providers: [...state.recording.providers, key] };
+      await putRecording(state.recording).catch(() => {});
+      state.analysis = null;
+    }
+    state.filter.extra.delete(key);
+    state.layer = null;
+    render();
+  },
+
+  async openRecording(id) {
+    state.viewing = id === state.current ? null : id;
+    state.historyOnly = false;
+    await loadRecording(id);
+    state.view = "findings";
+    render();
+  },
+  async backToLatest() {
+    state.viewing = null;
+    await loadRecording(state.current);
+    state.view = state.current ? "findings" : "events";
+    render();
+  },
+  async deleteRecording(id) {
+    await deleteRecording(id);
+    if (state.current === id) { await setCurrent(state.recording?.host ?? state.setup.host, null); state.current = null; }
+    if (state.rec === id) { state.viewing = null; await loadRecording(null); }
+    state.history.undo = null;
+    state.history.list = await listRecordings();
+    render();
+  },
+  openReport(id = state.rec) {
+    chrome.tabs.create({ url: chrome.runtime.getURL(`report/report.html?rec=${encodeURIComponent(id)}&lang=${state.lang}`) });
+  },
+  exportHtml() {
+    const a = state.analysis?.result;
+    if (!a) return;
+    download(`aitd-${state.rec.replace(/[^\w.-]+/g, "_")}-report.html`, reportHtml(a.run, { plan: state.recording.plan?.plan ?? null, lang: state.lang, site: state.recording.site }, { redacted: true }), "text/html");
+  },
+  async exportJson(id = state.rec) {
+    const r = id === state.rec ? state.recording : await getRecording(id);
+    if (!r) return;
+    const events = id === state.rec ? state.events : await getEvents(id);
+    const run = buildRun(events, { site: r.site, startedAt: r.startedAt, providers: r.providers ?? null, labels: labelsFor(state.lang) });
+    download(`aitd-${id.replace(/[^\w.-]+/g, "_")}-capture.json`, captureJson(run, { plan: r.plan?.plan ?? null, lang: state.lang, site: r.site, extensionVersion: chrome.runtime.getManifest().version }), "application/json");
+  },
+  openWindow() {
+    const id = state.tab?.id;
+    chrome.windows.create({ url: chrome.runtime.getURL(`panel/panel.html${id ? `?tab=${id}` : ""}`), type: "popup", width: 420, height: 820 }).catch(() => {});
+  },
+  async openSite(r) {
+    await setCurrent(r.host, r.id);
+    await chrome.tabs.create({ url: r.site });
+  },
+});
+
+// ---------- the header and footer controls ----------
+
+$("stop").onclick = () => actions.stop();
+$("startOver").onclick = () => actions.askStartOver();
+$("more").onclick = () => { state.layer = state.layer?.kind === "menu" ? null : { kind: "menu" }; render(); };
+
+let marking = false;
 $("stepForm").onsubmit = async (ev) => {
   ev.preventDefault();
-  const label = $("stepName").value.trim();
-  if (!label || !state.live) return;
+  const input = $("stepName");
+  const label = input.value.trim();
+  if (!label || !state.live || marking) return;
+  marking = true;
+  const n = model().steps.length + 1;
   await send({ type: "step", tabId: state.tab.id, label });
-  $("stepName").value = "";
+  marking = false;
+  input.value = "";
+  toast(m().mark.started(n, label));
 };
 
-$("planFile").onchange = async (ev) => {
-  const file = ev.target.files?.[0];
-  ev.target.value = "";
-  if (!file) return;
-  const { plan, error } = readPlan(await file.text());
-  state.notice = error ? m()[error] : null;
-  if (error) return render();
-  await savePlan({ name: file.name, plan });
-};
-$("planClear").onclick = () => savePlan(null);
+installKeys({ mode, model, tabs: TABS });
 
-for (const b of document.querySelectorAll(".tabs button")) {
-  b.onclick = () => { state.view = b.dataset.tab; render(); };
-}
-$("hideGtm").onchange = (ev) => { state.hideGtm = ev.target.checked; render(); };
-
-$("openReport").onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`report/report.html?rec=${encodeURIComponent(state.rec)}&lang=${state.lang}`) });
-const exportName = () => `aitd-${state.rec.replace(/[^\w.-]+/g, "_")}`;
-$("exportCapture").onclick = () => download(`${exportName()}-capture.json`, captureJson(analysis().run, { plan: state.plan?.plan ?? null, lang: state.lang, site: state.recording.site, extensionVersion: chrome.runtime.getManifest().version }), "application/json");
-$("exportHtml").onclick = () => download(`${exportName()}-report.html`, reportHtml(analysis().run, { plan: state.plan?.plan ?? null, lang: state.lang, site: state.recording.site }, { redacted: true }), "text/html");
-
-$("lang").onchange = async (ev) => {
-  state.lang = ev.target.value;
-  await chrome.storage.local.set({ lang: state.lang });
-  state.analysis = null;
-  applyStrings();
-  render();
-};
-$("mask").onchange = async (ev) => {
-  state.mask = ev.target.checked;
-  await chrome.storage.local.set({ mask: state.mask });
-  for (const d of document.querySelectorAll(".row details")) d.querySelector(".detail")?.remove();
-  render();
-};
+// ---------- live updates ----------
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== "recorded" || msg.rec !== state.rec) return;
+  const before = new Set(model().rows.map((r) => r.key));
   state.events.push(msg.event);
+  if (msg.event.kind === "request") {
+    const fresh = model().rows.filter((r) => !before.has(r.key));
+    for (const r of fresh) state.newKeys.add(r.key);
+    if (fresh.length) announceNew(fresh.length);
+  }
+  if (msg.event.kind === "step" && msg.event.action === "manual" && !state.hints.mark) {
+    // The first named step: one hint on what naming is for, once ever.
+    actions.seenHint("mark");
+    const r = $("stepName").getBoundingClientRect();
+    const tip = el("div", { class: "hinttip", role: "status", style: { left: `${r.left}px`, bottom: `${window.innerHeight - r.top + 8}px` }, text: m().hints.mark });
+    document.body.append(tip);
+    setTimeout(() => tip.remove(), 6000);
+  }
   render();
 });
 chrome.tabs.onActivated.addListener(() => refresh());
 chrome.tabs.onUpdated.addListener((tabId, info) => { if (info.url || info.status === "complete") refresh(); });
-setInterval(() => { if (state.live) renderHeader(); }, 1000);
+chrome.tabs.onRemoved.addListener((tabId) => { if (state.live && tabId === state.tab?.id) setTimeout(refresh, 300); });
+setInterval(() => { if (state.live) $("statusText").textContent = statusText(); }, 1000);
+// The "Nothing yet?" note appears 15 s into a recording that saw nothing, without an event to trigger a render.
+setInterval(() => { if (state.live && state.view === "events" && !model().rows.length) render(); }, 5000);
 
 // ---------- start ----------
 
-const stored = await chrome.storage.local.get(["lang", "mask"]);
+const stored = await load(["lang", "theme", "mask", "onboarded", "detailView", "groupsOpen", "hints"]);
 state.lang = stored.lang && LANGUAGES[stored.lang] ? stored.lang : chrome.i18n.getUILanguage().toLowerCase().startsWith("tr") ? "tr" : "en";
+state.theme = ["light", "dark"].includes(stored.theme) ? stored.theme : "system";
 state.mask = Boolean(stored.mask);
-$("mask").checked = state.mask;
-$("lang").replaceChildren(...Object.keys(LANGUAGES).map((code) => el("option", { value: code, text: code === "tr" ? "Türkçe" : "English" })));
-$("lang").value = state.lang;
-applyStrings();
+state.onboarded = stored.onboarded === true;
+state.tour = state.onboarded ? null : 0;
+state.detailView = ["readable", "all", "raw"].includes(stored.detailView) ? stored.detailView : "readable";
+state.groupsOpen = stored.groupsOpen ?? {};
+state.hints = stored.hints ?? {};
+applyTheme();
+navigator.storage?.estimate?.().then(({ usage, quota }) => { state.history.full = quota ? usage / quota > 0.8 : false; }).catch(() => {});
 await refresh();

@@ -53,7 +53,7 @@ export const labelsFor = (lang) => {
 };
 
 /** Event kinds a recording stores; see extension/worker.js and extension/bridge.js. */
-export const KINDS = ["step", "request", "status", "push", "load", "message", "cookies", "page", "error"];
+export const KINDS = ["step", "request", "status", "push", "load", "message", "cookies", "page", "doc", "error"];
 
 /**
  * The run for one recording.

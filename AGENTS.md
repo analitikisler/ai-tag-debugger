@@ -9,7 +9,7 @@ An open-source Node CLI and MCP server that QA-tests a website's analytics and a
 3. Capture: `src/parsers.js` turns requests into hits, `src/redact.js` strips user data, `src/consent.js` and `src/inventory.js` add consent scenarios and the tag inventory, `src/gtm.js` reads a container export.
 4. Check: `src/checks.js` emits findings with no model call; `src/verify.js` adds owners and verify links; `src/changes.js` compares with the previous run.
 5. Explain and report: `src/report.js` asks the model for causes and fixes and renders the Markdown and CSV reports; `src/html/` renders the HTML report (`shell.js` assembles the page, one module per section, `css.js` and `script.js` hold the stylesheet and the hashed script), all with strings from `src/i18n.js` through `src/report-shared.js`.
-6. The Chrome extension (`extension/`, AITD Recorder) records a tab the user browses by hand and runs the same checks and report in the browser: `worker.js` and `bridge.js` capture, `lib/run.js` builds the run, `lib/analyze.js` checks and renders. It imports the shared modules from `extension/core/`, which `scripts/extension.js` copies from `src/` (gitignored).
+6. The ai tag debugger Chrome extension (`extension/`) records a tab the user browses by hand and runs the same checks and report in the browser: `worker.js` and `bridge.js` capture, `lib/run.js` builds the run, `lib/analyze.js` checks and renders. It imports the shared modules from `extension/core/`, which `scripts/extension.js` copies from `src/` (gitignored).
 7. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
 
 ## Commands

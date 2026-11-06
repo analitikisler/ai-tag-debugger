@@ -234,13 +234,16 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     // page_view is enhanced measurement too, but a missing one means the GA4 tag itself did not send.
     const name = canonicalEvent(ev.name);
     const setting = ev.platform === "ga4" && name !== canonicalEvent("page_view") ? GA4_ENHANCED.get(name) : undefined;
+    // A hand recording (the Chrome extension) goes as far as the person browsing took it, not to a goal, so an
+    // event it never saw is "not reached", like an AI journey that stopped early, never "broken".
+    const byHand = run.source === "extension";
     findings.push({
       ...base,
-      severity: run.completed && !troubled.length ? "broken" : "info",
+      severity: run.completed && !troubled.length && !byHand ? "broken" : "info",
       check: "missing_event",
       platform: ev.platform,
       event: ev.name,
-      detail: troubled.length ? d.missingEventUnverified(ev.name) : !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
+      detail: troubled.length ? d.missingEventUnverified(ev.name) : byHand ? d.missingEventNotReached(ev.name) : !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
     });
   }
 
@@ -649,6 +652,24 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   const plainPush = run.dataLayerLog.find((e) => e.userData?.plain?.length);
   if (plainPush) {
     findings.push({ ...base, severity: "warning", check: "pii_datalayer", step: stepLabel(plainPush.step), detail: d.piiDataLayer(plainPush.userData.plain) });
+  }
+
+  // Tracking requests that failed or got an error answer on a live run (the Chrome extension, or a run with hits let
+  // through): those events never reached the platform. Not on other runs, where the browser answers tracking
+  // requests itself and a keepalive request it answered can still read as aborted.
+  if (run.live) {
+    const failedCalls = new Map();
+    for (const c of run.network ?? []) {
+      const bad = c.status === "failed" || (typeof c.status === "number" && c.status >= 400);
+      if (!bad || c.blocked || ["gtm", "consent"].includes(c.provider)) continue;
+      const k = `${c.provider}|${c.status}`;
+      const entry = failedCalls.get(k) ?? { provider: c.provider, status: c.status, n: 0, step: c.step };
+      entry.n += 1;
+      failedCalls.set(k, entry);
+    }
+    for (const f of failedCalls.values()) {
+      findings.push({ ...base, severity: "broken", check: "hit_failed", platform: f.provider, step: stepLabel(f.step), detail: d.hitFailed(f.provider, f.n, f.status, stepLabel(f.step)) });
+    }
   }
 
   // Events that are not in the plan. Without a plan every event would be listed, which says nothing.
