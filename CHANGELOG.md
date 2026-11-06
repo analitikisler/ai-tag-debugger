@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: a consent platform's auto-blocking (such as efilli's on a Next.js site) made one Google container read as loaded several times, so runs reported a false `container_duplicate`. A container script now counts as loaded only once it is added to the page as a script that runs. The duplicate warning names each source once, with how many times it loaded.
+- Fixed: the Google tag's consent and conversion pings to `pagead2.googlesyndication.com` were labelled Google AdSense; they are Google Ads, as on Google's other hosts.
+- The report's consent card judges the Consent Mode default by the four signals that decide what tags may do, so a default with only `security_storage` granted reads "denied" instead of "mixed" (now "partly granted" when those signals really differ), and a platform with no consent problems reads "Respects consent" instead of "OK".
 - Chrome extension preview, **AITD Recorder** (`extension/`): record a site's tracking while you browse it yourself in Chrome, then run the CLI's checks on it and open the same HTML report, in English or Turkish, from Chrome's side panel. Hits show live, grouped by step, with their parameters and HTTP status; dataLayer pushes are recorded from the first one, with or without a GTM container; a measurement plan can be chosen per site; and the run exports as a redacted `capture.json` and `report.html`. Not in the Chrome Web Store yet: `npm run extension`, then load `extension/` unpacked (README: Chrome extension).
 - The extension reads Google's container registry and the Google tag's consent state from the page, as the CLI does after each step, so it no longer reports a container that ran as never run.
 - The extension shows values as they were sent, client and session IDs included, and redacts user data only in what leaves it (exports). The CLI and the MCP server still redact at capture.

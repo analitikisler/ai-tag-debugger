@@ -78,7 +78,7 @@ export function render(ctx) {
     const sev = row?.severity ?? (!own.length && metrics.consent.platforms.find((p) => p.platform === platform)?.status !== "pass" ? "risk" : "ok");
     const cells = STATUS_SCENARIOS.filter((s) => sc && afterOf(sc, s))
       .map((s) => `<span class="cs-p"><span class="cs-k">${esc(t.cols[s])}</span>${total(platform, s)}</span>`).join("");
-    return `<li class="card sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
+    return `<li class="card sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, sev === "ok" ? t.respected : m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
   }).join("");
   const list = lines ? `<ul class="cs-list" aria-label="${esc(t.statusLabel)}">${lines}</ul>` : "";
 

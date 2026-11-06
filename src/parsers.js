@@ -515,6 +515,9 @@ export function providerOf(url) {
     return of(u.pathname.startsWith("/gtag/") && id.startsWith("G-") ? "ga4" : u.pathname.startsWith("/gtag/") && /^(AW|DC)-/.test(id) ? "google_ads" : "gtm");
   }
   if (/(^|\.)(doubleclick\.net|google\.[a-z.]+)$/.test(host) && /^\/(pagead|ccm)\//.test(u.pathname)) return of("google_ads");
+  // The Google tag also sends its consent and conversion pings to pagead2.googlesyndication.com: Google Ads, not
+  // AdSense, whose own scripts (adsbygoogle.js) come from the same host.
+  if (/(^|\.)googlesyndication\.com$/.test(host) && /^\/(ccm\/|pagead\/(viewthroughconversion|1p-user-list|1p-conversion|conversion|landing)\/)/.test(u.pathname)) return of("google_ads");
   if (/(^|\.)doubleclick\.net$/.test(host)) return of("doubleclick");
   // Before the vendor hosts: a GA4 hit to a Stape or Elevar endpoint is still a GA4 hit.
   if (isGa4Path(u) && !GOOGLE_COMPANION_HOST.test(host)) return of("ga4");

@@ -58,7 +58,8 @@ export const KINDS = ["step", "request", "status", "push", "load", "message", "c
 /**
  * The run for one recording.
  * @param {object[]} events the recording's events in the order they were stored ({ t, seq, kind, ... })
- * @param {{ site: string, startedAt?: number, labels?: { start: string, goal: string, note: string } }} info labels: the
+ * @param {{ site: string, startedAt?: number, providers?: string[] | null, labels?: { start: string, goal: string, note: string } }} info
+ *   providers: the platforms to check (src/parsers.js PROVIDERS keys), or null for every one seen. labels: the
  *   start step's name and the journey's goal and note in the report's language (messages(lang).extension).
  */
 export function buildRun(events, info) {
@@ -77,6 +78,8 @@ export function buildRun(events, info) {
   const cookieChanges = [];
   const pageErrors = [];
   const providers = [];
+  const chosen = Array.isArray(info.providers) && info.providers.length ? new Set(info.providers) : null;
+  const skipped = {};
   const calls = new Map();
   const statuses = new Map();
   let cookieHashes = null;
@@ -113,9 +116,17 @@ export function buildRun(events, info) {
     if (e.kind === "request") {
       const provider = providerOf(e.url);
       if (!provider) continue;
+      // Platforms the user chose not to check are counted per step and left out, as the CLI's --platforms does;
+      // tag managers and consent platforms are always kept, since they explain how the tags loaded.
+      if (chosen && !provider.always && !chosen.has(provider.key)) {
+        const counts = (skipped[current()] ??= {});
+        counts[provider.label] = (counts[provider.label] ?? 0) + 1;
+        continue;
+      }
       const frame = e.frameId && e.frameId !== 0 ? frameOf(e.initiator ?? e.frameUrl, topUrl) : null;
       const parsed = parseTrackingRequest(e.url, e.body ?? null) ?? [];
       for (const { userFields, ...hit } of parsed) {
+        if (chosen && !chosen.has(hit.platform)) continue;
         if (!providers.includes(hit.platform)) providers.push(hit.platform);
         const userData = userDataOfHit(hit, userFields, hostOf(hit.params?.page_location) ?? site);
         add("hits", hits, { ...hit, ...(userData ? { userData } : {}), step: current(), pageUrl: topUrl, t: e.t, seq: ++seq, ...(frame ? { frame } : {}) });
@@ -238,8 +249,8 @@ export function buildRun(events, info) {
     containerPreloads: [...containerPreloads.values()],
     frameMessages,
     network,
-    providers,
-    skipped: {},
+    providers: chosen ? [...chosen] : providers,
+    skipped,
     bodyBudgetStep,
     startedAt: info.startedAt ?? steps[0]?.t ?? Date.now(),
     pageErrors,

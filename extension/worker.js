@@ -7,7 +7,7 @@ import { siteOf } from "./core/redact.js";
 import { messages } from "./core/i18n.js";
 import { containersInPage, googleConsentStateInPage, pageProblemInPage } from "./core/page-hook.js";
 import { bodyText } from "./lib/body.js";
-import { addEvents, prune, putRecording, getRecording } from "./lib/store.js";
+import { addEvents, deleteRecording, prune, putRecording, getRecording } from "./lib/store.js";
 
 const SCRIPT_IDS = ["aitd-bridge", "aitd-hook"];
 
@@ -173,7 +173,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 
 // ---------- the panel and the page hook ----------
 
-async function start(tabId, url) {
+async function start(tabId, url, providers = null) {
   const u = new URL(url);
   const map = await active();
   if (map[tabId]) return { rec: map[tabId].rec };
@@ -183,7 +183,7 @@ async function start(tabId, url) {
   const host = u.hostname.replace(/^www\./, "");
   const rec = `${host}/${stamp}`;
   const { plans = {} } = await chrome.storage.local.get("plans");
-  await putRecording({ id: rec, host, site: u.origin, startedAt: now.getTime(), stoppedAt: null, lang: await language(), plan: plans[host] ?? null });
+  await putRecording({ id: rec, host, site: u.origin, startedAt: now.getTime(), stoppedAt: null, lang: await language(), plan: plans[host] ?? null, providers: Array.isArray(providers) && providers.length ? providers.map(String) : null });
   await prune(host);
   map[tabId] = { rec, origin: u.origin, host };
   await setActive(map);
@@ -221,7 +221,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   // From the panel, an extension page: only those may start or stop a recording, never a web page's content script.
   if (!fromExtensionPage) return false;
   const run = async () => {
-    if (msg.type === "start") return start(msg.tabId, msg.url);
+    if (msg.type === "start") return start(msg.tabId, msg.url, msg.providers);
+    // Start over: the recording is stopped and deleted, as if it never happened.
+    if (msg.type === "discard") {
+      const { rec } = await stop(msg.tabId);
+      const id = rec ?? msg.rec;
+      if (id) await deleteRecording(id);
+      return { rec: null };
+    }
     if (msg.type === "stop") return stop(msg.tabId);
     if (msg.type === "step") {
       const a = await recordingFor(msg.tabId);

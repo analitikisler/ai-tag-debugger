@@ -12,41 +12,57 @@ const CONTAINER_HOOK = `
   const doc = Math.random().toString(36).slice(2, 10);
   const isContainer = (src) => /\\/(gtm\\.js|gtag\\/js)\\?/.test(String(src)) && /[?&]id=/.test(String(src));
   const seen = new WeakSet();
-  const report = (el, src, how) => {
+  const report = (el, src, how, frames = []) => {
     try {
       const abs = new URL(String(src), document.baseURI).href;
       if (!isContainer(abs) || !window.__atdLoad) return;
       const layer = new URL(abs).searchParams.get("l") || "dataLayer";
       watch(layer);
-      let frames = [];
-      if (how === "script") {
-        const limit = Error.stackTraceLimit;
-        Error.stackTraceLimit = 50;
-        const stack = String(new Error().stack || "");
-        Error.stackTraceLimit = limit;
-        // The first two frames are report() and the setter, both from this script; injected inline code
-        // (a Custom HTML tag) has no address and shows as <anonymous>.
-        frames = stack.split("\\n").filter((line) => /^\\s+at /.test(line)).slice(2)
-          .map((line) => (line.match(/(https?:\\/\\/[^\\s()]+?):\\d+:\\d+/) || [])[1] || (/<anonymous>/.test(line) ? "inline" : null))
-          .filter(Boolean);
-      }
       window.__atdLoad({ src: abs, how, frames, documentUrl: docUrl, page: location.href, doc });
     } catch {}
+  };
+  // The scripts on the stack when code sets a script's src. The first two frames are callers() and the setter, both
+  // from this script; injected inline code (a Custom HTML tag) has no address and shows as <anonymous>.
+  const callers = () => {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 50;
+    const stack = String(new Error().stack || "");
+    Error.stackTraceLimit = limit;
+    return stack.split("\\n").filter((line) => /^\\s+at /.test(line)).slice(2)
+      .map((line) => (line.match(/(https?:\\/\\/[^\\s()]+?):\\d+:\\d+/) || [])[1] || (/<anonymous>/.test(line) ? "inline" : null))
+      .filter(Boolean);
+  };
+  // A script whose src code sets is a load only once it is in the page and of a type that runs. Consent platforms'
+  // auto-blocking builds copies of a script, or adds one as text/plain, and drops them; the browser never fetches
+  // those, so they are not loads. The callers are taken when src is set, since that is when they are on the stack.
+  const pending = new WeakMap();
+  const runnable = (el) => {
+    const t = (el.getAttribute("type") || "").trim().toLowerCase();
+    return !t || t === "module" || /^(text|application)\\/(x-)?(javascript|ecmascript)$/.test(t);
+  };
+  const noted = (el, src, frames) => {
+    if (seen.has(el)) return;
+    if (!el.isConnected) { pending.set(el, { src, frames }); return; }
+    if (runnable(el)) { seen.add(el); report(el, src, "script", frames); }
   };
   try {
     const desc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
     Object.defineProperty(HTMLScriptElement.prototype, "src", {
       ...desc,
-      set(v) { if (!seen.has(this)) { seen.add(this); report(this, v, "script"); } return desc.set.call(this, v); },
+      set(v) { if (!seen.has(this)) noted(this, v, callers()); return desc.set.call(this, v); },
     });
     const setAttribute = Element.prototype.setAttribute;
     Element.prototype.setAttribute = function (name, v) {
-      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === "src" && !seen.has(this)) { seen.add(this); report(this, v, "script"); }
+      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === "src" && !seen.has(this)) noted(this, v, callers());
       return setAttribute.call(this, name, v);
     };
     new MutationObserver((list) => {
       for (const m of list) for (const n of m.addedNodes) {
-        if (n instanceof HTMLScriptElement && n.src && !seen.has(n)) { seen.add(n); report(n, n.src, "parser"); }
+        if (n instanceof HTMLScriptElement && !seen.has(n)) {
+          const set = pending.get(n);
+          if (set) { if (runnable(n)) { seen.add(n); report(n, set.src, "script", set.frames); } }
+          else if (n.src) { seen.add(n); report(n, n.src, "parser"); }
+        }
         // A preload hint downloads a container without running it; caught as it is added, since a page's own code
         // can rewrite <head> and take it out again.
         else if (n instanceof HTMLLinkElement && /(^|\\s)(preload|modulepreload|prefetch)(\\s|$)/i.test(n.rel) && n.href && !seen.has(n)) { seen.add(n); report(n, n.href, "preload"); }

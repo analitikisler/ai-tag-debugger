@@ -142,3 +142,19 @@ test("Google's container registry, read from the page, decides whether a contain
   const missing = lib.buildRun([nav, load, { t: 1500, seq: 4, kind: "page", registry: [], preloads: [] }], { site: "https://shop.example" });
   assert.equal(notRun(missing), true);
 });
+
+test("platforms chosen before recording decide what is checked; the rest is counted, and tag managers stay", () => {
+  const events = [
+    { t: 1, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 2, seq: 2, kind: "request", requestId: "a", method: "GET", frameId: 0, url: `${GA}&en=page_view` },
+    { t: 3, seq: 3, kind: "request", requestId: "b", method: "GET", frameId: 0, url: "https://www.facebook.com/tr/?id=1&ev=PageView" },
+    { t: 4, seq: 4, kind: "request", requestId: "c", method: "GET", frameId: 0, url: "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123" },
+  ];
+  const onlyMeta = lib.buildRun(events, { site: "https://shop.example", providers: ["meta"] });
+  assert.deepEqual(onlyMeta.hits.map((h) => h.platform), ["meta"]);
+  assert.deepEqual(onlyMeta.providers, ["meta"]);
+  assert.deepEqual(onlyMeta.skipped, { 0: { GA4: 1 } });
+  assert.ok(onlyMeta.network.some((c) => c.provider === "gtm"), "the tag manager is kept");
+  const all = lib.buildRun(events, { site: "https://shop.example" });
+  assert.deepEqual(all.hits.map((h) => h.platform).sort(), ["ga4", "meta"]);
+});

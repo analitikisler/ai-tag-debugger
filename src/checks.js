@@ -152,6 +152,13 @@ function visitorEmailIn(text, hit) {
   });
 }
 
+/** The same source named once with how many times it came, so three loads by one script read as one line. */
+function grouped(sources) {
+  const counts = new Map();
+  for (const s of sources) counts.set(s, (counts.get(s) ?? 0) + 1);
+  return [...counts].map(([s, n]) => ({ source: s, times: n }));
+}
+
 function expectedIn(planEvent, journeyId) {
   return !planEvent.journeys || planEvent.journeys.includes(journeyId);
 }
@@ -377,7 +384,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   const ui = messages(lang).ui.containers;
   const source = (l) => ui.kinds[l.kind](l.by);
   for (const dup of duplicateLoads(run).filter((x, i, all) => all.findIndex((y) => y.id === x.id) === i)) {
-    findings.push({ ...base, severity: "warning", check: "container_duplicate", step: stepLabel(dup.loads[1].step), detail: d.containerDuplicate(dup.id, dup.loads.map(source), stepLabel(dup.loads[1].step)), evidence: dup.loads.map((l) => `${l.id} ${l.kind}${l.by ? ` ${l.by}` : ""} ${l.page ?? ""}`).join("\n") });
+    findings.push({ ...base, severity: "warning", check: "container_duplicate", step: stepLabel(dup.loads[1].step), detail: d.containerDuplicate(dup.id, dup.loads.length, grouped(dup.loads.map(source)), stepLabel(dup.loads[1].step)), evidence: dup.loads.map((l) => `${l.id} ${l.kind}${l.by ? ` ${l.by}` : ""} ${l.page ?? ""}`).join("\n") });
   }
   const loads = loadSources(run);
   for (const l of loads.filter((x, i, all) => x.environment && all.findIndex((y) => y.environment && y.id === x.id) === i)) {
