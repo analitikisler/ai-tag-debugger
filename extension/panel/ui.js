@@ -26,7 +26,8 @@ export function icon(name, size = "") {
   svg.setAttribute("class", `i ${size}`.trim());
   svg.setAttribute("aria-hidden", "true");
   const use = document.createElementNS(SVG, "use");
-  use.setAttribute("href", `#${name}`);
+  // Sprite ids carry an "i-" prefix so they never clash with an element id (an input called "search").
+  use.setAttribute("href", `#i-${name}`);
   svg.append(use);
   return svg;
 }
