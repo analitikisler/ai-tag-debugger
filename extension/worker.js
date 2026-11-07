@@ -32,6 +32,15 @@ async function setActive(map) {
   await chrome.storage.session.set({ active: map });
   await syncScripts(map);
 }
+/** The reloaded page committed: from now on its requests and pushes are recorded. */
+async function arm(tabId) {
+  const map = await active();
+  if (!map[tabId]) return;
+  map[tabId] = { ...map[tabId], armed: true };
+  activeCache = { ...map };
+  await chrome.storage.session.set({ active: map });
+}
+
 async function recordingFor(tabId) {
   if (tabId === undefined || tabId < 0) return null;
   return (await active())[tabId] ?? null;
@@ -124,6 +133,9 @@ chrome.webRequest.onBeforeRequest.addListener(
     // Returning nothing keeps the request untouched; the work happens after.
     (async () => {
       const a = await recordingFor(details.tabId);
+      // Until the reloaded page commits, requests are the old page's goodbye (its user_engagement, sent under its
+      // consent), not part of the visit being recorded.
+      if (a?.armed === false) return;
       // A server container's or the tag gateway's /_/set_cookie call is kept too: it is how first-party cookies get set.
       if (!a || (!providerOf(details.url) && !/\/_\/set_cookie\/?(\?|$)/.test(details.url))) return;
       recorded.add(details.requestId);
@@ -159,6 +171,7 @@ chrome.webNavigation.onCommitted.addListener(async (d) => {
   if (d.frameId !== 0) return;
   const a = await recordingFor(d.tabId);
   if (!a) return;
+  if (a.armed === false) await arm(d.tabId);
   const m = messages(await language()).extension;
   await record(a.rec, { kind: "step", action: "navigate", url: d.url, label: m.stepOpened(pathOf(d.url)) }, d.tabId);
 });
@@ -205,7 +218,8 @@ async function start(tabId, url, providers = null, { reload = true, clearCookies
   const { plans = {} } = await chrome.storage.local.get("plans");
   await putRecording({ id: rec, host, site: u.origin, startedAt: now.getTime(), stoppedAt: null, lang: await language(), plan: plans[host] ?? null, providers: Array.isArray(providers) && providers.length ? providers.map(String) : null });
   await prune(host);
-  map[tabId] = { rec, origin: u.origin, host };
+  // With a reload the recording starts when the new page commits (see arm); without one it starts now.
+  map[tabId] = { rec, origin: u.origin, host, armed: !(reload || clearCookies) };
   await setActive(map);
   if (clearCookies) await clearSite(u.origin);
   await snapshotCookies(rec, tabId, url);
@@ -235,7 +249,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   // From bridge.js: an event the page hook saw. The page could send the same, so it is stored as data only.
   if (msg?.type === "page" && sender.tab && !fromExtensionPage) {
     recordingFor(sender.tab.id).then((a) => {
-      if (!a || !["push", "load", "message"].includes(msg.kind)) return;
+      if (!a || a.armed === false || !["push", "load", "message"].includes(msg.kind)) return;
       return record(a.rec, { kind: msg.kind, entry: msg.entry, frameUrl: String(msg.frameUrl ?? ""), top: sender.frameId === 0 }, sender.tab.id);
     }).catch(() => {});
     return false;

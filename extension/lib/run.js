@@ -125,7 +125,9 @@ export function buildRun(events, info) {
       step(String(e.label ?? "").slice(0, 120) || `Step ${steps.length}`, { t: e.t, action: e.action ?? "manual", ...(e.url ? { url: e.url } : {}) });
       continue;
     }
-    if (!steps.length) step(labels.start, { t: e.t, action: "start", url: topUrl });
+    // The cookie snapshot taken as recording starts belongs to the first page; anything else that comes before a
+    // page committed (a recording without a reload) gets a step of its own.
+    if (!steps.length && e.kind !== "cookies" && e.kind !== "page") step(labels.start, { t: e.t, action: "start", url: topUrl });
     const site = hostOf(topUrl);
     if (e.kind === "request") {
       const provider = providerOf(e.url);
@@ -222,6 +224,7 @@ export function buildRun(events, info) {
       continue;
     }
     if (e.kind === "page") {
+      if (!steps.length) continue;
       readPages = true;
       // Google's registry of the containers that ran, the preload hints, the Google tag's consent state and a page
       // that is a bot challenge or crashed: what AuditSession.observe reads after each step.

@@ -36,15 +36,16 @@ const EVENTS = [
 
 test("events become the CLI's run shape, one step per page load and named step", () => {
   // The first step's name comes from the strings (labelsFor), so a copy change there doesn't break the shape check.
-  assert.deepEqual(run.steps.map((s) => s.label), [lib.labelsFor("en").start, "Opened /", "Opened /product", "Added to cart"]);
-  assert.deepEqual(run.steps.map((s) => s.index), [0, 1, 2, 3]);
+  // The cookie snapshot taken as recording starts belongs to the first page, so no "before the first page" step.
+  assert.deepEqual(run.steps.map((s) => s.label), ["Opened /", "Opened /product", "Added to cart"]);
+  assert.deepEqual(run.steps.map((s) => s.index), [0, 1, 2]);
   for (const key of ["hits", "dataLayerLog", "network", "cookieLog", "cookieChanges", "containerLoads", "frameMessages", "providers", "pageErrors"]) assert.ok(Array.isArray(run[key]), key);
   assert.equal(run.completed, true);
   assert.equal(run.live, true, "a hand recording's hits reached the real accounts");
 });
 
 test("a GA4 batch gives one hit per event, on the step it was sent in", () => {
-  assert.deepEqual(run.hits.map((h) => [h.name, h.step]), [["page_view", 1], ["view_item", 2], ["scroll", 2], ["sign_up", 2]]);
+  assert.deepEqual(run.hits.map((h) => [h.name, h.step]), [["page_view", 0], ["view_item", 1], ["scroll", 1], ["sign_up", 1]]);
   assert.deepEqual(run.providers, ["ga4"]);
   assert.equal(run.hits[1].params.currency, "EUR");
 });
@@ -66,7 +67,7 @@ test("values stay as sent in the run, with user data marked, and redactRun repla
 });
 
 test("dataLayer pushes, container loads and cookie changes are recorded like the CLI records them", () => {
-  assert.deepEqual(run.dataLayerLog.map((p) => p.step), [1, 2]);
+  assert.deepEqual(run.dataLayerLog.map((p) => p.step), [0, 1]);
   assert.equal(run.containerLoads[0].id, "GTM-ABC123");
   assert.equal(run.containerLoads[0].page, "https://shop.example/product", "no query string");
   assert.deepEqual(run.cookieLog.map((c) => c.name), ["_ga", "_fbp"]);
@@ -221,4 +222,14 @@ test("steps are named after the page title, and a route change on the same path 
   const r = lib.buildRun(events, { site: "https://shop.example" });
   assert.deepEqual(r.steps.map((s) => s.label), ["Ana Sayfa", "Masalar", "Add to cart"]);
   assert.equal(lib.cleanTitle("Lina Yemek Masası | Örnek Mobilya"), "Lina Yemek Masası");
+});
+
+test("the cookie snapshot taken as recording starts opens no step of its own", () => {
+  const r = lib.buildRun([
+    { t: 1, seq: 1, kind: "cookies", cookies: [{ name: "_ga", domain: ".shop.example", hash: "a" }] },
+    { t: 5, seq: 2, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 9, seq: 3, kind: "request", requestId: "x", method: "GET", frameId: 0, url: `${GA}&en=page_view` },
+  ], { site: "https://shop.example" });
+  assert.deepEqual(r.steps.map((s) => s.label), ["Opened /"]);
+  assert.deepEqual(r.cookieLog.map((c) => `${c.name}@${c.step}`), ["_ga@0"]);
 });
