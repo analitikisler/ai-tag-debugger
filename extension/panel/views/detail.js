@@ -5,7 +5,7 @@ import { el, icon, button, copy, since, upper, infoButton, renderSoon } from "..
 import { groupsOf, isCustomParam, paramGroup, paramHint, paramLabel, paramTip, RECOMMENDED_ORDER } from "../../core/glossary.js";
 import { isUserDataKey, redactParams } from "../../core/redact.js";
 import { CONSENT_SIGNALS, decodeGcd } from "../../core/parsers.js";
-import { card, statePill, GOOGLE, sentBeforeConsent, cookieless } from "./common.js";
+import { aitsLink, aitsLogo, card, statePill, GOOGLE, sentBeforeConsent, cookieless } from "./common.js";
 import { itemsCard } from "./items.js";
 
 const VIEWS = ["readable", "all", "raw"];
@@ -97,7 +97,7 @@ function metaLine(row, step) {
     row.batch ? item(d.batch, d.batchOf(row.batch.index, row.batch.size)) : null,
     item(d.sent, `${since(row.t, step.t)} · ${stamp}`),
     ep ? item(d.endpoint, ep.kind === "gateway" ? `${m().routes.endpoint.gateway} → ${ep.to}` : m().routes.endpoint[ep.kind]) : null,
-    row.route && row.route.kind !== "google" ? item(d.via, el("span", { class: `route${row.route.kind === "direct" ? " direct" : ""}`, text: m().routes.badge[row.route.kind] }), ` ${row.route.host}`) : null);
+    row.route && row.route.kind !== "google" ? item(d.via, el("span", { class: `route${row.route.kind === "direct" ? " direct" : ""}` }, row.route.kind === "aits" ? aitsLogo(11) : null, m().routes.badge[row.route.kind]), ` ${row.route.host}`) : null);
 }
 
 function viewSwitch(row) {
@@ -180,7 +180,11 @@ function serverCard(row) {
   const sv = row.server;
   if (!sv) return null;
   const note = (text) => el("div", { class: "cfoot", text });
-  if (sv.waiting) return card(t.title, { key: `sv:${row.key}`, body: note(state.live ? t.waiting : t.missing) });
+  if (sv.detected) {
+    return card(t.title, { key: `sv:${row.key}`, right: aitsLogo(), body: el("div", { class: "cfoot" }, t.detected, " ",
+      button(t.connect, () => { state.layer = { kind: "server" }; render(); }, { cls: "linkbtn" }), el("br"), t.about, " ", aitsLink()) });
+  }
+  if (sv.waiting) return card(t.title, { key: `sv:${row.key}`, right: aitsLogo(), body: note(state.live ? t.waiting : t.missing) });
   const tone = (outcome) => (outcome === "success" ? "okc" : outcome === "skipped" ? "" : "warnc");
   const line = (cls, ico, ...text) => el("div", { class: `check-line ${cls}` }, ico ? icon(ico, "s") : null, el("span", {}, text));
   const tags = sv.tags.map((x) => line(tone(x.outcome), x.outcome === "success" ? "check" : x.outcome === "skipped" ? null : "warn",
@@ -189,7 +193,7 @@ function serverCard(row) {
   const sends = sv.sends.map((x) => line(x.status !== null && x.status < 400 ? "okc" : "warnc", x.status !== null && x.status < 400 ? "check" : "warn",
     el("span", { class: "mono", text: `${x.method ?? ""} ${x.to}` }), ` → ${x.status ?? x.error ?? "?"}`, x.from ? ` · ${x.from}` : ""));
   const client = sv.client ? t.claimedBy(sv.client) : t.noClient;
-  return card(t.title, { key: `sv:${row.key}`, right: sv.status ? String(sv.status) : null, body: [
+  return card(t.title, { key: `sv:${row.key}`, right: [aitsLogo(), sv.status ? ` ${sv.status}` : null], body: [
     note([client, sv.clientError ? ` (${sv.clientError})` : "", sv.error ? ` · ${sv.error}` : ""].join("")),
     sv.client ? [el("div", { class: "sec-sub", text: t.tags }), tags.length ? tags : note(t.noTags), notFired] : null,
     sends.length ? [el("div", { class: "sec-sub", text: t.sends }), sends] : null,

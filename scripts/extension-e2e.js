@@ -31,7 +31,7 @@ function tagServer(req, res, url) {
         logs: [], triggers: [{ event: 0, tag: "Meta CAPI", fired: false, enabled: true, conditions: [] }],
       },
     });
-    res.writeHead(204).end();
+    res.writeHead(204, { "x-tagging-server": "ai-tagging-server" }).end();
     return true;
   }
   if (!url.pathname.startsWith("/admin/api/traces")) return false;
@@ -208,6 +208,23 @@ try {
   const sstPanel = await context.newPage();
   sstPanel.on("pageerror", (e) => errors.push(e.message));
   await sstPanel.goto(`chrome-extension://${id}/panel/panel.html?tab=${sstTabId}`);
+  // Not connected yet: the server's header alone marks the hit as an ai tagging server's and offers to connect.
+  await sstPanel.click("#startOver");
+  await sstPanel.click("#resetGo");
+  await sstPanel.click("#record");
+  await sstPanel.waitForSelector("#stop:not([hidden])");
+  await sstTab.waitForLoadState("load");
+  await sstTab.waitForTimeout(1500);
+  await sstPanel.click("#stop");
+  await sstPanel.waitForTimeout(500);
+  const named = await sstPanel.evaluate(async () => {
+    const { listRecordings, getEvents } = await import("../lib/store.js");
+    const { buildModel } = await import("./model.js");
+    const [rec] = await listRecordings();
+    const row = buildModel(await getEvents(rec.id)).rows.find((r) => r.kind === "hit" && r.e.url.includes("G-SST1"));
+    return { route: row?.route?.kind, server: row?.server };
+  });
+  assert.deepEqual(named, { route: "aits", server: { detected: true } }, "the header names the server");
   await sstPanel.click("#more");
   await sstPanel.click("text=ai tagging server…");
   await sstPanel.fill("#srvUrl", base);
@@ -243,7 +260,10 @@ try {
   await sstPanel.click("#tab-events").catch(() => {});
   await sstPanel.locator(".ev", { hasText: "page_view" }).first().click();
   await sstPanel.waitForSelector("text=Claimed by GA4", { timeout: 5000 });
-  if (process.argv.includes("--shots")) await sstPanel.screenshot({ path: path.join(process.cwd(), "sst-panel.png"), fullPage: true });
+  if (process.argv.includes("--shots")) {
+    await sstPanel.click(".rc-h");
+    await sstPanel.screenshot({ path: path.join(process.cwd(), "sst-panel.png"), fullPage: true });
+  }
   assert.deepEqual(errors, [], "no errors in the panel");
 
   console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out; the ai tagging server's trace landed under its hit`);

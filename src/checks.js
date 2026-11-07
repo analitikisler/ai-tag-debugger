@@ -395,7 +395,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }).filter((p) => p.server.length);
     // Only name the platforms whose server-side copies this run would have checked.
     const unseenServer = ["meta", "tiktok"].filter((p) => !run.providers || run.providers.includes(p)).map(platformName);
-    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) });
+    // The ai tagging server names itself on its responses, so the report can say which server it is.
+    const aits = (run.network ?? []).some((c) => c.serverSoftware === "ai-tagging-server");
+    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) + (aits ? ` ${d.serverIsAits}` : "") });
   }
   const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
   // Server containers the browser talked to: GA4 hits on a non-Google host, and GTM or gtag.js

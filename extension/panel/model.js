@@ -141,6 +141,7 @@ export function planCheck(hit, plan, items) {
 export function buildModel(events, { platforms = null, plan = null } = {}) {
   const sorted = [...events].sort((a, b) => a.t - b.t || (a.seq ?? 0) - (b.seq ?? 0));
   const status = new Map(sorted.filter((e) => e.kind === "status").map((e) => [e.requestId, e.status]));
+  const software = new Map(sorted.filter((e) => e.kind === "status" && e.software).map((e) => [e.requestId, e.software]));
   const chosen = platforms?.length ? new Set(platforms) : null;
   const steps = [];
   const rows = [];
@@ -288,13 +289,14 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     if (r.route?.kind === "gateway" && r.endpoint?.kind === "server") r.endpoint = { kind: "gateway", to: r.platform === "ga4" ? "www.google-analytics.com/g/collect" : "www.googleadservices.com/pagead/" };
   }
   // What the ai tagging server did with each hit sent to it; a hit to it with no trace yet is waiting for one.
+  // A hit whose response named the ai tagging server is its hit too, connected or not: the panel offers to connect.
   for (const r of rows) {
-    if (!server || r.kind !== "hit") continue;
-    const onServer = originOf(r.e.url) === server.url;
-    if (!onServer) continue;
+    if (r.kind !== "hit") continue;
+    const onServer = Boolean(server) && originOf(r.e.url) === server.url;
+    if (!onServer && software.get(r.e.requestId) !== "ai-tagging-server") continue;
     const trace = traces.get(r.e.requestId);
-    r.server = trace ? traceForEvent(trace, (r.batch?.index ?? 1) - 1) : { waiting: true };
-    // The connection test already said this origin is an ai tagging server.
+    r.server = trace ? traceForEvent(trace, (r.batch?.index ?? 1) - 1) : onServer ? { waiting: true } : { detected: true };
+    // Either the connection test or the server's own header said this origin is an ai tagging server.
     r.route = { kind: "aits", host: hostOf(r.e.url), firstParty: Boolean(pageHost) && siteOf(hostOf(r.e.url) ?? "") === siteOf(pageHost) };
   }
   const counts = {};

@@ -159,12 +159,17 @@ chrome.webRequest.onCompleted.addListener((d) => {
   recordingFor(d.tabId).then((a) => a && record(a.rec, { kind: "doc", url: d.url, status: d.statusCode }, d.tabId)).catch(() => {});
 }, { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] });
 
-const onDone = (details, status) => {
+// A server container that names itself (the ai tagging server's x-tagging-server header): the name only.
+const softwareOf = (headers) => {
+  const v = headers?.find((h) => h.name.toLowerCase() === "x-tagging-server")?.value ?? "";
+  return /^[\w.-]{1,40}$/.test(v) ? v : null;
+};
+const onDone = (details, status, software = null) => {
   if (!recorded.has(details.requestId)) return;
   recorded.delete(details.requestId);
-  recordingFor(details.tabId).then((a) => a && record(a.rec, { kind: "status", requestId: details.requestId, status })).catch(() => {});
+  recordingFor(details.tabId).then((a) => a && record(a.rec, { kind: "status", requestId: details.requestId, status, ...(software ? { software } : {}) })).catch(() => {});
 };
-chrome.webRequest.onCompleted.addListener((d) => onDone(d, d.statusCode), { urls: ["http://*/*", "https://*/*"] });
+chrome.webRequest.onCompleted.addListener((d) => onDone(d, d.statusCode, softwareOf(d.responseHeaders)), { urls: ["http://*/*", "https://*/*"] }, ["responseHeaders"]);
 chrome.webRequest.onErrorOccurred.addListener((d) => onDone(d, "failed"), { urls: ["http://*/*", "https://*/*"] });
 
 // ---------- navigation ----------

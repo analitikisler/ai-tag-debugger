@@ -108,7 +108,8 @@ export function buildRun(events, info) {
   };
   const step = (label, extra = {}) => steps.push({ index: steps.length, label, ...extra });
 
-  for (const e of sorted) if (e.kind === "status") statuses.set(e.requestId, e.status);
+  const software = new Map(); // requestId -> the server software a response named
+  for (const e of sorted) if (e.kind === "status") { statuses.set(e.requestId, e.status); if (e.software) software.set(e.requestId, e.software); }
 
   for (const e of sorted) {
     if (e.kind === "step") {
@@ -162,6 +163,7 @@ export function buildRun(events, info) {
         step: current(), pageUrl: topUrl, t: e.t, method: e.method ?? "GET", url: e.url, type: e.type ?? "other",
         vendor: vendorOf(e.url), provider: provider.key, ...body, blocked: false,
         status: statuses.has(e.requestId) ? statuses.get(e.requestId) : null, ...(frame ? { frame } : {}),
+        ...(software.has(e.requestId) ? { serverSoftware: software.get(e.requestId) } : {}),
       };
       if (add("network", network, call)) calls.set(e.requestId, call);
       continue;

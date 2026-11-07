@@ -583,6 +583,9 @@ export class AuditSession {
       const call = calls.get(response.request());
       if (!call) return;
       call.status = response.status();
+      // A server container that names itself (the ai tagging server's x-tagging-server header): the name only.
+      const software = response.headers()["x-tagging-server"];
+      if (software && /^[\w.-]{1,40}$/.test(software)) call.serverSoftware = software;
       // A consent platform's script or setup file date tells which build of its setup the site serves. Setup files
       // (OneTrust's, Cookiebot's) are fetched by script rather than loaded as one.
       if (call.provider === "consent" && ["script", "fetch", "xhr"].includes(call.type)) {

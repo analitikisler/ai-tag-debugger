@@ -112,3 +112,13 @@ export function card(title, { count = null, right = null, key = null, openDefaul
 }
 
 export { since };
+
+/** The ai tagging server's app icon, beside its name wherever the panel shows it. */
+export function aitsLogo(size = 14) {
+  return el("img", { class: "aits-logo", src: "../icons/ai-tagging-server.svg", width: String(size), height: String(size), alt: "" });
+}
+
+/** A link to the ai tagging server's repository, opened in a new tab. */
+export function aitsLink() {
+  return el("a", { href: "https://github.com/analitikisler/ai-tagging-server", target: "_blank", rel: "noopener", text: m().server.link });
+}

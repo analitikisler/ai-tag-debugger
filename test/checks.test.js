@@ -212,3 +212,11 @@ test("planned GA4 automatic events are read from their flags and are never missi
   assert.ok(!none.some((f) => f.check === "missing_event"));
   assert.equal(none.filter((f) => f.check === "ga4_automatic_event").length, 3);
 });
+
+test("the server-side finding names the ai tagging server when its responses say so", () => {
+  const hit = { platform: "ga4", name: "page_view", delivery: "server", id: "G-1", params: {}, url: "https://sst.shop.example/g/collect?_p=1", step: 1 };
+  const base = { journeyId: "j", viewport: "desktop", completed: true, steps: [{ index: 0, label: "start" }, { index: 1, label: "Home" }], consentStep: 1, dataLayerLog: [], hits: [hit] };
+  const side = (network) => checkRun({ events: [] }, { ...base, network }).find((f) => f.check === "server_side").detail;
+  assert.match(side([{ url: hit.url, serverSoftware: "ai-tagging-server" }]), /ai tagging server/);
+  assert.doesNotMatch(side([{ url: hit.url }]), /ai tagging server/);
+});

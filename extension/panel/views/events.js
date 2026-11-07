@@ -3,7 +3,7 @@
 import { state, m, render, actions } from "../state.js";
 import { el, icon, button, since, secs, renderSoon } from "../ui.js";
 import { BADGE, matchRow, routesOf } from "../model.js";
-import { badge, stepBlock, summaryOf, consentWords, GOOGLE } from "./common.js";
+import { aitsLogo, badge, stepBlock, summaryOf, consentWords, GOOGLE } from "./common.js";
 import { hitDetail } from "./detail.js";
 import { routesCard } from "./routes.js";
 import { platformName } from "./setup.js";
@@ -141,7 +141,7 @@ function routeBadge(row) {
   const kind = row.route?.kind;
   if (!kind || kind === "google") return null;
   const rt = m().routes;
-  return el("span", { class: `route${kind === "direct" ? " direct" : ""}`, title: rt.tip(kind, row.route.host, row.route.firstParty), text: rt.badge[kind] });
+  return el("span", { class: `route${kind === "direct" ? " direct" : ""}`, title: rt.tip(kind, row.route.host, row.route.firstParty) }, kind === "aits" ? aitsLogo(11) : null, rt.badge[kind]);
 }
 
 function checkIcon(row) {

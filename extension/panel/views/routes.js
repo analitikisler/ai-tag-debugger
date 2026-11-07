@@ -2,7 +2,7 @@
 // Google for a property that also has a server route (a leak), then the pixels that go to their own vendors.
 import { state, m, render } from "../state.js";
 import { el, icon, since, upper } from "../ui.js";
-import { badge } from "./common.js";
+import { aitsLink, aitsLogo, badge } from "./common.js";
 
 const line = (k, ...v) => [el("span", { class: "k", text: k }), el("span", {}, v)];
 
@@ -24,6 +24,9 @@ function block(b, model) {
     rows.push(...line(rt.why, el("span", { style: { color: "var(--warning)" } }, "⚠ ", b.beforeConfig ? rt.leakWhy : rt.leakWhyGeneric)));
   } else {
     rows.push(...line(rt.setBy, b.config ? [el("span", { class: "mono", text: b.config.key }), " ", rt.setByConfig(b.config.push.index + 1)] : rt.setByGtm));
+    // Ours, named: what it is. Someone else's server container: the open-source one that does the same job.
+    if (b.kind === "aits") rows.push(...line(m().server.title, m().server.about, " ", aitsLink()));
+    else if (["sgtm", "stape", "elevar"].includes(b.kind)) rows.push(...line(m().server.alternative, aitsLogo(12), " ", m().server.alternativeText, " ", aitsLink()));
     rows.push(...line(m().tabs.consent, b.noConsent ? el("span", { style: { color: "var(--warning)" } }, `⚠ ${rt.consentMissing(b.noConsent)}`) : rt.consentOk));
     if (b.cookies.length) {
       rows.push(...line(rt.cookies, b.cookies.map((c) => el("span", {}, el("span", { class: "ck", text: c.name }), " ")),
@@ -31,7 +34,7 @@ function block(b, model) {
     }
   }
   return el("div", { class: "dest" },
-    el("div", { class: "dh" }, el("span", { class: `route${b.kind === "direct" ? " direct" : ""}`, text: rt.badge[b.kind] }), el("b", { title: b.host, text: b.host }), el("span", { class: "n", text: rt.hits(b.hits) })),
+    el("div", { class: "dh" }, el("span", { class: `route${b.kind === "direct" ? " direct" : ""}` }, b.kind === "aits" ? aitsLogo(11) : null, rt.badge[b.kind]), el("b", { title: b.host, text: b.host }), el("span", { class: "n", text: rt.hits(b.hits) })),
     el("div", { class: "dl2" }, rows));
 }
 

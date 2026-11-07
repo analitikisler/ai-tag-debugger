@@ -94,3 +94,19 @@ test("the panel shows the server's trace under the hit it belongs to, and waits 
   const plain = M.buildModel(events.filter((e) => !e.kind.startsWith("server")));
   assert.ok(plain.rows.every((r) => r.server === undefined && r.route?.kind !== "aits"));
 });
+
+test("a hit whose response named the ai tagging server is marked as its hit, and offers to connect", () => {
+  const events = [
+    { t: 110, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 200, seq: 2, kind: "request", requestId: "r1", method: "GET", url: "https://sst.shop.example/g/collect?v=2&tid=G-1&cid=9.9&en=page_view" },
+    { t: 250, seq: 3, kind: "status", requestId: "r1", status: 204, software: "ai-tagging-server" },
+    { t: 300, seq: 4, kind: "request", requestId: "r2", method: "GET", url: "https://sgtm.other.example/g/collect?v=2&tid=G-1&cid=9.9&en=scroll" },
+    { t: 350, seq: 5, kind: "status", requestId: "r2", status: 204 },
+  ];
+  const model = M.buildModel(events);
+  const [ours, theirs] = model.rows.filter((r) => r.kind === "hit");
+  assert.equal(ours.route.kind, "aits");
+  assert.deepEqual(ours.server, { detected: true });
+  assert.equal(theirs.route.kind, "sgtm");
+  assert.equal(theirs.server, undefined);
+});
