@@ -14,9 +14,46 @@ import { copyCore } from "./extension.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHOP = path.join(ROOT, "examples", "demo-shop");
 
+// A stand-in for the ai tagging server: /g/collect keeps a trace of each hit, and the admin API answers with them in
+// the shape the real server uses (src/traces.rs there), behind the same bearer token check.
+const ADMIN_TOKEN = "e2e-admin-token";
+const traces = [];
+function tagServer(req, res, url) {
+  if (url.pathname === "/g/collect") {
+    const id = traces.length + 1;
+    traces.push({
+      id, at: Date.now(), status: 204, error: null,
+      request: { method: req.method, path: url.pathname, query: url.search.slice(1), headers: [], body: "" },
+      result: {
+        claimed_by: "GA4", client_error: null, response: { status: 204 }, events: [{ event_name: url.searchParams.get("en") }],
+        tags: [{ tag: "GA4", event: 0, outcome: "success", error: null }],
+        sends: [{ from: "GA4", method: "POST", url: "https://region1.google-analytics.com/g/collect", result: { Ok: 204 } }],
+        logs: [], triggers: [{ event: 0, tag: "Meta CAPI", fired: false, enabled: true, conditions: [] }],
+      },
+    });
+    res.writeHead(204).end();
+    return true;
+  }
+  if (!url.pathname.startsWith("/admin/api/traces")) return false;
+  if (req.headers.authorization !== `Bearer ${ADMIN_TOKEN}`) { res.writeHead(401).end(); return true; }
+  const json = (v) => res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(v));
+  const one = /^\/admin\/api\/traces\/(\d+)$/.exec(url.pathname);
+  if (one) return json(traces[Number(one[1]) - 1]), true;
+  const after = Number(url.searchParams.get("after") ?? 0);
+  json({ traces: traces.filter((t) => t.id > after).reverse().map((t) => ({ id: t.id, at: t.at, path: t.request.path })), latest: traces.length, oldest: traces.length ? 1 : null });
+  return true;
+}
+
 function serveShop() {
   const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
   const server = createServer(async (req, res) => {
+    if (tagServer(req, res, new URL(req.url, "http://x"))) return;
+    // A page whose Google tag sends to the site's own server container, as server_container_url makes it.
+    if (new URL(req.url, "http://x").pathname === "/sst.html") {
+      return res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`<!doctype html><title>Server</title><script>
+fetch("/g/collect?v=2&tid=G-SST1&cid=9.9&_p=" + Date.now() + "&_s=1&en=page_view", { keepalive: true });
+</script>`);
+    }
     // A page that sends a GA4 hit as it is left, as gtag's user_engagement does, named after which load of the
     // page sent it, so the recording can tell the page it reloads from the page it records.
     if (new URL(req.url, "http://x").pathname === "/beacon.html") {
@@ -164,7 +201,52 @@ try {
   assert.ok(beaconHits.includes("page_view_load_2"), `the reloaded page's hit is recorded (${beaconHits.join(", ")})`);
   assert.ok(!beaconHits.includes("goodbye_load_1"), `the page being left is not (${beaconHits.join(", ")})`);
 
-  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out`);
+  // The ai tagging server: connected for the site in the panel, its trace of the page's hit lands under that hit.
+  const sstTab = await context.newPage();
+  await sstTab.goto(`${base}/sst.html`);
+  const sstTabId = await worker.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/sst.html` }))[0].id, base);
+  const sstPanel = await context.newPage();
+  sstPanel.on("pageerror", (e) => errors.push(e.message));
+  await sstPanel.goto(`chrome-extension://${id}/panel/panel.html?tab=${sstTabId}`);
+  await sstPanel.click("#more");
+  await sstPanel.click("text=ai tagging server…");
+  await sstPanel.fill("#srvUrl", base);
+  await sstPanel.fill("#srvToken", "wrong");
+  await sstPanel.click("#srvSave");
+  await sstPanel.waitForSelector("text=The admin token was refused.");
+  await sstPanel.fill("#srvToken", ADMIN_TOKEN);
+  await sstPanel.click("#srvSave");
+  await sstPanel.waitForSelector(`text=Connected to ${base}`);
+  await sstPanel.keyboard.press("Escape");
+  await sstPanel.click(".sheet .btn:not(.primary):not(#srvRemove)").catch(() => {});
+  await sstPanel.click("#startOver");
+  await sstPanel.click("#resetGo");
+  await sstPanel.click("#record");
+  await sstPanel.waitForSelector("#stop:not([hidden])");
+  await sstTab.waitForLoadState("load");
+  await sstTab.waitForTimeout(4000);
+  await sstPanel.click("#stop");
+  await sstPanel.waitForTimeout(2500);
+  const sst = await sstPanel.evaluate(async () => {
+    const { listRecordings, getEvents } = await import("../lib/store.js");
+    const { buildModel } = await import("./model.js");
+    const [rec] = await listRecordings();
+    const model = buildModel(await getEvents(rec.id));
+    const row = model.rows.find((r) => r.kind === "hit" && r.e.url.includes("G-SST1"));
+    return { route: row?.route?.kind, client: row?.server?.client, sends: row?.server?.sends?.map((x) => `${x.to} ${x.status}`), notFired: row?.server?.notFired?.map((x) => x.tag) };
+  });
+  assert.equal(sst.route, "aits", `the hit is marked as sent to the ai tagging server (${JSON.stringify(sst)})`);
+  assert.equal(sst.client, "GA4");
+  assert.deepEqual(sst.sends, ["region1.google-analytics.com/g/collect 204"]);
+  assert.deepEqual(sst.notFired, ["Meta CAPI"]);
+  // Opened, the hit shows the server's card.
+  await sstPanel.click("#tab-events").catch(() => {});
+  await sstPanel.locator(".ev", { hasText: "page_view" }).first().click();
+  await sstPanel.waitForSelector("text=Claimed by GA4", { timeout: 5000 });
+  if (process.argv.includes("--shots")) await sstPanel.screenshot({ path: path.join(process.cwd(), "sst-panel.png"), fullPage: true });
+  assert.deepEqual(errors, [], "no errors in the panel");
+
+  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out; the ai tagging server's trace landed under its hit`);
 } finally {
   await context?.close();
   server.close();

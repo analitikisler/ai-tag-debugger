@@ -17,7 +17,7 @@ import { dataLayerToolbar, dataLayerList, visiblePushes } from "./views/datalaye
 import { consentView, consentDot } from "./views/consent.js";
 import { findingsView, findingCards, coverageOf } from "./views/findings.js";
 import { historyView } from "./views/history.js";
-import { menu, resetSheet, shortcutsSheet, notWebView } from "./views/layers.js";
+import { menu, resetSheet, serverSheet, shortcutsSheet, notWebView } from "./views/layers.js";
 import { installKeys } from "./keys.js";
 
 const TABS = ["events", "dataLayer", "consent", "findings", "history"];
@@ -133,6 +133,7 @@ async function enterHost(host) {
   state.setup.reload = setupOptions.reload ?? true;
   state.setup.clear = setupOptions.clear ?? false;
   state.setup.denied = false;
+  state.serverUrl = (await send({ type: "serverGet", host })).url ?? null;
   state.setup.detected = [];
   state.setup.remembered = Array.isArray(platforms[host]);
   state.setup.platforms = state.setup.remembered ? platforms[host].filter((k) => OFFERED.includes(k)) : [...DEFAULT_PLATFORMS];
@@ -315,10 +316,11 @@ function renderLayers(mdl) {
   if (l.kind === "menu") nodes = menu();
   else if (l.kind === "reset") nodes = resetSheet();
   else if (l.kind === "shortcuts") nodes = shortcutsSheet();
+  else if (l.kind === "server") nodes = serverSheet();
   else if (l.kind === "notSelected") nodes = [el("div", { class: "scrim", style: { background: "transparent" }, onclick: () => { state.layer = null; render(); } }), notSelectedPopover(mdl)];
   const wrap = el("div", { class: "layer" }, nodes);
   $("app").append(wrap);
-  wrap.querySelector(l.kind === "reset" ? "#resetGo" : ".mi, .sheet button, .popover button")?.focus();
+  wrap.querySelector(l.kind === "reset" ? "#resetGo" : l.kind === "server" ? "#srvUrl" : ".mi, .sheet button, .popover button")?.focus();
 }
 
 /** The focused control, so a render that rebuilds it can put the focus back where it was. */
@@ -479,6 +481,16 @@ function applyTheme() {
 Object.assign(actions, {
   model,
   analysis: runAnalysis,
+
+  async serverSave(url, token) {
+    const r = await send({ type: "serverSave", host: state.setup.host, url, token });
+    if (r.ok) state.serverUrl = r.url;
+    return r.ok ? r : { ok: false, error: r.error ?? "network" };
+  },
+  async serverRemove() {
+    await send({ type: "serverRemove", host: state.setup.host });
+    state.serverUrl = null;
+  },
 
   tourTo(i) { state.tour = i; state.layer = null; render(); requestAnimationFrame(() => requestAnimationFrame(() => $("obTitle")?.focus())); },
   async finishTour(granted) {

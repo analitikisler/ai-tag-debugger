@@ -174,6 +174,28 @@ function consentCard(row, model) {
   });
 }
 
+/** What the connected ai tagging server did with this hit: the client, each tag's outcome, and each send. */
+function serverCard(row) {
+  const t = m().server;
+  const sv = row.server;
+  if (!sv) return null;
+  const note = (text) => el("div", { class: "cfoot", text });
+  if (sv.waiting) return card(t.title, { key: `sv:${row.key}`, body: note(state.live ? t.waiting : t.missing) });
+  const tone = (outcome) => (outcome === "success" ? "okc" : outcome === "skipped" ? "" : "warnc");
+  const line = (cls, ico, ...text) => el("div", { class: `check-line ${cls}` }, ico ? icon(ico, "s") : null, el("span", {}, text));
+  const tags = sv.tags.map((x) => line(tone(x.outcome), x.outcome === "success" ? "check" : x.outcome === "skipped" ? null : "warn",
+    el("b", { text: x.tag }), ` · ${t.outcome[x.outcome] ?? x.outcome}`, x.skip ? ` (${x.skip})` : "", x.error ? ` (${x.error})` : ""));
+  const notFired = sv.notFired.length ? note(t.notFired(sv.notFired.map((x) => (x.enabled ? x.tag : `${x.tag} (${t.off})`)).join(", "))) : null;
+  const sends = sv.sends.map((x) => line(x.status !== null && x.status < 400 ? "okc" : "warnc", x.status !== null && x.status < 400 ? "check" : "warn",
+    el("span", { class: "mono", text: `${x.method ?? ""} ${x.to}` }), ` → ${x.status ?? x.error ?? "?"}`, x.from ? ` · ${x.from}` : ""));
+  const client = sv.client ? t.claimedBy(sv.client) : t.noClient;
+  return card(t.title, { key: `sv:${row.key}`, right: sv.status ? String(sv.status) : null, body: [
+    note([client, sv.clientError ? ` (${sv.clientError})` : "", sv.error ? ` · ${sv.error}` : ""].join("")),
+    sv.client ? [el("div", { class: "sec-sub", text: t.tags }), tags.length ? tags : note(t.noTags), notFired] : null,
+    sends.length ? [el("div", { class: "sec-sub", text: t.sends }), sends] : null,
+  ] });
+}
+
 function pageSession(row) {
   const d = m().detail;
   const keys = ["dl", "dr", "dt", "cid", "sid", "sct", "seg", "_fv", "_ss", "_nsi", "dma", "npa"];
@@ -249,7 +271,7 @@ function genericParams(row) {
 
 function readable(row, model) {
   if (row.kind === "call") return [requestCard(row)];
-  const out = [planCard(row)];
+  const out = [planCard(row), serverCard(row)];
   if (row.platform === "ga4") out.push(eventParams(row), userProps(row), row.items.length ? itemsCard(row) : null, consentCard(row, model), pageSession(row));
   else if (row.platform === "meta") out.push(...metaCards(row), consentCard(row, model));
   else if (row.platform === "google_ads") out.push(...adsCards(row, model), consentCard(row, model));

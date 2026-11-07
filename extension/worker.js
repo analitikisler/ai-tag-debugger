@@ -9,6 +9,7 @@ import { containersInPage, googleConsentStateInPage, pageProblemInPage } from ".
 import { detectCmpInPage } from "./core/cmp.js";
 import { bodyText } from "./lib/body.js";
 import { addEvents, deleteRecording, prune, putRecording, getRecording } from "./lib/store.js";
+import { POLL_LIMIT, isTraceList, matchTrace, mayMatch, serverOrigin, slimTrace } from "./lib/server.js";
 
 const SCRIPT_IDS = ["aitd-bridge", "aitd-hook"];
 
@@ -145,6 +146,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         type: details.type === "xmlhttprequest" ? "xhr" : details.type === "main_frame" || details.type === "sub_frame" ? "document" : details.type,
         frameId: details.frameId, initiator: details.initiator ?? null, ...(body !== null ? { body } : {}),
       }, details.tabId);
+      if (a.server && new URL(details.url).origin === a.server) await expectTrace(a.rec, details);
     })().catch(() => {});
   },
   { urls: ["http://*/*", "https://*/*"] },
@@ -206,6 +208,107 @@ async function clearSite(origin) {
   await chrome.browsingData.remove({ origins: [origin] }, { cookies: true, localStorage: true, cacheStorage: true, indexedDB: true, serviceWorkers: true }).catch(() => {});
 }
 
+// ---------- the ai tagging server ----------
+
+/** The server connected for a site, { url, token }, kept on this computer only. */
+async function serverFor(host) {
+  const { servers = {} } = await chrome.storage.local.get("servers");
+  return servers[host] ?? null;
+}
+
+/** GET on the server's admin API with its token. The token goes to that server only, never anywhere else. */
+async function adminGet(srv, path) {
+  const res = await fetch(`${srv.url}${path}`, { headers: { authorization: `Bearer ${srv.token}` }, credentials: "omit", cache: "no-store" });
+  if (!res.ok) throw Object.assign(new Error(String(res.status)), { status: res.status });
+  return res.json();
+}
+
+/** Whether these details reach an ai tagging server: the latest trace id, or why not ("401", "404", "network"). */
+async function testServer(url, token) {
+  const origin = serverOrigin(url);
+  if (!origin) return { ok: false, error: "url" };
+  try {
+    const json = await adminGet({ url: origin, token }, "/admin/api/traces?limit=1");
+    return isTraceList(json) ? { ok: true, url: origin, latest: json.latest } : { ok: false, error: "not" };
+  } catch (err) {
+    return { ok: false, error: err.status ? String(err.status) : "network" };
+  }
+}
+
+const traceKey = (rec) => `srv:${rec}`;
+const polls = new Map(); // rec -> timer
+// Requests arrive in bursts while a poll runs; one at a time, so neither overwrites the other's pending list.
+let serverQueue = Promise.resolve();
+const serially = (fn) => (...args) => (serverQueue = serverQueue.then(() => fn(...args)).catch(() => {}));
+
+/** A request to the server this recording sent: its trace is fetched on the next poll. */
+const expectTrace = serially(async (rec, details) => {
+  const key = traceKey(rec);
+  const s = (await chrome.storage.session.get(key))[key];
+  if (!s) return;
+  const u = new URL(details.url);
+  s.pending = [...s.pending.slice(-199), { requestId: details.requestId, path: u.pathname, query: u.search.slice(1), t: Date.now() }];
+  await chrome.storage.session.set({ [key]: s });
+  schedulePoll(rec, 1500);
+});
+
+function schedulePoll(rec, ms) {
+  if (polls.has(rec)) return;
+  polls.set(rec, setTimeout(() => { polls.delete(rec); pollTraces(rec).catch(() => {}); }, ms));
+}
+
+/**
+ * Reads the traces newer than the last one seen and keeps those of this recording's requests, matched by path and
+ * query (see matchTrace). Requests still without a trace are asked about again for 30 seconds.
+ */
+const pollTraces = serially(async (rec) => {
+  const key = traceKey(rec);
+  const s = (await chrome.storage.session.get(key))[key];
+  if (!s?.pending.length) return;
+  const srv = await serverFor(s.host);
+  if (!srv) return;
+  let list;
+  try {
+    list = await adminGet(srv, `/admin/api/traces?after=${s.last}&limit=${POLL_LIMIT}`);
+  } catch (err) {
+    return setStatus(rec, s, "error", err.status ? String(err.status) : "network");
+  }
+  if (!isTraceList(list)) return setStatus(rec, s, "error", "not");
+  // Newest first from the server; oldest first here, so a request takes the first trace that fits it.
+  for (const summary of [...list.traces].reverse()) {
+    if (!mayMatch(summary, s.pending)) continue;
+    const detail = await adminGet(srv, `/admin/api/traces/${summary.id}`).catch(() => null);
+    const hit = detail && matchTrace(detail, s.pending);
+    if (!hit) continue;
+    s.pending = s.pending.filter((p) => p !== hit);
+    await record(rec, { kind: "server", requestId: hit.requestId, trace: slimTrace(detail) });
+  }
+  s.last = Math.max(s.last, list.latest);
+  s.pending = s.pending.filter((p) => Date.now() - p.t < 30_000);
+  if (s.status !== "ok") await setStatus(rec, s, "ok");
+  await chrome.storage.session.set({ [key]: s });
+  if (s.pending.length) schedulePoll(rec, 2000);
+});
+
+async function setStatus(rec, s, status, detail = null) {
+  if (s.status === status && s.detail === detail) return;
+  s.status = status;
+  s.detail = detail;
+  await chrome.storage.session.set({ [traceKey(rec)]: s });
+  await record(rec, { kind: "serverStatus", url: s.url, state: status, detail });
+}
+
+/** At the start of a recording: older traces are not this recording's, so polling starts after the latest. */
+async function connectServer(rec, host) {
+  const srv = await serverFor(host);
+  if (!srv) return null;
+  const test = await testServer(srv.url, srv.token);
+  const s = { host, url: srv.url, last: test.latest ?? 0, pending: [], status: null, detail: null };
+  await chrome.storage.session.set({ [traceKey(rec)]: s });
+  await setStatus(rec, s, test.ok ? "ok" : "error", test.ok ? null : test.error);
+  return srv.url;
+}
+
 async function start(tabId, url, providers = null, { reload = true, clearCookies = false } = {}) {
   const u = new URL(url);
   const map = await active();
@@ -219,7 +322,8 @@ async function start(tabId, url, providers = null, { reload = true, clearCookies
   await putRecording({ id: rec, host, site: u.origin, startedAt: now.getTime(), stoppedAt: null, lang: await language(), plan: plans[host] ?? null, providers: Array.isArray(providers) && providers.length ? providers.map(String) : null });
   await prune(host);
   // With a reload the recording starts when the new page commits (see arm); without one it starts now.
-  map[tabId] = { rec, origin: u.origin, host, armed: !(reload || clearCookies) };
+  const server = await connectServer(rec, host).catch(() => null);
+  map[tabId] = { rec, origin: u.origin, host, armed: !(reload || clearCookies), ...(server ? { server } : {}) };
   await setActive(map);
   if (clearCookies) await clearSite(u.origin);
   await snapshotCookies(rec, tabId, url);
@@ -236,6 +340,16 @@ async function stop(tabId) {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab?.url) await snapshotCookies(a.rec, tabId, tab.url);
   await readPage(a.rec, tabId).catch(() => {});
+  // The last hits' traces: the server records a hit once its sends are answered, so give it a moment.
+  if (a.server) {
+    clearTimeout(polls.get(a.rec));
+    polls.delete(a.rec);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await pollTraces(a.rec).catch(() => {});
+    clearTimeout(polls.get(a.rec));
+    polls.delete(a.rec);
+    await chrome.storage.session.remove(traceKey(a.rec));
+  }
   delete map[tabId];
   await setActive(map);
   const recording = await getRecording(a.rec);
@@ -276,6 +390,21 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       return { ok: true };
     }
     if (msg.type === "state") return { recording: await recordingFor(msg.tabId) };
+    // The ai tagging server for a site: test and save, forget, or say which one is saved (never its token).
+    if (msg.type === "serverSave") {
+      const test = await testServer(msg.url, String(msg.token ?? ""));
+      if (!test.ok) return test;
+      const { servers = {} } = await chrome.storage.local.get("servers");
+      await chrome.storage.local.set({ servers: { ...servers, [String(msg.host)]: { url: test.url, token: String(msg.token) } } });
+      return test;
+    }
+    if (msg.type === "serverRemove") {
+      const { servers = {} } = await chrome.storage.local.get("servers");
+      delete servers[String(msg.host)];
+      await chrome.storage.local.set({ servers });
+      return { ok: true };
+    }
+    if (msg.type === "serverGet") return { url: (await serverFor(String(msg.host)))?.url ?? null };
     if (msg.type === "active") return { active: await active() };
     return { error: "unknown message" };
   };

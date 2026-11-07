@@ -1050,12 +1050,32 @@ const en = {
         commerce: "Commerce", variables: "Variables", visitor: "Visitor",
       },
     },
+    server: {
+      title: "ai tagging server", menu: "ai tagging server…",
+      claimedBy: (client) => `Claimed by ${client}`,
+      noClient: "No client claimed this hit, so no tag ran.",
+      outcome: { success: "sent", failure: "failed", exception: "error", timeout: "timed out", skipped: "skipped" },
+      tags: "Tags", sends: "Sent onward", noTags: "No tag fired for this event.",
+      notFired: (list) => `Did not fire (conditions not met): ${list}`, off: "off",
+      waiting: "Waiting for the server's trace of this hit…",
+      missing: "The server kept no trace of this hit: its trace buffer may be off (TRACE_BUFFER=0) or already full.",
+      error: (code) => (code === "401" || code === "403" ? "The admin token was refused."
+        : code === "404" ? "No admin API at this address. Is ADMIN_TOKEN set on the server?"
+          : code === "url" ? "Use an https address (http only for localhost)."
+            : code === "not" ? "This address answered, but not as an ai tagging server."
+              : "The server could not be reached."),
+      sheetTitle: "Connect an ai tagging server",
+      sheetBody: (host) => `See what the server did with each hit from ${host}: which client claimed it, which tags fired or why not, and what it sent to GA4, Meta and the others. The admin token stays on this computer and is sent only to this server.`,
+      url: "Server address", urlPlaceholder: "https://sst.example.com", token: "Admin token",
+      save: "Test and connect", testing: "Testing…", remove: "Disconnect",
+      connected: (url) => `Connected to ${url}. It applies from the next recording.`,
+    },
     routes: {
       title: "Where hits go", routes: (n) => `${n} ${n === 1 ? "route" : "routes"}`, leaks: (n) => `${n} ${n === 1 ? "leak" : "leaks"}`, hits: (n) => `${n} ${n === 1 ? "hit" : "hits"}`,
-      badge: { sgtm: "sGTM", gateway: "Gateway", stape: "Stape", elevar: "Elevar", direct: "direct", vendor: "vendor" },
+      badge: { aits: "ai tagging server", sgtm: "sGTM", gateway: "Gateway", stape: "Stape", elevar: "Elevar", direct: "direct", vendor: "vendor" },
       tip: (kind, host, firstParty) => (kind === "direct" ? `Sent straight to Google (${host}) although this property also goes through a server container`
         : kind === "gateway" ? `Google tag gateway · ${host}` : `Server-side tagging · ${host} (${firstParty ? "first-party" : "third-party"})`),
-      types: { sgtmFirst: "Server-side GTM, first-party subdomain", sgtmThird: "Server-side GTM, third-party host", gateway: "Google tag gateway, same origin", stape: "Stape", elevar: "Elevar", direct: "Direct to Google" },
+      types: { aits: "ai tagging server, connected", sgtmFirst: "Server-side GTM, first-party subdomain", sgtmThird: "Server-side GTM, third-party host", gateway: "Google tag gateway, same origin", stape: "Stape", elevar: "Elevar", direct: "Direct to Google" },
       type: "Type", sends: "Sends", setBy: "Set by", cookies: "Cookies", why: "Why", note: "Note",
       from: (container) => `from ${container}`, fromBrowser: "straight from the browser",
       setByConfig: (n) => `in gtag config · dataLayer #${n}`, setByGtm: "Set inside GTM (not visible in the dataLayer); inferred from requests",
@@ -2168,12 +2188,32 @@ const tr = {
         commerce: "Ticaret", variables: "Değişkenler", visitor: "Ziyaretçi",
       },
     },
+    server: {
+      title: "ai tagging server", menu: "ai tagging server…",
+      claimedBy: (client) => `${client} istemcisi aldı`,
+      noClient: "Bu isteği hiçbir istemci almadı; hiçbir etiket çalışmadı.",
+      outcome: { success: "gönderildi", failure: "başarısız", exception: "hata", timeout: "zaman aşımı", skipped: "atlandı" },
+      tags: "Etiketler", sends: "İletilenler", noTags: "Bu olay için hiçbir etiket çalışmadı.",
+      notFired: (list) => `Çalışmadı (koşullar sağlanmadı): ${list}`, off: "kapalı",
+      waiting: "Sunucunun bu istek için kaydı bekleniyor…",
+      missing: "Sunucu bu istek için kayıt tutmadı: kayıt arabelleği kapalı (TRACE_BUFFER=0) ya da dolmuş olabilir.",
+      error: (code) => (code === "401" || code === "403" ? "Yönetici anahtarı reddedildi."
+        : code === "404" ? "Bu adreste yönetici API'si yok. Sunucuda ADMIN_TOKEN tanımlı mı?"
+          : code === "url" ? "https adresi kullanın (http yalnızca localhost için)."
+            : code === "not" ? "Bu adres yanıt verdi ama bir ai tagging server olarak değil."
+              : "Sunucuya ulaşılamadı."),
+      sheetTitle: "ai tagging server bağla",
+      sheetBody: (host) => `${host} sitesinden gelen her istekle sunucunun ne yaptığı görünür: hangi istemcinin aldığı, hangi etiketlerin çalıştığı ya da neden çalışmadığı ve GA4'e, Meta'ya ve diğerlerine ne gönderildiği. Yönetici anahtarı bu bilgisayarda kalır ve yalnızca bu sunucuya gönderilir.`,
+      url: "Sunucu adresi", urlPlaceholder: "https://sst.ornek.com", token: "Yönetici anahtarı",
+      save: "Dene ve bağla", testing: "Deneniyor…", remove: "Bağlantıyı kes",
+      connected: (url) => `${url} adresine bağlandı. Bir sonraki kayıttan itibaren geçerli.`,
+    },
     routes: {
       title: "İstekler nereye gidiyor", routes: (n) => `${n} yol`, leaks: (n) => `${n} sızıntı`, hits: (n) => `${n} istek`,
-      badge: { sgtm: "sGTM", gateway: "Gateway", stape: "Stape", elevar: "Elevar", direct: "doğrudan", vendor: "sağlayıcı" },
+      badge: { aits: "ai tagging server", sgtm: "sGTM", gateway: "Gateway", stape: "Stape", elevar: "Elevar", direct: "doğrudan", vendor: "sağlayıcı" },
       tip: (kind, host, firstParty) => (kind === "direct" ? `Bu mülk bir sunucu kapsayıcısından da geçtiği hâlde doğrudan Google'a (${host}) gönderildi`
         : kind === "gateway" ? `Google etiket ağ geçidi · ${host}` : `Sunucu tarafı etiketleme · ${host} (${firstParty ? "birinci taraf" : "üçüncü taraf"})`),
-      types: { sgtmFirst: "Sunucu tarafı GTM, birinci taraf alt alan adı", sgtmThird: "Sunucu tarafı GTM, üçüncü taraf alan adı", gateway: "Google etiket ağ geçidi, aynı köken", stape: "Stape", elevar: "Elevar", direct: "Doğrudan Google'a" },
+      types: { aits: "ai tagging server, bağlı", sgtmFirst: "Sunucu tarafı GTM, birinci taraf alt alan adı", sgtmThird: "Sunucu tarafı GTM, üçüncü taraf alan adı", gateway: "Google etiket ağ geçidi, aynı köken", stape: "Stape", elevar: "Elevar", direct: "Doğrudan Google'a" },
       type: "Tür", sends: "Gönderilen", setBy: "Ayarlayan", cookies: "Çerezler", why: "Neden", note: "Not",
       from: (container) => `${container} kapsayıcısından`, fromBrowser: "doğrudan tarayıcıdan",
       setByConfig: (n) => `gtag config içinde · dataLayer #${n}`, setByGtm: "GTM içinde ayarlanmış (dataLayer'da görünmüyor); isteklerden çıkarıldı",

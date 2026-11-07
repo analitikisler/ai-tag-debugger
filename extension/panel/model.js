@@ -5,7 +5,11 @@ import { CONSENT_SIGNALS, parseTrackingRequest, providerOf, vendorOf } from "../
 import { canonicalEvent, hasParam, hitMatchesEvent, pageOf, persistedClientIds } from "../core/checks.js";
 import { decodeGa4Item } from "../core/glossary.js";
 import { siteOf } from "../core/redact.js";
+import { traceForEvent } from "../lib/server.js";
 
+const originOf = (href) => {
+  try { return new URL(href).origin; } catch { return null; }
+};
 const pathname = (href) => {
   try { return new URL(href).pathname; } catch { return String(href ?? ""); }
 };
@@ -152,7 +156,11 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     cur = { index: steps.length, label, action, url: e?.url ?? null, t: e?.t ?? 0, title: null, docStatus: null, entries: [], pushes: [] };
     steps.push(cur);
   };
+  const traces = new Map(); // requestId -> the ai tagging server's trace of it
+  let server = null; // { url, state, detail }: the connected ai tagging server and how polling it went
   for (const e of sorted) {
+    if (e.kind === "server") { traces.set(e.requestId, e.trace); continue; }
+    if (e.kind === "serverStatus") { server = { url: e.url, state: e.state, detail: e.detail ?? null }; continue; }
     if (e.kind === "step") {
       // A route change that keeps the path (query or hash only) is the same page, as the run builder does it.
       if (cur && e.action === "route" && cur.url && pathname(e.url) === pathname(cur.url)) continue;
@@ -279,6 +287,16 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     // A Google path under a prefix on the site's own host is the tag gateway, not a server container.
     if (r.route?.kind === "gateway" && r.endpoint?.kind === "server") r.endpoint = { kind: "gateway", to: r.platform === "ga4" ? "www.google-analytics.com/g/collect" : "www.googleadservices.com/pagead/" };
   }
+  // What the ai tagging server did with each hit sent to it; a hit to it with no trace yet is waiting for one.
+  for (const r of rows) {
+    if (!server || r.kind !== "hit") continue;
+    const onServer = originOf(r.e.url) === server.url;
+    if (!onServer) continue;
+    const trace = traces.get(r.e.requestId);
+    r.server = trace ? traceForEvent(trace, (r.batch?.index ?? 1) - 1) : { waiting: true };
+    // The connection test already said this origin is an ai tagging server.
+    r.route = { kind: "aits", host: hostOf(r.e.url), firstParty: Boolean(pageHost) && siteOf(hostOf(r.e.url) ?? "") === siteOf(pageHost) };
+  }
   const counts = {};
   const other = {};
   for (const r of rows) {
@@ -289,7 +307,7 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
   const ids = {};
   for (const r of rows) if (r.kind === "hit" && r.hit.id) (ids[r.platform] ??= new Set()).add(r.hit.id);
   const multiId = Object.fromEntries(Object.entries(ids).filter(([, set]) => set.size > 1).map(([k, set]) => [k, [...set]]));
-  return { multiId, steps, rows, pushes, consent, cookies: [...cookies.values()], counts, other, chosen: chosen ? [...chosen] : null, cmp, containers: [...containers] };
+  return { multiId, steps, rows, pushes, consent, cookies: [...cookies.values()], counts, other, chosen: chosen ? [...chosen] : null, cmp, containers: [...containers], server };
 }
 
 const hostOf = (url) => {
@@ -370,7 +388,7 @@ export function routesOf(model) {
     if (gtm) b.gtm.add(gtm);
     blocks.set(r.route.host, b);
   }
-  const order = { sgtm: 0, gateway: 0, stape: 0, elevar: 0, direct: 1 };
+  const order = { aits: 0, sgtm: 0, gateway: 0, stape: 0, elevar: 0, direct: 1 };
   const list = [...blocks.values()].sort((a, b) => order[a.kind] - order[b.kind]).map((b) => {
     const config = configs.find((c) => c.host === b.host) ?? null;
     const noConsent = b.rows.filter((r) => !r.wire.some(([k]) => k === "gcs")).length;

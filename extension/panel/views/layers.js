@@ -31,6 +31,7 @@ export function menu() {
       item("globe", ob.language, () => actions.setLang(langs[(langs.indexOf(state.lang) + 1) % langs.length]), m().languages[state.lang]),
       item("moon", ob.theme, () => actions.setTheme(themes[(themes.indexOf(state.theme) + 1) % themes.length]), m().theme[state.theme]),
       item("eye-off", t.mask, () => actions.setMask(!state.mask), state.mask ? t.on : t.off),
+      state.setup.host ? item("route", m().server.menu, () => { state.layer = { kind: "server" }; render(); }, state.serverUrl ? t.on : t.off) : null,
       el("div", { class: "sep" }),
       item("keyboard", t.shortcuts, () => { state.layer = { kind: "shortcuts" }; render(); }, null, "?"),
       item("help", t.tour, () => actions.tourTo(0)),
@@ -81,4 +82,30 @@ export function notWebView() {
         favicon(r.site, 18), el("span", { class: "g", text: r.host }),
         r.summary?.score != null ? el("span", { class: `score-chip ${tone(r)}`, text: String(r.summary.score) }) : null,
         el("span", { class: "small", text: day(r.startedAt) })))) : null);
+}
+
+/** Connect an ai tagging server for this site: the address and admin token, tested before they are kept. */
+export function serverSheet() {
+  const t = m().server;
+  const host = state.setup.host;
+  const status = el("p", { class: "small", role: "status", style: { minHeight: "16px", marginTop: "8px" }, text: state.serverUrl ? t.connected(state.serverUrl) : "" });
+  const field = (id, label, attrs) => el("label", { for: id, style: { display: "block", marginTop: "10px" } }, el("span", { class: "small", text: label }),
+    el("div", { class: "input", style: { marginTop: "4px" } }, el("input", { id, autocomplete: "off", spellcheck: "false", style: { flex: "1", minWidth: "0", border: "0", outline: "0", background: "transparent", color: "var(--fg)", fontSize: "var(--fs-s)" }, ...attrs })));
+  const save = async () => {
+    status.textContent = t.testing;
+    const r = await actions.serverSave(document.getElementById("srvUrl").value, document.getElementById("srvToken").value);
+    status.textContent = r.ok ? t.connected(r.url) : t.error(r.error);
+    if (r.ok) document.getElementById("srvToken").value = "";
+  };
+  const sheet = trap(el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-labelledby": "srvTitle" },
+    el("h2", { class: "h2", id: "srvTitle", text: t.sheetTitle }),
+    el("p", { class: "p", style: { fontSize: "var(--fs-s)" }, text: t.sheetBody(host) }),
+    field("srvUrl", t.url, { type: "url", placeholder: t.urlPlaceholder, value: state.serverUrl ?? "" }),
+    field("srvToken", t.token, { type: "password" }),
+    status,
+    el("div", { class: "acts" },
+      state.serverUrl ? button(t.remove, async () => { await actions.serverRemove(); status.textContent = ""; document.getElementById("srvUrl").value = ""; }, { cls: "btn", id: "srvRemove" }) : null,
+      button(m().close, () => { state.layer = null; render(); }, { cls: "btn" }),
+      button(t.save, save, { cls: "btn primary", id: "srvSave" }))));
+  return [el("div", { class: "scrim", onclick: () => { state.layer = null; render(); } }), sheet];
 }

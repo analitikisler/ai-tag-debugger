@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Chrome extension connects to an ai tagging server (⋯ menu → ai tagging server…, with its address and admin token). Each hit sent to it then shows which client claimed it, which tags fired, failed or skipped and why, and what the server sent onward to GA4, Meta and the others. Only the traces of the recorded tab's own requests are kept.
 - Fixed: one event sent several times with different contents (three `view_promotion` hits for three banners) was reported as a duplicate. Only hits that say the same thing count now; timing fields are left out of the comparison.
 - The extension's Consent tab reads the Google tag's own consent state when the dataLayer has no consent command, as when a consent platform's GTM template (efilli, Cookiebot, OneTrust) sets it. It no longer says "No Google consent mode found" on those sites.
 - The Consent tab says what a GA4 or Google Ads verdict rests on: cookieless pings, no `_ga` / `_gcl_*` cookie written, and a new client ID on each page load (or that one page load can't show it yet). A `_ga`, `FPID` or `_gcl_*` cookie written while its signal was denied is now reported as a problem. The report's consent line for GA4 reflects `client_id_persisted`.

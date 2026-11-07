@@ -835,3 +835,4 @@ table.gcdt td.granted { color: var(--granted); } table.gcdt td.denied { color: v
 .minisel { max-width: 110px; }
 /* Floating menus sit above their own click-catching scrim, or the scrim would take every click meant for them. */
 .menu, .popover { z-index: 12; }
+.sec-sub { padding: 6px 10px 2px; font-size: var(--fs-xs); color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; border-top: 1px solid var(--line); }
