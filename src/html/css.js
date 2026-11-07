@@ -1047,7 +1047,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent details.card>summary .chip.plain{color:var(--muted)}
 /* Consent Mode body */
 #consent .cm-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
-#consent .cm-list li{display:grid;grid-template-columns:64px minmax(0,220px) minmax(0,1fr);align-items:center;gap:var(--s2) var(--s3);padding:8px var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page)}
+#consent .cm-list li{display:grid;grid-template-columns:minmax(64px,max-content) minmax(0,220px) minmax(0,1fr);align-items:center;gap:var(--s2) var(--s3);padding:8px var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page)}
 #consent .cm-l{font-weight:600}
 #consent .cm-w{font-size:12.5px;color:var(--muted)}
 #consent .cm-s{display:flex;flex-wrap:wrap;gap:6px}

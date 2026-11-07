@@ -4,7 +4,7 @@
 
 - Fixed: the same event sent to two Meta pixels (or two GA4 properties) read as a duplicate, and as GA4 and Meta disagreeing on how often it was sent. Duplicates and the cross-platform comparison now count per tracking ID; the comparison notes when a platform sent to several IDs, and the extension's event rows show which pixel or property each hit went to.
 - The extension names each step after the page's title ("Lina Yemek Masası") instead of "Route /…", and a route change that only changes the query or the hash (a filter, a tab) no longer opens a new step.
-- Fixed: in the report's Consent section, the Google tag's own consent state sat flush against the commands above it.
+- Fixed: in the report's Consent section, the Google tag's own consent state sat flush against the commands above it, and the Turkish "Güncelleme" label ran into the step next to it.
 - Fixed: the Chrome extension declared site access as optional, so Chrome refused its request listeners ("You need to request host permissions in the manifest file…") and tracking requests could go unrecorded. Site access is now part of the install, as `webRequest` requires.
 - `before_consent` now compares times within the step the visitor accepted in, so a pixel that fired on page load, before the banner was answered on the same page, is reported.
 - Fixed: GA4's user ID (`uid`, `user_id`) was reported as unhashed personal data. It is the site's own pseudonymous ID, sent as it is by design; it is still masked, and is flagged only when its value is an email address or a phone number.
