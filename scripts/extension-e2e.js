@@ -113,10 +113,11 @@ try {
     const [rec] = await listRecordings();
     const run = buildRun(await getEvents(rec.id), { site: rec.site, startedAt: rec.startedAt });
     const { findings } = analyze(run, { plan: rec.plan?.plan ?? null });
-    return { rec: rec.id, steps: run.steps.map((s) => s.label), hits: run.hits.map((h) => `${h.platform}:${h.name}`), pushes: run.dataLayerLog.length, checks: findings.map((f) => `${f.check}:${f.event ?? ""}`) };
+    return { rec: rec.id, steps: run.steps.map((s) => s.label), urls: run.steps.map((s) => s.url ?? ""), hits: run.hits.map((h) => `${h.platform}:${h.name}`), pushes: run.dataLayerLog.length, checks: findings.map((f) => `${f.check}:${f.event ?? ""}`) };
   });
   assert.ok(result.steps.includes("Cart"), "the named step");
-  assert.ok(result.steps.some((s) => s.includes("thanks.html")), "a step per page load");
+  // Steps are named after the page title; the page they are on is in their address.
+  assert.ok(result.urls.some((u) => u.includes("thanks.html")), "a step per page load");
   for (const hit of ["ga4:page_view", "ga4:add_to_cart", "ga4:purchase", "meta:Purchase"]) assert.ok(result.hits.includes(hit), hit);
   assert.ok(result.pushes > 10, "dataLayer pushes are recorded without a GTM container");
   assert.ok(result.checks.includes("duplicate:add_to_cart"), "the demo shop's double add_to_cart is caught");
