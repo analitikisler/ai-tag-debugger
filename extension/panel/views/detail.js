@@ -1,7 +1,7 @@
 // An opened hit (§5.4, §5.7): the meta line, the view switch, then Readable (labelled cards), All parameters
 // (every key that arrived, grouped by the platform's dictionary) or Raw (the request as sent, one key=value a line).
 import { state, m, render, actions, save } from "../state.js";
-import { el, icon, button, copy, since, upper, infoButton } from "../ui.js";
+import { el, icon, button, copy, since, upper, infoButton, renderSoon } from "../ui.js";
 import { groupsOf, isCustomParam, paramGroup, paramHint, paramLabel, paramTip, RECOMMENDED_ORDER } from "../../core/glossary.js";
 import { isUserDataKey, redactParams } from "../../core/redact.js";
 import { CONSENT_SIGNALS, decodeGcd } from "../../core/parsers.js";
@@ -289,7 +289,7 @@ function allParams(row) {
   const tsv = () => groups.flatMap(([g, list]) => list.map(([k, v]) => [p.groups[g] ?? g, paramLabel(k, state.lang, platform), k, shown(k, v)].join("\t"))).join("\n");
   const content = [
     el("label", { class: "search pfilter" }, icon("search"), el("input", { id: "paramFilter", type: "search", placeholder: p.filter(pairs.length), value: state.paramFilter, "aria-label": p.filter(pairs.length),
-      oninput: (e) => { state.paramFilter = e.target.value; render(); } })),
+      oninput: (e) => { state.paramFilter = e.target.value; renderSoon(); } })),
     el("section", { class: "sec" }, el("div", { class: "kv" }, body)),
   ];
   return { content, buttons: [button(m().detail.copyJson, () => copy(json()), { cls: "btn", ico: "copy" }), button(m().detail.copyTable, () => copy(tsv()), { cls: "btn", ico: "copy" })] };

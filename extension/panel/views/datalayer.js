@@ -1,6 +1,6 @@
 // The dataLayer tab (§6): every push by step, oldest first, with the hits it fired; gtm.* events hidden by default.
 import { state, m, render, actions } from "../state.js";
-import { el, icon, button, copy, since, upper } from "../ui.js";
+import { el, icon, button, copy, since, upper, renderSoon } from "../ui.js";
 import { fold } from "../model.js";
 import { redactPush } from "../../core/redact.js";
 import { PROVIDERS } from "../../core/parsers.js";
@@ -25,7 +25,7 @@ export function dataLayerToolbar(model) {
   const sw = (id, label, checked, onchange) => el("label", { class: "switch", for: id }, el("input", { id, type: "checkbox", checked, onchange: (e) => onchange(e.target.checked) }), el("i"), label);
   return el("div", { class: "toolbar" },
     el("div", { class: "toprow" }, el("label", { class: "search" }, icon("search"), el("input", { id: "dlSearch", type: "search", placeholder: t.search, "aria-label": t.search, value: state.dl.search,
-      oninput: (e) => { state.dl.search = e.target.value; render(); }, onkeydown: (e) => { if (e.key === "Escape") { state.dl.search = ""; render(); } } }), el("span", { class: "kbd", text: "/" })), orderToggle()),
+      oninput: (e) => { state.dl.search = e.target.value; renderSoon(); }, onkeydown: (e) => { if (e.key === "Escape") { state.dl.search = ""; render(); } } }), el("span", { class: "kbd", text: "/" })), orderToggle()),
     el("div", { class: "toggle-row" },
       sw("hideGtm", t.hideGtm(gtm), state.dl.hideGtm, (v) => { state.dl.hideGtm = v; render(); }),
       sw("showFired", t.showFired, state.dl.showFired, (v) => { state.dl.showFired = v; render(); })));

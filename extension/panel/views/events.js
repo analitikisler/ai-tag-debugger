@@ -1,12 +1,13 @@
 // The Events tab: the search and platform filter, the "Where hits go" card when hits went through a server, then
 // the recording as steps with their hits in the order they happened, consent changes as dividers between them.
 import { state, m, render, actions } from "../state.js";
-import { el, icon, button, since, secs } from "../ui.js";
+import { el, icon, button, since, secs, renderSoon } from "../ui.js";
 import { BADGE, matchRow, routesOf } from "../model.js";
 import { badge, stepBlock, summaryOf, consentWords, GOOGLE } from "./common.js";
 import { hitDetail } from "./detail.js";
 import { routesCard } from "./routes.js";
 import { platformName } from "./setup.js";
+import { allShown, chipClick, shownKeys } from "./filter.js";
 
 const SERVER = new Set(["sgtm", "gateway", "stape", "elevar"]);
 const failed = (s) => s === "failed" || (typeof s === "number" && s >= 400);
@@ -20,8 +21,7 @@ export function platformSets(model) {
 
 /** Which platforms are shown: the pressed chips plus the unselected ones shown from the popover. "other" = other requests. */
 export function shownSet(model) {
-  const { selected } = platformSets(model);
-  return new Set([...(state.filter.on ?? selected), ...state.filter.extra]);
+  return shownKeys(state.filter, platformSets(model));
 }
 const isDefault = () => state.filter.on === null && !state.filter.extra.size;
 
@@ -57,16 +57,18 @@ function chip({ key, label, count, pressed, swatch, dashed, onclick, ondblclick,
     swatch ? el("span", { class: `sw ${swatch}` }) : dashed ? icon("plus", "s") : null, label, el("span", { class: "n", text: String(count) }));
 }
 
-function toggle(model, key, solo) {
-  const { selected } = platformSets(model);
-  if (solo) {
-    state.filter.on = new Set(selected.includes(key) ? [key] : []);
-    state.filter.extra = new Set(selected.includes(key) ? [] : [key]);
-  } else {
-    const on = new Set(state.filter.on ?? selected);
-    if (on.has(key)) on.delete(key); else on.add(key);
-    state.filter.on = on;
-  }
+/** The selected, unselected and "other requests" keys the filter works over. */
+function filterSets(model) {
+  return { ...platformSets(model), hasOther: model.rows.some((r) => r.kind === "call") };
+}
+
+/** A chip or popover click, through the tested reducer in filter.js. */
+function toggle(model, key, solo = false) {
+  const next = chipClick(state.filter, key, filterSets(model), { solo });
+  state.filter.on = next.on;
+  state.filter.extra = next.extra;
+  // The popover's Show / Hide labels follow: a new layer object asks for it to be drawn again.
+  if (state.layer?.kind === "notSelected") state.layer = { ...state.layer };
   actions.saveFilter();
   render();
 }
@@ -86,19 +88,14 @@ export function eventsToolbar(model) {
   const { selected, unselected } = platformSets(model);
   const shown = shownSet(model);
   const allKeys = [...selected, ...unselected, ...(model.rows.some((r) => r.kind === "call") ? ["other"] : [])];
-  const everything = allKeys.every((k) => shown.has(k));
+  const everything = allShown(state.filter, filterSets(model));
   const search = el("label", { class: "search" }, icon("search"),
     el("input", { id: "search", type: "search", placeholder: t.search, value: state.filter.search, "aria-label": t.search,
-      oninput: (e) => { state.filter.search = e.target.value; render(); },
+      oninput: (e) => { state.filter.search = e.target.value; renderSoon(); },
       onkeydown: (e) => { if (e.key === "Escape") { state.filter.search = ""; render(); } } }),
     el("span", { class: "kbd", text: "/" }));
   const chips = el("div", { class: "chips", role: "group", "aria-label": t.platformFilter },
-    chip({ key: "all", label: t.all, count: model.rows.filter((r) => r.kind === "hit" && found.has(r.key)).length, pressed: everything, onclick: () => {
-      state.filter.on = new Set([...selected, ...unselected]);
-      state.filter.extra = new Set(allKeys);
-      actions.saveFilter();
-      render();
-    } }),
+    chip({ key: "all", label: t.all, count: model.rows.filter((r) => r.kind === "hit" && found.has(r.key)).length, pressed: everything, onclick: () => toggle(model, "all") }),
     // The short badge names (G Ads, MS Ads) keep every chip on one row at 400 px; the full name is in the tooltip.
     selected.map((k) => chip({ key: k, label: BADGE[k] ?? platformName(k), count: count(k), pressed: shown.has(k), swatch: k in BADGE ? k : "other", title: `${platformName(k)} · ${t.soloHint}`,
       onclick: (e) => toggle(model, k, e.altKey), ondblclick: () => toggle(model, k, true) })),
@@ -128,14 +125,14 @@ export function notSelectedPopover(model) {
   const r = state.layer.anchor;
   const rows = unselected.map((k) => el("div", { class: "pr" }, el("span", { class: `sw ${k in BADGE ? k : "other"}`, style: { width: "8px", height: "8px", borderRadius: "2px" } }),
     el("span", { class: "grow", text: platformName(k) }), el("span", { class: "n", text: String(model.counts[k]) }),
-    button(state.filter.extra.has(k) ? t.hide : t.show, () => { state.filter.extra.has(k) ? state.filter.extra.delete(k) : state.filter.extra.add(k); actions.saveFilter(); render(); }, { cls: "linkbtn" }),
+    button(state.filter.extra.has(k) ? t.hide : t.show, () => toggle(model, k), { cls: "linkbtn" }),
     button(t.addPlatform, () => actions.addPlatform(k), { cls: "linkbtn" })));
   const others = Object.entries(model.other);
   return el("div", { class: "popover", role: "dialog", "aria-label": t.notSelected, style: { left: `${Math.max(8, Math.min(r.left, window.innerWidth - 288))}px`, top: `${r.bottom + 6}px` } },
     rows,
     others.length ? [el("div", { class: "ph", text: t.otherRequests }),
       el("div", { class: "pr" }, el("span", { class: "grow", text: others.map(([v, n]) => `${v} ${n}`).join(", ") }),
-        button(state.filter.extra.has("other") ? t.hide : t.show, () => { state.filter.extra.has("other") ? state.filter.extra.delete("other") : state.filter.extra.add("other"); actions.saveFilter(); render(); }, { cls: "linkbtn" }))] : null);
+        button(state.filter.extra.has("other") ? t.hide : t.show, () => toggle(model, "other"), { cls: "linkbtn" }))] : null);
 }
 
 // ---------- rows ----------
@@ -246,7 +243,7 @@ function nothingYet(model, stopped) {
   return el("div", { class: "helpnote", role: "note" }, icon("info"), el("div", {},
     el("b", { text: stopped ? t.noneRecorded : t.nothingTitle }),
     el("ul", {}, t.nothing.map((s) => el("li", { text: s })),
-      unselected ? el("li", {}, t.unselectedSeen(unselected), " ", button(t.showThem, () => { state.filter.on = new Set([...Object.keys(model.counts)]); state.filter.extra = new Set(["other"]); render(); }, { cls: "linkbtn" })) : null)));
+      unselected ? el("li", {}, t.unselectedSeen(unselected), " ", button(t.showThem, () => { if (!allShown(state.filter, filterSets(model))) toggle(model, "all"); }, { cls: "linkbtn" })) : null)));
 }
 
 export function eventsList(model) {

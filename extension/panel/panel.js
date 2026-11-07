@@ -76,11 +76,42 @@ async function setCurrent(host, rec) {
   } catch { /* the panel then opens on setup next time, nothing worse */ }
 }
 
-async function loadRecording(id) {
-  if (id === state.rec && (state.recording || !id)) return;
+// Events the worker broadcast for a recording the panel was not showing yet, or while it was reading it from the
+// store: a new recording's first events arrive before Start's reply, and the store read is a snapshot. They are
+// merged in when the recording is loaded, so a second run in the same tab never starts with its first page missing.
+const pending = new Map(); // rec -> events
+let loading = null;
+const eventKey = (e) => `${e.t}|${e.seq}|${e.kind}|${e.requestId ?? ""}`;
+function hold(rec, event) {
+  const list = pending.get(rec) ?? [];
+  list.push(event);
+  if (list.length > 5000) list.shift();
+  pending.delete(rec);
+  pending.set(rec, list);
+  // Only the latest few recordings are worth holding.
+  while (pending.size > 4) pending.delete(pending.keys().next().value);
+}
+
+let loadingDone = null;
+function loadRecording(id) {
+  // Two callers asking for the same recording (Start, and the refresh its first events trigger) share one load.
+  if (loading === id && loadingDone) return loadingDone;
+  if (id === state.rec && (state.recording || !id)) return Promise.resolve();
+  loading = id;
+  loadingDone = readRecording(id).finally(() => { if (loading === id) { loading = null; loadingDone = null; } });
+  return loadingDone;
+}
+
+async function readRecording(id) {
   state.rec = id;
-  state.recording = id ? await getRecording(id) : null;
-  state.events = id && state.recording ? (await getEvents(id)).sort((a, b) => a.t - b.t || a.seq - b.seq) : [];
+  const recording = id ? await getRecording(id) : null;
+  const stored = id && recording ? await getEvents(id) : [];
+  if (state.rec !== id) return; // another load started meanwhile; it wins
+  const seen = new Set(stored.map(eventKey));
+  const late = (pending.get(id) ?? []).filter((e) => !seen.has(eventKey(e)));
+  pending.delete(id);
+  state.recording = recording;
+  state.events = [...stored, ...late].sort((a, b) => a.t - b.t || (a.seq ?? 0) - (b.seq ?? 0));
   if (!state.recording) state.rec = null;
   state.analysis = null;
   state.analysisError = false;
@@ -271,9 +302,14 @@ function renderFoot(md) {
   $("markBtn").replaceChildren(m().mark.button, " ", el("span", { class: "kbd", text: "↵" }));
 }
 
+let shownLayer = null;
 function renderLayers(mdl) {
-  document.querySelectorAll(".layer").forEach((n) => n.remove());
   const l = state.layer;
+  // An open menu or popover is left alone by renders that don't change it: rebuilding it while live events arrive
+  // would replace the item under the pointer between mousedown and click, and the click would be lost.
+  if (l && l === shownLayer && document.querySelector(".layer")) return;
+  document.querySelectorAll(".layer").forEach((n) => n.remove());
+  shownLayer = l;
   if (!l) return;
   let nodes = [];
   if (l.kind === "menu") nodes = menu();
@@ -703,8 +739,16 @@ installKeys({ mode, model, tabs: TABS });
 
 // ---------- live updates ----------
 
+let lastUnknown = 0;
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type !== "recorded" || msg.rec !== state.rec) return;
+  if (msg?.type !== "recorded") return;
+  if (msg.rec !== state.rec || loading === msg.rec) {
+    hold(msg.rec, msg.event);
+    // A recording the panel doesn't show yet may be this tab's new one (started from another window, or a Start
+    // whose reply is still on its way): look again, at most every 2 s, unless an older recording is open on purpose.
+    if (!state.viewing && loading !== msg.rec && Date.now() - lastUnknown > 2000) { lastUnknown = Date.now(); refresh(); }
+    return;
+  }
   const before = new Set(model().rows.map((r) => r.key));
   state.events.push(msg.event);
   if (msg.event.kind === "request") {

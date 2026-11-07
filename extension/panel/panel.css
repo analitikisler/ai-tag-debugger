@@ -833,3 +833,5 @@ table.gcdt td.granted { color: var(--granted); } table.gcdt td.denied { color: v
 .chip { padding: 0 6px; font-size: 11.5px; }
 .chip svg.i.s { width: 10px; height: 10px; }
 .minisel { max-width: 110px; }
+/* Floating menus sit above their own click-catching scrim, or the scrim would take every click meant for them. */
+.menu, .popover { z-index: 12; }

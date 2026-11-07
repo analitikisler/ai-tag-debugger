@@ -4,6 +4,13 @@ import { state, m, render } from "./state.js";
 
 export const $ = (id) => document.getElementById(id);
 
+let soon = null;
+/** A render after typing pauses (120 ms), so a long list is filtered once per word, not once per key. */
+export function renderSoon() {
+  clearTimeout(soon);
+  soon = setTimeout(render, 120);
+}
+
 /** An element: attributes (class, text, on* handlers, data-*, aria-*), then children (nodes, strings, arrays, null). */
 export function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
