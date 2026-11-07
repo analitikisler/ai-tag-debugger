@@ -134,6 +134,26 @@ function pageOf(hit) {
   return hit.params?.page_location ?? hit.pageUrl ?? "";
 }
 
+/**
+ * GA4 client ids that came back on more than one page load while the hit said analytics_storage was denied. A
+ * cookieless ping gets a fresh id per page load; the same one again means it was stored (a _ga cookie, localStorage
+ * or a server-set FPID) before consent.
+ * @returns {{ cid: string, pages: number, hits: object[], second: object }[]} second: the first hit from another page load
+ */
+export function persistedClientIds(hits) {
+  const byCid = new Map();
+  for (const hit of hits) {
+    const cid = hit.protocol?.cid;
+    if (hit.platform !== "ga4" || !cid || hit.consent?.analytics_storage !== "denied") continue;
+    if (!byCid.has(cid)) byCid.set(cid, { cid, pages: new Set(), hits: [] });
+    const g = byCid.get(cid);
+    g.pages.add(pageOf(hit));
+    g.hits.push(hit);
+  }
+  return [...byCid.values()].filter((g) => g.pages.size > 1)
+    .map((g) => ({ ...g, pages: g.pages.size, second: g.hits.find((h) => pageOf(h) !== pageOf(g.hits[0])) }));
+}
+
 // Just before an address: a mailto: link or a link field (link_url=..., "link_text":"...").
 const LINK_BEFORE = /(mailto:|\b(link_url|link_text|click_url|click_text)(=|":"))$/i;
 
@@ -631,6 +651,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       step: stepLabel(hit.step),
       detail: fromWidget(hit, granted === null ? d.beforeConsentNever(hit.platform, hit.name) : d.beforeConsent(hit.platform, hit.name)),
     });
+  }
+
+  for (const p of persistedClientIds(legalHits)) {
+    const { second } = p;
+    findings.push({ ...base, severity: "risk", check: "client_id_persisted", platform: "ga4", event: second.name, step: stepLabel(second.step), detail: fromWidget(second, d.clientIdPersisted(p.cid, p.pages)), evidence: p.hits.map((h) => `${h.name} cid=${p.cid} gcs=${h.protocol?.gcs ?? ""} ${pageOf(h)}`).join("\n") });
   }
 
   // Personal data in hits.

@@ -233,3 +233,20 @@ test("the cookie snapshot taken as recording starts opens no step of its own", (
   assert.deepEqual(r.steps.map((s) => s.label), ["Opened /"]);
   assert.deepEqual(r.cookieLog.map((c) => `${c.name}@${c.step}`), ["_ga@0"]);
 });
+
+test("the same GA4 client id on two page loads while analytics_storage is denied is a finding", () => {
+  const page = (n, cid, gcs, p) => [
+    { t: n * 1000, seq: n * 10, kind: "step", action: "navigate", url: `https://shop.example/${n}`, label: `Opened /${n}` },
+    { t: n * 1000 + 100, seq: n * 10 + 1, kind: "request", requestId: `p${n}`, method: "GET", type: "ping", frameId: 0, url: `https://region1.google-analytics.com/g/collect?v=2&tid=G-TEST1&cid=${cid}&_p=${p}&gcs=${gcs}&en=page_view&dl=https%3A%2F%2Fshop.example%2F${n}` },
+  ];
+  const kept = lib.buildRun([...page(1, "5.6", "G100", "a"), ...page(2, "5.6", "G100", "b")], { site: "https://shop.example" });
+  const f = analyze.analyze(kept, { lang: "en" }).findings.find((x) => x.check === "client_id_persisted");
+  assert.ok(f, "the stored id is found");
+  assert.match(f.detail, /5\.6/);
+  assert.equal(f.step, "Opened /2");
+  // A fresh id per page load is what a cookieless ping does; the same id once consent is granted is just a cookie.
+  for (const events of [[...page(1, "5.6", "G100", "a"), ...page(2, "7.8", "G100", "b")], [...page(1, "5.6", "G111", "a"), ...page(2, "5.6", "G111", "b")]]) {
+    const fine = lib.buildRun(events, { site: "https://shop.example" });
+    assert.ok(!analyze.analyze(fine, { lang: "en" }).findings.some((x) => x.check === "client_id_persisted"));
+  }
+});

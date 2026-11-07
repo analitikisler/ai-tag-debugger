@@ -199,3 +199,20 @@ test("platforms that send to several IDs are listed, so rows can say which pixel
   ]);
   assert.deepEqual(m.multiId, { meta: ["111", "222"] });
 });
+
+test("the Consent tab says GA4 kept its client id when a denied hit's cid comes back on the next page load", () => {
+  const ga = (cid, p) => `https://region1.google-analytics.com/g/collect?v=2&tid=G-TEST1&cid=${cid}&_p=${p}&gcs=G100&en=page_view`;
+  const events = (cid2) => [
+    { t: 100, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 110, seq: 2, kind: "push", entry: { value: ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }] } },
+    { t: 200, seq: 3, kind: "request", requestId: "a", method: "GET", url: ga("1.1", "x") },
+    { t: 1000, seq: 4, kind: "step", action: "navigate", url: "https://shop.example/cart", label: "Opened /cart" },
+    { t: 1100, seq: 5, kind: "request", requestId: "b", method: "GET", url: ga(cid2, "y") },
+  ];
+  const ga4 = M.consentReport(M.buildModel(events("1.1"))).platforms.find((p) => p.platform === "ga4");
+  assert.equal(ga4.verdict, "violated");
+  assert.deepEqual([ga4.persisted.cid, ga4.persisted.pages, ga4.persisted.row.key], ["1.1", 2, "b:0"]);
+  const fresh = M.consentReport(M.buildModel(events("2.2"))).platforms.find((p) => p.platform === "ga4");
+  assert.equal(fresh.verdict, "respected");
+  assert.equal(fresh.persisted, null);
+});

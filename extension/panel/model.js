@@ -2,7 +2,7 @@
 // hit, a GA4 batch being several), the consent changes between them, the dataLayer pushes and which hits each one
 // fired, a plan check per hit, and the counts the platform filter needs. Pure, so it is tested in Node.
 import { CONSENT_SIGNALS, parseTrackingRequest, providerOf, vendorOf } from "../core/parsers.js";
-import { canonicalEvent, hasParam, hitMatchesEvent } from "../core/checks.js";
+import { canonicalEvent, hasParam, hitMatchesEvent, persistedClientIds } from "../core/checks.js";
 import { decodeGa4Item } from "../core/glossary.js";
 import { siteOf } from "../core/redact.js";
 
@@ -407,7 +407,10 @@ export function consentReport(model, platforms = null) {
   const keys = [...new Set(model.rows.filter((r) => r.kind === "hit" && (!platforms || platforms.includes(r.platform))).map((r) => r.platform))];
   const result = keys.map((platform) => {
     const hits = model.rows.filter((r) => r.kind === "hit" && r.platform === platform);
-    if (!def) return { platform, verdict: "unknown", hits: hits.length };
+    // The hit's own gcs says analytics_storage was denied, so this needs no consent command to be seen.
+    const kept = platform === "ga4" ? persistedClientIds(hits.map((r) => r.hit))[0] : undefined;
+    const persisted = kept ? { cid: kept.cid, pages: kept.pages, row: hits.find((r) => r.hit === kept.second) } : null;
+    if (!def) return persisted ? { platform, verdict: "violated", hits: hits.length, violations: [], persisted } : { platform, verdict: "unknown", hits: hits.length };
     const before = hits.filter((r) => !grantAt || r.t < grantAt.t);
     const denied = (r) => (r.consentAt?.ad_storage ?? def.signals.ad_storage) === "denied";
     let violations;
@@ -416,7 +419,7 @@ export function consentReport(model, platforms = null) {
       violations = before.filter((r) => denied(r) && (r.hit.consent?.ad_storage === "granted" || r.hit.consent?.analytics_storage === "granted"));
     } else violations = before.filter((r) => denied(r));
     const cookieless = GOOGLE.has(platform) ? before.filter((r) => r.hit.consent && Object.values(r.hit.consent).every((s) => s !== "granted")).length : 0;
-    return { platform, verdict: violations.length ? "violated" : "respected", hits: hits.length, before: before.length, cookieless, after: hits.length - before.length, violations };
+    return { platform, verdict: violations.length || persisted ? "violated" : "respected", hits: hits.length, before: before.length, cookieless, after: hits.length - before.length, violations, persisted };
   });
   const cut = grantAt?.t ?? Infinity;
   // Hits that say a signal was granted while the commands still said denied: something else updated consent.

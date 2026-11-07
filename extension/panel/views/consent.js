@@ -80,12 +80,18 @@ function respect(model, r) {
   const lines = r.platforms.map((p) => {
     const name = PROVIDERS[p.platform] ?? p.platform;
     if (p.verdict === "unknown") return el("div", { class: "resp" }, el("span", { class: "ri", style: { background: "var(--unset-tint)", color: "var(--unset)" }, text: "–" }), el("div", {}, el("b", { text: name }), el("div", { class: "sub", text: c.cantTell })));
+    if (p.verdict === "violated" && !p.violations.length) {
+      const { cid, pages, row } = p.persisted;
+      return el("div", { class: "resp" }, el("span", { class: "ri bad" }, icon("x")), el("div", {}, el("b", { text: c.persistedTitle(name) }),
+        el("div", { class: "sub" }, c.persistedBody(cid, pages), row ? [" ", button(c.seeHit, () => actions.showRow(row.key), { cls: "linkbtn" })] : null)));
+    }
     if (p.verdict === "violated") {
       const first = p.violations[0];
+      const kept = p.persisted ? [" ", c.persistedBody(p.persisted.cid, p.persisted.pages)] : null;
       const time = ((first.t - model.steps[first.step].t) / 1000).toFixed(1);
       const before = r.cookiesBefore.filter((ck) => owner(ck.name) === p.platform).map((ck) => ck.name);
       return el("div", { class: "resp" }, el("span", { class: "ri bad" }, icon("x")), el("div", {}, el("b", { text: c.violated(name) }),
-        el("div", { class: "sub" }, c.violatedBody(first.name, time, p.violations.length, before.join(", ")), " ", button(c.seeHit, () => actions.showRow(first.key), { cls: "linkbtn" }))));
+        el("div", { class: "sub" }, c.violatedBody(first.name, time, p.violations.length, before.join(", ")), kept, " ", button(c.seeHit, () => actions.showRow(first.key), { cls: "linkbtn" }))));
     }
     const body = p.cookieless ? c.cookielessBody(p.cookieless) : c.nothingBefore;
     const after = p.after ? ` ${c.afterHits(p.after)}` : "";

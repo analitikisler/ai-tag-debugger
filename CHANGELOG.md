@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New check `client_id_persisted` (risk): GA4 sent the same client ID (`cid`) on more than one page load while its hits said `analytics_storage` was denied. Cookieless pings get a new ID on every page load, so this one was stored before consent. The extension's Consent tab shows it under GA4.
 - Fixed in the extension's side panel: search lost focus after each keystroke, the ⋯ menu and the "Not selected" list could not be clicked, the "All" filter could not be turned off, and a second recording in the same tab could miss its first events.
 - Fixed: the same event sent to two Meta pixels (or two GA4 properties) read as a duplicate, and as GA4 and Meta disagreeing on how often it was sent. Duplicates and the cross-platform comparison now count per tracking ID; the comparison notes when a platform sent to several IDs, and the extension's event rows show which pixel or property each hit went to.
 - The extension names each step after the page's title ("Lina Yemek Masası") instead of "Route /…", and a route change that only changes the query or the hash (a filter, a tab) no longer opens a new step.
