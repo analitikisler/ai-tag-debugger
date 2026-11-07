@@ -17,6 +17,17 @@ const SHOP = path.join(ROOT, "examples", "demo-shop");
 function serveShop() {
   const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
   const server = createServer(async (req, res) => {
+    // A page that sends a GA4 hit as it is left, as gtag's user_engagement does, named after which load of the
+    // page sent it, so the recording can tell the page it reloads from the page it records.
+    if (new URL(req.url, "http://x").pathname === "/beacon.html") {
+      return res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`<!doctype html><title>Beacon</title><script>
+const ga = (en) => navigator.sendBeacon("https://region1.google-analytics.com/g/collect?v=2&tid=G-BEACON1&cid=1.1&en=" + en);
+const n = Number(sessionStorage.getItem("loads") || 0) + 1;
+sessionStorage.setItem("loads", n);
+addEventListener("pagehide", () => ga("goodbye_load_" + n));
+ga("page_view_load_" + n);
+</script>`);
+    }
     const file = path.join(SHOP, new URL(req.url, "http://x").pathname.replace(/^\/$/, "/index.html"));
     if (!file.startsWith(SHOP + path.sep)) return res.writeHead(403).end();
     let body;
@@ -129,7 +140,31 @@ try {
   await frame.waitForSelector("text=localhost");
   assert.equal(await frame.evaluate(() => document.documentElement.lang), "tr");
   assert.deepEqual(errors, [], "no errors in the panel");
-  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}`);
+  // Recording starts with a reload: the page being left still sends its goodbye hit (load 1), which belongs to the
+  // visit before the recording, so it must not be recorded; the reloaded page's own hit (load 2) must be.
+  const beaconTab = await context.newPage();
+  await beaconTab.goto(`${base}/beacon.html`);
+  const beaconTabId = await worker.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/beacon.html` }))[0].id, base);
+  const beaconPanel = await context.newPage();
+  await beaconPanel.goto(`chrome-extension://${id}/panel/panel.html?tab=${beaconTabId}`);
+  // The site's last recording is on screen; Start over (keeping it in History) goes back to setup.
+  await beaconPanel.click("#startOver");
+  await beaconPanel.click("#resetGo");
+  await beaconPanel.click("#record");
+  await beaconPanel.waitForSelector("#stop:not([hidden])");
+  await beaconTab.waitForLoadState("load");
+  await beaconTab.waitForTimeout(1500);
+  await beaconPanel.click("#stop");
+  await beaconPanel.waitForTimeout(500);
+  const beaconHits = await beaconPanel.evaluate(async () => {
+    const { listRecordings, getEvents } = await import("../lib/store.js");
+    const [rec] = await listRecordings();
+    return (await getEvents(rec.id)).filter((e) => e.kind === "request").map((e) => new URL(e.url).searchParams.get("en"));
+  });
+  assert.ok(beaconHits.includes("page_view_load_2"), `the reloaded page's hit is recorded (${beaconHits.join(", ")})`);
+  assert.ok(!beaconHits.includes("goodbye_load_1"), `the page being left is not (${beaconHits.join(", ")})`);
+
+  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out`);
 } finally {
   await context?.close();
   server.close();
