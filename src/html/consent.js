@@ -10,7 +10,7 @@ import { PLATFORM_ART, chip, esc, platformLabel, safeKey, sectionBlock, sortPlat
 const GOOGLE = new Set(["ga4", "google_ads"]);
 // The status line per platform keeps to no choice, accept and reject; the card lists every column that ran.
 const STATUS_SCENARIOS = ["before", "accept", "reject"];
-const LINE_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing"]);
+const LINE_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing", "client_id_persisted"]);
 const MODE_CHECKS = new Set(["consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update"]);
 const SEVERITY_RANK = { broken: 0, risk: 1, warning: 2, info: 3 };
 

@@ -2,7 +2,7 @@
 // hit, a GA4 batch being several), the consent changes between them, the dataLayer pushes and which hits each one
 // fired, a plan check per hit, and the counts the platform filter needs. Pure, so it is tested in Node.
 import { CONSENT_SIGNALS, parseTrackingRequest, providerOf, vendorOf } from "../core/parsers.js";
-import { canonicalEvent, hasParam, hitMatchesEvent, persistedClientIds } from "../core/checks.js";
+import { canonicalEvent, hasParam, hitMatchesEvent, pageOf, persistedClientIds } from "../core/checks.js";
 import { decodeGa4Item } from "../core/glossary.js";
 import { siteOf } from "../core/redact.js";
 
@@ -71,6 +71,39 @@ export function consentCommand(value) {
   return { mode: value[1], signals };
 }
 
+/**
+ * Consent commands the dataLayer never showed, read from the Google tag's own state instead: a consent platform's
+ * GTM template (efilli, Cookiebot, OneTrust) sets the default and the update through the template API, so nothing is
+ * pushed. The default applied before the step's first hit; an update is placed at the first Google hit that carries
+ * it, or at the moment the state was read, whichever came first. Marked source "tag".
+ */
+function consentFromTag(consent, tagStates, steps, hitRows) {
+  const out = [];
+  const google = hitRows.filter((r) => r.hit?.consent);
+  if (!consent.some((c) => c.mode === "default")) {
+    const first = tagStates.find((s) => Object.values(s.entries).some((e) => e.default));
+    if (first) {
+      const signals = Object.fromEntries(Object.entries(first.entries).filter(([, e]) => e.default).map(([k, e]) => [k, e.default]));
+      const t = Math.min(steps[first.step].t, google[0]?.t ?? Infinity) - 1;
+      out.push({ key: `tagd${first.step}`, kind: "consent", mode: "default", source: "tag", signals, summary: consentSummary(signals), t, step: first.step });
+    }
+  }
+  if (!consent.some((c) => c.mode === "update")) {
+    let known = {};
+    let since = -Infinity;
+    for (const st of tagStates) {
+      const changed = Object.fromEntries(Object.entries(st.entries).filter(([k, e]) => e.update && known[k] !== e.update).map(([k, e]) => [k, e.update]));
+      if (!Object.keys(changed).length) continue;
+      known = { ...known, ...changed };
+      const carrier = google.find((r) => r.t > since && r.t <= st.t && CONSENT_SIGNALS.some((k) => changed[k] && r.hit.consent[k] === changed[k]));
+      const t = carrier ? carrier.t - 1 : st.t;
+      since = t;
+      out.push({ key: `tagu${st.t}`, kind: "consent", mode: "update", source: "tag", signals: changed, summary: consentSummary(changed), t, step: carrier?.step ?? st.step });
+    }
+  }
+  return out;
+}
+
 /** "denied" / "granted" when the four tracking signals a command sets agree, "partly" when they differ, null when it sets none. */
 export function consentSummary(signals) {
   const states = CONSENT_SIGNALS.filter((k) => k in signals).map((k) => signals[k]);
@@ -111,6 +144,7 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
   const consent = [];
   const cookies = new Map(); // name|domain -> first seen t
   const containers = new Set();
+  const tagStates = []; // the Google tag's own consent state, read from the page after each load
   let cmp = null;
   let cur = null;
   let pageHost = null; // the recorded page's host, so a first-party server container can be told from a third-party one
@@ -136,6 +170,7 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     } else if (e.kind === "page") {
       if (e.title && !cur.title) cur.title = e.title;
       if (e.cmp?.vendor) cmp ??= e.cmp.vendor;
+      if (e.tagConsent?.entries) tagStates.push({ t: e.t, step: cur.index, entries: e.tagConsent.entries });
       for (const c of e.registry ?? []) if (c?.id) containers.add(c.id);
     } else if (e.kind === "request") {
       const hits = parseTrackingRequest(e.url, e.body ?? null) ?? [];
@@ -209,6 +244,13 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
       if (same) r.push = p.key;
     }
   }
+  for (const d of consentFromTag(consent, tagStates, steps, hitRows)) {
+    consent.push(d);
+    const list = steps[d.step].entries;
+    const at = list.findIndex((x) => x.t > d.t);
+    list.splice(at < 0 ? list.length : at, 0, d);
+  }
+  consent.sort((a, b) => a.t - b.t);
   // The consent each hit was sent under, as far as the dataLayer says (Google hits also carry their own gcs/gcd).
   // Before or after the visitor first accepted: sites push a denied default on every page load and restore the
   // stored choice a moment later, so a hit on a later page is not "before consent" just because it beat that restore.
@@ -395,6 +437,13 @@ export function consentAt(consent, t) {
   return state;
 }
 
+// The cookies a Google tag keeps its ids in, and the signal that has to be granted first. FPID is a server
+// container's first-party id; _gcl_* holds the ad click.
+const STORAGE_COOKIES = {
+  ga4: { signal: "analytics_storage", names: /^(_ga(_.+)?|FPID|FPLC)$/ },
+  google_ads: { signal: "ad_storage", names: /^(_gcl_.+|FPGCLAW|FPGCLDC)$/ },
+};
+
 /**
  * The Consent tab: the default and the updates, when the visitor first granted ad_storage, and per platform whether
  * its hits respected the state they were sent under.
@@ -419,7 +468,14 @@ export function consentReport(model, platforms = null) {
       violations = before.filter((r) => denied(r) && (r.hit.consent?.ad_storage === "granted" || r.hit.consent?.analytics_storage === "granted"));
     } else violations = before.filter((r) => denied(r));
     const cookieless = GOOGLE.has(platform) ? before.filter((r) => r.hit.consent && Object.values(r.hit.consent).every((s) => s !== "granted")).length : 0;
-    return { platform, verdict: violations.length || persisted ? "violated" : "respected", hits: hits.length, before: before.length, cookieless, after: hits.length - before.length, violations, persisted };
+    // Google's own storage written while the signal that allows it was denied: what a cookieless ping must never do.
+    const own = STORAGE_COOKIES[platform];
+    const storedCookies = own && (def.signals[own.signal] ?? "denied") === "denied"
+      ? [...new Set(model.cookies.filter((ck) => ck.t < (grantAt?.t ?? Infinity) && own.names.test(ck.name)).map((ck) => ck.name))] : [];
+    // How many page loads the denied GA4 hits came from: a stored client id only shows across two or more.
+    const pageLoads = platform === "ga4" ? new Set(before.filter((r) => r.hit.consent?.analytics_storage === "denied").map((r) => pageOf(r.hit))).size : 0;
+    const bad = violations.length || persisted || storedCookies.length;
+    return { platform, verdict: bad ? "violated" : "respected", hits: hits.length, before: before.length, cookieless, after: hits.length - before.length, violations, persisted, storedCookies, pageLoads };
   });
   const cut = grantAt?.t ?? Infinity;
   // Hits that say a signal was granted while the commands still said denied: something else updated consent.

@@ -6,6 +6,9 @@ import { consentReport, routesOf } from "../model.js";
 import { CONSENT_SIGNALS, PROVIDERS } from "../../core/parsers.js";
 import { card, consentWords, statePill } from "./common.js";
 
+// The cookies the "no ids stored" sentence names per Google platform.
+const STORAGE_NAMES = { ga4: "_ga", google_ads: "_gcl_*" };
+
 const at = (model, c) => ({ step: c.step + 1, time: ((c.t - (model.steps[c.step]?.t ?? c.t)) / 1000).toFixed(1) });
 
 /** The Consent tab's dot: ok (nothing sent against consent), bad (something was) or none (no consent mode seen). */
@@ -31,6 +34,12 @@ function changes(r) {
 }
 
 function lead(model, r) {
+  const p = leadText(model, r);
+  if (r.default?.source !== "tag") return p;
+  return [p, el("p", { class: "small", text: m().consent.fromTag })];
+}
+
+function leadText(model, r) {
   const c = m().consent;
   if (!r.default) return el("p", { class: "lead" }, el("span", { class: "muted", text: c.none }));
   const s = r.default.summary;
@@ -80,22 +89,23 @@ function respect(model, r) {
   const lines = r.platforms.map((p) => {
     const name = PROVIDERS[p.platform] ?? p.platform;
     if (p.verdict === "unknown") return el("div", { class: "resp" }, el("span", { class: "ri", style: { background: "var(--unset-tint)", color: "var(--unset)" }, text: "–" }), el("div", {}, el("b", { text: name }), el("div", { class: "sub", text: c.cantTell })));
-    if (p.verdict === "violated" && !p.violations.length) {
-      const { cid, pages, row } = p.persisted;
-      return el("div", { class: "resp" }, el("span", { class: "ri bad" }, icon("x")), el("div", {}, el("b", { text: c.persistedTitle(name) }),
-        el("div", { class: "sub" }, c.persistedBody(cid, pages), row ? [" ", button(c.seeHit, () => actions.showRow(row.key), { cls: "linkbtn" })] : null)));
-    }
+    // The reasons behind the verdict, each as its own sentence, so "respected" says what it rests on.
+    const kept = p.persisted ? c.persistedBody(p.persisted.cid, p.persisted.pages) : null;
+    const stored = p.storedCookies?.length ? c.storedCookies(p.storedCookies.join(", ")) : null;
+    const seeRow = (row) => (row ? [" ", button(c.seeHit, () => actions.showRow(row.key), { cls: "linkbtn" })] : null);
     if (p.verdict === "violated") {
       const first = p.violations[0];
-      const kept = p.persisted ? [" ", c.persistedBody(p.persisted.cid, p.persisted.pages)] : null;
-      const time = ((first.t - model.steps[first.step].t) / 1000).toFixed(1);
-      const before = r.cookiesBefore.filter((ck) => owner(ck.name) === p.platform).map((ck) => ck.name);
-      return el("div", { class: "resp" }, el("span", { class: "ri bad" }, icon("x")), el("div", {}, el("b", { text: c.violated(name) }),
-        el("div", { class: "sub" }, c.violatedBody(first.name, time, p.violations.length, before.join(", ")), kept, " ", button(c.seeHit, () => actions.showRow(first.key), { cls: "linkbtn" }))));
+      const title = first ? c.violated(name) : p.persisted ? c.persistedTitle(name) : c.storedTitle(name);
+      const lead = first ? c.violatedBody(first.name, ((first.t - model.steps[first.step].t) / 1000).toFixed(1), p.violations.length, r.cookiesBefore.filter((ck) => owner(ck.name) === p.platform).map((ck) => ck.name).join(", ")) : null;
+      const body = [lead, kept, stored].filter(Boolean).join(" ");
+      return el("div", { class: "resp" }, el("span", { class: "ri bad" }, icon("x")), el("div", {}, el("b", { text: title }),
+        el("div", { class: "sub" }, body, seeRow(first ?? p.persisted?.row))));
     }
-    const body = p.cookieless ? c.cookielessBody(p.cookieless) : c.nothingBefore;
-    const after = p.after ? ` ${c.afterHits(p.after)}` : "";
-    return el("div", { class: "resp" }, el("span", { class: "ri ok" }, icon("check")), el("div", {}, el("b", { text: c.respected(name) }), el("div", { class: "sub", text: body + after })));
+    const evidence = [p.cookieless ? c.cookielessBody(p.cookieless) : c.nothingBefore];
+    if (STORAGE_NAMES[p.platform]) evidence.push(c.noStoredCookies(STORAGE_NAMES[p.platform]));
+    if (p.platform === "ga4" && p.cookieless) evidence.push(p.pageLoads > 1 ? c.freshIds(p.pageLoads) : c.onePageLoad);
+    if (p.after) evidence.push(c.afterHits(p.after));
+    return el("div", { class: "resp" }, el("span", { class: "ri ok" }, icon("check")), el("div", {}, el("b", { text: c.respected(name) }), el("div", { class: "sub", text: evidence.join(" ") })));
   });
   if (!lines.length) return null;
   const n = r.platforms.filter((p) => p.verdict === "violated").length;

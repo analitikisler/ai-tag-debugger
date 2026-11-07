@@ -104,6 +104,14 @@ test("unnamed TikTok pings are not reported as duplicates, named ones still are"
   assert.equal(dup([tt("AddToCart"), tt("AddToCart")]).length, 1);
 });
 
+test("hits of one event with different contents are separate events; the same contents twice is a duplicate", () => {
+  const promo = (name, ts) => ({ platform: "ga4", name: "view_promotion", id: "G-1", params: { promotion_name: name, items: `id${name}`, timestamp: ts }, url: "https://www.google-analytics.com/g/collect?_p=1", step: 1 });
+  const base = { journeyId: "j", viewport: "desktop", completed: true, steps: [{ index: 0, label: "start" }, { index: 1, label: "Home" }], consentStep: 1, dataLayerLog: [] };
+  const dup = (hits) => checkRun({ events: [] }, { ...base, hits }).filter((f) => f.check === "duplicate");
+  assert.equal(dup([promo("A", 1), promo("B", 2), promo("C", 3)]).length, 0, "three banners");
+  assert.equal(dup([promo("A", 1), promo("A", 2)]).length, 1, "one banner sent twice, a moment apart");
+});
+
 test("finds planned events under site-specific names and parameter aliases", () => {
   const p = { events: [
     { platform: "ga4", name: "add_to_cart", required_params: ["value", "items"] },

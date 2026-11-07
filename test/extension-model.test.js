@@ -216,3 +216,40 @@ test("the Consent tab says GA4 kept its client id when a denied hit's cid comes 
   assert.equal(fresh.verdict, "respected");
   assert.equal(fresh.persisted, null);
 });
+
+// A consent platform's GTM template sets consent through the template API: no command in the dataLayer, only the
+// Google tag's own state, which the worker reads from the page.
+test("with no consent command in the dataLayer, the Consent tab reads the Google tag's own state", () => {
+  const ga = (p, gcs, cid = "1.1") => `https://region1.google-analytics.com/g/collect?v=2&tid=G-TEST1&cid=${cid}&_p=${p}&gcs=${gcs}&en=page_view`;
+  const denied = { ad_storage: { default: "denied" }, analytics_storage: { default: "denied" }, ad_user_data: { default: "denied" }, ad_personalization: { default: "denied" }, efilli_essential: { default: "granted" } };
+  const events = [
+    { t: 100, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 200, seq: 2, kind: "request", requestId: "a", method: "GET", url: ga("x", "G100") },
+    { t: 900, seq: 3, kind: "page", title: "Shop", registry: [], preloads: [], tagConsent: { entries: denied } },
+    { t: 1000, seq: 4, kind: "step", action: "navigate", url: "https://shop.example/cart", label: "Opened /cart" },
+    { t: 1100, seq: 5, kind: "request", requestId: "b", method: "GET", url: ga("y", "G100", "2.2") },
+    { t: 1500, seq: 6, kind: "request", requestId: "c", method: "GET", url: ga("y", "G111", "2.2") },
+    { t: 2500, seq: 7, kind: "page", title: "Cart", registry: [], preloads: [], tagConsent: { entries: { ...denied, ad_storage: { default: "denied", update: "granted" }, analytics_storage: { default: "denied", update: "granted" } } } },
+  ];
+  const report = M.consentReport(M.buildModel(events));
+  assert.equal(report.default.source, "tag");
+  assert.equal(report.default.summary, "denied");
+  assert.ok(report.default.t < 200, "the default applied before the first hit");
+  assert.equal(report.grantAt.source, "tag");
+  assert.equal(report.grantAt.t, 1499, "placed at the first hit that carried the update, not when the state was read");
+  const ga4 = report.platforms.find((p) => p.platform === "ga4");
+  assert.equal(ga4.verdict, "respected");
+  assert.deepEqual([ga4.cookieless, ga4.pageLoads, ga4.storedCookies], [2, 2, []]);
+});
+
+test("a _ga cookie written while analytics_storage was denied breaks GA4's consent even with cookieless hits", () => {
+  const events = [
+    { t: 100, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 110, seq: 2, kind: "push", entry: { value: ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }] } },
+    { t: 200, seq: 3, kind: "request", requestId: "a", method: "GET", url: "https://region1.google-analytics.com/g/collect?v=2&tid=G-TEST1&cid=1.1&_p=x&gcs=G100&en=page_view" },
+    { t: 300, seq: 4, kind: "cookies", cookies: [{ name: "_ga", domain: ".shop.example", hash: "a" }] },
+  ];
+  const ga4 = M.consentReport(M.buildModel(events)).platforms.find((p) => p.platform === "ga4");
+  assert.equal(ga4.verdict, "violated");
+  assert.deepEqual(ga4.storedCookies, ["_ga"]);
+});

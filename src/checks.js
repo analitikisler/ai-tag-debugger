@@ -126,7 +126,7 @@ const isPurchase = (hit) => canonicalEvent(hit.name) === "purchase";
 const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
 
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
-function pageOf(hit) {
+export function pageOf(hit) {
   try {
     const p = new URL(hit.url).searchParams.get("_p");
     if (p) return p;
@@ -152,6 +152,13 @@ export function persistedClientIds(hits) {
   }
   return [...byCid.values()].filter((g) => g.pages.size > 1)
     .map((g) => ({ ...g, pages: g.pages.size, second: g.hits.find((h) => pageOf(h) !== pageOf(g.hits[0])) }));
+}
+
+const TIMING_PARAM = /(^|_)(time|timestamp|ts|engagement_time_msec|unique_?event_?id|event_?id)$/i;
+/** What a hit says, without the fields that change between two sends of the same thing. */
+function contentOf(hit) {
+  const params = Object.entries(hit.params ?? {}).filter(([k]) => !TIMING_PARAM.test(k)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(params);
 }
 
 // Just before an address: a mailto: link or a link field (link_url=..., "link_text":"...").
@@ -296,7 +303,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // the same event sent to two Meta pixels or two GA4 properties is one send to each, not a duplicate.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}|${hit.id ?? ""}`;
+    // And so is what it says: three view_promotion hits for three banners on a page are three events, not one sent
+    // three times. Timing fields differ between true duplicates too, so they are left out of the comparison.
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}|${hit.id ?? ""}|${contentOf(hit)}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
