@@ -6,6 +6,10 @@ import { canonicalEvent, hasParam, hitMatchesEvent } from "../core/checks.js";
 import { decodeGa4Item } from "../core/glossary.js";
 import { siteOf } from "../core/redact.js";
 
+const pathname = (href) => {
+  try { return new URL(href).pathname; } catch { return String(href ?? ""); }
+};
+
 /** Platforms the setup offers, in its order and groups. DoubleClick and AdSense are recorded but never offered. */
 export const PLATFORM_GROUPS = [
   ["analytics", ["ga4", "adobe", "matomo", "piwik_pro"]],
@@ -116,6 +120,8 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
   };
   for (const e of sorted) {
     if (e.kind === "step") {
+      // A route change that keeps the path (query or hash only) is the same page, as the run builder does it.
+      if (cur && e.action === "route" && cur.url && pathname(e.url) === pathname(cur.url)) continue;
       // A reload as recording starts commits the same page twice; one step, as the run builder does it.
       if (cur && e.action !== "manual" && cur.url === e.url && cur.action === e.action && e.t - cur.t < 2000) continue;
       if (cur && cur.action === "start" && !cur.entries.length && !cur.pushes.length) steps.pop();
@@ -237,7 +243,11 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     if (r.kind === "hit") counts[r.platform] = (counts[r.platform] ?? 0) + 1;
     else other[r.vendor ?? "other"] = (other[r.vendor ?? "other"] ?? 0) + 1;
   }
-  return { steps, rows, pushes, consent, cookies: [...cookies.values()], counts, other, chosen: chosen ? [...chosen] : null, cmp, containers: [...containers] };
+  // The tracking IDs each platform sent to: when there are several (two Meta pixels, two GA4 properties) rows say which.
+  const ids = {};
+  for (const r of rows) if (r.kind === "hit" && r.hit.id) (ids[r.platform] ??= new Set()).add(r.hit.id);
+  const multiId = Object.fromEntries(Object.entries(ids).filter(([, set]) => set.size > 1).map(([k, set]) => [k, [...set]]));
+  return { multiId, steps, rows, pushes, consent, cookies: [...cookies.values()], counts, other, chosen: chosen ? [...chosen] : null, cmp, containers: [...containers] };
 }
 
 const hostOf = (url) => {

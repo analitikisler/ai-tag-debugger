@@ -1056,6 +1056,8 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent .cm-timing li{display:flex;align-items:center;flex-wrap:wrap;gap:4px var(--s3)}
 #consent .cm-timing .chip{min-width:92px}
 #consent .cm-runs{margin:var(--s3) 0 var(--s2)}
+#consent .cm-tag{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--border)}
+#consent .cm-tag>p{margin:0 0 var(--s2)}
 #consent .cm-find{margin-top:var(--s2)}
 #consent .cs-none{margin:var(--s2) 0 0}
 /* scenarios table */

@@ -24,6 +24,14 @@ export const pagePath = (href) => {
   try { const u = new URL(href); return /^https?:$/.test(u.protocol) ? u.origin + u.pathname : null; } catch { return null; }
 };
 
+/** A page's path, without query or fragment, to tell a new page from the same one with other parameters. */
+const pathOf = (href) => {
+  try { return new URL(href).pathname; } catch { return String(href ?? ""); }
+};
+
+/** A page title without the site name after it: "Lina Yemek Masası | Örnek Mobilya" -> "Lina Yemek Masası". */
+export const cleanTitle = (t) => String(t ?? "").split(/\s+[|·–—-]\s+/)[0].trim().slice(0, 80);
+
 /** The iframe something came from, as src/frames.js frameInfo() describes one; null for the page itself. */
 function frameOf(frameUrl, topUrl) {
   const o = originOf(frameUrl);
@@ -104,9 +112,15 @@ export function buildRun(events, info) {
 
   for (const e of sorted) {
     if (e.kind === "step") {
+      const last = steps.at(-1);
+      // A single-page app that changes the query or the hash (a filter, a tab, a modal) stays on the same page:
+      // it is the same step, not a new one.
+      if (last && e.action === "route" && pathOf(e.url) === pathOf(topUrl)) {
+        if (e.url) topUrl = e.url;
+        continue;
+      }
       if (e.url) topUrl = e.url;
       // Two navigations to the same address in a row (a reload as recording starts) stay one step.
-      const last = steps.at(-1);
       if (last && e.action !== "manual" && last.url === e.url && last.action === e.action && e.t - last.t < 2000) continue;
       step(String(e.label ?? "").slice(0, 120) || `Step ${steps.length}`, { t: e.t, action: e.action ?? "manual", ...(e.url ? { url: e.url } : {}) });
       continue;
@@ -220,11 +234,18 @@ export function buildRun(events, info) {
       const before = steps.slice(0, current()).map((x) => x.tagConsent).filter(Boolean).at(-1);
       if (e.tagConsent && JSON.stringify(e.tagConsent) !== JSON.stringify(st.tagConsent ?? before)) st.tagConsent = e.tagConsent;
       if (e.problem) st.pageProblem = e.problem;
+      if (e.title && !st.title) st.title = String(e.title).slice(0, 200);
       continue;
     }
     if (e.kind === "error") pageErrors.push({ step: current(), message: String(e.message ?? "").slice(0, 300) });
   }
   if (!steps.length) step(labels.start, { t: info.startedAt ?? Date.now(), action: "start", url: topUrl });
+  // Page loads and routes are named after the page's title, which says which page it was ("Lina Yemek Masası")
+  // where "Route /urun/lina-yemek-masasi" or a bare "Route /" does not. Steps the user named keep their name.
+  for (const st of steps) {
+    const title = cleanTitle(st.title);
+    if (title && (st.action === "navigate" || st.action === "route")) st.label = title;
+  }
   for (const [id, call] of calls) if (call.status === null && statuses.has(id)) call.status = statuses.get(id);
 
   return {

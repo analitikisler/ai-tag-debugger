@@ -8,7 +8,9 @@ export const badge = (platform, small = false) => el("span", { class: `pb ${plat
 export const GOOGLE = new Set(["ga4", "google_ads"]);
 
 /** A page title without the site name after it: "Lina Yemek Masası | Örnek Mobilya" → "Lina Yemek Masası". */
-export const cleanTitle = (t) => String(t ?? "").split(/\s+[|·–—-]\s+/)[0].trim();
+// One rule for the panel and the report: the run builder names steps after the same cleaned title.
+import { cleanTitle } from "../../lib/run.js";
+export { cleanTitle };
 
 /** The step's title, path and kind, as the step header and the findings' location chips show them. */
 export function stepInfo(step) {

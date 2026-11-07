@@ -189,3 +189,13 @@ test("a hit on a later page is not before consent because the page re-pushed a d
   assert.equal(second.beforeGrant, false);
   assert.equal(M.consentReport(m).platforms.find((p) => p.platform === "meta").violations.length, 1);
 });
+
+test("platforms that send to several IDs are listed, so rows can say which pixel each hit went to", () => {
+  const m = M.buildModel([
+    { t: 1, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 2, seq: 2, kind: "request", requestId: "a", method: "GET", url: "https://www.facebook.com/tr/?id=111&ev=PageView" },
+    { t: 3, seq: 3, kind: "request", requestId: "b", method: "GET", url: "https://www.facebook.com/tr/?id=222&ev=PageView" },
+    { t: 4, seq: 4, kind: "request", requestId: "c", method: "GET", url: `${GA}&en=page_view` },
+  ]);
+  assert.deepEqual(m.multiId, { meta: ["111", "222"] });
+});

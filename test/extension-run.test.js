@@ -189,3 +189,36 @@ test("a pixel sent before the visitor accepted, in the same step, is a before-co
   const found = analyze.analyze(lib.buildRun(events, { site: "https://shop.example" })).findings.filter((f) => f.check === "before_consent");
   assert.deepEqual(found.map((f) => f.event), ["PageView"]);
 });
+
+test("the same event sent to two Meta pixels is one send to each: no duplicate, and parity counts per pixel", () => {
+  const events = [
+    { t: 1, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/p", label: "Opened /p" },
+    { t: 10, seq: 2, kind: "request", requestId: "g", method: "GET", frameId: 0, url: `${GA}&en=add_to_cart&cu=TRY&epn.value=10` },
+    { t: 20, seq: 3, kind: "request", requestId: "m1", method: "GET", frameId: 0, url: "https://www.facebook.com/tr/?id=111&ev=AddToCart&cd[value]=10&cd[currency]=TRY" },
+    { t: 21, seq: 4, kind: "request", requestId: "m2", method: "GET", frameId: 0, url: "https://www.facebook.com/tr/?id=222&ev=AddToCart&cd[value]=10&cd[currency]=TRY" },
+  ];
+  const r = lib.buildRun(events, { site: "https://shop.example" });
+  const a = analyze.analyze(r);
+  assert.equal(a.findings.some((f) => f.check === "duplicate"), false);
+  const shared = a.metrics.parity[0].shared.find((x) => x.event === "addtocart");
+  assert.deepEqual(shared.mismatch, []);
+  assert.deepEqual(shared.platforms.meta.ids, ["111", "222"]);
+  // The same pixel twice is still a duplicate.
+  const twice = lib.buildRun([...events.slice(0, 3), { ...events[2], seq: 5, t: 22, requestId: "m3" }], { site: "https://shop.example" });
+  assert.equal(analyze.analyze(twice).findings.some((f) => f.check === "duplicate" && f.platform === "meta"), true);
+});
+
+test("steps are named after the page title, and a route change on the same path is the same step", () => {
+  const events = [
+    { t: 1, seq: 1, kind: "step", action: "navigate", url: "https://shop.example/", label: "Opened /" },
+    { t: 5, seq: 2, kind: "page", title: "Ana Sayfa | Örnek Mobilya" },
+    { t: 10, seq: 3, kind: "step", action: "route", url: "https://shop.example/masa?renk=ceviz", label: "Route /masa?…" },
+    { t: 15, seq: 4, kind: "page", title: "Masalar - Örnek Mobilya" },
+    // A filter that only changes the query: still the same page.
+    { t: 20, seq: 5, kind: "step", action: "route", url: "https://shop.example/masa?renk=mese", label: "Route /masa?…" },
+    { t: 30, seq: 6, kind: "step", action: "manual", label: "Add to cart" },
+  ];
+  const r = lib.buildRun(events, { site: "https://shop.example" });
+  assert.deepEqual(r.steps.map((s) => s.label), ["Ana Sayfa", "Masalar", "Add to cart"]);
+  assert.equal(lib.cleanTitle("Lina Yemek Masası | Örnek Mobilya"), "Lina Yemek Masası");
+});

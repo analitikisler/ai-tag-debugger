@@ -271,7 +271,7 @@ function parityNote(m, run, step, parity) {
   const events = new Set(hitsOf(run, step.index).map((h) => canonicalEvent(h.name)));
   const lines = (parity?.shared ?? []).filter((s) => s.mismatch.length && events.has(s.event));
   return lines.map((s) => {
-    const per = sortPlatforms(Object.keys(s.platforms)).map((k) => { const p = s.platforms[k]; return `<span class="jr-pp">${platChip(k, 13)}<code>${esc(p.names.join(" / "))}</code><span class="mono">${p.count}×${p.value !== null ? ` · ${esc(money(p.value, p.currency))}` : ""}</span></span>`; }).join("");
+    const per = sortPlatforms(Object.keys(s.platforms)).map((k) => { const p = s.platforms[k]; return `<span class="jr-pp">${platChip(k, 13)}<code>${esc(p.names.join(" / "))}</code><span class="mono">${p.count}×${p.ids?.length > 1 ? ` · ${esc(m.html.perIds(p.ids.length))}` : ""}${p.value !== null ? ` · ${esc(money(p.value, p.currency))}` : ""}</span></span>`; }).join("");
     return `<p class="jr-par">${use("sev-warning", 14)}<span class="jr-par-h">${esc(m.html.parity)}</span>${per}<b>${esc(s.mismatch.map((x) => m.html.mismatch[x] ?? x).join(", "))}</b></p>`;
   }).join("");
 }

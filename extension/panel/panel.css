@@ -490,6 +490,7 @@ table.ct td.sig .w { display: block; font: 10.5px/13px var(--mono); color: var(-
 :root { --p-ss: #0b6e6e; --p-ss-t: #ddf1ef; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --p-ss: #5fd3c9; --p-ss-t: #0f2f2d; } }
 :root[data-theme="dark"] { --p-ss: #5fd3c9; --p-ss-t: #0f2f2d; }
+.idtag { font: 500 10px/14px var(--mono); padding: 0 4px; margin-left: 6px; border-radius: 3px; color: var(--fg-2); background: var(--bg-hover); white-space: nowrap; }
 .route { font: 600 9px/14px var(--font); padding: 0 4px; border-radius: 3px; color: var(--p-ss); background: var(--p-ss-t); letter-spacing: .02em; white-space: nowrap; }
 .route.direct { color: var(--warning); background: var(--warning-tint); }
 .viewseg { display: flex; margin: 2px 12px 2px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px; gap: 2px; background: var(--bg); }

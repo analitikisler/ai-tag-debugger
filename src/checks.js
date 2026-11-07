@@ -272,10 +272,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // The same event sent more than once by a single action on one page. A step that loads a
-  // new page can also carry the previous page's last hits, so the page is part of the key.
+  // new page can also carry the previous page's last hits, so the page is part of the key. So is the tracking ID:
+  // the same event sent to two Meta pixels or two GA4 properties is one send to each, not a duplicate.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}`;
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}|${hit.id ?? ""}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {

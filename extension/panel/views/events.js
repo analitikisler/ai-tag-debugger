@@ -162,6 +162,16 @@ function rowLabel(row, summary, step) {
   return [`${BADGE[row.platform] ?? row.vendor ?? ""} ${row.name}`.trim(), summary, m().events.aria.time(secs(row.t, step.t)), plan, failed(row.status) ? String(row.status) : "", row.kind === "hit" && row.batch ? `${d.batch} ${d.batchOf(row.batch.index, row.batch.size)}` : ""].filter(Boolean).join(", ");
 }
 
+// Set by eventsList for the rows it draws.
+let multiId = {};
+
+/** Which pixel or property a hit went to, shown only when its platform sent to more than one (two Meta pixels). */
+function idTag(row) {
+  const id = row.kind === "hit" ? row.hit.id : null;
+  if (!id || !multiId[row.platform]) return null;
+  return el("span", { class: "idtag", title: id, text: id.length > 10 ? `…${id.slice(-6)}` : id });
+}
+
 function eventRow(row, step, match, batchPos) {
   const t = m().events;
   const open = state.open.has(row.key);
@@ -174,7 +184,7 @@ function eventRow(row, step, match, batchPos) {
     onclick: (e) => { if (e.target.closest("button, a")) return; actions.toggleRow(row.key, e.shiftKey); },
   },
   row.kind === "hit" ? badge(row.platform) : el("span", { class: "pb other", text: t.other }),
-  el("span", { class: "nm" }, el("b", { text: row.kind === "call" ? row.name.split("/").filter(Boolean).slice(-2).join("/") || row.name : row.name }), sum.text ? el("span", { class: `sum${sum.cls ? ` ${sum.cls}` : ""}`, text: sum.text }) : null),
+  el("span", { class: "nm" }, el("b", { text: row.kind === "call" ? row.name.split("/").filter(Boolean).slice(-2).join("/") || row.name : row.name }), idTag(row), sum.text ? el("span", { class: `sum${sum.cls ? ` ${sum.cls}` : ""}`, text: sum.text }) : null),
   el("span", { class: "rt" },
     (row.flags ?? []).map((f) => el("span", { class: "flag", title: t.flags[f], text: f === "_nsi" ? "NSI" : f.slice(1).toUpperCase() })),
     // A request that failed never reached the platform: its error is the row's state, and the plan check (which
@@ -240,6 +250,7 @@ function nothingYet(model, stopped) {
 }
 
 export function eventsList(model) {
+  multiId = model.multiId ?? {};
   const t = m().events;
   const { rows: visible } = visibleRows(model);
   const out = [];

@@ -213,7 +213,11 @@ export function platformParity({ runs = [] } = {}) {
         // A value that is not a number (a template left unresolved, a product name) stays as the text the
         // tag sent, so the report shows what the platform received instead of NaN. Only numbers are compared.
         const n = Number(value);
-        return [platform, { names: uniq(hits.map((h) => h.name)), count: hits.length, value: value === undefined ? null : Number.isFinite(n) ? n : String(value), currency: paramOf(valued, "currency") ?? null }];
+        // Counted per tracking ID: a site that sends to two Meta pixels sends each event twice, once to each,
+        // which is not the platform disagreeing with GA4.
+        const ids = uniq(hits.map((h) => h.id).filter(Boolean));
+        const perId = ids.length > 1 ? Math.max(...ids.map((id) => hits.filter((h) => h.id === id).length)) : hits.length;
+        return [platform, { names: uniq(hits.map((h) => h.name)), count: perId, ...(ids.length > 1 ? { ids } : {}), value: value === undefined ? null : Number.isFinite(n) ? n : String(value), currency: paramOf(valued, "currency") ?? null }];
       }));
       if (byPlatform.size < 2) {
         const [[platform, p]] = Object.entries(platforms);
