@@ -947,9 +947,9 @@ const en = {
       body2: "The panel, findings and reports use this language. Change it any time from ⋯.",
       mask: "Mask personal data on screen", maskHelp: "Hides emails, phone numbers and user IDs in the panel. Exports are always masked.",
       title3: "Allow access to websites",
-      body3: (name) => `To see tracking requests, ${name} needs to read the pages you record and the requests they send. Chrome will ask you once.`,
+      body3: (name) => `To see tracking requests, ${name} needs to read the pages you record and the requests they send. Access was limited in Chrome's extension settings; allow it for the sites to record.`,
       points: ["Only reads while you are recording, and only in that tab.", "Recordings are saved in this browser. Nothing is sent to us or anyone else.", "Remove access any time in chrome://extensions."],
-      chromeSays: "Chrome will show:", chromeWants: (name) => `“${name}” wants to`, chromePrompt: "Read and change all your data on all websites",
+      chromeSays: "Chrome asks:", chromeWants: (name) => `“${name}” wants to`, chromePrompt: "Read and change all your data on all websites",
     },
     theme: { system: "System", light: "Light", dark: "Dark" },
     status: {
@@ -2052,9 +2052,9 @@ const tr = {
       body2: "Panel, bulgular ve raporlar bu dili kullanır. İstenildiği zaman ⋯ menüsünden değiştirilebilir.",
       mask: "Ekrandaki kişisel verileri gizle", maskHelp: "Paneldeki e-posta, telefon ve kullanıcı kimliklerini gizler. Dışa aktarımlar her zaman maskelenir.",
       title3: "Web sitelerine erişim izni",
-      body3: (name) => `İzleme isteklerini görmek için ${name}, kaydedilen sayfaları ve bu sayfaların gönderdiği istekleri okur. Chrome bunun için bir kez izin ister.`,
+      body3: (name) => `İzleme isteklerini görmek için ${name}, kaydedilen sayfaları ve bu sayfaların gönderdiği istekleri okur. Chrome'un eklenti ayarlarında erişim kısıtlanmış; kaydedilecek siteler için izin verin.`,
       points: ["Yalnızca kayıt sırasında ve yalnızca o sekmede okur.", "Kayıtlar bu tarayıcıda saklanır. Bize ya da başka kimseye hiçbir şey gönderilmez.", "Erişim istenildiği zaman chrome://extensions sayfasından kaldırılabilir."],
-      chromeSays: "Chrome'un göstereceği:", chromeWants: (name) => `“${name}” şunları istiyor:`, chromePrompt: "Tüm web sitelerindeki tüm verileri okuma ve değiştirme",
+      chromeSays: "Chrome'un sorusu:", chromeWants: (name) => `“${name}” şunları istiyor:`, chromePrompt: "Tüm web sitelerindeki tüm verileri okuma ve değiştirme",
     },
     theme: { system: "Sistem", light: "Açık", dark: "Koyu" },
     status: {

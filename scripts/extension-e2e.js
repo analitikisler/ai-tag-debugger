@@ -1,11 +1,9 @@
-// End-to-end check of the Chrome extension: loads extension/ in Chromium, records a shopping journey on the demo shop
-// through the panel, stops, and checks the run, the findings and the report tab. Not part of `npm test` (it needs a
-// browser); run it with `npm run test:extension`. Nothing leaves the machine: no proxy is used and every host but localhost is unresolvable.
-//
-// A headless browser cannot answer Chrome's permission prompt, so the test loads a temporary copy of the extension
-// with the optional host access granted at install. Everything else is the extension as shipped.
+// End-to-end check of the Chrome extension: loads extension/ in Chromium exactly as shipped, records a shopping journey
+// on the demo shop through the panel, stops, and checks the run, the findings and the report tab. Not part of
+// `npm test` (it needs a browser); run it with `npm run test:extension`. Nothing leaves the machine: no proxy is used
+// and every host but localhost is unresolvable.
 import { createServer } from "node:http";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +26,16 @@ function serveShop() {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
 
+/** The extension's service worker once its extension APIs exist: right after launch, a first call can land before. */
+async function workerOf(context) {
+  const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
+  for (let i = 0; i < 100; i++) {
+    if (await sw.evaluate(() => typeof globalThis.chrome?.tabs === "object").catch(() => false)) return sw;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("The extension's service worker never got its APIs.");
+}
+
 const work = await mkdtemp(path.join(tmpdir(), "aitd-ext-"));
 const server = await serveShop();
 const base = `http://localhost:${server.address().port}`;
@@ -39,11 +47,10 @@ try {
     args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`, "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"],
   });
 
-  // As shipped, before any site access is granted: the panel must know the tab's site and offer Record, which is
-  // what asks for access. (A panel that can't read the address until access is granted never gets to ask.)
+  // As shipped, before anything is recorded: the panel names the site and offers Record.
   const shipped = await launch(path.join(ROOT, "extension"), "profile-shipped");
   try {
-    const sw = shipped.serviceWorkers()[0] ?? (await shipped.waitForEvent("serviceworker"));
+    const sw = await workerOf(shipped);
     const page = await shipped.newPage();
     await page.goto(`${base}/`);
     const tab = await sw.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/*` }))[0]?.id, base);
@@ -53,21 +60,14 @@ try {
     const p = await shipped.newPage();
     await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html?tab=${tab}`);
     await p.waitForFunction(() => document.getElementById("host").textContent === "localhost", null, { timeout: 10_000 }).catch(() => {});
-    assert.equal(await p.textContent("#host"), "localhost", "the panel names the site before access is granted");
-    assert.equal(await p.isEnabled("#record"), true, "Record can be pressed before access is granted");
+    assert.equal(await p.textContent("#host"), "localhost", "the panel names the site");
+    assert.equal(await p.isEnabled("#record"), true, "Record can be pressed");
   } finally {
     await shipped.close();
   }
 
-  const ext = path.join(work, "extension");
-  await cp(path.join(ROOT, "extension"), ext, { recursive: true });
-  const manifest = JSON.parse(await readFile(path.join(ext, "manifest.json"), "utf8"));
-  manifest.host_permissions = manifest.optional_host_permissions;
-  delete manifest.optional_host_permissions;
-  await writeFile(path.join(ext, "manifest.json"), JSON.stringify(manifest));
-
-  context = await launch(ext, "profile");
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
+  context = await launch(path.join(ROOT, "extension"), "profile");
+  const worker = await workerOf(context);
   const id = new URL(worker.url()).host;
 
   const shop = await context.newPage();

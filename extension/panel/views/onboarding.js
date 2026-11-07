@@ -36,7 +36,13 @@ export function onboardingView() {
       el("h2", { class: "h3", text: t.privacy }),
       el("label", { class: "opt" }, el("input", { type: "checkbox", checked: state.mask, onchange: (e) => actions.setMask(e.target.checked) }), el("span", { class: "cb" }, icon("check")),
         el("span", {}, el("b", { text: t.mask }), el("span", { class: "small", text: t.maskHelp })))];
-    next = button(t.next, () => actions.tourTo(2), { cls: "btn primary lg", id: "obNext" });
+    // Site access comes with the install; the access screen is only for someone who limited it in Chrome's
+    // extension settings ("on click" or "on specific sites").
+    next = button(t.next, async () => {
+      const granted = await chrome.permissions.contains(SITES).catch(() => false);
+      if (granted) await actions.finishTour(true);
+      else actions.tourTo(2);
+    }, { cls: "btn primary lg", id: "obNext" });
   } else {
     body = [title(t.title3), el("p", { class: "p", style: { marginTop: "8px" }, text: t.body3(m().name) }),
       el("div", { class: "perm-list" }, t.points.map((p) => el("div", {}, icon("check"), el("span", { text: p })))),

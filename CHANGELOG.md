@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: the Chrome extension declared site access as optional, so Chrome refused its request listeners ("You need to request host permissions in the manifest file…") and tracking requests could go unrecorded. Site access is now part of the install, as `webRequest` requires.
 - `before_consent` now compares times within the step the visitor accepted in, so a pixel that fired on page load, before the banner was answered on the same page, is reported.
 - Fixed: GA4's user ID (`uid`, `user_id`) was reported as unhashed personal data. It is the site's own pseudonymous ID, sent as it is by design; it is still masked, and is flagged only when its value is an email address or a phone number.
 - New check `hit_failed` (broken) on live runs: tracking requests that failed or got an HTTP error, so those events never reached the platform.
