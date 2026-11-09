@@ -68,7 +68,7 @@ let seq = 0;
 const counts = new Map(); // rec -> { hits, pushes, steps }
 
 async function record(rec, event, tabId) {
-  const e = { t: Date.now(), seq: ++seq, ...event };
+  const e = { t: Date.now(), ...event, seq: ++seq };
   await addEvents(rec, [e]);
   const c = counts.get(rec) ?? { requests: 0, pushes: 0, steps: 0 };
   if (event.kind === "request") c.requests += 1;
@@ -129,6 +129,60 @@ const pathOf = (url) => {
 
 const recorded = new Set(); // request ids recorded, so their status is too
 
+// ---------- the page being left ----------
+//
+// A recording that starts with a reload must not take in the old page's goodbye hits (gtag's user_engagement on
+// pagehide). Chrome can send them after the new page commits and even after its first script ran, with the new
+// page's document id, so neither time nor id tells them apart. So before the reload, the old page is told to name
+// every request it sends from then on; the worker drops requests it named. The site's requests go out unchanged.
+
+const leaving = new Map(); // tabId -> { urls: Set<string>, until }
+const LEAVING_WAIT_MS = 300; // how long a request waits for the old page's word, in the window after the reload
+
+/** Runs in the old page (MAIN world): wraps the ways a tag sends a hit, each calling the original as it was. */
+function nameOutgoingInPage() {
+  if (window.__aitdLeaving) return;
+  window.__aitdLeaving = true;
+  const tell = (u) => {
+    try { window.dispatchEvent(new CustomEvent("__aitd_leaving", { detail: new URL(String(u), location.href).href })); } catch { /* not a URL */ }
+  };
+  const beacon = navigator.sendBeacon?.bind(navigator);
+  if (beacon) navigator.sendBeacon = function (url, data) { tell(url); return beacon(url, data); };
+  const fetch0 = window.fetch;
+  if (fetch0) window.fetch = function (input) { tell(input instanceof Request ? input.url : input); return fetch0.apply(this, arguments); };
+  const open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) { tell(url); return open.apply(this, arguments); };
+  const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+  if (src?.set) Object.defineProperty(HTMLImageElement.prototype, "src", { ...src, set(v) { tell(v); src.set.call(this, v); } });
+}
+
+/** Runs in the old page (isolated world): passes what the MAIN-world wrapper named on to the worker. */
+function relayLeavingInPage() {
+  if (window.__aitdLeavingRelay) return;
+  window.__aitdLeavingRelay = true;
+  window.addEventListener("__aitd_leaving", (e) => {
+    if (typeof e.detail === "string" && e.detail.length < 8192) chrome.runtime.sendMessage({ type: "leaving", url: e.detail }).catch(() => {});
+  });
+}
+
+async function markLeaving(tabId) {
+  leaving.set(tabId, { urls: new Set(), until: Date.now() + 15_000 });
+  const target = { tabId, allFrames: true };
+  await chrome.scripting.executeScript({ target, world: "ISOLATED", func: relayLeavingInPage }).catch(() => {});
+  await chrome.scripting.executeScript({ target, world: "MAIN", func: nameOutgoingInPage }).catch(() => {});
+}
+
+/** Whether a request is the old page's: in the window after the reload it waits a moment for the page's word. */
+async function fromLeavingPage(tabId, url) {
+  const l = leaving.get(tabId);
+  if (!l) return false;
+  if (Date.now() > l.until) { leaving.delete(tabId); return false; }
+  if (!l.urls.has(url)) await new Promise((resolve) => setTimeout(resolve, LEAVING_WAIT_MS));
+  if (!l.urls.has(url)) return false;
+  l.urls.delete(url);
+  return true;
+}
+
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     // Returning nothing keeps the request untouched; the work happens after.
@@ -139,10 +193,13 @@ chrome.webRequest.onBeforeRequest.addListener(
       if (a?.armed === false) return;
       // A server container's or the tag gateway's /_/set_cookie call is kept too: it is how first-party cookies get set.
       if (!a || (!providerOf(details.url) && !/\/_\/set_cookie\/?(\?|$)/.test(details.url))) return;
+      const t = Date.now();
+      // Marked first: the response can come back while the request waits, and its status must not be lost.
       recorded.add(details.requestId);
+      if (await fromLeavingPage(details.tabId, details.url)) { recorded.delete(details.requestId); return; }
       const body = details.method === "POST" ? await bodyText(details.requestBody) : null;
       await record(a.rec, {
-        kind: "request", requestId: details.requestId, url: details.url, method: details.method,
+        t, kind: "request", requestId: details.requestId, url: details.url, method: details.method,
         type: details.type === "xmlhttprequest" ? "xhr" : details.type === "main_frame" || details.type === "sub_frame" ? "document" : details.type,
         frameId: details.frameId, initiator: details.initiator ?? null, ...(body !== null ? { body } : {}),
       }, details.tabId);
@@ -178,7 +235,12 @@ chrome.webNavigation.onCommitted.addListener(async (d) => {
   if (d.frameId !== 0) return;
   const a = await recordingFor(d.tabId);
   if (!a) return;
-  if (a.armed === false) await arm(d.tabId);
+  if (a.armed === false) {
+    await arm(d.tabId);
+    // The old page's pagehide runs around the commit; a few seconds is plenty.
+    const l = leaving.get(d.tabId);
+    if (l) l.until = Math.min(l.until, Date.now() + 3000);
+  }
   const m = messages(await language()).extension;
   await record(a.rec, { kind: "step", action: "navigate", url: d.url, label: m.stepOpened(pathOf(d.url)) }, d.tabId);
 });
@@ -333,7 +395,10 @@ async function start(tabId, url, providers = null, { reload = true, clearCookies
   if (clearCookies) await clearSite(u.origin);
   await snapshotCookies(rec, tabId, url);
   // A reload records the page from its first request, with the hook in place before the site's scripts run.
-  if (reload || clearCookies) await chrome.tabs.reload(tabId);
+  if (reload || clearCookies) {
+    await markLeaving(tabId);
+    await chrome.tabs.reload(tabId);
+  }
   else await record(rec, { kind: "step", action: "navigate", url, label: messages(await language()).extension.stepOpened(pathOf(url)) }, tabId);
   return { rec };
 }
@@ -371,6 +436,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (!a || a.armed === false || !["push", "load", "message"].includes(msg.kind)) return;
       return record(a.rec, { kind: msg.kind, entry: msg.entry, frameUrl: String(msg.frameUrl ?? ""), top: sender.frameId === 0 }, sender.tab.id);
     }).catch(() => {});
+    return false;
+  }
+  // From the page being left (relayLeavingInPage): a request it is sending. Used only to leave that request out.
+  if (msg?.type === "leaving" && sender.tab && !fromExtensionPage) {
+    const l = leaving.get(sender.tab.id);
+    if (l && typeof msg.url === "string" && l.urls.size < 500) l.urls.add(msg.url);
     return false;
   }
   // From the panel, an extension page: only those may start or stop a recording, never a web page's content script.
