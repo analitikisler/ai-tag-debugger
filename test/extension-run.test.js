@@ -177,6 +177,9 @@ test("a tracking request that failed on a live recording is a broken finding", (
   assert.match(analyze.analyze(onlyFailed).verdict.headline, /GA4 delivery is broken/);
   // The CLI's own runs answer tracking requests in the browser, so the check stays off there.
   assert.equal(analyze.analyze({ ...run, live: false }).findings.some((f) => f.check === "hit_failed"), false);
+  // A request the browser cancelled as the page was left may well have been sent: no failure.
+  const aborted = lib.buildRun([EVENTS[1], { ...EVENTS[3], url: `${GA}&en=user_engagement` }, { t: 1350, seq: 5, kind: "status", requestId: "r1", status: "aborted" }], { site: "https://shop.example" });
+  assert.equal(analyze.analyze(aborted).findings.some((f) => f.check === "hit_failed"), false);
 });
 
 test("a pixel sent before the visitor accepted, in the same step, is a before-consent risk", () => {

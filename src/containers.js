@@ -23,6 +23,9 @@ export function containerOf(url) {
   if (!CONTAINER_ID.test(id)) return null;
   const script = /\/gtm\.js$/.test(u.pathname) ? "gtm" : /\/gtag\/js$/.test(u.pathname) ? "gtag" : null;
   if (!script) return null;
+  // A container served from the site's own domain fetches Google's copy with gtg_health=1 to check that serving
+  // works. That copy is a probe, not a second install of the container.
+  if (u.searchParams.has("gtg_health")) return null;
   const environment = u.searchParams.get("gtm_preview") || (u.searchParams.has("gtm_auth") ? "unnamed" : null);
   return {
     id,

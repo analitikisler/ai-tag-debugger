@@ -227,7 +227,9 @@ const onDone = (details, status, software = null) => {
   recordingFor(details.tabId).then((a) => a && record(a.rec, { kind: "status", requestId: details.requestId, status, ...(software ? { software } : {}) })).catch(() => {});
 };
 chrome.webRequest.onCompleted.addListener((d) => onDone(d, d.statusCode, softwareOf(d.responseHeaders)), { urls: ["http://*/*", "https://*/*"] }, ["responseHeaders"]);
-chrome.webRequest.onErrorOccurred.addListener((d) => onDone(d, "failed"), { urls: ["http://*/*", "https://*/*"] });
+// A request the browser cancelled (a goodbye hit as the page is left, a page that navigated away) is "aborted": it may
+// well have been sent, and it says nothing about the site's setup, so it is no failure.
+chrome.webRequest.onErrorOccurred.addListener((d) => onDone(d, d.error === "net::ERR_ABORTED" ? "aborted" : "failed"), { urls: ["http://*/*", "https://*/*"] });
 
 // ---------- navigation ----------
 

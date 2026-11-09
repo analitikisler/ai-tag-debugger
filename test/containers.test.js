@@ -330,3 +330,8 @@ test("copies of a container a consent blocker builds but never runs are not load
   assert.deepEqual(run.containerLoads.map((l) => `${l.id} ${l.how}`), ["GTM-ONCE script"]);
   assert.deepEqual(checkRun({ events: [] }, run).filter((f) => f.check === "container_duplicate"), []);
 });
+
+test("Google's gtg_health copy of a first-party served container is a probe, not a container load", () => {
+  assert.equal(containerOf("https://www.googletagmanager.com/gtm.js?id=GTM-ABC12&gtg_health=1"), null);
+  assert.equal(containerOf("https://sgtm.example.com/gtm.js?id=GTM-ABC12").served, "site");
+});

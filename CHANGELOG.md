@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: a container served from the site's own domain read as loaded twice (`container_duplicate`), because Google's own script fetches a `gtg_health=1` copy from googletagmanager.com to check that first-party serving works. That probe is no longer counted as a container load.
+- Fixed in the extension: a tracking request the browser cancelled as the page was left (`net::ERR_ABORTED`) was reported as a delivery failure (`hit_failed`). It is now marked as aborted, which is no failure.
 - Fixed: a recording that starts with a reload could take in the previous page's goodbye hit (gtag's `user_engagement` on leaving), because Chrome can send it after the new page has started. Before the reload, the page being left now names each request it sends, and those requests are left out; they still reach the site's accounts unchanged.
 - The CLI and the extension recognise an ai tagging server by the `x-tagging-server` header it sends on tracking responses. Its hits carry the ai tagging server badge with no setup, the extension offers to connect it for per-hit traces, and the report's server-side finding names it. Where a site uses another server container (server-side GTM, Stape, Elevar), the extension's "Where hits go" card mentions the ai tagging server as an open-source alternative.
 - The Chrome extension connects to an ai tagging server (⋯ menu → ai tagging server…, with its address and admin token). Each hit sent to it then shows which client claimed it, which tags fired, failed or skipped and why, and what the server sent onward to GA4, Meta and the others. Only the traces of the recorded tab's own requests are kept.
