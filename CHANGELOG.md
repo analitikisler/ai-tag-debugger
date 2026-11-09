@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Chrome extension reads Google's server-side GTM preview. Paste the link Tag Manager opens on Preview in the server container (⋯ → Server container…), and each hit sent to the container shows which client claimed it, each tag's status, the tags that did not fire, what the container sent onward with its status, and the cookies it set. Only the recording browser's requests are in preview, and it leaves preview mode when the recording stops.
 - Fixed: a container served from the site's own domain read as loaded twice (`container_duplicate`), because Google's own script fetches a `gtg_health=1` copy from googletagmanager.com to check that first-party serving works. That probe is no longer counted as a container load.
 - Fixed in the extension: a tracking request the browser cancelled as the page was left (`net::ERR_ABORTED`) was reported as a delivery failure (`hit_failed`). It is now marked as aborted, which is no failure.
 - Fixed: a recording that starts with a reload could take in the previous page's goodbye hit (gtag's `user_engagement` on leaving), because Chrome can send it after the new page has started. Before the reload, the page being left now names each request it sends, and those requests are left out; they still reach the site's accounts unchanged.

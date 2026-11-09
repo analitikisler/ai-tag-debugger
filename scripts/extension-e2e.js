@@ -44,10 +44,53 @@ function tagServer(req, res, url) {
   return true;
 }
 
+// A stand-in for Google's server-side GTM under /sgtm: /gtm/debug opens a preview session, a hit that carries the
+// preview cookies is queued, and /gtm/get_memo answers with it in the stream's real format (test/fixtures/), or with
+// 204 after a while, as the real one does after about 20 s.
+const memoTemplate = (await readFile(path.join(ROOT, "test", "fixtures", "sgtm-memo.txt"), "utf8")).replace(/^\)\]\}'\n/, "");
+const memoQueue = [];
+let memoWaiter = null;
+function sgtmServer(req, res, url) {
+  if (url.pathname === "/sgtm/gtm/debug") {
+    res.writeHead(200, { "content-type": "text/html" }).end('<!DOCTYPE html><html><head><meta name="sgtm:debug-session" content="e2esession01"></head></html>');
+    return true;
+  }
+  if (url.pathname === "/sgtm/g/collect") {
+    const cookies = String(req.headers.cookie ?? "");
+    if (cookies.includes("gtm_debug=GTM-E2E0001=e2esession01") && cookies.includes("gtm_auth=GTM-E2E0001=e2eauth01")) {
+      const path0 = (url.pathname + url.search).replace(/^\/sgtm/, "");
+      memoQueue.push(memoTemplate.replace(/\/g\/collect\?v=2[^"]*/g, path0).replace(/1a1bf6d7c7f044b4a1af2/g, `group${memoQueue.length}`));
+      memoWaiter?.();
+    }
+    res.writeHead(200).end();
+    return true;
+  }
+  if (url.pathname === "/sgtm/gtm/get_memo") {
+    const answer = () => {
+      memoWaiter = null;
+      if (!memoQueue.length) return res.writeHead(204).end();
+      const all = memoQueue.splice(0).map((t) => Object.values(JSON.parse(t))[0]).flat();
+      res.writeHead(200, { "content-type": "application/json" }).end(`)]}'\n${JSON.stringify({ "GTM-E2E0001": all })}`);
+    };
+    if (memoQueue.length) return answer(), true;
+    const timer = setTimeout(answer, 3000);
+    memoWaiter = () => { clearTimeout(timer); answer(); };
+    return true;
+  }
+  return false;
+}
+
 function serveShop() {
   const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
   const server = createServer(async (req, res) => {
     if (tagServer(req, res, new URL(req.url, "http://x"))) return;
+    if (sgtmServer(req, res, new URL(req.url, "http://x"))) return;
+    // A page whose Google tag sends to a server-side GTM container under /sgtm, with its cookies.
+    if (new URL(req.url, "http://x").pathname === "/sgtm.html") {
+      return res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`<!doctype html><title>sGTM</title><script>
+setTimeout(() => fetch("/sgtm/g/collect?v=2&tid=G-SGTM1&cid=7.7&_p=" + Date.now() + "&_s=1&en=page_view", { credentials: "include", keepalive: true }), 300);
+</script>`);
+    }
     // A page whose Google tag sends to the site's own server container, as server_container_url makes it.
     if (new URL(req.url, "http://x").pathname === "/sst.html") {
       return res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(`<!doctype html><title>Server</title><script>
@@ -224,9 +267,9 @@ try {
     const row = buildModel(await getEvents(rec.id)).rows.find((r) => r.kind === "hit" && r.e.url.includes("G-SST1"));
     return { route: row?.route?.kind, server: row?.server };
   });
-  assert.deepEqual(named, { route: "aits", server: { detected: true } }, "the header names the server");
+  assert.deepEqual(named, { route: "aits", server: { kind: "aits", detected: true } }, "the header names the server");
   await sstPanel.click("#more");
-  await sstPanel.click("text=ai tagging server…");
+  await sstPanel.click("text=Server container…");
   await sstPanel.fill("#srvUrl", base);
   await sstPanel.fill("#srvToken", "wrong");
   await sstPanel.click("#srvSave");
@@ -266,7 +309,40 @@ try {
   }
   assert.deepEqual(errors, [], "no errors in the panel");
 
-  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out; the ai tagging server's trace landed under its hit`);
+  // Google's server-side GTM: connected with the preview link, the container's preview of the hit lands under it.
+  const gTab = await context.newPage();
+  await gTab.goto(`${base}/sgtm.html`);
+  const gTabId = await worker.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/sgtm.html` }))[0].id, base);
+  const gPanel = await context.newPage();
+  gPanel.on("pageerror", (e) => errors.push(e.message));
+  await gPanel.goto(`chrome-extension://${id}/panel/panel.html?tab=${gTabId}`);
+  await gPanel.click("#more");
+  await gPanel.click("text=Server container…");
+  await gPanel.fill("#srvUrl", `${base}/sgtm/gtm/debug?id=GTM-E2E0001&gtm_auth=e2eauth01&gtm_preview=env-7&hl=en`);
+  await gPanel.click("#srvSave");
+  await gPanel.waitForSelector(`text=Connected to ${base}/sgtm`);
+  await gPanel.click(".sheet .btn:not(.primary):not(#srvRemove)").catch(() => {});
+  await gPanel.click("#startOver");
+  await gPanel.click("#resetGo");
+  await gPanel.click("#record");
+  await gPanel.waitForSelector("#stop:not([hidden])");
+  await gTab.waitForLoadState("load");
+  await gTab.waitForTimeout(3000);
+  await gPanel.click("#stop");
+  await gPanel.waitForTimeout(2500);
+  const g = await gPanel.evaluate(async () => {
+    const { listRecordings, getEvents } = await import("../lib/store.js");
+    const { buildModel } = await import("./model.js");
+    const [rec] = await listRecordings();
+    const row = buildModel(await getEvents(rec.id)).rows.find((r) => r.kind === "hit" && r.e.url.includes("G-SGTM1"));
+    return { route: row?.route?.kind, kind: row?.server?.kind, client: row?.server?.client, tags: row?.server?.tags?.map((x) => `${x.tag}:${x.outcome}`), sends: row?.server?.sends?.map((x) => `${x.to} ${x.status}`) };
+  });
+  // Under a path on the site's own host, the route reads as a gateway; the preview data is the container's all the same.
+  assert.deepEqual(g, { route: "gateway", kind: "sgtm", client: "GA4", tags: ["Google Analytics GA4:success"], sends: ["www.google-analytics.com/g/collect 204"] }, "the preview lands under its hit");
+  assert.deepEqual((await context.cookies(base)).filter((c) => c.name.startsWith("gtm_")), [], "the browser leaves preview mode when the recording stops");
+  assert.deepEqual(errors, [], "no errors in the panel");
+
+  console.log(`ok: ${result.hits.length} hits, ${result.pushes} pushes, ${result.steps.length} steps; findings: ${result.checks.join(", ")}; the reloaded page's goodbye hit was left out; the ai tagging server's trace and the sGTM preview landed under their hits`);
 } finally {
   await context?.close();
   server.close();

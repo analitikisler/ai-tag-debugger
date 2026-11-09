@@ -174,29 +174,34 @@ function consentCard(row, model) {
   });
 }
 
-/** What the connected ai tagging server did with this hit: the client, each tag's outcome, and each send. */
+/** What the connected server container did with this hit: the client, each tag's outcome, each send, its cookies. */
 function serverCard(row) {
   const t = m().server;
   const sv = row.server;
   if (!sv) return null;
+  const sgtm = sv.kind === "sgtm";
+  const title = sgtm ? t.sgtmTitle : t.title;
+  const logo = sgtm ? null : aitsLogo();
   const note = (text) => el("div", { class: "cfoot", text });
   if (sv.detected) {
-    return card(t.title, { key: `sv:${row.key}`, right: aitsLogo(), body: el("div", { class: "cfoot" }, t.detected, " ",
+    return card(title, { key: `sv:${row.key}`, right: logo, body: el("div", { class: "cfoot" }, t.detected, " ",
       button(t.connect, () => { state.layer = { kind: "server" }; render(); }, { cls: "linkbtn" }), el("br"), t.about, " ", aitsLink()) });
   }
-  if (sv.waiting) return card(t.title, { key: `sv:${row.key}`, right: aitsLogo(), body: note(state.live ? t.waiting : t.missing) });
-  const tone = (outcome) => (outcome === "success" ? "okc" : outcome === "skipped" ? "" : "warnc");
+  if (sv.waiting) return card(title, { key: `sv:${row.key}`, right: logo, body: note(state.live ? t.waiting : sgtm ? t.missingPreview : t.missing) });
+  const tone = (outcome) => (outcome === "success" ? "okc" : outcome === "skipped" || outcome === "running" ? "" : "warnc");
   const line = (cls, ico, ...text) => el("div", { class: `check-line ${cls}` }, ico ? icon(ico, "s") : null, el("span", {}, text));
-  const tags = sv.tags.map((x) => line(tone(x.outcome), x.outcome === "success" ? "check" : x.outcome === "skipped" ? null : "warn",
+  const tags = sv.tags.map((x) => line(tone(x.outcome), x.outcome === "success" ? "check" : x.outcome === "skipped" || x.outcome === "running" ? null : "warn",
     el("b", { text: x.tag }), ` · ${t.outcome[x.outcome] ?? x.outcome}`, x.skip ? ` (${x.skip})` : "", x.error ? ` (${x.error})` : ""));
   const notFired = sv.notFired.length ? note(t.notFired(sv.notFired.map((x) => (x.enabled ? x.tag : `${x.tag} (${t.off})`)).join(", "))) : null;
   const sends = sv.sends.map((x) => line(x.status !== null && x.status < 400 ? "okc" : "warnc", x.status !== null && x.status < 400 ? "check" : "warn",
     el("span", { class: "mono", text: `${x.method ?? ""} ${x.to}` }), ` → ${x.status ?? x.error ?? "?"}`, x.from ? ` · ${x.from}` : ""));
   const client = sv.client ? t.claimedBy(sv.client) : t.noClient;
-  return card(t.title, { key: `sv:${row.key}`, right: [aitsLogo(), sv.status ? ` ${sv.status}` : null], body: [
+  const cookies = sv.cookies?.length ? note(t.cookiesSet(sv.cookies.join(", "))) : null;
+  return card(title, { key: `sv:${row.key}`, right: [logo, sv.status ? ` ${sv.status}` : null], body: [
     note([client, sv.clientError ? ` (${sv.clientError})` : "", sv.error ? ` · ${sv.error}` : ""].join("")),
     sv.client ? [el("div", { class: "sec-sub", text: t.tags }), tags.length ? tags : note(t.noTags), notFired] : null,
     sends.length ? [el("div", { class: "sec-sub", text: t.sends }), sends] : null,
+    cookies,
   ] });
 }
 

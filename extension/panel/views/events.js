@@ -286,7 +286,7 @@ export function eventsList(model) {
     if (!anyHit && Date.now() - (state.recording?.startedAt ?? Date.now()) > 15000) out.push(nothingYet(model, false));
   } else if (!anyHit && state.recording) out.push(nothingYet(model, true));
   // A connected ai tagging server that stopped answering: its traces are missing for a reason worth saying.
-  if (model.server?.state === "error") out.unshift(el("div", { class: "note", style: { margin: "8px 12px" } }, icon("warn"), el("span", { text: `${m().server.title}: ${m().server.error(model.server.detail)}` })));
+  if (model.server?.state === "error") out.unshift(el("div", { class: "note", style: { margin: "8px 12px" } }, icon("warn"), el("span", { text: `${model.server.kind === "sgtm" ? m().server.sgtmTitle : m().server.title}: ${m().server.error(model.server.detail)}` })));
   return el("div", { class: "list", role: "tree", "aria-label": m().tabs.events }, out);
 }
 

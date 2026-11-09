@@ -1052,22 +1052,26 @@ const en = {
       },
     },
     server: {
-      title: "ai tagging server", menu: "ai tagging server…",
+      title: "ai tagging server", menu: "Server container…", sgtmTitle: "Server-side GTM (preview)",
       claimedBy: (client) => `Claimed by ${client}`,
       noClient: "No client claimed this hit, so no tag ran.",
-      outcome: { success: "sent", failure: "failed", exception: "error", timeout: "timed out", skipped: "skipped" },
+      outcome: { success: "sent", failure: "failed", exception: "error", timeout: "timed out", skipped: "skipped", running: "still running" },
+      cookiesSet: (names) => `Set cookies: ${names}`,
+      missingPreview: "This hit did not show up in the container's preview. It may have been sent before the preview opened, or without the preview cookies.",
       tags: "Tags", sends: "Sent onward", noTags: "No tag fired for this event.",
       notFired: (list) => `Did not fire (conditions not met): ${list}`, off: "off",
       waiting: "Waiting for the server's trace of this hit…",
       missing: "The server kept no trace of this hit: its trace buffer may be off (TRACE_BUFFER=0) or already full.",
-      error: (code) => (code === "401" || code === "403" ? "The admin token was refused."
+      error: (code) => (code === "preview" ? "No server container with that ID answered the preview link. Open Preview again in Tag Manager and copy the new link."
+        : code === "nodata" ? "Hits reached the container but not its preview. The preview link may be out of date: open Preview again in Tag Manager and paste the new link."
+          : code === "401" || code === "403" ? "The admin token was refused."
         : code === "404" ? "No admin API at this address. Is ADMIN_TOKEN set on the server?"
           : code === "url" ? "Use an https address (http only for localhost)."
             : code === "not" ? "This address answered, but not as an ai tagging server."
               : "The server could not be reached."),
-      sheetTitle: "Connect an ai tagging server",
-      sheetBody: (host) => `See what the server did with each hit from ${host}: which client claimed it, which tags fired or why not, and what it sent to GA4, Meta and the others. The admin token stays on this computer and is sent only to this server.`,
-      url: "Server address", urlPlaceholder: "https://sst.example.com", token: "Admin token",
+      sheetTitle: "Connect a server container",
+      sheetBody: (host) => `See what the server container did with each hit from ${host}: which client claimed it, which tags fired or why not, and what it sent to GA4, Meta and the others. For an ai tagging server, enter its address and admin token. For Google's server-side GTM, paste the link Tag Manager opens when you press Preview in the server container (…/gtm/debug?id=GTM-…). What you enter stays on this computer and is sent only to that server.`,
+      url: "Server address or preview link", urlPlaceholder: "https://sst.example.com", token: "Admin token (ai tagging server only)",
       save: "Test and connect", testing: "Testing…", remove: "Disconnect",
       connected: (url) => `Connected to ${url}. It applies from the next recording.`,
       detected: "This hit went through an ai tagging server: the server named itself on the response. Connect it to see which client claimed the hit, which tags fired and what was sent onward.",
@@ -2196,22 +2200,26 @@ const tr = {
       },
     },
     server: {
-      title: "ai tagging server", menu: "ai tagging server…",
+      title: "ai tagging server", menu: "Sunucu container'ı…", sgtmTitle: "Sunucu tarafı GTM (önizleme)",
       claimedBy: (client) => `${client} istemcisi aldı`,
       noClient: "Bu isteği hiçbir istemci almadı; hiçbir etiket çalışmadı.",
-      outcome: { success: "gönderildi", failure: "başarısız", exception: "hata", timeout: "zaman aşımı", skipped: "atlandı" },
+      outcome: { success: "gönderildi", failure: "başarısız", exception: "hata", timeout: "zaman aşımı", skipped: "atlandı", running: "hâlâ çalışıyor" },
+      cookiesSet: (names) => `Yazılan çerezler: ${names}`,
+      missingPreview: "Bu istek container'ın önizlemesinde görünmedi. Önizleme açılmadan önce ya da önizleme çerezleri olmadan gönderilmiş olabilir.",
       tags: "Etiketler", sends: "İletilenler", noTags: "Bu olay için hiçbir etiket çalışmadı.",
       notFired: (list) => `Çalışmadı (koşullar sağlanmadı): ${list}`, off: "kapalı",
       waiting: "Sunucunun bu istek için kaydı bekleniyor…",
       missing: "Sunucu bu istek için kayıt tutmadı: kayıt arabelleği kapalı (TRACE_BUFFER=0) ya da dolmuş olabilir.",
-      error: (code) => (code === "401" || code === "403" ? "Yönetici anahtarı reddedildi."
+      error: (code) => (code === "preview" ? "Önizleme bağlantısına bu kimlikte bir sunucu container'ı yanıt vermedi. Tag Manager'da önizlemeyi yeniden açıp yeni bağlantıyı kopyalayın."
+        : code === "nodata" ? "İstekler container'a ulaştı ama önizlemesine düşmedi. Önizleme bağlantısı eskimiş olabilir: Tag Manager'da önizlemeyi yeniden açıp yeni bağlantıyı yapıştırın."
+          : code === "401" || code === "403" ? "Yönetici anahtarı reddedildi."
         : code === "404" ? "Bu adreste yönetici API'si yok. Sunucuda ADMIN_TOKEN tanımlı mı?"
           : code === "url" ? "https adresi kullanın (http yalnızca localhost için)."
             : code === "not" ? "Bu adres yanıt verdi ama bir ai tagging server olarak değil."
               : "Sunucuya ulaşılamadı."),
-      sheetTitle: "ai tagging server bağla",
-      sheetBody: (host) => `${host} sitesinden gelen her istekle sunucunun ne yaptığı görünür: hangi istemcinin aldığı, hangi etiketlerin çalıştığı ya da neden çalışmadığı ve GA4'e, Meta'ya ve diğerlerine ne gönderildiği. Yönetici anahtarı bu bilgisayarda kalır ve yalnızca bu sunucuya gönderilir.`,
-      url: "Sunucu adresi", urlPlaceholder: "https://sst.ornek.com", token: "Yönetici anahtarı",
+      sheetTitle: "Sunucu container'ı bağla",
+      sheetBody: (host) => `${host} sitesinden gelen her istekle sunucu container'ının ne yaptığı görünür: hangi istemcinin aldığı, hangi etiketlerin çalıştığı ya da neden çalışmadığı ve GA4'e, Meta'ya ve diğerlerine ne gönderildiği. ai tagging server için adresini ve yönetici anahtarını girin. Google'ın sunucu tarafı GTM'i için, sunucu container'ında Önizleme'ye basınca Tag Manager'ın açtığı bağlantıyı (…/gtm/debug?id=GTM-…) yapıştırın. Girilenler bu bilgisayarda kalır ve yalnızca o sunucuya gönderilir.`,
+      url: "Sunucu adresi ya da önizleme bağlantısı", urlPlaceholder: "https://sst.ornek.com", token: "Yönetici anahtarı (yalnızca ai tagging server)",
       save: "Dene ve bağla", testing: "Deneniyor…", remove: "Bağlantıyı kes",
       connected: (url) => `${url} adresine bağlandı. Bir sonraki kayıttan itibaren geçerli.`,
       detected: "Bu istek bir ai tagging server'dan geçti: sunucu yanıtta kendini tanıttı. İsteği hangi istemcinin aldığını, hangi etiketlerin çalıştığını ve neyin iletildiğini görmek için bağlanın.",

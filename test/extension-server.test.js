@@ -88,7 +88,7 @@ test("the panel shows the server's trace under the hit it belongs to, and waits 
   assert.equal(pv.route.kind, "aits");
   assert.deepEqual(pv.server.tags.map((x) => `${x.tag}:${x.outcome}`), ["GA4:success", "Meta CAPI:failure"]);
   assert.deepEqual(scroll.server.tags.map((x) => x.tag), ["GA4"]);
-  assert.deepEqual(cart.server, { waiting: true });
+  assert.deepEqual(cart.server, { kind: "aits", waiting: true });
   assert.equal(M.routesOf(model).blocks[0].kind, "aits");
   // Without a connected server, nothing changes.
   const plain = M.buildModel(events.filter((e) => !e.kind.startsWith("server")));
@@ -106,7 +106,7 @@ test("a hit whose response named the ai tagging server is marked as its hit, and
   const model = M.buildModel(events);
   const [ours, theirs] = model.rows.filter((r) => r.kind === "hit");
   assert.equal(ours.route.kind, "aits");
-  assert.deepEqual(ours.server, { detected: true });
+  assert.deepEqual(ours.server, { kind: "aits", detected: true });
   assert.equal(theirs.route.kind, "sgtm");
   assert.equal(theirs.server, undefined);
 });

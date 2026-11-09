@@ -10,6 +10,7 @@ import { detectCmpInPage } from "./core/cmp.js";
 import { bodyText } from "./lib/body.js";
 import { addEvents, deleteRecording, prune, putRecording, getRecording } from "./lib/store.js";
 import { POLL_LIMIT, isTraceList, matchTrace, mayMatch, serverOrigin, slimTrace } from "./lib/server.js";
+import { addMessages, parseMemo, previewLink, previewQuery, sessionOf, traceOf } from "./lib/sgtm.js";
 
 const SCRIPT_IDS = ["aitd-bridge", "aitd-hook"];
 
@@ -203,7 +204,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         type: details.type === "xmlhttprequest" ? "xhr" : details.type === "main_frame" || details.type === "sub_frame" ? "document" : details.type,
         frameId: details.frameId, initiator: details.initiator ?? null, ...(body !== null ? { body } : {}),
       }, details.tabId);
-      if (a.server && new URL(details.url).origin === a.server) await expectTrace(a.rec, details);
+      if (a.server && details.url.startsWith(`${a.server}/`)) await expectTrace(a.rec, details);
     })().catch(() => {});
   },
   { urls: ["http://*/*", "https://*/*"] },
@@ -292,8 +293,45 @@ async function adminGet(srv, path) {
   return res.json();
 }
 
+/**
+ * Opens Google's server-side GTM preview for this browser: /gtm/debug starts a session, and its three cookies on the
+ * server's domain put the hits this browser sends there into preview. The cookies are set here as well, so they are
+ * in place whatever the browser does with a response to the extension, and renewed before each poll (they last 5
+ * minutes). The session id, or null when the address is no server container with that ID.
+ */
+async function openPreview(p) {
+  const res = await fetch(`${p.url}/gtm/debug?${previewQuery(p)}`, { credentials: "include", cache: "no-store" });
+  if (!res.ok) return null;
+  const session = sessionOf(await res.text());
+  if (session) await setPreviewCookies(p, session);
+  return session;
+}
+async function setPreviewCookies(p, session) {
+  const u = new URL(p.url);
+  const secure = u.protocol === "https:";
+  const expirationDate = Math.floor(Date.now() / 1000) + 300;
+  for (const [name, value] of [["gtm_auth", p.auth], ["gtm_debug", session], ["gtm_preview", p.env]]) {
+    await chrome.cookies.set({ url: `${u.origin}/`, name, value: `${p.id}=${value}`, path: "/", secure, httpOnly: true, sameSite: secure ? "no_restriction" : "lax", expirationDate }).catch(() => {});
+  }
+}
+async function closePreview(url) {
+  const origin = new URL(url).origin;
+  for (const name of ["gtm_auth", "gtm_debug", "gtm_preview"]) await chrome.cookies.remove({ url: `${origin}/`, name }).catch(() => {});
+}
+
 /** Whether these details reach an ai tagging server: the latest trace id, or why not ("401", "404", "network"). */
 async function testServer(url, token) {
+  // A server-side GTM preview link instead of an address: the container must answer with a preview session.
+  const preview = previewLink(url);
+  if (preview) {
+    try {
+      const session = await openPreview(preview);
+      if (session) await closePreview(preview.url);
+      return session ? { ok: true, url: preview.url, kind: "sgtm", preview } : { ok: false, error: "preview" };
+    } catch {
+      return { ok: false, error: "network" };
+    }
+  }
   const origin = serverOrigin(url);
   if (!origin) return { ok: false, error: "url" };
   try {
@@ -317,9 +355,81 @@ const expectTrace = serially(async (rec, details) => {
   if (!s) return;
   const u = new URL(details.url);
   s.pending = [...s.pending.slice(-199), { requestId: details.requestId, path: u.pathname, query: u.search.slice(1), t: Date.now() }];
+  if (s.kind === "sgtm") {
+    // The preview stream may already hold this request's messages.
+    await matchGroups(rec, s, Object.keys(s.groups));
+    await chrome.storage.session.set({ [key]: s });
+    memoLoop(rec);
+    return;
+  }
   await chrome.storage.session.set({ [key]: s });
   schedulePoll(rec, 1500);
 });
+
+// ---------- server-side GTM's preview stream ----------
+
+const memoLoops = new Set(); // recordings whose preview stream is being read
+
+/** Gives each request group of the preview stream to the hit it belongs to, and records what is known of it. */
+async function matchGroups(rec, s, gids) {
+  for (const gid of gids) {
+    const g = s.groups[gid];
+    if (!g?.url) continue;
+    if (!g.requestId) {
+      const path = g.url;
+      const ga = (q) => { const p = new URLSearchParams(q); return p.get("cid") && p.get("_p") && p.get("_s") ? `${p.get("cid")}|${p.get("_p")}|${p.get("_s")}` : null; };
+      const key = ga(path.split("?")[1] ?? "");
+      const hit = s.pending.find((p) => `${p.path}${p.query ? `?${p.query}` : ""}` === path) ?? (key ? s.pending.find((p) => ga(p.query) === key) : null);
+      if (!hit) continue;
+      g.requestId = hit.requestId;
+      s.pending = s.pending.filter((p) => p !== hit);
+    }
+    s.seen = true;
+    await record(rec, { kind: "server", requestId: g.requestId, trace: traceOf(g) });
+  }
+  // A long recording keeps the last 200 requests' groups: older ones are complete and recorded.
+  const ids = Object.keys(s.groups);
+  for (const gid of ids.slice(0, Math.max(0, ids.length - 200))) delete s.groups[gid];
+}
+
+/** Reads the preview stream while the recording runs: get_memo answers when there is news, or with 204 after ~20 s. */
+async function memoLoop(rec) {
+  if (memoLoops.has(rec)) return;
+  memoLoops.add(rec);
+  try {
+    for (;;) {
+      const key = traceKey(rec);
+      const s = (await chrome.storage.session.get(key))[key];
+      if (!s || s.kind !== "sgtm" || s.closed) break;
+      const srv = await serverFor(s.host);
+      if (!srv?.id) break;
+      await setPreviewCookies(srv, s.session);
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), 30_000);
+      let res = null;
+      try {
+        res = await fetch(`${srv.url}/gtm/get_memo?${previewQuery(srv)}`, { credentials: "include", cache: "no-store", signal: stop.signal });
+      } catch { /* a timeout or a network error: tried again below */ } finally { clearTimeout(timer); }
+      const messages = res?.status === 200 ? parseMemo(await res.text()) : [];
+      await serially(async () => {
+        const now = (await chrome.storage.session.get(key))[key];
+        if (!now || now.closed) return;
+        const changed = addMessages(now.groups, messages);
+        await matchGroups(rec, now, changed);
+        // Hits sent to the container that never showed up in its preview: the preview link is out of date.
+        const stale = !now.seen && now.pending.some((p) => Date.now() - p.t > 15_000);
+        if (stale) await setStatus(rec, now, "error", "nodata");
+        else if (res && !res.ok && res.status !== 204) await setStatus(rec, now, "error", String(res.status));
+        else if (res && now.status !== "ok" && now.seen) await setStatus(rec, now, "ok");
+        now.pending = now.pending.filter((p) => Date.now() - p.t < 60_000);
+        await chrome.storage.session.set({ [key]: now });
+      })();
+      if (!res) await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  } finally {
+    memoLoops.delete(rec);
+  }
+}
 
 function schedulePoll(rec, ms) {
   if (polls.has(rec)) return;
@@ -364,13 +474,21 @@ async function setStatus(rec, s, status, detail = null) {
   s.status = status;
   s.detail = detail;
   await chrome.storage.session.set({ [traceKey(rec)]: s });
-  await record(rec, { kind: "serverStatus", url: s.url, state: status, detail });
+  await record(rec, { kind: "serverStatus", url: s.url, server: s.kind ?? "aits", state: status, detail });
 }
 
 /** At the start of a recording: older traces are not this recording's, so polling starts after the latest. */
 async function connectServer(rec, host) {
   const srv = await serverFor(host);
   if (!srv) return null;
+  if (srv.kind === "sgtm") {
+    const session = await openPreview(srv).catch(() => null);
+    const s = { kind: "sgtm", host, url: srv.url, session, pending: [], groups: {}, seen: false, status: null, detail: null };
+    await chrome.storage.session.set({ [traceKey(rec)]: s });
+    await setStatus(rec, s, session ? "ok" : "error", session ? null : "preview");
+    if (session) memoLoop(rec);
+    return srv.url;
+  }
   const test = await testServer(srv.url, srv.token);
   const s = { host, url: srv.url, last: test.latest ?? 0, pending: [], status: null, detail: null };
   await chrome.storage.session.set({ [traceKey(rec)]: s });
@@ -418,6 +536,12 @@ async function stop(tabId) {
     polls.delete(a.rec);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     await pollTraces(a.rec).catch(() => {});
+    // Server-side GTM: the stream has had its moment for the last hits; the browser leaves preview mode.
+    const s = (await chrome.storage.session.get(traceKey(a.rec)))[traceKey(a.rec)];
+    if (s?.kind === "sgtm") {
+      await chrome.storage.session.set({ [traceKey(a.rec)]: { ...s, closed: true } });
+      await closePreview(s.url);
+    }
     clearTimeout(polls.get(a.rec));
     polls.delete(a.rec);
     await chrome.storage.session.remove(traceKey(a.rec));
@@ -473,8 +597,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       const test = await testServer(msg.url, String(msg.token ?? ""));
       if (!test.ok) return test;
       const { servers = {} } = await chrome.storage.local.get("servers");
-      await chrome.storage.local.set({ servers: { ...servers, [String(msg.host)]: { url: test.url, token: String(msg.token) } } });
-      return test;
+      const saved = test.kind === "sgtm" ? { kind: "sgtm", url: test.url, ...test.preview } : { kind: "aits", url: test.url, token: String(msg.token) };
+      await chrome.storage.local.set({ servers: { ...servers, [String(msg.host)]: saved } });
+      return { ok: true, url: test.url, kind: saved.kind };
     }
     if (msg.type === "serverRemove") {
       const { servers = {} } = await chrome.storage.local.get("servers");
@@ -482,7 +607,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await chrome.storage.local.set({ servers });
       return { ok: true };
     }
-    if (msg.type === "serverGet") return { url: (await serverFor(String(msg.host)))?.url ?? null };
+    if (msg.type === "serverGet") { const srv = await serverFor(String(msg.host)); return { url: srv?.url ?? null, kind: srv?.kind ?? (srv ? "aits" : null) }; }
     if (msg.type === "active") return { active: await active() };
     return { error: "unknown message" };
   };

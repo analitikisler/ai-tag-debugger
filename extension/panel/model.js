@@ -7,9 +7,6 @@ import { decodeGa4Item } from "../core/glossary.js";
 import { siteOf } from "../core/redact.js";
 import { traceForEvent } from "../lib/server.js";
 
-const originOf = (href) => {
-  try { return new URL(href).origin; } catch { return null; }
-};
 const pathname = (href) => {
   try { return new URL(href).pathname; } catch { return String(href ?? ""); }
 };
@@ -161,7 +158,7 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
   let server = null; // { url, state, detail }: the connected ai tagging server and how polling it went
   for (const e of sorted) {
     if (e.kind === "server") { traces.set(e.requestId, e.trace); continue; }
-    if (e.kind === "serverStatus") { server = { url: e.url, state: e.state, detail: e.detail ?? null }; continue; }
+    if (e.kind === "serverStatus") { server = { url: e.url, kind: e.server ?? "aits", state: e.state, detail: e.detail ?? null }; continue; }
     if (e.kind === "step") {
       // A route change that keeps the path (query or hash only) is the same page, as the run builder does it.
       if (cur && e.action === "route" && cur.url && pathname(e.url) === pathname(cur.url)) continue;
@@ -288,16 +285,19 @@ export function buildModel(events, { platforms = null, plan = null } = {}) {
     // A Google path under a prefix on the site's own host is the tag gateway, not a server container.
     if (r.route?.kind === "gateway" && r.endpoint?.kind === "server") r.endpoint = { kind: "gateway", to: r.platform === "ga4" ? "www.google-analytics.com/g/collect" : "www.googleadservices.com/pagead/" };
   }
-  // What the ai tagging server did with each hit sent to it; a hit to it with no trace yet is waiting for one.
-  // A hit whose response named the ai tagging server is its hit too, connected or not: the panel offers to connect.
+  // What the connected server container did with each hit sent to it (the ai tagging server's trace, or server-side
+  // GTM's preview); a hit to it with no trace yet is waiting for one. A hit whose response named the ai tagging server
+  // is its hit too, connected or not: the panel offers to connect.
   for (const r of rows) {
     if (r.kind !== "hit") continue;
-    const onServer = Boolean(server) && originOf(r.e.url) === server.url;
-    if (!onServer && software.get(r.e.requestId) !== "ai-tagging-server") continue;
+    const onServer = Boolean(server) && String(r.e.url).startsWith(`${server.url}/`);
+    const named = software.get(r.e.requestId) === "ai-tagging-server";
+    if (!onServer && !named) continue;
     const trace = traces.get(r.e.requestId);
-    r.server = trace ? traceForEvent(trace, (r.batch?.index ?? 1) - 1) : onServer ? { waiting: true } : { detected: true };
-    // Either the connection test or the server's own header said this origin is an ai tagging server.
-    r.route = { kind: "aits", host: hostOf(r.e.url), firstParty: Boolean(pageHost) && siteOf(hostOf(r.e.url) ?? "") === siteOf(pageHost) };
+    const kind = onServer ? server.kind : "aits";
+    r.server = trace ? { kind, ...traceForEvent(trace, (r.batch?.index ?? 1) - 1) } : onServer ? { kind, waiting: true } : { kind, detected: true };
+    // The connection test or the server's own header said what this server is; a server-side GTM keeps its route.
+    if (kind === "aits") r.route = { kind: "aits", host: hostOf(r.e.url), firstParty: Boolean(pageHost) && siteOf(hostOf(r.e.url) ?? "") === siteOf(pageHost) };
   }
   const counts = {};
   const other = {};
