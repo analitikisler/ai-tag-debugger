@@ -120,3 +120,39 @@ export function traceOf(g) {
     events: g.events.map((e) => e.name), tags, notFired, sends: g.sends, cookies: g.cookies,
   };
 }
+
+/**
+ * The preview found in the browser's tabs that belongs to a site: its server on the same registrable domain
+ * (sgtm.shop.example for shop.example), newest first. Null when none does.
+ * @param {{ url: string, id: string, auth: string, env: string, at: number }[]} previews
+ * @param {string} host the recorded site's host
+ * @param {(host: string) => string} siteOf the registrable domain of a host
+ */
+export function previewForSite(previews, host, siteOf) {
+  if (!host) return null;
+  const site = siteOf(host);
+  return [...previews].sort((a, b) => b.at - a.at).find((p) => {
+    try { return siteOf(new URL(p.url).hostname) === site; } catch { return false; }
+  }) ?? null;
+}
+
+/**
+ * The saved server connections with a newer preview link: pressing Preview again in Tag Manager gives a new
+ * gtm_auth or environment, and a connection to the same container on the same server takes it. Null when none
+ * changed.
+ */
+export function freshen(servers, preview) {
+  let changed = false;
+  const out = {};
+  for (const [host, srv] of Object.entries(servers ?? {})) {
+    const same = srv?.kind === "sgtm" && srv.id === preview.id && srv.url === preview.url;
+    if (same && (srv.auth !== preview.auth || srv.env !== preview.env)) {
+      out[host] = { ...srv, auth: preview.auth, env: preview.env };
+      changed = true;
+    } else out[host] = srv;
+  }
+  return changed ? out : null;
+}
+
+/** The link to paste for a preview, as Tag Manager opened it. */
+export const previewUrl = (p) => `${p.url}/gtm/debug?${previewQuery(p)}`;

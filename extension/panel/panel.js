@@ -121,6 +121,14 @@ async function readRecording(id) {
   state.newKeys = new Set();
 }
 
+/** The site's connected server container, and the Tag Manager previews found in the browser's tabs. */
+async function loadServer(host) {
+  const srv = await send({ type: "serverGet", host });
+  state.serverUrl = srv.url ?? null;
+  state.serverKind = srv.kind ?? null;
+  state.previews = (await send({ type: "previews" })).previews ?? [];
+}
+
 const filters = new Map(); // host -> the platform filter, kept for the browser session
 async function enterHost(host) {
   if (state.setup.host === host) return;
@@ -133,7 +141,7 @@ async function enterHost(host) {
   state.setup.reload = setupOptions.reload ?? true;
   state.setup.clear = setupOptions.clear ?? false;
   state.setup.denied = false;
-  state.serverUrl = (await send({ type: "serverGet", host })).url ?? null;
+  await loadServer(host);
   state.setup.detected = [];
   state.setup.remembered = Array.isArray(platforms[host]);
   state.setup.platforms = state.setup.remembered ? platforms[host].filter((k) => OFFERED.includes(k)) : [...DEFAULT_PLATFORMS];
@@ -484,12 +492,14 @@ Object.assign(actions, {
 
   async serverSave(url, token) {
     const r = await send({ type: "serverSave", host: state.setup.host, url, token });
-    if (r.ok) state.serverUrl = r.url;
+    if (r.ok) { state.serverUrl = r.url; state.serverKind = r.kind; render(); }
     return r.ok ? r : { ok: false, error: r.error ?? "network" };
   },
   async serverRemove() {
     await send({ type: "serverRemove", host: state.setup.host });
     state.serverUrl = null;
+    state.serverKind = null;
+    render();
   },
 
   tourTo(i) { state.tour = i; state.layer = null; render(); requestAnimationFrame(() => requestAnimationFrame(() => $("obTitle")?.focus())); },
@@ -753,6 +763,13 @@ installKeys({ mode, model, tabs: TABS });
 
 let lastUnknown = 0;
 chrome.runtime.onMessage.addListener((msg) => {
+  // A Tag Manager preview tab opened: setup offers it, or a connection to that container already took the new link.
+  if (msg?.type === "previewFound") {
+    state.previews = [msg.preview, ...(state.previews ?? []).filter((p) => !(p.id === msg.preview.id && p.url === msg.preview.url))];
+    if (msg.refreshed) toast(m().server.refreshed(msg.preview.id), null, 3500);
+    if (state.setup.host) loadServer(state.setup.host).then(render); else render();
+    return;
+  }
   if (msg?.type !== "recorded") return;
   if (msg.rec !== state.rec || loading === msg.rec) {
     hold(msg.rec, msg.event);

@@ -79,3 +79,21 @@ test("the panel shows the preview under the hit it belongs to, keeping the serve
   assert.deepEqual(pv.server.cookies, ["FPID"]);
   assert.deepEqual(scroll.server, { kind: "sgtm", waiting: true });
 });
+
+test("a preview found in the tabs is offered to its own site, and a newer link replaces a connection's old one", async () => {
+  const { siteOf } = await import("../extension/core/redact.js");
+  const previews = [
+    { url: "https://sgtm.other.example", id: "GTM-OTHER11", auth: "a1b2c3d4", env: "env-1", at: 3 },
+    { url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "olderauth", env: "env-4", at: 1 },
+    { url: "https://sgtm.shop.example", id: "GTM-SHOP222", auth: "neweraut", env: "env-5", at: 2 },
+  ];
+  assert.equal(G.previewForSite(previews, "www.shop.example", siteOf).id, "GTM-SHOP222", "the newest one on the site's domain");
+  assert.equal(G.previewForSite(previews, "elsewhere.example", siteOf), null);
+  const servers = { "shop.example": { kind: "sgtm", url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "olderauth", env: "env-4" }, "aits.example": { kind: "aits", url: "https://sst.aits.example", token: "t" } };
+  const fresh = G.freshen(servers, { url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "brandnew1", env: "env-9" });
+  assert.deepEqual(fresh["shop.example"], { kind: "sgtm", url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "brandnew1", env: "env-9" });
+  assert.deepEqual(fresh["aits.example"], servers["aits.example"]);
+  assert.equal(G.freshen(servers, { url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "olderauth", env: "env-4" }), null, "the same link changes nothing");
+  assert.equal(G.freshen(servers, { url: "https://sgtm.shop.example", id: "GTM-OTHER11", auth: "x1y2z3w4", env: "env-1" }), null, "another container is not this connection");
+  assert.equal(G.previewUrl({ url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "olderauth", env: "env-4" }), "https://sgtm.shop.example/gtm/debug?id=GTM-SHOP111&gtm_auth=olderauth&gtm_preview=env-4");
+});

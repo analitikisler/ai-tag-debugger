@@ -10,7 +10,7 @@ import { detectCmpInPage } from "./core/cmp.js";
 import { bodyText } from "./lib/body.js";
 import { addEvents, deleteRecording, prune, putRecording, getRecording } from "./lib/store.js";
 import { POLL_LIMIT, isTraceList, matchTrace, mayMatch, serverOrigin, slimTrace } from "./lib/server.js";
-import { addMessages, parseMemo, previewLink, previewQuery, sessionOf, traceOf } from "./lib/sgtm.js";
+import { addMessages, freshen, parseMemo, previewLink, previewQuery, sessionOf, traceOf } from "./lib/sgtm.js";
 
 const SCRIPT_IDS = ["aitd-bridge", "aitd-hook"];
 
@@ -366,6 +366,35 @@ const expectTrace = serially(async (rec, details) => {
   schedulePoll(rec, 1500);
 });
 
+// ---------- server-side GTM's preview link, picked up from Tag Manager ----------
+//
+// Preview in a server container makes Tag Manager open a tab on the server itself: <server>/gtm/debug?id=GTM-…&
+// gtm_auth=…&gtm_preview=env-…, the very link the extension needs. It is noted when such a tab opens (and found in
+// tabs already open when the panel asks), a container already connected takes a newer link by itself, and the panel
+// offers to connect one that belongs to the site.
+
+async function notePreview(url) {
+  const p = previewLink(url);
+  if (!p) return;
+  const { previews = [] } = await chrome.storage.session.get("previews");
+  // Known already, with the same link: nothing to note or announce (the panel asks for the list on every visit).
+  if (previews.some((x) => x.id === p.id && x.url === p.url && x.auth === p.auth && x.env === p.env)) return;
+  const list = [{ ...p, at: Date.now() }, ...previews.filter((x) => !(x.id === p.id && x.url === p.url))].slice(0, 10);
+  await chrome.storage.session.set({ previews: list });
+  const { servers = {} } = await chrome.storage.local.get("servers");
+  const fresh = freshen(servers, p);
+  if (fresh) await chrome.storage.local.set({ servers: fresh });
+  chrome.runtime.sendMessage({ type: "previewFound", preview: { ...p, at: Date.now() }, refreshed: Boolean(fresh) }).catch(() => {});
+}
+chrome.webNavigation.onCommitted.addListener((d) => { if (d.frameId === 0) notePreview(d.url).catch(() => {}); }, { url: [{ pathSuffix: "/gtm/debug", queryContains: "gtm_auth=" }] });
+
+/** The previews noted so far, with any preview tab still open added. */
+async function previewsFound() {
+  const tabs = await chrome.tabs.query({}).catch(() => []);
+  for (const t of tabs) if (t.url && previewLink(t.url)) await notePreview(t.url);
+  return (await chrome.storage.session.get("previews")).previews ?? [];
+}
+
 // ---------- server-side GTM's preview stream ----------
 
 const memoLoops = new Set(); // recordings whose preview stream is being read
@@ -607,6 +636,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       await chrome.storage.local.set({ servers });
       return { ok: true };
     }
+    if (msg.type === "previews") return { previews: await previewsFound() };
     if (msg.type === "serverGet") { const srv = await serverFor(String(msg.host)); return { url: srv?.url ?? null, kind: srv?.kind ?? (srv ? "aits" : null) }; }
     if (msg.type === "active") return { active: await active() };
     return { error: "unknown message" };

@@ -57,7 +57,8 @@ function sgtmServer(req, res, url) {
   }
   if (url.pathname === "/sgtm/g/collect") {
     const cookies = String(req.headers.cookie ?? "");
-    if (cookies.includes("gtm_debug=GTM-E2E0001=e2esession01") && cookies.includes("gtm_auth=GTM-E2E0001=e2eauth01")) {
+    // Only the newest preview link counts, as when Preview is pressed again in Tag Manager.
+    if (cookies.includes("gtm_debug=GTM-E2E0001=e2esession01") && cookies.includes("gtm_auth=GTM-E2E0001=e2eauth02")) {
       const path0 = (url.pathname + url.search).replace(/^\/sgtm/, "");
       memoQueue.push(memoTemplate.replace(/\/g\/collect\?v=2[^"]*/g, path0).replace(/1a1bf6d7c7f044b4a1af2/g, `group${memoQueue.length}`));
       memoWaiter?.();
@@ -278,7 +279,7 @@ try {
   await sstPanel.click("#srvSave");
   await sstPanel.waitForSelector(`text=Connected to ${base}`);
   await sstPanel.keyboard.press("Escape");
-  await sstPanel.click(".sheet .btn:not(.primary):not(#srvRemove)").catch(() => {});
+  await sstPanel.click("#srvClose").catch(() => {});
   await sstPanel.click("#startOver");
   await sstPanel.click("#resetGo");
   await sstPanel.click("#record");
@@ -309,21 +310,30 @@ try {
   }
   assert.deepEqual(errors, [], "no errors in the panel");
 
-  // Google's server-side GTM: connected with the preview link, the container's preview of the hit lands under it.
+  // Google's server-side GTM. Preview in Tag Manager opens a tab on the server's /gtm/debug: setup offers it, one
+  // click connects, and pressing Preview again later gives a new link that the connection takes by itself.
   const gTab = await context.newPage();
   await gTab.goto(`${base}/sgtm.html`);
   const gTabId = await worker.evaluate(async (url) => (await globalThis.chrome.tabs.query({ url: `${url}/sgtm.html` }))[0].id, base);
+  const previewTab = await context.newPage();
+  await previewTab.goto(`${base}/sgtm/gtm/debug?id=GTM-E2E0001&gtm_auth=e2eauth01&gtm_preview=env-7&hl=en`);
   const gPanel = await context.newPage();
   gPanel.on("pageerror", (e) => errors.push(e.message));
   await gPanel.goto(`chrome-extension://${id}/panel/panel.html?tab=${gTabId}`);
+  // The ai tagging server connected above for this same site is disconnected first.
   await gPanel.click("#more");
   await gPanel.click("text=Server container…");
-  await gPanel.fill("#srvUrl", `${base}/sgtm/gtm/debug?id=GTM-E2E0001&gtm_auth=e2eauth01&gtm_preview=env-7&hl=en`);
-  await gPanel.click("#srvSave");
-  await gPanel.waitForSelector(`text=Connected to ${base}/sgtm`);
-  await gPanel.click(".sheet .btn:not(.primary):not(#srvRemove)").catch(() => {});
+  await gPanel.click("#srvRemove");
+  await gPanel.click("#srvClose");
   await gPanel.click("#startOver");
   await gPanel.click("#resetGo");
+  await gPanel.waitForSelector("text=Tag Manager preview found: GTM-E2E0001");
+  if (process.argv.includes("--shots")) await gPanel.screenshot({ path: path.join(process.cwd(), "setup-found.png"), fullPage: true });
+  await gPanel.click("#srvFoundConnect");
+  await gPanel.waitForSelector("text=Its preview link is renewed by itself");
+  await previewTab.goto(`${base}/sgtm/gtm/debug?id=GTM-E2E0001&gtm_auth=e2eauth02&gtm_preview=env-8&hl=en`);
+  await gPanel.waitForSelector("text=the new preview link from Tag Manager is in use");
+  await previewTab.close();
   await gPanel.click("#record");
   await gPanel.waitForSelector("#stop:not([hidden])");
   await gTab.waitForLoadState("load");

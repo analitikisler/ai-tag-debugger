@@ -1,7 +1,9 @@
 // Setup (state "ready"): which platforms are being tested, the measurement plan, the start options and Start
 // recording. The selection and the plan are remembered per site; Start asks for site access from the click.
-import { state, m, actions } from "../state.js";
+import { state, m, actions, render } from "../state.js";
 import { el, icon, button } from "../ui.js";
+import { siteOf } from "../../core/redact.js";
+import { previewForSite, previewUrl } from "../../lib/sgtm.js";
 import { PLATFORM_GROUPS } from "../model.js";
 import { PROVIDERS } from "../../core/parsers.js";
 
@@ -54,6 +56,38 @@ function planSection() {
     el("p", { class: "small", style: { marginTop: "8px" }, text: t.planHelp }));
 }
 
+/**
+ * The site's server container (optional): connected, a Tag Manager preview found in an open tab and offered with one
+ * click, or a short word on what connecting gives and how.
+ */
+function serverSection() {
+  const t = m().server;
+  const s = state.setup;
+  const open = () => { state.layer = { kind: "server" }; render(); };
+  const head = el("h2", { class: "h3" }, `3 · ${t.setupTitle} `, el("span", { style: { textTransform: "none", letterSpacing: 0, fontWeight: 400, color: "var(--fg-3)" }, text: m().setup.optional }));
+  let body;
+  const found = previewForSite(state.previews ?? [], s.host, siteOf);
+  if (state.serverUrl) {
+    const kind = state.serverKind === "sgtm" ? t.sgtmTitle : t.title;
+    body = [el("div", { class: "file" }, el("span", { class: "ficon" }, icon("route")),
+      el("div", { class: "fn" }, el("b", { text: kind }), el("span", { class: "small", text: state.serverUrl })),
+      button(m().setup.change, open, { cls: "btn ghost" })),
+    el("p", { class: "small", style: { marginTop: "8px" }, text: state.serverKind === "sgtm" ? t.setupSgtmConnected : t.setupAitsConnected })];
+  } else if (found) {
+    body = el("div", { class: "note", role: "status" }, icon("route"), el("div", {},
+      el("b", { style: { display: "block", color: "var(--fg)" }, text: t.foundTitle(found.id, new URL(found.url).host) }),
+      el("span", { text: t.foundBody }),
+      el("div", { class: "acts" }, button(t.foundConnect, async () => {
+        const r = await actions.serverSave(previewUrl(found), "");
+        if (!r.ok) open();
+      }, { cls: "btn primary", id: "srvFoundConnect" }), button(t.how, open, { cls: "linkbtn muted" }))));
+  } else {
+    body = [el("p", { class: "small", text: t.setupIntro }),
+      el("div", { class: "acts", style: { marginTop: "8px" } }, button(t.connect, open, { cls: "btn", id: "srvOpen" }))];
+  }
+  return el("section", { class: "setup-sec" }, head, body);
+}
+
 function option(id, label, help, checked, onchange) {
   return el("label", { class: "opt", for: id },
     el("input", { id, type: "checkbox", checked, onchange: (e) => onchange(e.target.checked) }),
@@ -80,6 +114,6 @@ export function setupView() {
     option("optClear", t.clear, t.clearHelp, s.clear, (v) => actions.setOption("clear", v)));
   const start = el("button", { id: "record", class: "btn rec lg block", type: "button", disabled: !s.platforms.length, onclick: () => actions.start() },
     el("span", { class: "dotw" }), t.start, el("span", { class: "kbd", text: "Alt R" }));
-  return el("div", { class: "setup" }, denied, platforms, planSection(), options,
+  return el("div", { class: "setup" }, denied, platforms, planSection(), serverSection(), options,
     el("div", { class: "cta" }, start, el("p", { class: "small summary-line", text: t.summary(s.platforms.length, s.plan ? s.plan.plan.events.length : null) })));
 }

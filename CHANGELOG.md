@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The extension picks up a server-side GTM preview link by itself: when Preview is pressed in a server container, Tag Manager opens a tab on the server's /gtm/debug address, and setup offers to connect it with one click. A container already connected takes each new preview link automatically. Setup has a Server container section, the connection sheet explains both ways to connect (picked up, or pasted), the Where hits go card points an unconnected server-side GTM to its preview, and the first-run tour mentions it.
 - The Chrome extension reads Google's server-side GTM preview. Paste the link Tag Manager opens on Preview in the server container (⋯ → Server container…), and each hit sent to the container shows which client claimed it, each tag's status, the tags that did not fire, what the container sent onward with its status, and the cookies it set. Only the recording browser's requests are in preview, and it leaves preview mode when the recording stops.
 - Fixed: a container served from the site's own domain read as loaded twice (`container_duplicate`), because Google's own script fetches a `gtg_health=1` copy from googletagmanager.com to check that first-party serving works. That probe is no longer counted as a container load.
 - Fixed in the extension: a tracking request the browser cancelled as the page was left (`net::ERR_ABORTED`) was reported as a delivery failure (`hit_failed`). It is now marked as aborted, which is no failure.

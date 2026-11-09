@@ -2,6 +2,7 @@
 // empty state with its recent sites.
 import { state, m, render, actions } from "../state.js";
 import { el, icon, button, favicon, day } from "../ui.js";
+import { previewUrl } from "../../lib/sgtm.js";
 
 function trap(node) {
   // Focus stays inside a modal sheet: Tab from the last control goes to the first and back.
@@ -84,28 +85,43 @@ export function notWebView() {
         el("span", { class: "small", text: day(r.startedAt) })))) : null);
 }
 
-/** Connect an ai tagging server for this site: the address and admin token, tested before they are kept. */
+/**
+ * Connect the site's server container: a Tag Manager preview found in an open tab with one click, a pasted preview
+ * link, or an ai tagging server's address and admin token, each tested before it is kept; and how to get there.
+ */
 export function serverSheet() {
   const t = m().server;
   const host = state.setup.host;
   const status = el("p", { class: "small", role: "status", style: { minHeight: "16px", marginTop: "8px" }, text: state.serverUrl ? t.connected(state.serverUrl) : "" });
   const field = (id, label, attrs) => el("label", { for: id, style: { display: "block", marginTop: "10px" } }, el("span", { class: "small", text: label }),
     el("div", { class: "input", style: { marginTop: "4px" } }, el("input", { id, autocomplete: "off", spellcheck: "false", style: { flex: "1", minWidth: "0", border: "0", outline: "0", background: "transparent", color: "var(--fg)", fontSize: "var(--fs-s)" }, ...attrs })));
-  const save = async () => {
+  const connect = async (url, token) => {
     status.textContent = t.testing;
-    const r = await actions.serverSave(document.getElementById("srvUrl").value, document.getElementById("srvToken").value);
+    const r = await actions.serverSave(url, token);
     status.textContent = r.ok ? t.connected(r.url) : t.error(r.error);
     if (r.ok) document.getElementById("srvToken").value = "";
   };
-  const sheet = trap(el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-labelledby": "srvTitle" },
+  const found = (state.previews ?? []).slice(0, 3);
+  const foundList = found.length ? el("div", { class: "found", style: { marginTop: "10px" } }, el("div", { class: "small", text: t.foundInTabs }),
+    found.map((p) => el("div", { class: "file", style: { marginTop: "6px" } }, el("span", { class: "ficon" }, icon("route")),
+      el("div", { class: "fn" }, el("b", { text: p.id }), el("span", { class: "small", text: `${new URL(p.url).host} · ${p.env}` })),
+      button(t.use, () => { document.getElementById("srvUrl").value = previewUrl(p); connect(previewUrl(p), ""); }, { cls: "btn" })))) : null;
+  const steps = (title, list) => el("div", { style: { marginTop: "8px" } }, el("b", { class: "small", style: { color: "var(--fg)" }, text: title }),
+    el("ol", { class: "small", style: { margin: "4px 0 0", paddingLeft: "18px" } }, list.map((x) => el("li", { style: { marginTop: "3px" }, text: x }))));
+  const guide = el("details", { class: "guide", style: { marginTop: "12px" } }, el("summary", { class: "small", style: { cursor: "pointer", color: "var(--accent)" }, text: t.howTitle }),
+    steps(t.sgtmTitle, t.howSgtm), steps(t.title, t.howAits), el("p", { class: "small", style: { marginTop: "8px" }, text: t.howNote }));
+  if (!state.serverUrl && !found.length) guide.open = true;
+  const sheet = trap(el("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-labelledby": "srvTitle", style: { maxHeight: "90vh", overflowY: "auto" } },
     el("h2", { class: "h2", id: "srvTitle", text: t.sheetTitle }),
     el("p", { class: "p", style: { fontSize: "var(--fs-s)" }, text: t.sheetBody(host) }),
-    field("srvUrl", t.url, { type: "url", placeholder: t.urlPlaceholder, value: state.serverUrl ?? "" }),
+    foundList,
+    field("srvUrl", t.url, { type: "url", placeholder: t.urlPlaceholder, value: state.serverUrl && state.serverKind !== "sgtm" ? state.serverUrl : "" }),
     field("srvToken", t.token, { type: "password" }),
     status,
+    guide,
     el("div", { class: "acts" },
       state.serverUrl ? button(t.remove, async () => { await actions.serverRemove(); status.textContent = ""; document.getElementById("srvUrl").value = ""; }, { cls: "btn", id: "srvRemove" }) : null,
-      button(m().close, () => { state.layer = null; render(); }, { cls: "btn" }),
-      button(t.save, save, { cls: "btn primary", id: "srvSave" }))));
+      button(m().close, () => { state.layer = null; render(); }, { cls: "btn", id: "srvClose" }),
+      button(t.save, () => connect(document.getElementById("srvUrl").value, document.getElementById("srvToken").value), { cls: "btn primary", id: "srvSave" }))));
   return [el("div", { class: "scrim", onclick: () => { state.layer = null; render(); } }), sheet];
 }

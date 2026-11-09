@@ -26,6 +26,11 @@ function block(b, model) {
     rows.push(...line(rt.setBy, b.config ? [el("span", { class: "mono", text: b.config.key }), " ", rt.setByConfig(b.config.push.index + 1)] : rt.setByGtm));
     // Ours, named: what it is. Someone else's server container: the open-source one that does the same job.
     if (b.kind === "aits") rows.push(...line(m().server.title, m().server.about, " ", aitsLink()));
+    // A server-side GTM the recording is not connected to: its preview would show what it did with each hit.
+    if (b.kind === "sgtm" && !model.server) {
+      rows.push(...line(m().server.routeHintLabel, m().server.routeHint, " ",
+        el("button", { type: "button", class: "linkbtn", text: m().server.how, onclick: () => { state.layer = { kind: "server" }; render(); } })));
+    }
     else if (["sgtm", "stape", "elevar"].includes(b.kind)) rows.push(...line(m().server.alternative, aitsLogo(12), " ", m().server.alternativeText, " ", aitsLink()));
     rows.push(...line(m().tabs.consent, b.noConsent ? el("span", { style: { color: "var(--warning)" } }, `⚠ ${rt.consentMissing(b.noConsent)}`) : rt.consentOk));
     if (b.cookies.length) {
