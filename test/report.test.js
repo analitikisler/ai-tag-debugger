@@ -285,3 +285,11 @@ test("a GTM tag's evaluation is shown as a why line under the finding, in both l
   const html = renderHtml({ title: "t", generatedAt: "now", findings: withGtm, explained: null, runs: [run], lang: "tr" });
   assert.match(html, /&quot;GA4 - add_to_cart&quot; etiketi: tetiklenmedi — trigger &quot;CE - add_to_cart&quot; needs/);
 });
+
+test("the CSV names an event pushed with gtag() and quotes a value holding a carriage return", async () => {
+  const { renderCsv } = await import("../src/report.js");
+  const run = { journeyId: "j", viewport: "desktop", startedAt: 0, steps: [{ index: 0, label: "start" }], hits: [{ platform: "ga4", name: "a\rb", step: 0, t: 1, params: {} }], dataLayerLog: [{ step: 0, t: 2, value: ["event", "add_to_cart", { value: 1 }] }], network: [] };
+  const csv = renderCsv({ findings: [], runs: [run] });
+  assert.match(csv, /,datalayer,,add_to_cart,/);
+  assert.match(csv, /,hit,ga4,"a\rb",/);
+});

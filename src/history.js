@@ -37,8 +37,8 @@ export const dateOfId = (id) => {
 
 /**
  * The summary of one run that history keeps: its journeys, its counts and its problems, a few hundred
- * bytes instead of a capture. Fields a capture may lack (older shapes, or ones audit.js does not write
- * yet such as version and ai) come out null, never throw. Findings a baseline accepted are left out,
+ * bytes instead of a capture. Fields a capture may lack (older shapes, from before audit.js wrote
+ * version and ai) come out null, never throw. Findings a baseline accepted are left out,
  * as the counts and the verdict leave them out, so an accepted problem is not "still open" in the trend.
  */
 export function runSummary(id, capture = {}, { version = null, ai = null } = {}) {
@@ -184,7 +184,7 @@ const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
  * series: per run { id, date, broken, risk, warning, score, complete }, oldest first. score is
  * 3·broken + 2·risk + warning (lower is better); complete is false when a journey did not finish.
  * direction: the mean score of the last 3 complete runs against the 3 complete runs before them
- * ("improving" when lower, "worsening" when higher, else "flat"); with fewer than 4 complete runs the
+ * ("improving" when lower, "worsening" when higher, else "flat"); with fewer than 6 complete runs the
  * two halves are compared, and with fewer than 2 it is "flat". Incomplete runs are left out because a
  * journey that stopped early hides findings rather than fixing them.
  * openLongest: the 5 problems open longest; fixedRecently / newRecently: fixed or first seen in the

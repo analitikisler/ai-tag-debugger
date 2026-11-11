@@ -1,7 +1,6 @@
 // Helpers every section of the HTML report uses: escaping, the icon sprite, platform names and icons, chips and
-// badges, the ids that link Findings, Journeys and Summary to each other, and page titles for steps. The 0.17
-// renderer imports its icon, logo and id helpers from here, so the sections cannot drift apart while
-// both exist; this module imports neither of them. CONTRACT-IMPL.md in the build notes lists what each helper is for.
+// badges, the ids that link Findings, Journeys and Summary to each other, and page titles for steps. Every section
+// takes them from here, so the sections cannot drift apart; this module imports none of them.
 import { hitMatchesEvent } from "../checks.js";
 import { LOGOS, LOGO_ART } from "../brand.js";
 import { OWNERS, ownerOf } from "../verify.js";
@@ -20,10 +19,6 @@ const UI_SYMBOLS = {
   "ui-chevron": '<path d="m9 18 6-6-6-6"/>',
   "ui-impact": '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
   "ui-cause": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  "ui-evidence": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
-  "ui-fix": '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
-  "ui-where": '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
-  "ui-verify": '<path d="M9 12l2 2 4-4"/><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z"/>',
   "ui-external": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   "ui-theme": '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/>',
   "ui-gtm": '<path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><path d="M14 14h6v6h-6z"/>',
@@ -167,12 +162,6 @@ Object.assign(UI_SYMBOLS, {
   "ui-desktop": '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
   "ui-mobile": '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18h2"/>',
   "ui-clock": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  "ui-shield": '<path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
-  "ui-spark": '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
-  "ui-list": '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
-  "ui-route": '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7.5a3.5 3.5 0 0 0 0-7h-7a3.5 3.5 0 0 1 0-7H16"/>',
-  "ui-stack": '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
-  "ui-user": '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
   "ui-vendors": '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   "ui-journeys": '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7.5a3.5 3.5 0 0 0 0-7h-7a3.5 3.5 0 0 1 0-7H16"/>',
   "ui-events": '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
@@ -247,7 +236,8 @@ function hitFinding(rows, run, step, hit) {
   let worst = null;
   for (const f of rows) {
     if (!(f.severity in PROBLEM_RANK) || f.platform !== hit.platform || f.event !== hit.name) continue;
-    if (!f.where.some((w) => w.journey === run.journeyId && w.viewport === run.viewport && w.step === step.label)) continue;
+    // Two steps can share a label ("Add to cart" twice): the place then means one of them, the one whereTarget picks.
+    if (!f.where.some((w) => w.journey === run.journeyId && w.viewport === run.viewport && w.step === step.label && (step.index === 0 || whereTarget([run], w, f)?.step?.index === step.index))) continue;
     if (!worst || PROBLEM_RANK[f.severity] < PROBLEM_RANK[worst.severity]) worst = f;
   }
   return worst;
@@ -277,7 +267,7 @@ ${body}
 </section>`;
 
 export {
-  sectionBlock, STROKE, UI_SYMBOLS, PLATFORM_ART, use, sprite, platIcon, plat, badge, hostPath, pathOf, whereTarget, cardIds, alsoFineOn,
+  sectionBlock, UI_SYMBOLS, PLATFORM_ART, use, sprite, platIcon, plat, badge, hostPath, pathOf, whereTarget, cardIds, alsoFineOn,
   missingParamRows, hitFor, fmt, detailHtml, esc, escapeHtml, platformLabel, safeKey, sortPlatforms, ownerOf, OWNERS, chip, n, secs,
   pageTitle, stepTitle, passedRows, stepAnchor, hitsOf, pushesOf, requestsOf, hitId, pushId, requestId, hitAnchor, hitFinding,
 };

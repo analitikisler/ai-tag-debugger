@@ -44,6 +44,7 @@ One module per concern in `src/`, in the order a run goes through them.
 - `plan.js` and `plan-html.js`: save a plan folder (`savePlan`) and render its `plan.html`.
 - `sheet.js`: plan import and export as `.xlsx` (through the optional `fflate`) or CSV.
 - `campaign.js`: the UTM and click-id parameters a run puts on the landing address.
+- `schema.js`: the zod schemas a config and a plan are checked against (`validateConfig`, `validatePlan`), with the unknown-key warnings.
 
 **Browse**
 
@@ -52,6 +53,8 @@ One module per concern in `src/`, in the order a run goes through them.
 - `guard.js`: where the browser may go. `hostScope`, `isPrivateAddress`, `privateHostChecker`, `navigationError`.
 - `egress.js`: `startEgressProxy`, the local proxy all browser traffic goes through when private addresses are blocked.
 - `providers.js`: the AI providers behind one contract (see [How to add an AI provider](#how-to-add-an-ai-provider)).
+- `login.js`: the test account journeys log in with (`loginFromEnv`, `loginScrubber`, which keeps its values out of everything stored) and the sessions `aitd login` saves.
+- `pool.js`: `runPool`, which runs journeys and consent scenarios a few at a time, each in its own browser.
 
 **Capture**
 
@@ -59,6 +62,10 @@ One module per concern in `src/`, in the order a run goes through them.
 - `redact.js`: replaces user data sent for ad matching with a marker before anything is stored (`redactUrl`, `redactBody`, `redactParams`, `redactPush`).
 - `consent.js`: the consent scenarios, one fresh browser per consent choice, and the table the report shows.
 - `inventory.js`: `buildInventory`, the tag inventory (vendors, party, pages, cookie names).
+- `cmp.js`: which consent platform the page runs and how it is set up (`detectCmpInPage`, `cmpFacts`).
+- `containers.js`: how each Google container reached the page, and the ones that failed, never ran or loaded twice (`loadSources`, `containerRows`, `containersNotRun`).
+- `frames.js`: iframes. Tells an embedded widget's own tracking from the site's (`splitRun`, `widgetSummaries`) and follows the events iframes post to the page (`messageOutcomes`).
+- `hit-params.js`: `hitParams`, the parameters a hit's request carried, for the report's hit cards and the MCP `get_hit` tool.
 - `gtm.js`: reads a GTM container export to name the tag and trigger behind a hit.
 
 **Check**
@@ -66,12 +73,15 @@ One module per concern in `src/`, in the order a run goes through them.
 - `checks.js`: the deterministic rules. `checkRun` emits findings, `planCheck` sorts planned events into buckets, `summarize` and `groupFindings` shape them for the reports.
 - `verify.js`: who fixes a finding (`ownerOf`) and the tools to verify the fix in (`verifyLinks`).
 - `changes.js`: the comparison with the site's previous run and plan (`compareRuns`, `comparePlans`, `sinceLastRun`, `routeHints`).
+- `metrics.js`: `computeMetrics`, the numbers the reports show: verdict, score, plan coverage, journey funnel, platform parity, consent compliance and conversion integrity (defined in `docs/design/metrics.md`).
+- `baseline.js`: accepted findings (`readBaseline`, `applyBaseline`, `writeBaseline`), which are reported but not counted.
+- `history.js`: the site's `history.json` index and the trend across its saved runs (`loadHistory`, `trend`, `journeyStability`).
 
 **Explain and report**
 
 - `report.js`: `explainFindings` (the one model call that writes causes and fixes), `renderMarkdown`, `renderCsv`, and the exports every caller imports (`renderHtml`, `VERSION`, `escapeHtml`, `platformLabel`, `verdictHeadline`).
 - `report-shared.js`: what the Markdown and HTML renderers share (grouped findings, platform names and order, the verdict sentence), so neither imports the other.
-- `html/`: the HTML report. `legacy.js` is the 0.17 renderer `report.js` exports today; `shell.js` is the new one (top bar, rail, footer) with one module per section (`summary.js`, `findings.js`, `journeys.js`, `consent.js`, `scope.js`), and `lib.js`, `css.js` and `script.js` hold their helpers, stylesheet and inline script.
+- `html/`: the HTML report. `shell.js` assembles the page (top bar, rail, footer) with one module per section (`summary.js`, `findings.js`, `journeys.js`, `consent.js`, `scope.js`), and `lib.js`, `css.js` and `script.js` hold their helpers, stylesheet and inline script.
 - `i18n.js`: every user-visible string, in `LANGUAGES`.
 - `glossary.js`: what each request parameter means, for the `?` tips in the Network tab.
 - `brand.js` and `whitelabel.js`: the embedded logos (written by `node scripts/brand.js` from `brand/ai/assets/`; the brand guide is `brand/ai/BRAND.md`), and the `report` setting (name, logo, color, PDF).
@@ -82,6 +92,8 @@ One module per concern in `src/`, in the order a run goes through them.
 - `workspace.js`: the `aitd/<domain>/plans/<id>` and `runs/<id>` folders, IDs, and `resolvePlan` for `--against`.
 - `notify.js`: Slack and email alerts with the "since last run" diff.
 - `replay.js`: saved sites, replayed offline to compare a new version of the tool against known findings.
+- `ci-output.js`: `junit.xml` and `summary.json` for CI (`renderJunit`, `buildSummary`).
+- `doctor.js`: `doctorChecks`, what `aitd doctor` checks before a run.
 
 **Entry points**
 
@@ -95,8 +107,8 @@ Everything is in `src/parsers.js`.
 
 1. Write `parseX(url, postData)`. It returns an array of hits, or `null` when the request is not for that vendor. One request can carry several events (a batched GA4 POST does). A hit is `{ platform, name, params, url }` plus, when known, `id` (the tag or pixel id), `eventId` (for deduplication with a server-side copy), `delivery` (`"browser"` or `"server"`), `consent` and `userFields` (the raw user-data fields, so `redact.js` can replace them). Map the vendor's parameter names to the common ones the checks read: `value`, `currency`, `transaction_id`, `items`, `event_id`.
 2. Add an entry to `VENDORS`: `{ key, label, hosts, parse }`. `key` is the id users pass to `--platforms` and write in a plan, `label` is the display name, `hosts` is a regex over the request hostname. Add `path` when the tracker has to be told apart by its path on a first-party or shared host (Piwik PRO has no `hosts` at all). Leave `parse` out for a vendor whose requests are only counted, like DoubleClick.
-3. Decide what is answered locally. `isCollectionEndpoint` returns true for any request a parser recognizes, so those hits never reach the real account; beacons that are not parsed into hits (remarketing pings and similar) go in `OTHER_BEACONS`.
-4. Give it an icon and a place: `PLATFORM_ART` in `src/html/lib.js` holds each platform's icon (a platform without one shows its initials), the 0.17 report's `CSS` in `src/html/legacy.js` has one `.dot.p-<key>,.ptag.p-<key>::before` rule per platform, and `PLATFORM_ORDER` in `src/report-shared.js` sets the order in tables.
+3. Decide what is answered locally. `isCollectionEndpoint` returns true for any request a parser recognizes (except a tag's own script, which a parser names `script_load` and which has to load), so those hits never reach the real account; beacons that are not parsed into hits (remarketing pings and similar) go in `OTHER_BEACONS`.
+4. Give it an icon and a place: `PLATFORM_ART` in `src/html/lib.js` holds each platform's icon (a platform without one shows its initials), and `PLATFORM_ORDER` in `src/report-shared.js` sets the order in tables.
 5. Tests: a parsing test in `test/parsers.test.js` with a real request URL (and body, if the vendor POSTs), and a case in `test/vendors.test.js`, which also checks that every `VENDORS` entry has a label and that its hosts map back to it through `providerOf`.
 6. Docs: the "Platforms:" paragraph and the list under "Choose the platforms to check" in README.md, the same places in README.tr.md, and a CHANGELOG line.
 
@@ -158,7 +170,7 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 ## Releasing
 
 1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), both version fields in `server.json`, the plugin's `version` and pinned package in `plugin/.claude-plugin/plugin.json` and `plugin/.mcp.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
-2. Add the `## x.y.z (date)` section at the top of CHANGELOG.md with the lines collected for it. Update the version in README's Playwright install commands if Playwright changed.
+2. Add the `## x.y.z (date)` section at the top of CHANGELOG.md with the lines collected for it. Update the version in the Playwright install commands (README, `examples/cron/run-audit.sh`) if Playwright changed.
 3. Run `npm test`, then merge to `main` with a commit such as `Release 0.16.0`.
 4. `.github/workflows/publish.yml` runs on every push to `main` that touches `package.json` (or by hand from the Actions tab). Its `check` job looks the version up on npm and stops if it is already there; otherwise `test` runs `npm ci`, installs Chromium and runs `npm test` on Node 22, and `publish` publishes with npm trusted publishing (OIDC, no stored token) from the `npm` environment with `npm publish --access public`.
 5. The MCP Registry is updated by hand: once the version is on npm, run `.github/workflows/publish-mcp-registry.yml` from the Actions tab. It checks that `server.json`'s package version exists on npm, then signs in to the registry with GitHub OIDC and publishes `server.json` as it is on `main`.

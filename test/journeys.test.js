@@ -112,3 +112,11 @@ test("without --against nothing changes", () => {
   const { plan: p } = planRun({ plan: sitePlan, picks: ["add_to_cart"] });
   assert.equal(p.events.find((e) => e.name === "purchase").journeys, undefined);
 });
+
+test("with a plan to check against, a ready-made journey picked by its alias keeps the events planned for it", () => {
+  const scoped = { events: [{ platform: "ga4", name: "coupon_applied", journeys: ["purchase"] }, { platform: "ga4", name: "sign_up", journeys: ["sign_up"] }] };
+  const byId = planRun({ plan: scoped, picks: ["purchase"], against: true }).plan.events.find((e) => e.name === "coupon_applied");
+  const byAlias = planRun({ plan: scoped, picks: ["checkout"], against: true }).plan.events.find((e) => e.name === "coupon_applied");
+  assert.deepEqual(byId.journeys, ["purchase"]);
+  assert.deepEqual(byAlias.journeys, ["purchase"]);
+});

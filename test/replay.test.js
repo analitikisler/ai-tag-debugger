@@ -329,3 +329,15 @@ test("--save-steps replaces only the saved journeys' steps in an existing config
 test("compareKeys counts repeats", () => {
   assert.deepEqual(compareKeys(["a", "a", "b"], ["a", "c"]), { missing: ["a", "b"], extra: ["c"] });
 });
+
+test("a saved site leaves out what belongs to the computer that saved it: its Chrome, its login session and its alert addresses", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "atd-site-"));
+  try {
+    const config = { site: "https://shop.test/", viewports: ["desktop"], connect: "http://127.0.0.1:9222", session_file: "/home/me/session.json", notify: { slack: "https://hooks.slack.com/services/T/B/secret" } };
+    await writeSavedSite(dir, { config, plan: null, runs: [], findings: [] });
+    const saved = JSON.parse(await readFile(path.join(dir, SAVED_SITE_FILE), "utf8"));
+    assert.deepEqual(saved.config, { site: "https://shop.test/", viewports: ["desktop"] });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

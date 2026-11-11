@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeGcd, parseTrackingRequest } from "../src/parsers.js";
+import { decodeGcd, isCollectionEndpoint, parseTrackingRequest } from "../src/parsers.js";
 
 test("parses a GA4 hit with ecommerce params and consent state", () => {
   const [hit] = parseTrackingRequest(
@@ -145,4 +145,22 @@ test("gcd as gtag.js sent it for each consent sequence decodes to that sequence"
   // A default of ad_storage denied, analytics_storage granted, ad_user_data denied, ad_personalization granted.
   const mixed = decodeGcd("13p3t3p3t5l1");
   assert.deepEqual(Object.fromEntries(Object.entries(mixed).map(([k, v]) => [k, v.default])), { ad_storage: "denied", analytics_storage: "granted", ad_user_data: "denied", ad_personalization: "granted" });
+});
+
+test("a GA4 batch joined with CRLF, as gtag.js sends it, leaves no carriage return in names or values", () => {
+  const hits = parseTrackingRequest("https://www.google-analytics.com/g/collect?v=2&tid=G-1", "en=purchase&epn.value=10&cu=EUR\r\nen=scroll");
+  assert.deepEqual(hits.map((h) => h.name), ["purchase", "scroll"]);
+  assert.equal(hits[0].params.currency, "EUR");
+});
+
+test("a malformed escape in an Adobe-style path is kept as sent instead of throwing out of the request handler", () => {
+  assert.equal(parseTrackingRequest("https://evil.example/b/ss/%zz/1/s1")[0].id, "%zz");
+});
+
+test("a tag's own script is read as a hit but is not a collection endpoint, so it still loads when hits are answered locally", () => {
+  for (const url of ["https://static.hotjar.com/c/hotjar-123456.js?sv=7", "https://www.clarity.ms/tag/abc123"]) {
+    assert.equal(parseTrackingRequest(url, null)[0].name, "script_load");
+    assert.equal(isCollectionEndpoint(url), false, url);
+  }
+  assert.equal(isCollectionEndpoint("https://a.clarity.ms/collect"), true);
 });

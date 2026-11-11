@@ -145,7 +145,7 @@ test("the verdict headline follows the verdict key, with a fallback per key and 
   assert.equal(headline([{ journey: "checkout", viewport: "desktop", severity: "risk", check: "consent_default_missing", detail: "x" }], [run()]).headline, "the consent default missing check carries a consent or data risk");
   assert.equal(headline([], [run({ hits: [] })]).headline, "no tracking hits were captured");
   assert.deepEqual(headline([], []), { status: "attention", statusText: "Needs attention", headline: "nothing was tested", score: null });
-  assert.equal(headline([], [run()], { events: [{ platform: "ga4", name: "purchase" }] }).headline, "all 1 planned events fired correctly on 1 journey");
+  assert.equal(headline([], [run()], { events: [{ platform: "ga4", name: "purchase" }] }).headline, "the planned event fired correctly on 1 journey");
   assert.equal(headline([], [run()]).headline, "all checks passed on 1 journey");
   assert.equal(verdictHeadline({ findings: [broken], runs: [run()], metrics: computeMetrics({ runs: [run()], findings: [broken] }), lang: "tr" }).headline, "purchase izlemesi bozuk");
   // The consequence and fix tables accept a string or a function of the finding.

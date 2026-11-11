@@ -3,12 +3,13 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request as httpRequest } from "node:http";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { connect as netConnect } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { AuditSession, browserEnv } from "../src/browser.js";
-import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
+import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "../src/guard.js";
 import { pageView } from "../src/agent.js";
 import { buildServer, closeIdleAudits, startMcp } from "../src/mcp.js";
 import { checkRun } from "../src/checks.js";
@@ -148,8 +149,22 @@ test("the HTTP server rejects short tokens, big bodies and wrong secrets, and se
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     assert.equal((await fetch(`${base}/mcp/wrong-secret-of-same-size`, { method: "POST", body: "{}" })).status, 404);
-    const big = await fetch(`${base}/mcp/${token}`, { method: "POST", headers: { "content-type": "application/json" }, body: "x".repeat(1024 * 1024 + 10) }).catch(() => null);
-    assert.ok(!big || big.status === 413);
+    // Too big a body is answered 413 and the connection dropped; a client still sending may only see the drop.
+    const big = await new Promise((resolve) => {
+      const req = httpRequest(`${base}/mcp/${token}`, { method: "POST", headers: { "content-type": "application/json" } }, (res) => resolve(res.statusCode));
+      req.on("error", (err) => resolve(err.code));
+      req.end("x".repeat(1024 * 1024 + 10));
+    });
+    assert.ok([413, "ECONNRESET", "EPIPE"].includes(big), String(big));
+    // A request target that is no URL is answered 404 like any other wrong path; it used to end the process.
+    const malformed = await new Promise((resolve, reject) => {
+      const socket = netConnect(server.address().port, "127.0.0.1", () => socket.write("GET //[ HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"));
+      let answer = "";
+      socket.on("data", (d) => { answer += d; });
+      socket.on("end", () => resolve(answer));
+      socket.on("error", reject);
+    });
+    assert.match(malformed, /^HTTP\/1\.1 404 /);
     assert.equal((await fetch(`${base}/mcp/${token}/reports/none/report.html`)).status, 404);
     const report = await fetch(`${base}/mcp/${token}/reports/audit1/report.html`);
     assert.equal(report.status, 200);
@@ -243,4 +258,46 @@ test("with private addresses blocked, a GA4 request to a private server-side end
     await session.close();
     page.close();
   }
+});
+
+test("a tab the page opens is held to the site, and the page address kept with hits and pushes is redacted", async () => {
+  let elsewhere = 0;
+  const other = createServer((req, res) => {
+    elsewhere += 1;
+    res.writeHead(200, { "content-type": "text/html" }).end("<p>elsewhere</p>");
+  });
+  await new Promise((r) => other.listen(0, "127.0.0.1", r));
+  const page = `<!doctype html><a target="_blank" href="http://localhost:${other.address().port}/x">Partner site</a><script>
+    window.dataLayer = window.dataLayer || []; dataLayer.push({ event: "thanks" });
+    new Image().src = "https://www.facebook.com/tr/?id=1&ev=Lead";
+  </script>`;
+  const site = createServer((req, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise((r) => site.listen(0, "127.0.0.1", r));
+  const session = new AuditSession({ viewport: "desktop", site: `http://127.0.0.1:${site.address().port}/`, login: null });
+  try {
+    await session.start();
+    await session.act({ action: "goto", url: `http://127.0.0.1:${site.address().port}/thanks?email=jane.doe%40gmail.com`, reason: "Open the thanks page" });
+    const lead = session.hits.find((h) => h.name === "Lead");
+    const push = session.dataLayerLog.find((e) => e.value?.event === "thanks");
+    assert.ok(lead && push);
+    for (const address of [lead.pageUrl, push.url]) {
+      assert.ok(!address.includes("jane.doe"), address);
+      assert.match(address, /redacted/);
+    }
+    // localhost is another host than 127.0.0.1, so it is outside the audited site: the new tab may not load it.
+    await session.act({ action: "click", text: "Partner site", reason: "Follow the partner link" });
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(elsewhere, 0);
+    assert.ok(session.context.pages().every((p) => !p.url().startsWith("http://localhost")));
+  } finally {
+    await session.close();
+    site.close();
+    other.close();
+  }
+});
+
+test("localhost with a trailing dot is still localhost, and a bad site address is reported as such", async () => {
+  assert.equal(await privateHostChecker()("localhost."), true);
+  assert.throws(() => hostScope("http://exa mple"), /is not a valid site address/);
+  assert.throws(() => hostScope("https://example.com", ["bad host"]), /in allowed_hosts is not a valid host/);
 });

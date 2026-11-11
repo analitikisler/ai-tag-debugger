@@ -142,3 +142,9 @@ test("plan import and export explain what is missing", () => {
   fails(["export"], "plan export needs a plan");
   fails(["export", "latest", "--site", "https://a.test", "--format", "ods"], '--format must be xlsx or csv (found "ods")');
 });
+
+test("a trigger given as text and a user property given as a name are exported, not dropped", () => {
+  const rows = planToRows({ events: [{ platform: "ga4", name: "sign_up", trigger: "After the form is sent" }], user_properties: ["customer_type"] });
+  assert.equal(rows.events[0].trigger, "After the form is sent");
+  assert.deepEqual(rows.user_properties, [{ name: "customer_type", description: "", example: "" }]);
+});

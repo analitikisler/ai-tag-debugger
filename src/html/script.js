@@ -1,14 +1,14 @@
 // The report's one inline script, allowed by its hash in the page's CSP and the MCP server's header. Every behavior
-// hangs off data attributes (CONTRACT-IMPL.md lists them); every word it shows comes from the markup, so the script is
+// hangs off data attributes; every word it shows comes from the markup, so the script is
 // the same in every language and its hash never changes with the report's content.
 import { createHash } from "node:crypto";
 
 // ---------- shell: routing, rail, tabs, filters, single select, expand all, theme ----------
 const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select, expand all, theme. The only script on the page,
-   so the product can hash it for its CSP; every behavior hangs off data attributes documented in NOTES-shell.md. */
+   so the product can hash it for its CSP; every behavior hangs off data attributes. */
 (function () {
   "use strict";
-  var html = document.documentElement, body = document.body;
+  var html = document.documentElement;
   html.classList.add("js");
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var byId = function (s) { return s ? document.getElementById(s.replace(/^#/, "")) : null; };
@@ -98,11 +98,6 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     var has = function (row, k, vals) { var toks = (row.getAttribute("data-" + k) || "").split(/\\s+/); return vals.some(function (v) { return toks.indexOf(v) >= 0; }); };
     // A row the baseline accepted is listed but not counted, as the tally behind Summary, the rail and the headings.
     var counted = function (r) { return !r.hasAttribute("data-accepted"); }, total = rows.filter(counted).length;
-    chips.forEach(function (c) { // static count of the rows this chip alone would show
-      if (!c.hasAttribute("data-count-for")) return;
-      var p = kv(c), n = c.querySelector(".n") || c.appendChild(document.createElement("span"));
-      n.className = "n"; n.textContent = rows.filter(function (r) { return counted(r) && has(r, p[0], [p[1]]); }).length;
-    });
     function pressed() { var o = {}; chips.forEach(function (c) { if (on(c, "aria-pressed")) { var p = kv(c); (o[p[0]] = o[p[0]] || []).push(p[1]); } }); return o; }
     function apply(write) {
       var o = pressed(), keys = Object.keys(o), q = search ? search.value.trim() : "", ql = q.toLowerCase(), shown = 0, visible = 0, active = keys.length > 0 || !!q;
@@ -140,13 +135,8 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
   }).filter(Boolean);
 
   /* ---------- routing: #section, #section?key=v1,v2&q=text, #element-id ---------- */
-  var mock = document.querySelector(".mock-switch");
   function show(sec) {
-    var state = sec.id.indexOf("failed-") === 0 ? "failed" : "demo";
     sections.forEach(function (s) { s.hidden = s !== sec; });
-    body.setAttribute("data-state", state);
-    $$("[data-only]").forEach(function (n) { n.hidden = n.getAttribute("data-only") !== state; });
-    if (mock) { mock.setAttribute("aria-pressed", state === "failed"); mock.querySelector(".m-val").textContent = mock.getAttribute(state === "failed" ? "data-on" : "data-off"); }
     $$(".rail a").forEach(function (a) { if (a.getAttribute("href") === "#" + sec.id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   }
   function reveal(el) {
@@ -214,7 +204,6 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     else if ((x = t.closest("[data-vp-target]"))) pressVp(x, true);
     else if ((x = t.closest("[data-expand-all],[data-collapse-all]"))) $$("details.card", x.closest(".sec")).forEach(function (d) { d.open = x.hasAttribute("data-expand-all"); });
     else if (t.closest("[data-rail-toggle]")) setRail(html.getAttribute("data-rail") !== "collapsed", true);
-    else if (t.closest(".mock-switch")) go(body.getAttribute("data-state") === "failed" ? "#summary" : "#failed-summary");
   });
   function select(btn, focus) {
     var insp = btn.closest("[data-inspector]"), pane = byId(btn.getAttribute("data-select-target"));
@@ -240,13 +229,12 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
       if (n) { e.preventDefault(); return select(n, true); }
     }
     if (typing(t)) return;
-    var state = body.getAttribute("data-state") === "failed" ? "failed-" : "";
     if (rail) { e.preventDefault(); setRail(html.getAttribute("data-rail") !== "collapsed", true); }
     else if (/^[1-7]$/.test(e.key)) {
       var a = $$('.rail ul:not([hidden]) > li > a')[+e.key - 1];
       if (a && a.getAttribute("href")) { e.preventDefault(); go(a.getAttribute("href")); }
     } else if (e.key === "/") {
-      var s = byId(state + "findings"), q = s && s.querySelector("[data-filter-search]");
+      var s = byId("findings"), q = s && s.querySelector("[data-filter-search]");
       if (s && s.hidden) { history.pushState(null, "", "#" + s.id); route(false); }
       if (q) { e.preventDefault(); q.focus(); }
     }
@@ -267,10 +255,10 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
 // ---------- end of shell ----------
 
 // ---------- journeys: keeps the viewport when the journey changes ----------
-const JOURNEYS = `/* Journeys: what the generic behaviors do not do. shell.js keeps the step when the viewport changes
+const JOURNEYS = `/* Journeys: what the generic behaviors do not do. The shell part above keeps the step when the viewport changes
    ([data-vp-switch]); this keeps the viewport when the journey changes, so a reader comparing mobile runs stays
    on mobile, and writes the step now on screen to the hash (replaceState) after either switch. It only clicks
-   the generic switch, so shell.js stays in charge of state. */
+   the generic switch, so the shell part stays in charge of state. */
 (function () {
   var pick = document.querySelector("#journeys .jr-pick");
   if (!pick) return;

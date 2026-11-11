@@ -136,3 +136,15 @@ test("the site's own email addresses, like a mailto link GTM reports on a click,
   hit.params = { customer: "staff@analitikisler.com", page_location: "https://analitikisler.com/" };
   assert.ok(checkRun({ events: [] }, run).some((f) => f.check === "pii"), "an own-domain address outside a link still counts");
 });
+
+test("user data inside a JSON parameter and in CRLF-joined body lines is redacted", () => {
+  const hash = "a".repeat(64);
+  const pinterest = redactUrl(`https://ct.pinterest.com/v3/?event=checkout&pd=${encodeURIComponent(JSON.stringify({ em: hash }))}&ed=${encodeURIComponent('{"value":10}')}`);
+  assert.deepEqual(pinterest.fields, ["pd.em"]);
+  assert.ok(!pinterest.url.includes(hash));
+  // A JSON parameter with no user data comes back exactly as sent.
+  assert.ok(pinterest.url.includes(`ed=${encodeURIComponent('{"value":10}')}`));
+  const body = redactBody("en=purchase&em=jane%40gmail.com&cu=EUR\r\nen=scroll");
+  assert.ok(!body.text.includes("jane"));
+  assert.match(body.text, /&cu=EUR\r\nen=scroll$/);
+});

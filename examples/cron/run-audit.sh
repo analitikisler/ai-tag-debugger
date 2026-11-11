@@ -4,7 +4,7 @@
 #
 # Setup, once:
 #   npm install -g @analitikisler/ai-tag-debugger@0.22.8
-#   npx playwright install --with-deps chromium
+#   npx -y playwright@1.56.1 install --with-deps chromium   # the browser version this release uses
 #   mkdir -p /opt/aitd && cp ai-tag-debugger.config.json /opt/aitd/
 #   echo 'ANTHROPIC_API_KEY=...' > /etc/aitd.env && chmod 600 /etc/aitd.env
 #

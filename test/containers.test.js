@@ -77,7 +77,7 @@ test("each container load is recorded with the way it reached the page", async (
   let run;
   try {
     await session.act({ action: "goto", url: `${url}?email=someone@example.com` });
-    await session.act({ action: "wait", ms: 400 });
+    await session.act({ action: "wait", value: "400" });
     run = { ...collect(session, { id: "j" }, "desktop") };
   } finally {
     await session.close();
@@ -224,7 +224,7 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   const call = async (name, args) => (await client.callTool({ name, arguments: args })).content;
   const page = (await call("start_audit", { site: url, journey: "browse", campaign: false }))[0].text;
   const id = page.match(/audit_id: (\w+)/)[1];
-  await call("browser_action", { audit_id: id, action: "wait", ms: 400, reason: "Let the tags load" });
+  await call("browser_action", { audit_id: id, action: "wait", value: "400", reason: "Let the tags load" });
 
   const listed = (await call("get_containers", { audit_id: id }))[0].text;
   // The test server is the site, so every script counts as served from the site's own domain.
@@ -264,7 +264,7 @@ test("a container the page only preloads, or that runs unseen, is listed, and on
   let run;
   try {
     await session.act({ action: "goto", url: `${url}preload` });
-    await session.act({ action: "wait", ms: 300 });
+    await session.act({ action: "wait", value: "300" });
     run = { ...collect(session, { id: "j" }, "desktop"), completed: true };
   } finally {
     await session.close();
@@ -301,7 +301,7 @@ test("a preload followed by the script itself is one ordinary load", async () =>
   let run;
   try {
     await session.act({ action: "goto", url: `${url}next` });
-    await session.act({ action: "wait", ms: 300 });
+    await session.act({ action: "wait", value: "300" });
     run = { ...collect(session, { id: "j" }, "desktop"), completed: true };
   } finally {
     await session.close();

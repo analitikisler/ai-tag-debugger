@@ -1016,7 +1016,10 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
   const reportsUrl = publicUrl ? `${publicUrl.replace(/\/+$/, "")}${endpoint}/reports` : undefined;
   const httpServer = createServer(async (req, res) => {
     // A request target that is no URL ("//[") must not throw here: nothing would catch it and the server would exit.
-    const pathname = URL.parse(req.url, "http://x")?.pathname ?? "";
+    let pathname = "";
+    try {
+      pathname = new URL(req.url, "http://x").pathname;
+    } catch { /* answered 404 below, like any other wrong path */ }
     const { ok, rest } = authorized(pathname);
     if (!ok) {
       res.writeHead(404).end();

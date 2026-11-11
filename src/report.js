@@ -530,7 +530,7 @@ const csvCell = (v) => {
   let s = v === null || v === undefined ? "" : typeof v === "string" ? v : JSON.stringify(v);
   // Text from the page could run as a formula in Excel or Sheets; a leading ' keeps it text.
   if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
 /** One row per tracking hit, dataLayer push and network call, in time order, for spreadsheets. */
@@ -546,7 +546,8 @@ export function renderCsv({ findings, runs }) {
     }
     for (const e of r.dataLayerLog ?? []) {
       const s = stepOf(e.step);
-      const name = isConsentEntry(e.value) ? `consent ${e.value[1]}` : e.value?.event ?? "";
+      // An event is pushed as { event: "x" } by GTM and as ["event", "x", …] by gtag().
+      const name = isConsentEntry(e.value) ? `consent ${e.value[1]}` : Array.isArray(e.value) ? (e.value[0] === "event" && typeof e.value[1] === "string" ? e.value[1] : "") : e.value?.event ?? "";
       rows.push({ at: e.t, cells: [r.journeyId, r.viewport, s.index, s.label, t(e.t), "datalayer", "", name, e.value, "", ""] });
     }
     for (const c of r.network ?? []) {

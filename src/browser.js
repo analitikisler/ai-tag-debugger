@@ -856,7 +856,11 @@ export class AuditSession {
       try {
         isTopNavigation = request.isNavigationRequest() && !request.frame().parentFrame();
         isMainNavigation = isTopNavigation && request.frame() === this.page?.mainFrame();
-      } catch { /* service worker requests have no frame */ }
+      } catch {
+        // Service worker requests have no frame and are no navigation. A navigation without one is a new tab's
+        // first page, asked for before its frame exists.
+        isTopNavigation = request.isNavigationRequest();
+      }
       if (isTopNavigation) error = await this.checkUrl(request.url());
       else if (this.isPrivate) {
         const u = new URL(request.url());

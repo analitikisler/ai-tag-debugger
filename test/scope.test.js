@@ -102,3 +102,7 @@ test("other Google tag pings are answered locally, never sent to the real accoun
   }
   assert.ok(!isCollectionEndpoint("https://www.shop.co.uk/collections/shoes"));
 });
+
+test("custom item parameters past the ninth, and values that start with a digit, decode whole", () => {
+  assert.deepEqual(decodeGa4Item("nmShoe~k0size~v042~k10fit~v10XL").custom, [["size", "42"], ["fit", "XL"]]);
+});

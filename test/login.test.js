@@ -209,3 +209,9 @@ test("a config's session_file of saved is the session aitd login saved for the s
   // No session saved yet: the run stops before any browser starts, with the command that saves one.
   await assert.rejects(runAudit({ config: { site: "https://www.shop.example/", session_file: "saved", journeys: [{ id: "j", goal: "g" }] }, dataDir: dir, ai: false, scripted: true }), /No saved login session at .*shop\.example.*session\.json\. Save one with: aitd login --site https:\/\/www\.shop\.example\//);
 });
+
+test("the scrubber finds the password as a form encodes it and as JSON escapes it", () => {
+  const scrub = loginScrubber({ email: "qa@shop.test", password: 'Sec"ret!42' });
+  assert.equal(scrub("https://shop.test/login?p=Sec%22ret%2142&next=%2F"), "https://shop.test/login?p={{login.password}}&next=%2F");
+  assert.equal(scrub(JSON.stringify({ password: 'Sec"ret!42' })), '{"password":"{{login.password}}"}');
+});

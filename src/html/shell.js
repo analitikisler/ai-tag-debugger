@@ -1,6 +1,6 @@
-// The new HTML report: the head, the top bar, the rail, the seven sections and the footer around them. Each section
+// The HTML report: the head, the top bar, the rail, the seven sections and the footer around them. Each section
 // module (summary.js, findings.js, journeys.js, consent.js, scope.js) renders from the one context built here, so the
-// numbers on the rail, the top bar and the sections come from the same rows. src/report.js still exports the 0.17
+// numbers on the rail, the top bar and the sections come from the same rows. src/report.js re-exports renderHtml.
 import { messages } from "../i18n.js";
 import { summarize } from "../checks.js";
 import { computeMetrics } from "../metrics.js";

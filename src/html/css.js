@@ -350,8 +350,8 @@ html:not(.js) .filterbar{display:none}
 
 // ---------- shell: top bar, rail, layout, 390 px, no-JS and print ----------
 const SHELL = `/* Page shell: skip link, top bar, rail (expanded 200 px, collapsed 48 px, strip under 720 px), main, section switching,
-   expand/collapse row, reveal flash, footer, no-JS and print. Driven by js/shell.js through html.js, html[data-rail],
-   body[data-state] and the hidden attribute. */
+   expand/collapse row, reveal flash, footer, no-JS and print. Driven by the shell part of script.js through html.js,
+   html[data-rail] and the hidden attribute. */
 
 /* JS hides with the hidden attribute; a section rule that sets display must not bring a hidden row back on screen. */
 @media screen{[hidden]{display:none!important}}
@@ -367,8 +367,6 @@ html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .logo .l-light{display:none}html:not([data-theme="light"]) .logo .l-dark{display:inline}}
 .eyebrow{font:500 12px/1.4 var(--font-sans);color:var(--muted)}
-.mock-note{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2) var(--s3);margin:var(--s3) 0 var(--s4);border:1px dashed var(--sev-info);border-radius:var(--r-sm);color:var(--sev-info-fg);font-size:12.5px}
-.mock-note .ic{margin-top:2px}
 
 .skip{position:absolute;left:var(--s4);top:-48px;z-index:50;padding:var(--s2) var(--s3);background:var(--card);border:1px solid var(--border);border-radius:var(--r-ctl);color:var(--fg)}
 .skip:focus{top:var(--s2)}
@@ -390,9 +388,6 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .v-pass{--v:var(--score-pass);--v-fg:var(--score-pass-fg);--v-bg:var(--score-pass-bg)}
 .top-end{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
 .byline{display:inline-flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted);margin-right:var(--s2)}
-.mock-switch{align-items:center;gap:.3em;height:28px;padding:0 10px;border:1px dashed var(--border-strong);border-radius:var(--r-ctl);background:none;color:var(--muted);font:500 12px var(--font-sans);cursor:pointer}
-.mock-switch:hover{color:var(--fg);border-color:var(--muted)}
-.mock-switch[aria-pressed=true]{border-color:var(--sev-info);color:var(--sev-info-fg);background:var(--sev-info-bg)}
 .icon-btn{align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--r-ctl);background:none;color:var(--muted);cursor:pointer}
 .icon-btn:hover{background:var(--card-2);color:var(--fg)}
 
@@ -441,7 +436,6 @@ main:focus{outline:none}
 main [id]{scroll-margin-top:calc(var(--top) + var(--s3))}
 html:not(.js) main>.sec+.sec{margin-top:var(--s7);padding-top:var(--s5);border-top:1px solid var(--border)}
 /* The failed run is a mockup-only state reached through the top-bar switch, so without JS it stays out of the page. */
-html:not(.js) main>.sec[id^="failed-"]{display:none}
 /* expand / collapse all, top right of the section, level with its h2 */
 .sec-tools{position:absolute;top:-4px;right:0;gap:var(--s1)}
 .sec-tools .btn{height:26px;padding:0 8px;font-size:12px;color:var(--muted)}
@@ -461,7 +455,6 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
   .top{gap:var(--s2);padding:0 var(--s3)}
   .top .l-lockup,.top-site .eyebrow,.top-date,.byline{display:none}
   .top .l-mark{display:block}
-  .mock-switch .m-pre{display:none}
   .shell{display:block}
   .rail{top:var(--top);width:auto;height:auto;padding:0;border-right:0;border-bottom:1px solid var(--border);overflow:visible}
   .r-head{display:none}
@@ -480,13 +473,12 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 /* ---------- print: the no-JS layout, sections stacked one per page ---------- */
 @media print{
   :root{--top:0px}
-  .top,.rail,.skip,.sec-tools,.mock-note,.fb-clear,html.js .js-only,html.js .sec-tools.js-only{display:none!important}
+  .top,.rail,.skip,.sec-tools,.fb-clear,html.js .js-only,html.js .sec-tools.js-only{display:none!important}
   .shell{display:block}
   main{padding:0}
   main>.sec[hidden],[data-select-pane][hidden],[data-inspector][hidden],[data-filter-group][hidden],[data-text][hidden]{display:block!important}
   li[data-text][hidden]{display:list-item!important}
   tr[data-text][hidden]{display:table-row!important}
-  main>.sec[id^="failed-"]{display:none!important}
   main>.sec+.sec{break-before:page}
   .flash{outline:0!important;animation:none}
 }`;
@@ -496,6 +488,7 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 const PRODUCT = `.plate{fill:var(--card);stroke:var(--border);stroke-width:1}
 .plat-fb{display:inline-grid;place-items:center;border-radius:var(--r-sm);background:var(--well);color:var(--muted);font:500 10px var(--font-mono);flex:none}
 .plat-fb.s12{width:12px;height:12px;font-size:8px}
+.plat-fb.s13{width:13px;height:13px;font-size:8px}
 .plat-fb.s14{width:14px;height:14px;font-size:9px}
 .plat-fb.s16{width:16px;height:16px}
 .plat-fb.s18{width:18px;height:18px;font-size:10px}
@@ -680,7 +673,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd details.group>summary:focus-visible{outline-offset:2px;border-radius:var(--r-sm)}
 .fnd .chip.lg b{font-weight:600}
 .fnd .g-rows>.card+.card{margin-top:6px}
-.fnd [hidden]{display:none!important}
+.fnd .fnd-empty[hidden]{display:none!important}
 
 /* ---------- the collapsed row: badge · title · owner · platform · where, in aligned columns ---------- */
 .fnd details.card>summary,.fnd .card.line{display:grid;grid-template-columns:92px minmax(0,1fr) 112px 150px 132px;align-items:center;column-gap:var(--s3);row-gap:6px;flex-wrap:nowrap;min-height:44px;padding:8px 40px 8px var(--s3)}

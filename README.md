@@ -24,7 +24,7 @@ Built by [Analitik İşler](https://analitikisler.com). MIT licensed.
   Place the order
   ✓ All scripted steps completed. · 20 tracking hits captured
 
-2 broken · 1 risk · 1 warning · 4 ok
+2 broken · 1 risk · 1 warning · 0 info · 4 ok
 Report: reports/demo/localhost/runs/2026-10-16_0800/report.html
 ```
 
@@ -73,7 +73,7 @@ Each audit also opens the start page once per consent choice, each time in a fre
 
 Under it, the **Consent matrix** puts the choices side by side, from the page each one leads to: the first Google hit and the consent it carries, whether the campaign parameters reached it, whether the GA4 client id the visitor had before choosing was kept, whether `_gcl_aw` holds the landing `gclid`, the cookies set, how long after the page started each tag was called, and the Google tag's own consent. What should not happen with a choice is marked: tracking cookies before a choice, without one or after reject all, a client id that changes on accept, and a UTM parameter lost from the first hit. The same matrix is in `report.md`, and the `consent_matrix` MCP tool runs it on its own.
 
-The **Consent** section also names the consent platform the site runs. For Efilli it says when the site's bundle was compiled, which language's setup is in force, its categories, whether Efilli's own Consent Mode integration is on and the category each signal maps to (and, when it is off, that the signals come from somewhere else, such as a GTM template), and whether auto-blocking and IAB TCF are on. For CookieYes it gives the law its banner follows, its categories, how it maps them to Consent Mode (the same on every site: advertisement to `ad_storage`, `ad_user_data` and `ad_personalization`, analytics to `analytics_storage`, functional to `functionality_storage` and `personalization_storage`, necessary to `security_storage`), how many providers it holds back, and when its site script last changed. For OneTrust: its version, the consent model and region it applied to the visit, its groups, whether its Consent Mode setting is on and which group grants each signal, ads data redaction, IAB TCF, and when the site last published its setup. For Cookiebot: its version, consent model and region, its fixed mapping (marketing to the three ad signals, statistics to `analytics_storage`, preferences to `functionality_storage` and `personalization_storage`), whether its Consent Mode integration is on, ads data redaction, auto-blocking, IAB TCF, and when its setup was last published. When a platform counted the visit as consent given without a choice (an opt-out region), the card says so, since tags then run before any choice. Other platforms are named, with the date their script last changed. A reject button inside a banner drawn in a shadow root, as Efilli's is, is checked like any other. No AI model is called, but the start page is visited three more times. Set `"consent_scenarios": false` in the config to turn it off.
+The **Consent** section also names the consent platform the site runs. For Efilli it says when the site's bundle was compiled, which language's setup is in force, its categories, whether Efilli's own Consent Mode integration is on and the category each signal maps to (and, when it is off, that the signals come from somewhere else, such as a GTM template), and whether auto-blocking and IAB TCF are on. For CookieYes it gives the law its banner follows, its categories, how it maps them to Consent Mode (the same on every site: advertisement to `ad_storage`, `ad_user_data` and `ad_personalization`, analytics to `analytics_storage`, functional to `functionality_storage` and `personalization_storage`, necessary to `security_storage`), how many providers it holds back, and when its site script last changed. For OneTrust: its version, the consent model and region it applied to the visit, its groups, whether its Consent Mode setting is on and which group grants each signal, ads data redaction, IAB TCF, and when the site last published its setup. For Cookiebot: its version, consent model and region, its fixed mapping (marketing to the three ad signals, statistics to `analytics_storage`, preferences to `functionality_storage` and `personalization_storage`), whether its Consent Mode integration is on, ads data redaction, auto-blocking, IAB TCF, and when its setup was last published. When a platform counted the visit as consent given without a choice (an opt-out region), the card says so, since tags then run before any choice. Other platforms are named, with the date their script last changed. A reject button inside a banner drawn in a shadow root, as Efilli's is, is checked like any other. No AI model is called, but the start page is opened again for each choice, up to four more times. Set `"consent_scenarios": false` in the config to turn it off.
 
 ## How it works
 
@@ -171,7 +171,7 @@ The global install also adds `aitd`, a short alias: `aitd run --site … --journ
 
 Or run it without installing: `npx -y @analitikisler/ai-tag-debugger run --site … --journey add_to_cart`.
 
-Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`) for each command's options. If something does not work, `aitd doctor` checks Node, Chromium, your AI key and the data folder, and says what to fix.
+Run `aitd --help` to see the commands, and `aitd run --help` (or `plan`, `replay`, `mcp`, `login`, `doctor`, `history`) for each command's options. If something does not work, `aitd doctor` checks Node, Chromium, your AI key and the data folder, and says what to fix.
 
 ### Try the demo shop (from source)
 
@@ -270,7 +270,7 @@ Review the plan before you use it. The examples and suggestions come from the pa
 }
 ```
 
-`platform` is `ga4`, `google_ads`, `meta` or `tiktok`. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
+`platform` is a platform key such as `ga4`, `google_ads`, `meta` or `tiktok`; every key `--platforms` takes is allowed. `journeys` limits where an event is expected (default: every journey). Set `allow_multiple: true` for events that may legitimately fire more than once per action.
 
 Event names are matched loosely, so `dl_add_to_cart` (Elevar), `addToCart` and `Add To Cart` count as `add_to_cart`, and `transaction` or `order_completed` as `purchase`. Add your own with `"aliases": ["my_event"]` on a planned event. Required parameters are also found under their usual other names: `products` for `items`, `revenue` for `value`, `order_id` for `transaction_id`.
 
@@ -403,6 +403,7 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 | `lead` (or `contact`, `form`) | Fills in and sends a contact, quote or demo form | GA4 `generate_lead`; Meta `Lead` |
 | `search` | Searches the site and opens a result | GA4 `search` with `search_term`; Meta `Search` |
 | `login` (or `signin`) | Logs in with the [test account](#logging-in) | GA4 `login` |
+| `decline_cookies` (or `decline`, `reject`, `reject_cookies`, `consent`) | Rejects all cookies on the banner, then browses a few pages like a visitor who said no | None of its own: the consent checks report what was still sent |
 
 `--journey` also picks journeys from your config by id. With a config, ready-made journeys add their events to your plan.
 
@@ -532,6 +533,7 @@ The file holds one entry per finding, with a `key` the run matches on (the check
 | `session_file` | A session saved with `aitd login`, so every journey starts logged in: `"saved"` for the site's own, or a file path. See [Logging in](#logging-in). |
 | `connect` | Your own Chrome's debugging address, e.g. `http://127.0.0.1:9222`: each journey runs in a fresh window of it. See [Using your own Chrome](#using-your-own-chrome). |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
+| `detect_providers` | Whether any other known platform the site sends to is checked too. Default: `true` while `providers` is unset, `false` once it lists platforms. Set it to `true` to keep detection on next to your own list. `--platforms` on the command line turns it off for that run. |
 | `campaign_checks` | Default `true`. Each run opens the first page like an ad click (UTM parameters, `gclid`, `fbclid`, or the ones already in the start address) and checks they survive redirects and reach the hits. Set to `false` to open the plain address. |
 | `block_hits` | Default `true`. Set to `false` to let hits reach your real endpoints. |
 | `consent_scenarios` | Default `true`. Set to `false` to skip the [consent scenarios](#consent-scenarios), which visit the start page once per consent choice. |
@@ -600,7 +602,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 
 | Option | Commands | Meaning |
 |---|---|---|
-| `--site <url>` | plan, run, doctor, history | The site. Required for `plan` and `history`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
+| `--site <url>` | plan, run, login, doctor, history | The site. Required for `plan`, `login` and `history`; for `run`, needed unless `--against` or the config gives it. `doctor` only checks that the address is http(s) and its host resolves. |
 | `--against <plan>` | run | Check against a plan: `latest` (or `last`), `first`, a plan ID, or a path to a plan file or folder. |
 | `--journey <id>` | run | A ready-made journey (repeatable). |
 | `--goal "<text>"` | run | A journey in plain language (repeatable). |
@@ -620,14 +622,16 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--no-ai` | run | No AI model at all. Implies `--scripted`. |
 | `--save-site <dir>` | run | Save the site's responses for `replay`. |
 | `--save-steps <file>` | run | Write the steps each journey took into a config file. |
-| `--data-dir <dir>` | plan, run, doctor, history | Where `aitd/` (plans and runs) is kept. Default: `./aitd`. Replaces `run --out`. |
+| `--data-dir <dir>` | plan, run, login, mcp, doctor, history | Where `aitd/` (plans, runs and saved login sessions) is kept. Default: `./aitd`. For `mcp`, where the server finds saved plans, runs and sessions and saves the plans it drafts. Replaces `run --out`. |
 | `--limit <n>` | history | How many of the site's newest runs the trend reads. Default: 30. |
 | `--json` | history | Print the trend series, the finding timeline and the journey stability as JSON instead of text. |
 | `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
 | `--update` | replay | Make this replay's findings the expected ones. |
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
-| `--base-url <url>` | run | The API address for an OpenAI-compatible provider. |
-| `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
+| `--base-url <url>` | plan, run | The API address for an OpenAI-compatible provider. |
+| `--allow-host <host>` | plan, run, login | Another host the browser may visit (repeatable), such as a hosted checkout or a single sign-on page. Same as `allowed_hosts`. |
+| `--topic <name>` | plan | Draft a plan for one kind of event only: `custom-events`, `ecommerce`, `forms` or `consent`. |
+| `-y`, `--yes` | a sentence, run | Don't ask: run the command a sentence turns into, and save the plan a first run learns. |
 | `--session saved\|<file>` | run | Start every journey logged in, from the session `aitd login` saved (`saved`) or a session file. Same as `session_file`. See [Logging in](#logging-in). |
 | `--save <file>` | login | Where `aitd login` saves the session (default `aitd/<domain>/session.json`). |
 | `--connect <url>` | run, plan | Run in your own Chrome, started with a debugging port, e.g. `http://127.0.0.1:9222`. Same as `connect`. See [Using your own Chrome](#using-your-own-chrome). |
@@ -671,7 +675,7 @@ Output:
 - `report.html`: one file, one screen at a time. A collapsible rail on the left lists seven sections; every section, filter and card has its own URL you can bookmark or share, and a link from one section opens the right card in another (a finding's "Where" chip opens that hit in its step).
   - **Summary**: the data quality score as a ring, coloured red below 50, amber to 89 and green from 90, the verdict and its headline, up to three lines saying what cost the points (none for a perfect score), status chips that open the findings filtered by severity, and six cards about the run: vendors checked, journeys with the platforms seen on each, events checked, consent, the AI provider and the run itself.
   - **Findings**: a filter bar (severity, owner, platform, journey, viewport, search) over three groups: failed, unverified and passed. Every row starts collapsed and opens into **Evidence**, **Fix**, **Where** and **Verify** tabs: the impact, the likely cause, the evidence with missing parameters marked, numbered fix steps, the steps where it happened, and the tools to check the fix in, such as Tag Assistant, GA4 DebugView, Meta Test Events or TikTok Pixel Helper. **Changed since last run** sits above the groups when the site has an earlier run.
-  - **Journeys**: one journey and viewport at a time. The steps on the left, named after the pages ("Open Home", "Add to cart") and grouped by page, with the hits each step produced; the selected step on the right with **Hits**, **Data Layer** and **Requests** tabs. Each hit shows its event, key parameters and consent state, and opens into the decoded parameters, item cards and the raw request. A batched GA4 request shows each of its events. It opens on the first step with a problem.
+  - **Journeys**: one journey and viewport at a time. The steps on the left, named after the pages ("Open Home", "Add to cart") and grouped by page, with the hits each step produced; the selected step on the right with **Hits**, **Data Layer**, **Network requests** and **Cookies** tabs. Each hit shows its event, key parameters and consent state, and opens into the decoded parameters, item cards and the raw request. A batched GA4 request shows each of its events. It opens on the first step with a problem.
   - **Consent**: one line per platform with what it received before a choice, after accept and after reject, the Consent Mode default and updates with their timing, and the [consent scenarios](#consent-scenarios) table.
   - **Coverage**: whether each planned event was sent on each journey, with the parameters it still needs, conversion integrity, and, with `--against`, the [Plan vs. site](#plan-vs-site) buckets.
   - **Inventory**: the [tag inventory](#tag-inventory), one line per platform, opening into its hosts, pages and cookies, and the [Google containers](#google-containers) with how each reached the page.
@@ -754,7 +758,7 @@ cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787; note t
 npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<your-tunnel-address>
 ```
 
-The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`) must be at least 16 characters.
+The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`) must be at least 16 characters. `--host <addr>` changes the address the server listens on (default `127.0.0.1`), and `--reports <dir>` where finished audits write their reports (default `~/ai-tag-debugger-reports`).
 
 In HTTP mode, the server is more locked down than locally:
 

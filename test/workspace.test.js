@@ -55,3 +55,11 @@ test("newRunDir puts runs under <domain>/runs/<id>", async () => {
   const { id, dir } = await newRunDir(dataDir, "https://www.shop.test", new Date(2026, 9, 16, 9, 0));
   assert.equal(dir, path.join(dataDir, "shop.test", "runs", id));
 });
+
+test("newId never returns an ID that is taken, and a host of dots is not a folder name", () => {
+  const now = new Date(2026, 0, 2, 3, 4, 5);
+  assert.equal(newId(["2026-01-02_0304", "2026-01-02_030405"], now), "2026-01-02_030406");
+  // The next free second can fall in the next minute.
+  assert.equal(newId(["2026-01-02_0304", "2026-01-02_030459"], new Date(2026, 0, 2, 3, 4, 59)), "2026-01-02_030500");
+  assert.throws(() => domainOf("http://../"), /no host name/);
+});

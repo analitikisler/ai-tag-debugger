@@ -57,6 +57,10 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   assert.match(await call("get_step", { audit_id: id, step }), /ga4 add_to_cart/);
   assert.match((await client.callTool({ name: "get_hit", arguments: { audit_id: id, step, hit: 99 } })).content[0].text, /^Step \d+ has \d+ hits? \(h0 to h\d+\)\.$/);
 
+  // A plan the checks could not read is refused while the audit is still open, like one that is not JSON.
+  const unreadable = await client.callTool({ name: "finish_audit", arguments: { audit_id: id, completed: true, note: "x", measurement_plan: JSON.stringify({ events: [{ platform: "ga4", name: "purchase", required_params: "value" }] }) } });
+  assert.equal(unreadable.isError, true);
+  assert.match(unreadable.content[0].text, /^Could not read the plan: [\s\S]*The audit is still open/);
   const plan = JSON.stringify({ consent_mode: true, events: [{ platform: "ga4", name: "add_to_cart", required_params: ["currency"] }] });
   const finished = (await client.callTool({ name: "finish_audit", arguments: { audit_id: id, completed: true, note: "Added.", measurement_plan: plan } })).content;
   const result = finished[0].text;
@@ -68,6 +72,8 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   // The report can be read over MCP by the name the result gives.
   const name = result.match(/get_report with report "([^"]+)"/)[1];
   assert.match(await call("get_report", { report: name }), /^# /m);
+  // Over HTTP every request gets a server of its own, so one built later has to find the report too.
+  assert.match(await (await connect({ allowFiles: false, reportsDir })).call("get_report", { report: name }), /^# /m);
   assert.equal(JSON.parse(await call("get_report", { report: name, part: "summary" })).site, "localhost");
   const steps = JSON.parse(await call("get_report", { report: name, part: "timeline" }));
   assert.deepEqual(steps[0].steps, timeline);
@@ -76,7 +82,7 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   assert.match(result, /sent 2 times/);
   const reportPath = result.match(/event timeline: (.+report\.html)/)[1];
   assert.ok(existsSync(reportPath));
-  assert.match(await call("get_page", { audit_id: id }).catch((e) => e.message), /No open audit/);
+  assert.match(await call("get_page", { audit_id: id }), /No open audit/);
 });
 
 test("run_audit without a key tells the chat app how to go on, in its own terms", async () => {

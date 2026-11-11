@@ -124,3 +124,13 @@ test("sendSmtp speaks SMTP with AUTH LOGIN", async () => {
   assert.ok(got.includes("RCPT TO:<a@x>"));
   assert.ok(got.includes(Buffer.from("Body").toString("base64")));
 });
+
+test("sendSmtp fails instead of waiting forever when the server hangs up before accepting the message", async () => {
+  const server = createServer((sock) => sock.end("220 hi\r\n"));
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  try {
+    await assert.rejects(sendSmtp(`smtp://127.0.0.1:${server.address().port}`, { from: "f@x", to: ["a@x"], subject: "Hi", text: "Body" }), /SMTP/);
+  } finally {
+    server.close();
+  }
+});

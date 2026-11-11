@@ -47,7 +47,7 @@ test("a widget's own hits are kept apart from the site's, and still count for co
   let run;
   try {
     await session.act({ action: "goto", url });
-    await session.act({ action: "wait", ms: 500 });
+    await session.act({ action: "wait", value: "500" });
     run = { ...collect(session, { id: "browse" }, "desktop"), completed: true };
   } finally {
     await session.close();
@@ -144,7 +144,7 @@ test("over MCP: get_widgets during the audit, then finish_audit and get_report",
   try {
     const page = (await call("start_audit", { site: url, journey: "browse", campaign: false }))[0].text;
     const id = page.match(/audit_id: (\w+)/)[1];
-    await call("browser_action", { audit_id: id, action: "wait", ms: 500, reason: "Let the widget load" });
+    await call("browser_action", { audit_id: id, action: "wait", value: "500", reason: "Let the widget load" });
     const listed = (await call("get_widgets", { audit_id: id }))[0].text;
     assert.match(listed, new RegExp(`^ {2}${widget.replace(/[.:/]/g, "\\$&")}, embedded in ${url.replace(/[.:/]/g, "\\$&")}; containers GTM-WIDGET$`, "m"));
     assert.match(listed, /^ {4}own tracking: GA4 G-WIDGET: purchase$/m);

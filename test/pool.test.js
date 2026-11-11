@@ -130,3 +130,16 @@ test("an audit with concurrency 2 gives the same runs and findings as one journe
     await rm(out, { recursive: true, force: true });
   }
 });
+
+test("after a worker throws, no lane starts another job", async () => {
+  const started = [];
+  const worker = async (job) => {
+    started.push(job);
+    await new Promise((r) => setTimeout(r, 5));
+    if (job === 1) throw new Error("boom");
+    return job;
+  };
+  await assert.rejects(runPool([1, 2, 3, 4, 5, 6], 2, worker), /boom/);
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(started, [1, 2]);
+});

@@ -204,3 +204,15 @@ test("planned GA4 automatic events are read from their flags and are never missi
   assert.ok(!none.some((f) => f.check === "missing_event"));
   assert.equal(none.filter((f) => f.check === "ga4_automatic_event").length, 3);
 });
+
+test("one event to two accounts is not a duplicate, and events sharing an event ID are not listed as clean", () => {
+  const twoProperties = checkRun({ events: [] }, run({ hits: [hit("ga4", "page_view", 1, {}, { id: "G-AAA" }), hit("ga4", "page_view", 1, {}, { id: "G-BBB" })] }));
+  assert.deepEqual(twoProperties.filter((f) => f.check === "duplicate"), []);
+  const sameProperty = checkRun({ events: [] }, run({ hits: [hit("ga4", "page_view", 1, {}, { id: "G-AAA" }), hit("ga4", "page_view", 1, {}, { id: "G-AAA" })] }));
+  assert.equal(sameProperty.filter((f) => f.check === "duplicate").length, 1);
+
+  const metaPlan = { events: [{ platform: "meta", name: "AddToCart" }, { platform: "meta", name: "Purchase" }] };
+  const reused = checkRun(metaPlan, run({ hits: [hit("meta", "AddToCart", 3, {}, { eventId: "e1" }), hit("meta", "Purchase", 4, {}, { eventId: "e1" })] }));
+  assert.equal(reused.filter((f) => f.check === "event_id_reused").length, 1);
+  assert.deepEqual(reused.filter((f) => f.check === "matches_plan"), []);
+});

@@ -58,7 +58,7 @@ test("events iframes post to the page are matched with what the page did next", 
   let stepText;
   try {
     await session.act({ action: "goto", url });
-    await session.act({ action: "wait", ms: 4000 });
+    await session.act({ action: "wait", value: "4000" });
     run = { ...collect(session, { id: "browse" }, "desktop"), completed: true };
     stepText = stepCapture({ session }, run.frameMessages[0].step);
   } finally {

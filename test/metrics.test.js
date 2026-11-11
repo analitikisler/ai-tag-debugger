@@ -327,3 +327,10 @@ test("computeMetrics: every metric at once, also from an empty capture", () => {
   const empty = computeMetrics({});
   assert.deepEqual([empty.verdict.headline, empty.score.score, empty.coverage, empty.funnel, empty.parity, empty.consent.status, empty.conversions.total, empty.timing, empty.priorities], ["attention_nothing_tested", null, null, [], [], "unknown", 0, [], []]);
 });
+
+test("the funnel counts a GA4 event carried as a flag on another hit, as the checks do", () => {
+  const run = { journeyId: "j", viewport: "desktop", completed: true, steps: [{ index: 0, label: "start" }, { index: 1, label: "Open home" }], hits: [{ platform: "ga4", name: "page_view", step: 1, t: 1, params: {}, autoEvents: ["session_start"] }] };
+  const [funnel] = journeyFunnel({ plan: { events: [{ platform: "ga4", name: "session_start" }] }, runs: [run] });
+  assert.equal(funnel.firstMissing, null);
+  assert.deepEqual(funnel.events.map((e) => [e.event, e.observed, e.status, e.step]), [["session_start", true, "ok", 1]]);
+});

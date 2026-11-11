@@ -75,10 +75,11 @@ function mdHeadline(m, runs, rows, metrics) {
   const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
   const scope = mdScope(m, runs, lead);
   const incomplete = runs.find((r) => !r.completed);
-  const ctx = { key: v.headline, what, scope, journey: incomplete ? String(incomplete.journeyId) : "", events: metrics.coverage?.checkable ?? 0, journeys: runs.length, counts: v.counts, lead };
+  // Without the runs (a headline built from findings alone), the finding itself names the journey.
+  const journey = String(incomplete?.journeyId ?? rows.find((f) => f.check === "journey_incomplete")?.where?.[0]?.journey ?? "");
   const fallback = m.ui.md.headline[v.headline] ?? m.ui.md.headline.attention_nothing_tested;
-  if (v.headline === "fail_incomplete") return fallback(ctx.journey);
-  if (v.headline === "pass") return fallback(ctx.events, ctx.journeys);
+  if (v.headline === "fail_incomplete") return fallback(journey);
+  if (v.headline === "pass") return fallback(metrics.coverage?.checkable ?? 0, runs.length);
   if (v.headline === "attention_no_hits" || v.headline === "attention_nothing_tested") return fallback();
   return fallback(what, scope);
 }
