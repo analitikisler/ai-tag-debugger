@@ -124,7 +124,9 @@ export async function writeSavedSite(dir, { config, plan, runs, findings }) {
       throw new Error(`The recording of ${run.journeyId} (${run.viewport}) is missing, probably because the browser closed early. Save the site again.`);
     }
   }
-  const { journeys: _journeys, plan: _plan, gtm_container: _gtm, ...site } = config;
+  // Left out: what a replay reads elsewhere (journeys, plan), and what belongs to the computer that saved the site
+  // and would break or leak in a replay: its Chrome, its login session file and its alert addresses.
+  const { journeys: _journeys, plan: _plan, gtm_container: _gtm, connect: _connect, session_file: _session, notify: _notify, ...site } = config;
   const saved = {
     version: 1,
     saved_at: new Date().toISOString(),

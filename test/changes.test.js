@@ -84,7 +84,7 @@ test("compares a plan with the version before it", async () => {
   const pc = comparePlans(prev, next, "2026-10-01_0900");
   assert.deepEqual(pc.added.map((c) => c.event), ["size_guide_open"]);
   assert.deepEqual(pc.removed.map((c) => c.event), ["login"]);
-  assert.deepEqual(pc.changed.map((c) => [c.event, c.what]), [["purchase", ["required parameters"]]]);
+  assert.deepEqual(pc.changed.map((c) => [c.event, c.what]), [["purchase", ["required_params"]]]);
   assert.equal(comparePlans(prev, prev, "x").same, true);
   assert.equal(comparePlans(null, next), null);
 

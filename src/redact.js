@@ -87,11 +87,11 @@ function note(found, key, value) {
   return marker(value);
 }
 
-/** Redacts form-encoded parameters (a URL query or a GA4 body line). Returns null when nothing needed it. */
 // Criteo OneTag nests each event as a query string in p0, p1, …; its setEmail entry (e=ce) carries the email hash in m.
 const isNestedEvent = (k, v) => /^p\d+$/.test(k) && /^e=/.test(v);
 const nestedUserKey = (k) => /^m(\[\d*\])?$/.test(k) || isUserDataKey(k);
 
+/** Redacts form-encoded parameters (a URL query or a GA4 body line). Returns null when nothing needed it. */
 function redactParamString(text, found, site) {
   const params = new URLSearchParams(text);
   let changed = false;
@@ -108,6 +108,15 @@ function redactParamString(text, found, site) {
     } else if (isUserDataKey(k) || isEmail(v, site, k)) {
       changed = true;
       out.append(k, note(found, k, v));
+    } else if (/^\s*[{[]/.test(v)) {
+      // JSON inside a parameter (Pinterest's pd={"em": "<hash>"}) holds user data under its own keys.
+      const before = found.fields.length;
+      let inner = null;
+      try { inner = redactJson(JSON.parse(v), k, found, isUserDataKey, site); } catch { /* not JSON after all */ }
+      if (found.fields.length > before) {
+        changed = true;
+        out.append(k, JSON.stringify(inner));
+      } else out.append(k, v);
     } else out.append(k, v);
   }
   return changed ? out.toString() : null;
@@ -160,8 +169,9 @@ export function redactBody(body, found = emptyFound()) {
     }
   }
   if (/^[^\s{]*=/.test(trimmed)) {
-    const lines = text.split("\n").map((line) => redactParamString(line, found) ?? line);
-    return { text: lines.join("\n"), ...found };
+    // Split with the line breaks kept (gtag.js uses \r\n), so a \r never becomes part of a line's last value.
+    const parts = text.split(/(\r?\n)/).map((part, i) => (i % 2 ? part : redactParamString(part, found) ?? part));
+    return { text: parts.join(""), ...found };
   }
   return { text, ...found };
 }

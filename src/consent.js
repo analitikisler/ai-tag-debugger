@@ -92,9 +92,11 @@ const applyInPage = ({ state, selectors }) => {
     // An API that throws falls back to the banner's buttons.
   }
   if (state === "analytics") return null;
-  const words = state === "accept"
-    ? /^(accept|allow|agree|ok|got it|kabul|tümünü kabul|izin ver|onayla|alle akzeptieren|tout accepter)/i
-    : /^(reject|decline|deny|refuse|necessary only|only necessary|reddet|tümünü reddet|kabul etme|ablehnen|tout refuser)/i;
+  const accept = /^(accept|allow|agree|ok(ay)?\b|got it|kabul|tümünü kabul|izin ver|onayla|alle akzeptieren|tout accepter)/i;
+  const reject = /^(reject|decline|deny|refuse|necessary only|only necessary|reddet|tümünü reddet|kabul etm|izin verme|ablehnen|tout refuser)/i;
+  // "Accept necessary only" and "Kabul etmiyorum" start like an accept and are not one.
+  const partial = /\b(necessary|essential|selection|selected|only)\b/i;
+  const words = state === "accept" ? { test: (label) => accept.test(label) && !reject.test(label) && !partial.test(label) } : reject;
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   // Banners drawn inside open shadow roots (Efilli's) count too.
   const roots = [document];
@@ -121,7 +123,7 @@ const applyInPage = ({ state, selectors }) => {
 const cookieless = (h) => !!h.consent && CONSENT_SIGNALS.every((k) => h.consent[k] !== "granted");
 const isAnalyticsOnlyOk = (h) => !!h.consent && CONSENT_SIGNALS.filter((k) => k !== "analytics_storage").every((k) => h.consent[k] !== "granted");
 
-/** Hits per platform and event: { n, quiet } where quiet counts the ones sent with storage denied. */
+/** Hits per platform and event: { n, cookieless, adDenied }, the last two counting the ones sent with every signal or the ad signals denied. */
 const countBy = (hits) => {
   const out = {};
   for (const h of hits) {
@@ -184,7 +186,7 @@ export function scenarioLanding(config, campaign) {
  */
 async function runState(config, state, opts) {
   const session = new AuditSession({
-    viewport: "desktop", site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers,
+    viewport: "desktop", site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers, detect: config.detect_providers,
     blockHits: config.block_hits !== false, headless: !opts.headed, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}),
   });
   const landing = scenarioLanding(config, opts.campaign);
@@ -223,6 +225,7 @@ async function runState(config, state, opts) {
 /**
  * Runs every consent scenario on the site's start page. Returns null when the page has no consent
  * banner the tool can answer (the first choice found nothing to click), so the report leaves the section out.
+ * Throws when the start page could not be opened at all, which is not the same as having no banner.
  * opts.concurrency runs the other choices side by side, each in its own browser; default 1.
  * opts.campaign: the campaign parameters to open the start page with, or false for none (see scenarioLanding).
  * opts.blockPrivate: as for AuditSession, for an MCP server reachable over HTTP.
@@ -231,6 +234,7 @@ async function runState(config, state, opts) {
 export async function runConsentScenarios(config, opts = {}) {
   const log = opts.log ?? (() => {});
   const first = await runState(config, "accept", opts);
+  if (first.error) throw new Error(first.error);
   if (!first.via) return null;
   log(`\n▶ consent scenarios (${first.via})`);
   // The first choice shows whether there is a banner to answer at all; the others don't depend on each other.

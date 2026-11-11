@@ -80,7 +80,7 @@ export function scriptPath(url) {
 
 /**
  * The call stack the browser captured, as callers from the innermost out: { inline: true } for script in the
- * page itself (the page's address, or "inline" for code injected without one) (the snippet, or a Custom HTML tag GTM injected), { container: id } for a container script and
+ * page itself (the snippet at the page's address, or "inline" for code injected without one, such as a Custom HTML tag), { container: id } for a container script and
  * { script: url } for any other script. Repeats in a row are folded.
  */
 export function callersOf(frames, documentUrl) {
@@ -98,11 +98,9 @@ export function callersOf(frames, documentUrl) {
   return out;
 }
 
-const pathOf = (href) => scriptPath(href);
-
 /** Whether a gtag command in the dataLayer names this ID: ["config", id] or ["event", name, { send_to }]. */
 function commandFor(load, pushes) {
-  const earlier = pushes.filter((e) => Array.isArray(e.value) && (e.t ?? 0) <= (load.t ?? Infinity) && (!load.page || pathOf(e.url) === load.page));
+  const earlier = pushes.filter((e) => Array.isArray(e.value) && (e.t ?? 0) <= (load.t ?? Infinity) && (!load.page || scriptPath(e.url) === load.page));
   if (earlier.some((e) => e.value[0] === "config" && String(e.value[1]).toUpperCase() === load.id)) return "config";
   const sendsTo = (e) => {
     const to = e.value[0] === "event" ? e.value[2]?.send_to : undefined;
@@ -215,14 +213,15 @@ export function unseenContainers(run) {
 
 /**
  * GTM containers a run downloaded or asked for that never ran: Google's registry never held them on any step. Only
- * GTM containers, whose registry entry is certain; [] for captures that didn't record the registry.
+ * GTM containers, whose registry entry is certain; [] for captures that didn't record the registry. A container
+ * loaded in an iframe is left out: the registry is read from the page itself, and an iframe has its own.
  */
 export function containersNotRun(run) {
   if (!Array.isArray(run.containersRunning)) return [];
   const ran = new Set(run.containersRunning.map((c) => c.id));
   const seen = new Map();
   for (const l of [...loadSources(run), ...unseenContainers(run)]) {
-    if (!l.id.startsWith("GTM-") || ran.has(l.id) || l.failed || l.frame?.party === "third" || seen.has(l.id)) continue;
+    if (!l.id.startsWith("GTM-") || ran.has(l.id) || l.failed || l.frame || seen.has(l.id)) continue;
     seen.set(l.id, { id: l.id, kind: l.kind, step: l.step ?? 0 });
   }
   return [...seen.values()];

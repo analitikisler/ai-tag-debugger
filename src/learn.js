@@ -2,7 +2,7 @@ import { PROVIDERS } from "./parsers.js";
 
 /**
  * A plan learned from what a site already sends: one event per platform and event name seen in
- * the runs, the parameters it carried,. Parameters sent with every
+ * the runs, with the parameters it carried. Parameters sent with every
  * hit of an event become its required parameters. Values are not copied, so nothing a visitor typed
  * ends up in the plan. Returns null when the runs captured no named events.
  */

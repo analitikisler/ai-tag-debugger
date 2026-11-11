@@ -3,14 +3,14 @@ import { readFileSync } from "node:fs";
 import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { loadConfig, runAudit } from "./audit.js";
+import { loadConfig, readJson, runAudit } from "./audit.js";
 import { messages } from "./i18n.js";
 import { helpText } from "./help.js";
 import { validatePlan } from "./schema.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
 import { readBaseline, writeBaseline } from "./baseline.js";
 import { savePlan } from "./plan.js";
-import { DEFAULT_DATA_DIR } from "./workspace.js";
+import { DEFAULT_DATA_DIR, domainOf, listPlanIds, resolvePlan } from "./workspace.js";
 import { resolveSessionFile, sessionFileFor } from "./login.js";
 import { commandText, intentToArgs, isSentence, needsWhatToTest, translate } from "./ask.js";
 
@@ -33,7 +33,9 @@ async function saveLoginSession(values) {
   const session = new AuditSession({ viewport: "desktop", site: values.site, allowedHosts: values["allow-host"], headless: false, login: null });
   await session.start();
   try {
-    await session.act({ action: "goto", url: values.site });
+    // Without this, an address that doesn't open would be "logged in to" on the browser's error page and saved empty.
+    const error = await session.act({ action: "goto", url: values.site });
+    if (error) throw new Error(`Could not open ${values.site}: ${error}`);
     console.log("Log in to the site in the browser window. When you are logged in, come back here and press Enter (Ctrl+C cancels).");
     console.log(`The browser stays on ${session.scope.hosts.join(", ")}; for a login on another host (single sign-on), add --allow-host <host>.`);
     await new Promise((resolve) => {
@@ -122,7 +124,7 @@ async function main(args = process.argv.slice(2)) {
   }
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
-    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"] });
+    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"], dataDir: values["data-dir"] });
     return;
   }
   if (command === "login" && !values.help) {
@@ -153,7 +155,6 @@ async function main(args = process.argv.slice(2)) {
   }
   if (command === "plan" && positionals[1] === "list" && !values.help) {
     if (!values.site) throw new Error("plan list needs --site <url>: aitd plan list --site https://www.example.com");
-    const { domainOf, listPlanIds } = await import("./workspace.js");
     const ids = await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site);
     if (!ids.length) throw new Error(`No plan yet for ${domainOf(values.site)}. Draft one with: aitd plan --site ${values.site}`);
     for (const id of ids) console.log(id);
@@ -170,7 +171,6 @@ async function main(args = process.argv.slice(2)) {
     if (!values.site) throw new Error("plan needs --site <url>: aitd plan --site https://www.example.com");
     if (values.topic !== undefined) (await import("./discover.js")).checkTopic(values.topic);
     const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
-    const { domainOf } = await import("./workspace.js");
     domainOf(values.site); // Checked before the browser starts.
     const maxSteps = values["max-steps"] ? Number(values["max-steps"]) : undefined;
     if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
@@ -215,8 +215,6 @@ async function main(args = process.argv.slice(2)) {
   }
   let against = null;
   if (values.against) {
-    const { readJson } = await import("./audit.js");
-    const { resolvePlan } = await import("./workspace.js");
     if (loaded.config.site) {
       try {
         new URL(loaded.config.site);
@@ -234,6 +232,8 @@ async function main(args = process.argv.slice(2)) {
       loaded.config = { ...loaded.config, site: plan.site };
     }
     loaded.plan = plan;
+    // Checked just above with its file name, so runAudit doesn't print the same warnings again.
+    loaded.planValidated = true;
   }
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
@@ -331,7 +331,6 @@ async function showHistory(values) {
   if (!(Number.isInteger(limit) && limit > 0)) throw new Error("--limit must be a positive whole number.");
   const lang = values.lang ?? "en";
   const m = messages(lang);
-  const { domainOf } = await import("./workspace.js");
   domainOf(values.site);
   const { findingTimeline, historySummaryLines, journeyStability, loadHistory, sparkline, trend } = await import("./history.js");
   const history = await loadHistory(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site, { limit });
@@ -360,7 +359,6 @@ async function showHistory(values) {
 // The first run of a site with no plan: offer what it already tracks as its plan.
 async function offerLearnedPlan(result, site, values) {
   const dataDir = values["data-dir"] ?? DEFAULT_DATA_DIR;
-  const { listPlanIds } = await import("./workspace.js");
   if ((await listPlanIds(dataDir, site).catch(() => [])).length) return;
   const { learnPlan } = await import("./learn.js");
   const plan = learnPlan(site, result.runs);
@@ -394,7 +392,8 @@ async function fromSentence(sentence, values, extra) {
   }
   if (r.unsupported) throw new Error(r.unsupported);
   let args = r.args;
-  const needsSite = !values.site && !args.includes("--site") && (args[0] === "plan" || !args.includes("--against"));
+  // "--against latest", the only form a sentence turns into, is looked up by site; only a plan file the user named can supply one.
+  const needsSite = !values.site && !args.includes("--site") && (args[0] === "plan" || !values.against);
   if (needsSite) {
     const site = await ask("Which site? (e.g. https://www.example.com) ");
     if (!site) throw new Error("A site is needed. Add it to the sentence or pass --site <url>.");
@@ -415,7 +414,6 @@ async function fromSentence(sentence, values, extra) {
 // A run needs something to test: suggest the site's latest plan, else ask for a goal.
 async function whatToTest(args, values) {
   const site = values.site ?? args[args.indexOf("--site") + 1];
-  const { listPlanIds } = await import("./workspace.js");
   const hasPlan = (await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, site).catch(() => [])).length > 0;
   if (hasPlan) {
     const answer = values.yes ? "" : (await ask("Check against the latest plan? (Y/n) ")).toLowerCase();
@@ -448,18 +446,16 @@ async function planSheet(action, arg, values) {
   if (action === "import") {
     if (!arg) throw new Error("plan import needs a file: aitd plan import plan.xlsx --site https://www.example.com");
     if (!values.site) throw new Error(`plan import needs --site <url>: aitd plan import ${arg} --site https://www.example.com`);
-    const { domainOf } = await import("./workspace.js");
     domainOf(values.site);
     const { plan, warnings } = await readPlanSheet(arg, { site: values.site });
     for (const w of warnings) console.log(`Warning: ${w}`);
-    const { id, dir } = await savePlan(plan, { dataDir, site: values.site });
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     console.log(`✓ Imported plan ${id}: ${plan.events.length} events and ${plan.user_properties.length} user properties in ${shown(dir)}`);
     return;
   }
   if (!arg) throw new Error("plan export needs a plan: aitd plan export latest --site https://www.example.com");
   const format = (values.format ?? "xlsx").toLowerCase();
   if (!["xlsx", "csv"].includes(format)) throw new Error(`--format must be xlsx or csv (found "${values.format}").`);
-  const { resolvePlan } = await import("./workspace.js");
   const { file } = await resolvePlan(arg, { dataDir, site: values.site });
   const plan = JSON.parse(readFileSync(file, "utf8"));
   const written = await writePlanSheet(plan, path.dirname(file), { format });

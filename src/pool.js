@@ -19,11 +19,18 @@ export function parseConcurrency(value) {
 export async function runPool(jobs, limit, worker) {
   const results = new Array(jobs.length);
   let next = 0;
+  let failed = false;
   // Each lane takes the next job as soon as its own is done, so the lanes stay busy whatever the job lengths.
+  // Once a worker has thrown, the pool has rejected and nobody waits for the rest, so no lane starts another job.
   const lane = async () => {
-    while (next < jobs.length) {
+    while (next < jobs.length && !failed) {
       const i = next++;
-      results[i] = await worker(jobs[i], i);
+      try {
+        results[i] = await worker(jobs[i], i);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, jobs.length)) }, lane));

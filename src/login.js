@@ -47,7 +47,7 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * A function that turns the test account's values back into their placeholders wherever they appear in a text, as
- * typed or URL-encoded. Values shorter than 3 characters are left alone, since they would match ordinary text.
+ * typed, URL-encoded, form-encoded (which also escapes !'()~) or escaped inside JSON. Values shorter than 3 characters are left alone, since they would match ordinary text.
  * Identity when there is no test account.
  */
 export function loginScrubber(login) {
@@ -59,7 +59,8 @@ export function loginScrubber(login) {
   for (const [field, value] of [["password", login.password], ["email", login.email], ["username", login.username]]) {
     if (!value || value.length < 3 || taken.has(value)) continue;
     taken.add(value);
-    for (const form of new Set([value, encodeURIComponent(value), encodeURIComponent(value).replace(/%20/g, "+")])) pairs.push([form, `{{login.${field}}}`]);
+    const forms = [value, encodeURIComponent(value), encodeURIComponent(value).replace(/%20/g, "+"), new URLSearchParams({ v: value }).toString().slice(2), JSON.stringify(value).slice(1, -1)];
+    for (const form of new Set(forms)) pairs.push([form, `{{login.${field}}}`]);
   }
   if (!pairs.length) return (text) => text;
   const re = new RegExp(pairs.map(([v]) => escape(v)).sort((a, b) => b.length - a.length).join("|"), "g");

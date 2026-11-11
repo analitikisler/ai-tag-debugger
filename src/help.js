@@ -1,5 +1,5 @@
 import { LANGUAGES } from "./i18n.js";
-import { PROVIDERS, aiStatus } from "./providers.js";
+import { AI_KEY_HELP, aiStatus } from "./providers.js";
 import { JOURNEY_PRESETS } from "./journeys.js";
 
 const journeys = Object.keys(JOURNEY_PRESETS).join(", ");
@@ -28,7 +28,7 @@ Run "aitd <command> --help" for that command's options.   -h, --help   -v, --ver
 const RUN = `Usage: aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>")
 
 Audit what a site actually sends while an AI agent walks its journeys. Needs an AI key
-(${Object.values(PROVIDERS).map((p) => p.env).join(", ")}) unless --no-ai. Each run is saved in
+(${AI_KEY_HELP}) unless --no-ai. Each run is saved in
 aitd/<domain>/runs/<id>/ and its report says what changed since the site's previous run.
 
 What to test (at least one):
@@ -63,7 +63,7 @@ const PLAN = `Usage: aitd plan --site <url>
 
 Draft a measurement plan: what should be tracked. The AI explores one page of each type
 and proposes events, parameters and user properties. Plans are saved in
-aitd/<domain>/plans/<id>/. Needs an AI key (${Object.values(PROVIDERS).map((p) => p.env).join(", ")}).
+aitd/<domain>/plans/<id>/. Needs an AI key (${AI_KEY_HELP}).
 
 Commands:
   (none)               Draft a new plan from the site
@@ -108,6 +108,7 @@ Advanced:
   --allow-private-network   Over HTTP, let audits open localhost and private addresses
   --allow-live              Over HTTP, let start_audit send live (tracking requests reach the real accounts)
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
+  --data-dir <dir>     Where saved plans, runs and login sessions are read and plans are saved (default: aitd)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 
 const LOGIN = `Usage: aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]

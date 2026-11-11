@@ -30,11 +30,13 @@ export async function startEgressProxy(opts = {}) {
 
   /** The one address to connect to, or throws when the host is refused or unresolvable. */
   async function resolve(host) {
-    const bare = host.replace(/^\[|\]$/g, "");
+    // "localhost." names the same host as "localhost".
+    const bare = host.replace(/^\[|\]$/g, "").replace(/\.$/, "");
     const addrs = isIP(bare) ? [{ address: bare, family: isIP(bare) }] : await lookup(bare);
     if (!addrs.length) throw new Error(`${host} did not resolve`);
     if (bare === "localhost" || bare.endsWith(".localhost") || addrs.some((a) => isBlocked(a.address))) {
-      refused.push(host);
+      // Once per host: a page can ask for the same refused address thousands of times.
+      if (!refused.includes(host)) refused.push(host);
       throw Object.assign(new Error(`${host} is a private network address`), { refused: true });
     }
     return addrs[0];
@@ -72,6 +74,8 @@ export async function startEgressProxy(opts = {}) {
       (up) => {
         res.writeHead(up.statusCode ?? 502, up.headers);
         up.pipe(res);
+        // An upstream that dies mid-body never ends the pipe; without this the browser's request hangs.
+        up.on("close", () => { if (!up.complete) res.destroy(); });
       },
     );
     upstream.on("error", () => (res.headersSent ? res.destroy() : res.writeHead(502).end()));
@@ -80,7 +84,6 @@ export async function startEgressProxy(opts = {}) {
 
   // HTTPS and WebSockets: a CONNECT tunnel to the checked address.
   server.on("connect", async (req, client, head) => {
-    track(client);
     const target = splitHostPort(req.url, 443);
     let addr;
     try {
@@ -101,7 +104,6 @@ export async function startEgressProxy(opts = {}) {
 
   // A ws:// upgrade sent as a plain proxied request, in case the browser doesn't tunnel it.
   server.on("upgrade", async (req, client, head) => {
-    track(client);
     let target;
     let addr;
     try {
@@ -120,6 +122,7 @@ export async function startEgressProxy(opts = {}) {
     }));
     upstream.on("error", () => client.destroy());
   });
+  // Every client socket, the ones the connect and upgrade handlers get included.
   server.on("connection", track);
 
   await new Promise((r) => server.listen(0, "127.0.0.1", r));

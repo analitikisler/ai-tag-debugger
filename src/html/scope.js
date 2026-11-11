@@ -154,7 +154,7 @@ function planVsSiteCard(ctx) {
   const bchip = (b, label) => (BUCKET_SEV[b] === "muted" ? plain(label) : sevchip(BUCKET_SEV[b], label));
   const summary = `<span class="t">${esc(m.ui.planVsSite)}</span>${counts.map(([b, k]) => bchip(b, `${esc(m.ui.bucket[b])} <b>${k}</b>`)).join("")}`;
   const rows = pcSort(pc).map((e) => `<tr><th scope="row"><span class="cv-ev">${pchip(e.platform)}${code(e.event)}</span></th><td>${bchip(e.bucket, esc(m.ui.bucket[e.bucket]))}</td><td class="xs muted">${(e.details ?? []).map(detailHtml).join("<br>")}</td></tr>`).join("");
-  const items = planChanges ? planChangeItems(planChanges) : [];
+  const items = planChanges ? planChangeItems(planChanges, m) : [];
   const changes = planChanges ? `<h3 class="pv-h">${esc(m.html.planChanges)}</h3><p class="xs">${esc(m.ui.planChangesLine(planChanges))}</p>${items.length ? `<ul class="pv-changes xs">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}` : "";
   return `<details class="card" id="plan-vs-site"><summary>${summary}</summary><div class="body">
 <p><strong>${esc(overall)}</strong></p>${perPlatform.length ? `<p class="muted xs">${perPlatform.map(esc).join("<br>")}</p>` : ""}

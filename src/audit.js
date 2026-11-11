@@ -72,8 +72,10 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   const changes = previous === undefined ? null : compareRuns(previous, { findings, planCheck: check, runs });
   const metrics = computeMetrics({ plan, runs, findings, consentScenarios });
   const verdict = verdictHeadline({ findings, runs, metrics, lang });
+  // The alert settings stay out of the capture: a Slack webhook address is a secret, and capture.json is what CI uploads.
+  const { notify: _notify, ...kept } = config;
   // The capture goes first: the history index summarises it, and the reports then show the trend including this run.
-  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...kept, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
   let trend = null;
   let stability = null;
   if (history) {
@@ -110,7 +112,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  * @param {{ config: any, plan?: any, gtmContainer?: any, journeys?: string[], goals?: string[], events?: string[], viewports?: string[],
  *   scripted?: boolean, ai?: boolean, provider?: string, model?: string, baseUrl?: string, maxSteps?: number, lang?: string, headed?: boolean,
  *   outDir?: string, dataDir?: string, branding?: boolean, brand?: Awaited<ReturnType<typeof loadReportBrand>>, providers?: string[], saveSite?: string, replaySite?: string, concurrency?: number | string, log?: (m: string) => void }} opts
- *   journeys: config journey ids or ready-made journeys (purchase, add_to_cart, sign_up, lead, search).
+ *   journeys: config journey ids or ready-made journeys (the keys of JOURNEY_PRESETS, such as purchase or lead).
  *   goals: extra journeys described in plain language. events: only check these events.
  *   providers: tracking providers to check (default: config "providers", else GA4, Google Ads, Meta, TikTok plus
  *     any other known platform the site sends to).
@@ -121,6 +123,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
  *   against: { id, file } of the plan given with --against; opts.plan is then that plan. Used alone, the
  *   journeys come from the plan; with journeys or goals, only the plan events expected on them are checked.
  *   validated: true when config and plan came through loadConfig, which already checked them against the schema.
+ *   planValidated: true when only the plan was checked already (the CLI checks the one --against names).
  *   baseline: a baseline read with readBaseline (see baseline.js). The findings it accepts are flagged
  *     accepted and left out of the counts; the result then has baseline: { accepted, partial, stale }.
  */
@@ -130,7 +133,7 @@ export async function runAudit(opts) {
   const events = opts.events ?? [];
   const log = opts.log ?? (() => {});
   if (!opts.validated) {
-    const checked = [validateConfig(config), ...(opts.plan ? [validatePlan(opts.plan)] : [])];
+    const checked = [validateConfig(config), ...(opts.plan && !opts.planValidated ? [validatePlan(opts.plan)] : [])];
     for (const w of checked.flatMap((c) => c.warnings)) log(w);
   }
   if (!config.site) throw new Error('No site to audit. Pass --site or set "site" in the config.');
@@ -144,8 +147,10 @@ export async function runAudit(opts) {
   const against = opts.against ? { ...opts.against, label: opts.against.id ?? path.relative(process.cwd(), opts.against.file) } : null;
   const { journeys, plan } = planRun({ config, plan: opts.plan, picks: opts.journeys, goals: opts.goals, events, against: Boolean(against) });
   const chosen = opts.providers ?? config.providers;
-  // Without a choice, any other known platform the site sends to is checked too (see AuditSession).
-  config = { ...config, providers: resolveProviders(chosen, plan), detect_providers: !(Array.isArray(chosen) ? chosen.length : chosen) };
+  // Without a choice, any other known platform the site sends to is checked too (see AuditSession). A config that
+  // says so itself keeps its word: a saved site carries the resolved providers and whether detection was on.
+  const detect = opts.providers ? false : config.detect_providers ?? !(Array.isArray(chosen) ? chosen.length : chosen);
+  config = { ...config, providers: resolveProviders(chosen, plan), detect_providers: detect };
   const viewports = opts.viewports?.length ? opts.viewports : config.viewports ?? ["desktop"];
   const allowed = Object.keys(VIEWPORTS).join(", ");
   if (!Array.isArray(viewports)) throw new Error(`"viewports" must be a list, e.g. ["desktop", "mobile"]. Allowed values: ${allowed}.`);

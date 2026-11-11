@@ -4,7 +4,7 @@
 // { plan, runs, findings, consentScenarios } (no I/O, no AI, no HTML) and returns plain data; the
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
-import { canonicalEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
+import { canonicalEvent, carriesAutoEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
 import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
@@ -168,11 +168,13 @@ export function journeyFunnel({ plan = null, runs = [] } = {}) {
   return runs.map((run) => {
     const { source, events } = expectedEvents(plan, run);
     const rows = events.map((ev) => {
-      const hits = (run.hits ?? []).filter((h) => hitMatchesEvent(ev, h)).sort(byTime);
+      const named = (run.hits ?? []).filter((h) => hitMatchesEvent(ev, h)).sort(byTime);
+      // GA4's first_visit and session_start ride on another hit as a flag; the checks count that as fired, so the funnel does too.
+      const hits = named.length ? named : (run.hits ?? []).filter((h) => carriesAutoEvent(ev, h)).sort(byTime);
       const first = hits[0] ?? null;
       const step = first ? stepOf(run, first.step) : null;
       const required = ev.required_params ?? [];
-      const missingParams = uniq(hits.flatMap((h) => required.filter((p) => !hasParam(h, p))));
+      const missingParams = uniq(named.flatMap((h) => required.filter((p) => !hasParam(h, p))));
       const status = !first ? "missing" : missingParams.length ? "missing_params" : "ok";
       return {
         platform: ev.platform, event: ev.name, conversion: isConversion(ev.name), observed: Boolean(first), count: hits.length,

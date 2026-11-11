@@ -2,9 +2,10 @@
 // so a report can say what the agent otherwise has to dig out of the platform's bundle by hand.
 
 /**
- * Runs in the page. Efilli in full: its site bundle and the date it was compiled, the language in force,
- * whether its own Consent Mode integration is on with the category each signal maps to, auto-blocking and TCF.
- * The other platforms by name only. Null when none is found.
+ * Runs in the page. Efilli, CookieYes, OneTrust and Cookiebot in full, as far as each exposes it: the site bundle
+ * and the date it was compiled, the language in force, whether its own Consent Mode integration is on with the
+ * category each signal maps to, auto-blocking and TCF. The other platforms by name only. Null when none is found.
+ * Besides the fields below, a platform can add law, version, consentModel, region, impliedConsent, fixed and redaction.
  * @returns {null | { vendor: string, built?: string|null, script?: string|null, language?: string|null, categories?: string[],
  *   consentMode?: { active: boolean, mapping: Record<string,string>|null, urlPassthrough: boolean, adsDataRedaction: boolean },
  *   autoBlocking?: boolean, blockingRules?: number|null, tcf?: boolean }}

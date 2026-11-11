@@ -3,9 +3,7 @@ import { AuditSession } from "./browser.js";
 import { splitRun } from "./frames.js";
 import { withCampaignParams } from "./campaign.js";
 import { messages } from "./i18n.js";
-import { createProvider, PROVIDERS } from "./providers.js";
-
-export const DEFAULT_MODEL = PROVIDERS.anthropic.defaultModel;
+import { createProvider } from "./providers.js";
 
 export const SYSTEM_PROMPT = `You are a QA tester checking a website's analytics tracking. You drive a real browser to complete one user journey, the way a real visitor would. Another program records every analytics and advertising request while you work, so your only job is to complete the journey naturally.
 

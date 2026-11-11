@@ -480,7 +480,11 @@ export function renderMarkdown({ title, site = null, generatedAt, findings, expl
   const lines = [`# ${mdText(m.ui.md.title(site ?? title, mdHeadline(m, runs, rows, metrics)))}`, "", meta.join(" · "), status, `**${m.ui.counts(counts)}**${changes && !changes.previous ? ` · ${m.ui.noPreviousRun}` : ""}`, ""];
   if (runs.some((r) => r.live)) lines.push(`**${mdText(m.ui.liveRun)}**`, "");
   if (accepted) lines.push(mdText(m.ui.acceptedLine(accepted)), "");
-  if (planChanges) lines.push(mdText(m.ui.planChangesLine(planChanges)), "", ...planChangeItems(planChanges).map((i) => `- ${mdText(i)}`), ...(planChangeItems(planChanges).length ? [""] : []));
+  if (planChanges) {
+    // "- + x" would read as a list inside the list, so an added event's plus sign is escaped.
+    const items = planChangeItems(planChanges, m).map((i) => `- ${mdText(i).replace(/^\+ /, "\\+ ")}`);
+    lines.push(mdText(m.ui.planChangesLine(planChanges)), "", ...items, ...(items.length ? [""] : []));
+  }
   const sum = summaryParts(explained?.summary);
   if (sum) {
     lines.push(`${m.ui.md.aiSummary}: ${sum.text ? mdText(sum.text) : `**${mdText(sum.headline)}**`}`);

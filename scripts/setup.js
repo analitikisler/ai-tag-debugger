@@ -25,7 +25,8 @@ export function nodeVersionOk(version, range) {
 }
 
 /** The key variables that are set, by name only. */
-export const keysSet = (env = process.env) => KEY_VARS.filter((k) => env[k]);
+// A Cloudflare token only counts with its account ID, as in src/providers.js.
+export const keysSet = (env = process.env) => KEY_VARS.filter((k) => env[k] && (k !== "CLOUDFLARE_API_TOKEN" || env.CLOUDFLARE_ACCOUNT_ID));
 
 function run(cmd, args) {
   console.log(`\n> ${cmd} ${args.join(" ")}`);
@@ -55,8 +56,8 @@ function main(argv) {
     console.log(`\nAI provider key found: ${keys.join(", ")}.`);
   } else {
     console.log(
-      "\nNo AI provider key is set. To let a model browse your site, set one of ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY " +
-        "(or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API).\nWithout a key you can still run the tests (npm test) and the demo (npm run demo).",
+      "\nNo AI provider key is set. To let a model browse your site, set one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, " +
+        "AI_GATEWAY_API_KEY, CLOUDFLARE_API_TOKEN with CLOUDFLARE_ACCOUNT_ID (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API).\nWithout a key you can still run the tests (npm test) and the demo (npm run demo).",
     );
   }
   console.log("\nSetup done. Try: npm test, or npm run demo:serve and npm run demo in a second terminal.");

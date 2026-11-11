@@ -37,9 +37,7 @@ export function resolveProviderName(name, env = process.env) {
 
 const NO_API_KEY = `No AI provider key found. Set one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY for Vercel AI Gateway, or CLOUDFLARE_API_TOKEN with CLOUDFLARE_ACCOUNT_ID for Cloudflare Workers AI (or OPENAI_COMPATIBLE_BASE_URL for an OpenAI-compatible API), or pick one with --provider. To run without any AI model, replay saved steps with --no-ai.`;
 
-function hasApiKey(env) {
-  return Boolean(env.OPENAI_COMPATIBLE_BASE_URL || env.AI_GATEWAY_API_KEY || (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) || env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.OPENAI_API_KEY || env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
-}
+const hasApiKey = (env) => KEY_PROVIDERS.some(([, has]) => has(env));
 
 /**
  * @param {{ name?: string, model?: string, baseUrl?: string, client?: any, log?: (msg: string) => void, retry?: { attempts?: number, baseDelayMs?: number, sleep?: (ms: number) => Promise<void> } }} opts
@@ -184,6 +182,9 @@ export function pickModel(name, model) {
   return model ?? PROVIDERS[name].defaultModel;
 }
 
+/** The variables that turn a provider on, as the help and the "no key" line name them: the same set KEY_PROVIDERS reads. */
+export const AI_KEY_HELP = "ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY, CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID or OPENAI_COMPATIBLE_BASE_URL";
+
 const KEY_PROVIDERS = [
   ["vercel", (env) => env.AI_GATEWAY_API_KEY],
   ["cloudflare", (env) => env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID],
@@ -198,7 +199,7 @@ const KEY_PROVIDERS = [
  * "AI: anthropic (claude-opus-5-5) via Cloudflare AI Gateway · also set: gemini (pick with --provider)".
  */
 export function aiStatus(opts = {}, env = process.env) {
-  if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return "AI: no key set (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_GATEWAY_API_KEY or CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID)";
+  if (!opts.name && !KEY_PROVIDERS.some(([, has]) => has(env))) return `AI: no key set (${AI_KEY_HELP})`;
   const name = resolveProviderName(opts.name, env);
   const model = (name === "openai-compatible" ? compatibleModel(opts.model, env) : pickModel(name, opts.model)) ?? "no model set";
   const via = name !== "vercel" && gatewayOptions(name, env).baseURL ? " via Cloudflare AI Gateway" : "";

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices } from "playwright";
@@ -15,21 +15,25 @@ import { callersOf, containerOf, containerVersion, isContainerId } from "./conta
 import { frameInfo } from "./frames.js";
 import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginScrubber, scrubDeep } from "./login.js";
 
-// Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
-// one of these always blocks the journey, and a reject click is checked against them afterwards.
+const playwrightPackage = createRequire(import.meta.url).resolve("playwright/package.json");
+/** The command that installs the Chromium build this package's Playwright looks for; an unpinned one can fetch another build. */
+export const BROWSER_INSTALL_COMMAND = `npx -y playwright@${JSON.parse(readFileSync(playwrightPackage, "utf8")).version} install chromium`;
+
 let browserInstall = null;
 /** Downloads Chromium with Playwright's own installer. Output goes to stderr, because stdout carries the MCP protocol. */
 export function installBrowser() {
   browserInstall ??= new Promise((resolve, reject) => {
-    const cli = path.join(path.dirname(createRequire(import.meta.url).resolve("playwright/package.json")), "cli.js");
+    const cli = path.join(path.dirname(playwrightPackage), "cli.js");
     console.error("ai-tag-debugger: installing the Chromium browser (one time, about a minute)...");
     const child = spawn(process.execPath, [cli, "install", "chromium"], { stdio: ["ignore", 2, 2] });
     child.on("error", reject);
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.56.1 install chromium`))));
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: ${BROWSER_INSTALL_COMMAND}`))));
   }).finally(() => { browserInstall = null; });
   return browserInstall;
 }
 
+// Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
+// one of these always blocks the journey, and a reject click is checked against them afterwards.
 export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
 #truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
 #sp_message_container, [id^="sp_message_container_"], #cookie-law-info-bar, #BorlabsCookieBox, .klaro, #termly-code-snippet-support, #cookie-information-template-wrapper, #coiOverlay, \
@@ -50,9 +54,6 @@ export const VIEWPORTS = {
   mobile: devices["Pixel 7"],
 };
 
-// Runs in the page before any site script: reports every dataLayer push
-// (including gtag consent commands) to Node through an exposed binding, so the
-// log survives page navigations.
 // How to start Chrome for --connect, per system: a debugging port, and a profile folder of its own, which Chrome
 // requires for remote debugging and which keeps the audits away from the everyday profile.
 export const CHROME_START = {
@@ -103,7 +104,7 @@ const CONTAINER_HOOK = `
   const doc = Math.random().toString(36).slice(2, 10);
   const isContainer = (src) => /\\/(gtm\\.js|gtag\\/js)\\?/.test(String(src)) && /[?&]id=/.test(String(src));
   const seen = new WeakSet();
-  const report = (el, src, how) => {
+  const report = (src, how) => {
     try {
       const abs = new URL(String(src), document.baseURI).href;
       if (!isContainer(abs) || !window.__atdLoad) return;
@@ -128,19 +129,19 @@ const CONTAINER_HOOK = `
     const desc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
     Object.defineProperty(HTMLScriptElement.prototype, "src", {
       ...desc,
-      set(v) { if (!seen.has(this)) { seen.add(this); report(this, v, "script"); } return desc.set.call(this, v); },
+      set(v) { if (!seen.has(this)) { seen.add(this); report(v, "script"); } return desc.set.call(this, v); },
     });
     const setAttribute = Element.prototype.setAttribute;
     Element.prototype.setAttribute = function (name, v) {
-      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === "src" && !seen.has(this)) { seen.add(this); report(this, v, "script"); }
+      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === "src" && !seen.has(this)) { seen.add(this); report(v, "script"); }
       return setAttribute.call(this, name, v);
     };
     new MutationObserver((list) => {
       for (const m of list) for (const n of m.addedNodes) {
-        if (n instanceof HTMLScriptElement && n.src && !seen.has(n)) { seen.add(n); report(n, n.src, "parser"); }
+        if (n instanceof HTMLScriptElement && n.src && !seen.has(n)) { seen.add(n); report(n.src, "parser"); }
         // A preload hint downloads a container without running it; caught as it is added, since a page's own code
         // can rewrite <head> and take it out again.
-        else if (n instanceof HTMLLinkElement && /(^|\\s)(preload|modulepreload|prefetch)(\\s|$)/i.test(n.rel) && n.href && !seen.has(n)) { seen.add(n); report(n, n.href, "preload"); }
+        else if (n instanceof HTMLLinkElement && /(^|\\s)(preload|modulepreload|prefetch)(\\s|$)/i.test(n.rel) && n.href && !seen.has(n)) { seen.add(n); report(n.href, "preload"); }
       }
     }).observe(document, { childList: true, subtree: true });
   } catch {}
@@ -173,6 +174,9 @@ const MESSAGE_HOOK = `
   }
 `;
 
+// Runs in the page before any site script: reports every dataLayer push
+// (including gtag consent commands) to Node through an exposed binding, so the
+// log survives page navigations.
 const INIT_SCRIPT = `(() => {
   const record = (entry, layer = "dataLayer") => {
     let value = entry;
@@ -352,10 +356,6 @@ function trackingBody(request) {
   return body ? (body.length > MAX_BODY ? body.slice(0, MAX_BODY) : body) : null;
 }
 
-/**
- * How a scripted run can find the element an action used again: the selector it was given,
- * else a CSS path to the element, else its visible text. Refs only mean something in one run.
- */
 /** Query parameters that only carry the time or a cache-buster, so they differ between a recording and its replay. */
 const STAMP_PARAMS = /^(_|_t|ts|timestamp|cb|cachebust|nocache)$/i;
 /** The address without its timestamp parameters. */
@@ -394,6 +394,10 @@ function restampedAnswers(har) {
 // Text that looks like an email address or phone number is not saved with a click.
 const savableText = (text) => (typeof text === "string" && text && !/@|\d[\d\s().+-]{6,}\d/.test(text) ? text : undefined);
 
+/**
+ * How a scripted run can find the element an action used again: the selector it was given,
+ * else a CSS path to the element, else its visible text. Refs only mean something in one run.
+ */
 async function replayTarget(a, locator) {
   // Only a click keeps its text: a field's text is what was typed in it, not what identifies it.
   const keepText = a.action === "click";
@@ -401,7 +405,8 @@ async function replayTarget(a, locator) {
   const found = await locator
     .evaluate((el) => {
       const text = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 80);
-      if (window !== window.top) return { text };
+      // No path for an element in an iframe or a shadow root: a selector is looked up from the page's own document.
+      if (window !== window.top || el.getRootNode() !== document) return { text };
       const parts = [];
       for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
         if (n.id && document.querySelectorAll(`#${CSS.escape(n.id)}`).length === 1) {
@@ -620,10 +625,11 @@ export class AuditSession {
     this.rejectStep = null;
     this.cookieLog = []; // each cookie name and domain with the step it was first seen at (never values)
     this.cookieChanges = []; // { step, name, domain, change: added|changed|removed }, never values
-    this.cookieHashes = new Map(); // domain|name -> a hash of the value at the last step, kept in memory only
+    this.cookieHashes = new Map(); // domain|name|path -> { name, domain, hash of the value at the last step }, kept in memory only
     this.cmp = null; // the consent platform and its setup, from detectCmpInPage, with the step it was first seen at
     this.refusedScripts = new Map(); // step -> how many of the page's scripts were refused for coming back as HTML
     this.errors = [];
+    this.logsFull = new Set(); // the logs that reached their limit, so each says so once
     this.dataLayerLog = [];
     this.containerLoads = []; // each Google container script the page added, with how (see src/containers.js)
     this.containerScripts = []; // each container script's answer: status, version, size and load time
@@ -731,7 +737,7 @@ export class AuditSession {
       const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.scrub(this.page.url()), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
+        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.pageAddress(), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -760,7 +766,7 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
-        pageUrl: this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url),
+        pageUrl: this.pageAddress(),
         t: Date.now(),
         method: request.method(),
         url: this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url),
@@ -845,10 +851,13 @@ export class AuditSession {
       const request = route.request();
       let error = null;
       let isMainNavigation = false;
+      // A tab the page opened (target=_blank, window.open) is held to the site like the page itself.
+      let isTopNavigation = false;
       try {
-        isMainNavigation = request.isNavigationRequest() && request.frame() === this.page?.mainFrame();
+        isTopNavigation = request.isNavigationRequest() && !request.frame().parentFrame();
+        isMainNavigation = isTopNavigation && request.frame() === this.page?.mainFrame();
       } catch { /* service worker requests have no frame */ }
-      if (isMainNavigation) error = await this.checkUrl(request.url());
+      if (isTopNavigation) error = await this.checkUrl(request.url());
       else if (this.isPrivate) {
         const u = new URL(request.url());
         if (/^https?:$/.test(u.protocol) && (await this.isPrivate(u.hostname))) error = `${u.hostname} is a private network address.`;
@@ -894,7 +903,6 @@ export class AuditSession {
     return { step: loaded, late: { during: this.currentStep, ms: Math.max(0, entry.t - since) } };
   }
 
-  /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
   /** Whether requests of this provider are recorded; with detection on, a known provider seen for the first time joins the list. */
   checks(key) {
     if (this.providers.includes(key)) return true;
@@ -908,6 +916,7 @@ export class AuditSession {
     return this.login ? scrubDeep(value, this.scrub) : value;
   }
 
+  /** The hit with user data for ad matching redacted, and userData: { fields, plain } when there was any. */
   redactHit(raw) {
     return this.keepOut(this.redactUserData(raw));
   }
@@ -923,8 +932,15 @@ export class AuditSession {
     return this.opts.keepBodies ? { ...hit, userData } : { ...hit, url, params, userData };
   }
 
+  /** An address as it is kept: user data in its query redacted (unless keepBodies), the test account scrubbed. */
+  pageAddress(url = this.page.url()) {
+    return this.scrub(this.opts.keepBodies ? url : redactUrl(url).url);
+  }
+
   /** A dataLayer entry with user data redacted, and userData: { fields, plain } when there was any. */
   redactEntry(entry) {
+    // The page address the push was made on is kept like every other one.
+    if (typeof entry.url === "string") entry = { ...entry, url: this.pageAddress(entry.url) };
     const found = redactPush(entry.value, undefined, hostOf(this.page.url()));
     if (!found.fields.length) return this.keepOut(entry);
     const userData = { fields: [...new Set(found.fields)], plain: [...new Set(found.plain)] };
@@ -1028,8 +1044,8 @@ export class AuditSession {
   /** Adds an entry to one of the logs, up to its limit. Returns false once the limit is reached. */
   record(log, entry) {
     if (this[log].length >= LOG_LIMITS[log]) {
-      if (!this.logFull) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log} entries); later entries were dropped.` });
-      this.logFull = true;
+      if (!this.logsFull.has(log)) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log} entries); later entries were dropped.` });
+      this.logsFull.add(log);
       return false;
     }
     this[log].push(entry);
@@ -1136,7 +1152,7 @@ export class AuditSession {
         await this.page.waitForTimeout(Math.min(wait, until - Date.now()));
       }
       // A click whose page starts loading only now (a link delayed for its tags) is waited for once more.
-      if (!this.leaving) break;
+      if (!this.leaving || round === 1) break;
       await this.page.waitForEvent("framenavigated", { predicate: (f) => f === this.page.mainFrame(), timeout: 5000 }).catch(() => {});
     }
   }
@@ -1157,7 +1173,7 @@ export class AuditSession {
         if (next > MAX_ELEMENTS) break;
         const sub = await frame.evaluate(snapshotInPage, { first: next, limit: MAX_ELEMENTS - next + 1, textLimit: 0, frameBox, offscreenLimit }).catch(() => null);
         if (!sub?.lines.length) continue;
-        lines.push(`(inside an embedded frame from ${new URL(sub.url).host})`, ...sub.lines);
+        lines.push(`(inside an embedded frame from ${hostOf(sub.url) ?? "the page itself"})`, ...sub.lines);
         for (let r = next; r < sub.next; r++) this.refFrames.set(r, frame);
         next = sub.next;
         more ||= sub.more;
@@ -1453,18 +1469,22 @@ export class AuditSession {
     const seen = new Set(this.cookieLog.map((c) => `${c.domain}|${c.name}`));
     const now = new Map();
     for (const c of all) {
-      const k = `${c.domain}|${c.name}`;
+      const listed = `${c.domain}|${c.name}`;
+      // A site can set one name on two paths with different values; they are two cookies, compared apart.
+      const k = `${listed}|${c.path}`;
       const hash = createHash("sha256").update(c.value).digest("base64").slice(0, 16);
-      now.set(k, hash);
-      if (!seen.has(k) && this.cookieLog.length < 500) this.cookieLog.push({ name: c.name, domain: c.domain, step: this.currentStep });
+      now.set(k, { name: c.name, domain: c.domain, hash });
+      if (!seen.has(listed) && this.cookieLog.length < 500) {
+        seen.add(listed);
+        this.cookieLog.push({ name: c.name, domain: c.domain, step: this.currentStep });
+      }
       const before = this.cookieHashes.get(k);
-      const change = before === undefined ? "added" : before !== hash ? "changed" : null;
+      const change = !before ? "added" : before.hash !== hash ? "changed" : null;
       if (change && this.cookieChanges.length < 2000) this.cookieChanges.push({ step: this.currentStep, name: c.name, domain: c.domain, change });
     }
-    for (const k of this.cookieHashes.keys()) {
+    for (const [k, c] of this.cookieHashes) {
       if (now.has(k) || this.cookieChanges.length >= 2000) continue;
-      const [domain, ...name] = k.split("|");
-      this.cookieChanges.push({ step: this.currentStep, name: name.join("|"), domain, change: "removed" });
+      this.cookieChanges.push({ step: this.currentStep, name: c.name, domain: c.domain, change: "removed" });
     }
     this.cookieHashes = now;
     const identity = identityOf(all, this.landing?.requested);

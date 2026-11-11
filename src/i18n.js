@@ -135,6 +135,7 @@ const en = {
     sections: "Report sections",
     liveRun: "Live run: tracking requests reached the real analytics and ad accounts, so this test traffic is in their reports.",
     checkedAgainst: (id) => `Checked against plan ${id}`,
+    planChangeWhat: { required_params: "required parameters", parameters: "parameters", journeys: "journeys" },
     planChangesLine: (pc) => (pc.same ? `Plan unchanged since ${pc.previous}` : `Plan changed since ${pc.previous}: ${pc.added.length} added, ${pc.removed.length} removed, ${pc.changed.length} changed`),
     planVsSite: "Plan vs. site",
     changesTitle: "Changed since last run",
@@ -168,6 +169,8 @@ const en = {
     consentDefault: "Default",
     consentUpdate: "Update",
     scenarios: "Consent scenarios",
+    scenariosVia: (cmp) => `Consent banner answered through: ${cmp}.`,
+    scenariosLegend: "Hits per tag and event after each choice; ⚠: sent with cookies where the choice says no.",
     scenarioCols: { before: "No choice yet", ignore: "No choice, next page", accept: "Accept all", reject: "Reject all", analytics: "Analytics only" },
     matrix: {
       title: "Consent matrix",
@@ -1019,6 +1022,7 @@ const tr = {
     sections: "Rapor bölümleri",
     liveRun: "Canlı çalıştırma: takip istekleri gerçek analitik ve reklam hesaplarına ulaştı; bu test trafiği onların raporlarında görünür.",
     checkedAgainst: (id) => `${id} planına göre kontrol edildi`,
+    planChangeWhat: { required_params: "zorunlu parametreler", parameters: "parametreler", journeys: "yolculuklar" },
     planChangesLine: (pc) => (pc.same ? `Plan ${pc.previous} sürümünden bu yana değişmedi` : `Plan ${pc.previous} sürümünden bu yana değişti: ${pc.added.length} eklendi, ${pc.removed.length} çıkarıldı, ${pc.changed.length} değişti`),
     planVsSite: "Plan ve site",
     changesTitle: "Son çalıştırmadan bu yana değişenler",
@@ -1052,6 +1056,8 @@ const tr = {
     consentDefault: "Varsayılan",
     consentUpdate: "Güncelleme",
     scenarios: "Onay senaryoları",
+    scenariosVia: (cmp) => `Onay banner'ı şununla yanıtlandı: ${cmp}.`,
+    scenariosLegend: "Her seçimden sonra etiket ve olay başına istek sayısı; ⚠: seçimin hayır dediği yerde çerezlerle gönderildi.",
     scenarioCols: { before: "Henüz seçim yok", ignore: "Seçim yok, sonraki sayfa", accept: "Tümünü kabul", reject: "Tümünü reddet", analytics: "Yalnızca analitik" },
     matrix: {
       title: "Onay matrisi",

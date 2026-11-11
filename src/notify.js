@@ -102,6 +102,8 @@ export function sendSmtp(url, { from, to, subject, text }) {
     let i = 0;
     socket.setTimeout(20000, () => socket.destroy(new Error("SMTP timed out")));
     socket.on("error", reject);
+    // A server that hangs up without its last reply would otherwise leave this promise, and the run, waiting forever.
+    socket.on("close", () => reject(new Error("SMTP connection closed before the message was accepted")));
     socket.on("data", (chunk) => {
       buf += chunk;
       // A reply is complete at a line "NNN text" (a dash after the code means more lines follow).

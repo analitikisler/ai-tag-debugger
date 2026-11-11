@@ -107,7 +107,8 @@ export function parseGa4(url, postData) {
   // (Primary hits can carry gaf too, e.g. gaf=2, so the host decides, not the parameter.)
   if (GOOGLE_COMPANION_HOST.test(u.hostname)) return null;
   const base = new URLSearchParams(u.search);
-  const lines = postData ? postData.split("\n").filter(Boolean) : [""];
+  // gtag.js joins the events of a batch with \r\n; a \r left on a line would end up in its last value.
+  const lines = postData ? postData.split(/\r?\n/).filter(Boolean) : [""];
   return lines.map((line) => {
     const merged = new URLSearchParams(base);
     for (const [k, v] of new URLSearchParams(line)) merged.set(k, v);
@@ -311,7 +312,7 @@ export function parseCriteo(url, postData) {
     if (CRITEO_EVENTS[code] && !name) name = CRITEO_EVENTS[code];
     for (const [k, v] of e) {
       if (k === "e") continue;
-      if (/^m(\[\d*\])?$/.test(k) || isUserDataKey(k)) user[`${code}.${k}`] = v;
+      if (/^m(\[\d*\])?$/.test(k) || isUserDataKey(k)) user[`${code ?? "p"}.${k}`] = v;
       else if (k === "p") params.content_ids = v;
       else if (k === "id" && code === "vc") params.transaction_id = v;
       else if (k === "site_type") params.site_type = v;
@@ -338,7 +339,10 @@ export function parseAdobe(url) {
     if (q.has(from)) params[to] = q.get(from);
   }
   const pe = q.get("pe");
-  return [{ platform: "adobe", name: pe ? `link:${q.get("pev2") || pe}` : "pageView", id: decodeURIComponent(m[1]), params, url }];
+  // Any host can have a /b/ss/ path, and a malformed escape in it must not throw out of the request handler.
+  let suite = m[1];
+  try { suite = decodeURIComponent(suite); } catch { /* kept as sent */ }
+  return [{ platform: "adobe", name: pe ? `link:${q.get("pev2") || pe}` : "pageView", id: suite, params, url }];
 }
 
 // Matomo and Piwik PRO share one tracking protocol: an idsite and either an event (e_c, e_a, e_n),
@@ -445,7 +449,9 @@ const OTHER_BEACONS = [
  * into the site's real analytics and ad accounts.
  */
 export function isCollectionEndpoint(url) {
-  if (parseTrackingRequest(url, null) !== null) return true;
+  const hits = parseTrackingRequest(url, null);
+  // A tag's own script (Clarity's, Hotjar's) is read as a hit to name the account, but it has to load for the tag to run.
+  if (hits) return hits.some((h) => h.name !== "script_load");
   let u;
   try { u = new URL(url); } catch { return false; }
   if (!/^https?:$/.test(u.protocol)) return false;
@@ -454,7 +460,7 @@ export function isCollectionEndpoint(url) {
 
 /**
  * Every tracking vendor: its key, display name, the hosts its requests go to (path: how its
- * tracker is told apart on a first-party host) and, when its events are read, a parser. Adding a vendor is one entry here plus its icon in report.js.
+ * tracker is told apart on a first-party host) and, when its events are read, a parser. Adding a vendor is one entry here plus its icon (PLATFORM_ART in src/html/lib.js).
  */
 export const VENDORS = [
   { key: "ga4", label: "GA4", hosts: /(^|\.)(google-analytics|analytics\.google)\.com$/, parse: parseGa4 },

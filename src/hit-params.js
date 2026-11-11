@@ -42,7 +42,7 @@ export function paramSets(call) {
     } catch { /* not JSON, or cut at the size limit */ }
   }
   if (/^[^\s{]*=/.test(trimmed)) {
-    return trimmed.split("\n").filter(Boolean).map((line) => {
+    return trimmed.split(/\r?\n/).filter(Boolean).map((line) => {
       const merged = new Map(query);
       for (const [k, v] of new URLSearchParams(line)) merged.set(k, v);
       return [...merged];
@@ -63,7 +63,11 @@ export function hitParams(run, hit) {
   let i = 0;
   if (sets.length > 1) {
     const names = (parseTrackingRequest(call.url, call.postData ?? null) ?? []).map((h) => h.name);
-    i = Math.max(0, names.indexOf(hit.name));
+    // A batch can carry one event name twice: the hit takes the set at its own place among the same-named ones.
+    const sameName = names.flatMap((name, at) => (name === hit.name ? [at] : []));
+    const sentIn = hit.late?.during ?? hit.step;
+    const rank = run.hits.filter((h) => (h.late?.during ?? h.step) === sentIn && h.url === hit.url && h.name === hit.name).indexOf(hit);
+    i = sameName.length ? sameName[Math.max(0, rank) % sameName.length] : 0;
   }
   const entries = sets[i] ?? [];
   return { call, batch: sets.length > 1 ? [i + 1, sets.length] : null, event: entries.filter(([k]) => isEventParam(k)), context: entries.filter(([k]) => !isEventParam(k)) };

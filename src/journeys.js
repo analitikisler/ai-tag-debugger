@@ -98,9 +98,11 @@ export function planRun({ config = {}, plan, picks = [], goals = [], events = []
   // --against with --journey or --goal: only plan events expected on those flows are checked;
   // the rest are expected nowhere, so they are not checked rather than reported missing.
   const scoped = against && (picks.length || goals.length);
+  // A ready-made journey picked by another name (checkout for purchase) is the journey the plan names by its id.
+  const pickedIds = picks.map((p) => (configJourneys.some((j) => j.id === p) ? p : presetFor(p)?.id ?? p));
   let runPlan = {
     ...(plan ?? { events: [] }),
-    events: (plan?.events ?? []).map((e) => (scoped ? { ...e, journeys: (e.journeys ?? []).filter((j) => picks.includes(j)) } : { ...e })),
+    events: (plan?.events ?? []).map((e) => (scoped ? { ...e, journeys: (e.journeys ?? []).filter((j) => pickedIds.includes(j)) } : { ...e })),
   };
   const journeys = [];
 

@@ -14,7 +14,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { AuditSession } from "./browser.js";
+import { AuditSession, BROWSER_INSTALL_COMMAND } from "./browser.js";
 import { navigationError, privateHostChecker } from "./guard.js";
 import { collect, pageView, SYSTEM_PROMPT } from "./agent.js";
 import { canonicalEvent, checkRun, groupFindings, isConsentCommand, summarize } from "./checks.js";
@@ -25,7 +25,7 @@ import { readBaseline } from "./baseline.js";
 import { MAX_CONCURRENCY } from "./pool.js";
 import { scriptCell, scriptCspSource } from "./report.js";
 import { DEFAULT_DATA_DIR, resolvePlan } from "./workspace.js";
-import { checkTopic, discoverPlan, TOPICS } from "./discover.js";
+import { discoverPlan, TOPICS } from "./discover.js";
 import { createProvider } from "./providers.js";
 import { savePlan } from "./plan.js";
 import { changesLines, sinceLastRun } from "./changes.js";
@@ -45,6 +45,13 @@ const IDLE_MS = 15 * 60 * 1000; // an audit untouched this long is closed
 const MAX_BODY_BYTES = 1024 * 1024;
 const MIN_TOKEN_LENGTH = 16;
 
+// The CLI agent's working rules, said in this server's terms: its model ends a journey with a finish tool and a
+// success flag, a chat app with finish_audit and completed.
+const BROWSING_RULES = SYSTEM_PROMPT.split("How to work:\n")[1]
+  .replaceAll("call finish with success false", "call finish_audit with completed false")
+  .replaceAll("finish with success false", "call finish_audit with completed false")
+  .replace("Call finish as soon as", "Call finish_audit as soon as");
+
 const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracking (GA4, Google Ads, Meta Pixel, TikTok Pixel, Consent Mode).
 
 Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")}). If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
@@ -54,7 +61,7 @@ Before starting, ask the user which platforms to check and suggest the default (
 To audit a journey yourself: call start_audit with the site URL and a journey (a ready-made one: ${Object.keys(JOURNEY_PRESETS).join(", ")}, or the user's own description), then browser_action one step at a time until the journey is done (each result shows the page and the tracking hits that step sent), then finish_audit (with against to check the run against a saved plan) to get the findings and the report. Explain the findings to the user in plain language. When a question needs a hit's raw parameters (client id, gcs, gcd decoded per consent signal, session flags), call get_hit with the step number and the hit's [h] number; get_step shows an earlier step again.
 
 While browsing:
-${SYSTEM_PROMPT.split("How to work:\n")[1]}`;
+${BROWSING_RULES}`;
 
 /** "Checked: GA4, Meta. Out of scope: Microsoft Clarity 5 (5 requests skipped)." */
 function skippedLine(run) {
@@ -67,6 +74,13 @@ function skippedLine(run) {
 
 /** Open audits, by id. One browser each. */
 const audits = new Map();
+/** Browsers being started for an audit that has no id yet; they count toward MAX_OPEN_AUDITS. */
+let starting = 0;
+/**
+ * The reports this process wrote, by folder name: get_report reads these and nothing else. Kept here and not in
+ * buildServer, because over HTTP every request gets a server of its own.
+ */
+const written = new Map();
 
 const text = (t) => ({ content: [{ type: "text", text: t }] });
 const fail = (t) => ({ content: [{ type: "text", text: t }], isError: true });
@@ -236,11 +250,6 @@ export function hitDetail(audit, step, index) {
   return lines.join("\n");
 }
 
-/**
- * One entry per step, short enough to return with finish_audit and read without the report: what the step did, the
- * hits it sent with their consent, its consent commands and other tracking calls, the Google tag's consent when it
- * changed, and the cookies and ids that changed.
- */
 /** A container load or row as compact JSON: the ID, its source, and the dataLayer, host and environment when they are not the usual ones. */
 function containerJson(l) {
   return {
@@ -260,7 +269,7 @@ function containerJson(l) {
 }
 
 /** The Google containers of the runs and how each reached the page, as lines for a tool result; [] when none loaded. */
-export function containerLines(runs) {
+function containerLines(runs) {
   const rows = containerRows(runs);
   if (!rows.length) return [];
   const c = messages("en").ui.containers;
@@ -305,6 +314,11 @@ export function widgetLines(runs) {
   ];
 }
 
+/**
+ * One entry per step, short enough to return with finish_audit and read without the report: what the step did, the
+ * hits it sent with their consent, its consent commands and other tracking calls, the Google tag's consent when it
+ * changed, and the cookies and ids that changed.
+ */
 export function timelineOf(run) {
   let lastIds = null;
   return (run.steps ?? []).map((st) => {
@@ -366,6 +380,16 @@ function getAudit(id) {
   return audit;
 }
 
+/**
+ * Runs fn once everything already asked of this audit is done. A chat app can send two tool calls side by side;
+ * two actions in one browser at once would share a step, and each would report the other's page and hits.
+ */
+function inTurn(audit, fn) {
+  const run = (audit.turn ?? Promise.resolve()).then(fn);
+  audit.turn = run.catch(() => {});
+  return run;
+}
+
 /** Closes audits nobody has touched for a while, so abandoned ones don't hold browsers and slots. */
 export async function closeIdleAudits(now = Date.now(), idleMs = IDLE_MS) {
   const idle = [...audits.values()].filter((a) => now - a.lastUsed > idleMs).map((a) => a.id);
@@ -417,8 +441,6 @@ async function loadAgainst(ref, site, opts) {
  */
 export function buildServer(opts) {
   const server = new McpServer({ name: "ai-tag-debugger", version: VERSION }, { instructions: INSTRUCTIONS });
-  // The reports this server wrote, by folder name: get_report reads these and nothing else, over HTTP too.
-  const written = new Map();
 
   server.registerTool(
     "start_audit",
@@ -466,7 +488,7 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       await closeIdleAudits();
-      if (audits.size >= MAX_OPEN_AUDITS) return fail(`${audits.size} audits are already open. Finish one with finish_audit first.`);
+      if (audits.size + starting >= MAX_OPEN_AUDITS) return fail(`${audits.size + starting} audits are already open. Finish one with finish_audit first.`);
       let session;
       try {
         if (live && !opts.allowLive) return fail("Live audits are off on this server: it was started without --allow-live. Leave live out to audit with tracking requests answered locally.");
@@ -479,17 +501,21 @@ export function buildServer(opts) {
       } catch (err) {
         return fail(err.message);
       }
-      try {
-        await session.start();
-      } catch (err) {
-        await session.close().catch(() => {});
-        return fail(connect ? `Could not connect to Chrome: ${err.message}` : `Could not start the browser: ${err.message}. If Chromium is missing, run: npx playwright install chromium`);
-      }
       const id = randomUUID().slice(0, 8);
       const preset = presetFor(journey);
       const name = preset?.id ?? ((journey || "journey").toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 40) || "journey");
       const audit = { id, session, site: url.href, journey: name, preset, viewport: viewport ?? "desktop", lastUsed: Date.now() };
-      audits.set(id, audit);
+      // The slot is taken before the browser starts, so calls made side by side can't open more than the limit.
+      starting += 1;
+      try {
+        await session.start();
+        audits.set(id, audit);
+      } catch (err) {
+        await session.close().catch(() => {});
+        return fail(connect ? `Could not connect to Chrome: ${err.message}` : `Could not start the browser: ${err.message}. If Chromium is missing, run: ${BROWSER_INSTALL_COMMAND}`);
+      } finally {
+        starting -= 1;
+      }
       const start = campaign === false ? url.href : withCampaignParams(url.href, typeof campaign === "object" ? campaign : null);
       const error = await session.act({ action: "goto", url: start, reason: `Open ${start}` });
       const page = await viewFor(audit, error);
@@ -507,7 +533,7 @@ export function buildServer(opts) {
     {
       title: "Act in the audit browser",
       description:
-        "Performs one action in the audit's browser and returns the updated page plus the tracking hits that action sent. Actions: goto (url), click (ref or text), fill (ref or text, value), select (ref or text, value), scroll (value = down or up), wait (value = milliseconds). Refs come from the latest page view, which lists on-screen elements first; if an element has no ref, scroll or pass its visible text in text. If a cookie banner appears, accept it and set accepts_consent to true on that click (or, on a journey that is about declining cookies, reject it and set rejects_consent to true). Use test data in forms and never enter real payment details.",
+        "Performs one action in the audit's browser and returns the updated page plus the tracking hits that action sent. Actions: goto (url), click (ref or text), fill (ref or text, value), select (ref or text, value), scroll (value = down or up), wait (value = milliseconds, 1000 when left out, at most 10000). Refs come from the latest page view, which lists on-screen elements first; if an element has no ref, scroll or pass its visible text in text. If a cookie banner appears, accept it and set accepts_consent to true on that click (or, on a journey that is about declining cookies, reject it and set rejects_consent to true). Use test data in forms and never enter real payment details.",
       inputSchema: {
         audit_id: z.string(),
         action: z.enum(["goto", "click", "fill", "select", "scroll", "wait"]),
@@ -525,9 +551,11 @@ export function buildServer(opts) {
       const audit = getAudit(input.audit_id);
       if (["click", "fill", "select"].includes(input.action) && !Number.isInteger(input.ref) && !input.text?.trim()) return fail(`${input.action} needs a ref or text.`);
       if (input.action === "goto" && !input.url) return fail("goto needs a url.");
-      const error = await audit.session.act(input);
-      const page = await viewFor(audit, error, input.detail);
-      return text(`${page}\n\n${stepCapture(audit, audit.session.currentStep)}`);
+      return inTurn(audit, async () => {
+        const error = await audit.session.act(input);
+        const page = await viewFor(audit, error, input.detail);
+        return text(`${page}\n\n${stepCapture(audit, audit.session.currentStep)}`);
+      });
     },
   );
 
@@ -684,13 +712,19 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       const config = { site: url.href, providers, allowed_hosts };
-      const sc = await runConsentScenarios(config, { campaign, concurrency, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) });
+      let sc;
+      try {
+        sc = await runConsentScenarios(config, { campaign, concurrency, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) });
+      } catch (err) {
+        // A page that would not open is not a page without a banner.
+        return fail(`Could not compare the consent choices on ${url.href}: ${err.message}`);
+      }
       if (!sc) return text(`No consent banner the tool can answer was found on ${url.href}, so the choices could not be compared. Walk the journey with start_audit and browser_action instead.`);
       const m = messages(language);
       const table = consentTable(sc);
-      const lines = [`Consent banner answered through: ${sc.cmp}.`, "", `| | ${table.cols.map((c) => m.ui.scenarioCols[c]).join(" | ")} |`, `|${" --- |".repeat(table.cols.length + 1)}`];
+      const lines = [m.ui.scenariosVia(sc.cmp), "", `| | ${table.cols.map((c) => m.ui.scenarioCols[c]).join(" | ")} |`, `|${" --- |".repeat(table.cols.length + 1)}`];
       for (const r of table.rows) lines.push(`| ${TRACKING_PROVIDERS[r.platform] ?? r.platform} ${r.event} | ${r.cells.map((c) => (c.count === null ? "–" : `${c.count}${c.problem ? " ⚠" : ""}`)).join(" | ")} |`);
-      lines.push("", "Hits per tag and event after each choice; ⚠: sent with cookies where the choice says no.", "", ...consentMatrixMarkdown(m, sc));
+      lines.push("", m.ui.scenariosLegend, "", ...consentMatrixMarkdown(m, sc));
       return text(lines.join("\n"));
     },
   );
@@ -727,8 +761,12 @@ export function buildServer(opts) {
           const loaded = await loadAgainst(against, audit.site, opts);
           plan = loaded.plan;
           againstPlan = { ...loaded.found, label: loaded.found.id ?? path.relative(process.cwd(), loaded.found.file) };
-        } else plan = await readPlan(measurement_plan, opts.allowFiles);
-        if (!Array.isArray(plan.events)) throw new Error('The plan needs an "events" list.');
+        } else {
+          plan = await readPlan(measurement_plan, opts.allowFiles);
+          if (!Array.isArray(plan?.events)) throw new Error('The plan needs an "events" list.');
+          // After this point the browser closes, so a plan the checks can't read has to be refused here.
+          validatePlan(plan);
+        }
       } catch (err) {
         return fail(`Could not read the plan: ${err.message} ${STILL_OPEN}`);
       }
@@ -737,7 +775,8 @@ export function buildServer(opts) {
       plan = onlyEvents(plan, events);
       const lang = language ?? "en";
       const journey = { id: audit.journey };
-      const run = { ...collect(audit.session, journey, audit.viewport), completed, note, cookies: await audit.session.cookies().catch(() => []) };
+      // After any action still running, so the run holds its step whole.
+      const run = await inTurn(audit, async () => ({ ...collect(audit.session, journey, audit.viewport), completed, note, cookies: await audit.session.cookies().catch(() => []) }));
       await closeAudit(audit_id);
 
       const findings = filterFindings(checkRun(plan, run, { lang }), events);
@@ -802,7 +841,6 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, plans are limited to public websites.`);
       }
       try {
-        checkTopic(topic);
         const provider = opts.provider ?? (await createProvider());
         const { plan } = await discoverPlan({ site: url.href, topic, provider, blockPrivate: opts.blockPrivate });
         const { id, dir } = await savePlan(plan, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site: url.href });
@@ -927,7 +965,7 @@ export function buildServer(opts) {
 }
 
 /** Starts the MCP server on stdio, or on HTTP with --http. */
-export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", token, reportsDir, publicUrl, allowPrivateNetwork = false, allowLive = false } = {}) {
+export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", token, reportsDir, publicUrl, allowPrivateNetwork = false, allowLive = false, dataDir } = {}) {
   const dir = path.resolve(reportsDir ?? path.join(homedir(), "ai-tag-debugger-reports"));
   const shutdown = async () => {
     await Promise.all([...audits.keys()].map(closeAudit));
@@ -938,8 +976,10 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
 
   if (!http) {
     // On your own computer live runs are yours to start; a server others reach needs --allow-live.
-    const server = buildServer({ allowFiles: true, reportsDir: dir, allowLive: true });
+    const server = buildServer({ allowFiles: true, reportsDir: dir, allowLive: true, dataDir });
     await server.connect(new StdioServerTransport());
+    // The app that started the server closes stdin when it goes; without this an open audit's browser keeps the process alive.
+    process.stdin.on("end", shutdown);
     // stdout carries the protocol, so status goes to stderr.
     console.error(`ai-tag-debugger MCP server ready on stdio. Reports go to ${dir}`);
     return;
@@ -975,7 +1015,8 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
   };
   const reportsUrl = publicUrl ? `${publicUrl.replace(/\/+$/, "")}${endpoint}/reports` : undefined;
   const httpServer = createServer(async (req, res) => {
-    const pathname = new URL(req.url, "http://x").pathname;
+    // A request target that is no URL ("//[") must not throw here: nothing would catch it and the server would exit.
+    const pathname = URL.parse(req.url, "http://x")?.pathname ?? "";
     const { ok, rest } = authorized(pathname);
     if (!ok) {
       res.writeHead(404).end();
@@ -1025,7 +1066,7 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
       return;
     }
     // Stateless: a new server and transport per request. Open audits live in the module, keyed by audit_id.
-    const server = buildServer({ allowFiles: false, blockPrivate: !allowPrivateNetwork, reportsDir: dir, reportsUrl, allowLive });
+    const server = buildServer({ allowFiles: false, blockPrivate: !allowPrivateNetwork, reportsDir: dir, reportsUrl, allowLive, dataDir });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       transport.close();

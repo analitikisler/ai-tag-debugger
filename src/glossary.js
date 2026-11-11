@@ -127,13 +127,25 @@ export function decodeGa4Item(s) {
   const fields = [];
   const names = {};
   const values = {};
-  for (const part of String(s).split("~")) {
+  const parts = String(s).split("~");
+  // Custom parameter names first (k0size … k10fit): a name never starts with a digit, so its number reads whole.
+  for (const part of parts) {
+    const m = part.match(/^k(\d+)(.*)$/);
+    if (m) names[Number(m[1])] = m[2];
+  }
+  for (const part of parts) {
+    if (/^k\d/.test(part)) continue;
+    const value = part.match(/^v(\d+)(.*)$/);
+    if (value) {
+      // A value can start with digits itself (v042 is 42 for parameter 0), so its number is the longest one a name was given for.
+      const digits = value[1];
+      let n = 1;
+      for (let len = digits.length; len > 1; len--) if (Number(digits.slice(0, len)) in names) { n = len; break; }
+      values[Number(digits.slice(0, n))] = digits.slice(n) + value[2];
+      continue;
+    }
     const m = part.match(/^([a-z][a-z0-9])(.*)$/);
-    if (!m) continue;
-    const [, k, v] = m;
-    if (/^k\d$/.test(k)) names[k[1]] = v;
-    else if (/^v\d$/.test(k)) values[k[1]] = v;
-    else fields.push([ITEM_FIELDS[k] ?? k, v]);
+    if (m) fields.push([ITEM_FIELDS[m[1]] ?? m[1], m[2]]);
   }
   return { fields, custom: Object.entries(values).map(([n, v]) => [names[n] ?? `custom_${n}`, v]) };
 }

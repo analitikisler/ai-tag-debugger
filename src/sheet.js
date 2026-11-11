@@ -20,7 +20,8 @@ const yesNo = (v) => (v ? "yes" : "no");
 export function planToRows(plan) {
   const events = [];
   for (const ev of plan.events ?? []) {
-    const trigger = ev.trigger ? [ev.trigger.page, ev.trigger.element].filter(Boolean).join(TRIGGER_SEP) : "";
+    // A plan may give the trigger as plain text instead of { page, element }.
+    const trigger = typeof ev.trigger === "string" ? ev.trigger : ev.trigger ? [ev.trigger.page, ev.trigger.element].filter(Boolean).join(TRIGGER_SEP) : "";
     const params = { ...(ev.parameters ?? {}) };
     for (const p of ev.required_params ?? []) params[p] ??= {};
     const required = new Set(ev.required_params ?? []);
@@ -42,7 +43,8 @@ export function planToRows(plan) {
       });
     }
   }
-  const user_properties = (plan.user_properties ?? []).map((u) => ({ name: u.name, description: u.description ?? "", example: u.example ?? "" }));
+  // A user property may be just its name.
+  const user_properties = (plan.user_properties ?? []).map((u) => (typeof u === "string" ? { name: u, description: "", example: "" } : { name: u.name, description: u.description ?? "", example: u.example ?? "" }));
   return { events, user_properties };
 }
 

@@ -88,9 +88,13 @@ const isGa4Builtin = (platform, name) => isGa4Automatic(platform, name) || (plat
 
 /** Whether a planned event was sent on a run: by name, or for GA4's first_visit and session_start, as a flag on another hit. */
 function eventFired(ev, hits) {
-  if (hits.some((h) => hitMatchesEvent(ev, h))) return true;
+  return hits.some((h) => hitMatchesEvent(ev, h)) || hits.some((h) => carriesAutoEvent(ev, h));
+}
+
+/** Whether a GA4 hit carries the planned event as a flag (first_visit as _fv, session_start as _ss) instead of by name. */
+export function carriesAutoEvent(ev, hit) {
   const name = canonicalEvent(ev.name);
-  return ev.platform === "ga4" && hits.some((h) => h.platform === "ga4" && (h.autoEvents ?? []).some((a) => canonicalEvent(a) === name));
+  return ev.platform === "ga4" && hit.platform === "ga4" && (hit.autoEvents ?? []).some((a) => canonicalEvent(a) === name);
 }
 
 /** Whether a captured hit is the planned event, by its exact name, an alias or a common variant. */
@@ -262,10 +266,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // The same event sent more than once by a single action on one page. A step that loads a
-  // new page can also carry the previous page's last hits, so the page is part of the key.
+  // new page can also carry the previous page's last hits, so the page is part of the key. So is the
+  // account: one event to each of two GA4 properties or two pixels is counted once by each.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}`;
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}|${hit.id ?? ""}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
@@ -444,7 +449,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     const events = [...new Set(hits.map((h) => `${h.step}|${canonicalEvent(h.name)}`))];
     if (events.length < 2) continue;
     const names = [...new Set(hits.map((h) => h.name))];
-    findings.push({ ...base, severity: "warning", check: "event_id_reused", platform: hits[0].platform, event: names.join(", "), step: stepLabel(hits[1].step), detail: d.eventIdReused(platformName(hits[0].platform), hits[0].eventId, names, events.length), evidence: hits.map((h) => h.url).join("\n") });
+    findings.push({ ...base, severity: "warning", check: "event_id_reused", platform: hits[0].platform, event: names.join(", "), events: names, step: stepLabel(hits[1].step), detail: d.eventIdReused(platformName(hits[0].platform), hits[0].eventId, names, events.length), evidence: hits.map((h) => h.url).join("\n") });
   }
 
   // With a server container, the Conversions API copy is usually built from the GA4 hit, so the
@@ -621,17 +626,16 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   // Personal data in hits.
   const piiSeen = new Set();
   for (const hit of legalHits) {
+    if (piiSeen.has(legalKey(hit))) continue;
     let url = hit.url;
     try {
       url = decodeURIComponent(hit.url);
     } catch { /* malformed % sequence, e.g. "50%": search the raw URL */ }
-    const haystack = url + " " + JSON.stringify(hit.params);
-    if (piiSeen.has(legalKey(hit))) continue;
     // User data for ad matching is redacted at capture; userData.plain lists the fields that were not hashed.
     if (hit.userData?.plain?.length) {
       piiSeen.add(legalKey(hit));
       findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: fromWidget(hit, d.piiUnhashed(hit.platform, hit.name, hit.userData.plain)) });
-    } else if (visitorEmailIn(haystack, hit)) {
+    } else if (visitorEmailIn(url + " " + JSON.stringify(hit.params), hit)) {
       piiSeen.add(legalKey(hit));
       findings.push({ ...base, severity: "risk", check: "pii", platform: hit.platform, event: hit.name, step: stepLabel(hit.step), detail: fromWidget(hit, d.pii(hit.platform, hit.name)) });
     }
@@ -645,13 +649,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // Events that are not in the plan. Without a plan every event would be listed, which says nothing.
-  const unplanned = [...new Set(run.hits.filter((h) => !planEventFor(h) && !isGa4Builtin(h.platform, h.name)).map((h) => key(h.platform, h.name)))];
-  if (hasPlan && unplanned.length) {
+  const unplanned = hasPlan ? [...new Set(run.hits.filter((h) => !planEventFor(h) && !isGa4Builtin(h.platform, h.name)).map((h) => key(h.platform, h.name)))] : [];
+  if (unplanned.length) {
     findings.push({ ...base, severity: "info", check: "unplanned_events", detail: d.unplanned(unplanned) });
   }
 
   // Planned events that fired cleanly.
-  const problemKeys = new Set(findings.filter((f) => f.event).map((f) => key(f.platform, f.event)));
+  // A finding about several events at once (a reused event ID) names each in `events`.
+  const problemKeys = new Set(findings.filter((f) => f.event).flatMap((f) => (f.events ?? [f.event]).map((name) => key(f.platform, name))));
   const okKeys = [...new Set(run.hits.filter((h) => planEventFor(h)).map((h) => key(h.platform, h.name)))].filter((k) => !problemKeys.has(k));
   if (okKeys.length) {
     findings.push({ ...base, severity: "ok", check: "matches_plan", detail: d.matches(okKeys) });

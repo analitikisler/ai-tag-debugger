@@ -110,10 +110,11 @@ const coverageLines = (m, pc) => [
 const pcSort = (pc) => [...pc.events].sort((a, b) => BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || platformRank(a.platform) - platformRank(b.platform));
 const BUCKET_ORDER = ["missing", "missing_params", "wrong_values", "implemented", "unplanned", "not_checked"];
 
-const planChangeItems = (pc) => [
+// A capture saved before 0.22.9 holds the English words themselves in `what`; they are shown as saved.
+const planChangeItems = (pc, m) => [
   ...pc.added.map((c) => `+ ${changeLabel(c)}`),
   ...pc.removed.map((c) => `− ${changeLabel(c)}`),
-  ...pc.changed.map((c) => `~ ${changeLabel(c)}: ${c.what.join(", ")}`),
+  ...pc.changed.map((c) => `~ ${changeLabel(c)}: ${c.what.map((w) => m.ui.planChangeWhat[w] ?? w).join(", ")}`),
 ];
 
 export {

@@ -16,11 +16,11 @@ export function hostScope(site, allowedHosts = []) {
   const bases = [site, ...allowedHosts]
     .map((entry) => String(entry).trim())
     .filter(Boolean)
-    .map((entry) => {
+    .map((entry, i) => {
       try {
         return baseHost(new URL(entry.includes("://") ? entry : `http://${entry}`).hostname);
       } catch {
-        throw new Error(`"${entry}" in allowed_hosts is not a valid host.`);
+        throw new Error(i === 0 ? `"${entry}" is not a valid site address.` : `"${entry}" in allowed_hosts is not a valid host.`);
       }
     })
     .map((h) => h.replace(/^\*\./, ""));
@@ -28,7 +28,7 @@ export function hostScope(site, allowedHosts = []) {
     hosts: [...new Set(bases)],
     allows(hostname) {
       const h = hostname.toLowerCase();
-      return this.hosts.some((b) => h === b || h === `www.${b}` || h.endsWith(`.${b}`));
+      return this.hosts.some((b) => h === b || h.endsWith(`.${b}`));
     },
   };
 }
@@ -92,7 +92,8 @@ export function isPrivateAddress(ip) {
 export function privateHostChecker(isBlocked = isPrivateAddress) {
   const cache = new Map();
   return async (hostname) => {
-    const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    // "localhost." names the same host as "localhost".
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (host === "localhost" || host.endsWith(".localhost")) return true;
     if (isIP(host)) return isBlocked(host);
     if (!cache.has(host)) {

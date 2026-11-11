@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { messages } from "./i18n.js";
-import { platformLabel } from "./report.js";
+import { changeLabel } from "./report-shared.js";
 import { ownerOf } from "./verify.js";
 import { PLAN_FILE, listPlanIds, listRunIds, plansDir, runsDir } from "./workspace.js";
 
@@ -139,7 +139,7 @@ export function changesLines(ch, lang = "en") {
   const m = messages(lang);
   if (!ch.run) return [m.ui.noSavedRun];
   if (!ch.previous) return [m.ui.noPreviousRun];
-  const label = (c) => `${platformLabel(c.platform ?? "")} ${c.event ?? ""}`.trim() || c.check;
+  const label = changeLabel;
   const why = (c, bucket) => (ch.mode === "findings" ? c.detail : m.ui.bucket[bucket]);
   const tag = (c) => (ch.mode === "findings" ? m.severity[c.severity] ?? "" : m.ui.bucket[c.bucket]);
   return [
@@ -153,10 +153,10 @@ export function changesLines(ch, lang = "en") {
 const planKey = (e) => [e.platform ?? "ga4", e.name].join("|");
 const sortedList = (v) => JSON.stringify([...(v ?? [])].sort());
 
-/** What differs for an event kept in both plans: its required parameters, parameter list or journeys. */
+/** What differs for an event kept in both plans: its required parameters, parameter list or journeys, as keys of ui.planChangeWhat. */
 function eventChanges(a, b) {
   const out = [];
-  if (sortedList(a.required_params) !== sortedList(b.required_params)) out.push("required parameters");
+  if (sortedList(a.required_params) !== sortedList(b.required_params)) out.push("required_params");
   if (sortedList(Object.keys(a.parameters ?? {})) !== sortedList(Object.keys(b.parameters ?? {}))) out.push("parameters");
   if (sortedList(a.journeys) !== sortedList(b.journeys)) out.push("journeys");
   return out;

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { browserEnv, installBrowser } from "./browser.js";
 
@@ -129,7 +130,8 @@ export async function writePdf(htmlPath, pdfPath) {
     // JavaScript is off: the report needs none, and the page is only ever our own file.
     const context = await browser.newContext({ javaScriptEnabled: false, colorScheme: "light" });
     const page = await context.newPage();
-    await page.goto(new URL(`file://${path.resolve(htmlPath)}`).href);
+    // pathToFileURL escapes #, ? and % in folder names, which a hand-built file:// address would read as a fragment or query.
+    await page.goto(pathToFileURL(path.resolve(htmlPath)).href);
     await page.emulateMedia({ media: "print", colorScheme: "light" });
     await page.pdf({ path: pdfPath, format: "A4", printBackground: true, displayHeaderFooter: true, headerTemplate: "<span></span>", footerTemplate: PDF_FOOTER, margin: { top: "14mm", bottom: "16mm", left: "10mm", right: "10mm" } });
   } finally {

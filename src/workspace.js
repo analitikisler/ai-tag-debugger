@@ -16,16 +16,25 @@ export function domainOf(url) {
   } catch {
     throw new Error(`"${url}" is not a full URL. Use e.g. https://www.example.com`);
   }
+  // The host becomes a folder name under the data folder: "." and ".." (http://../) would name another folder.
+  if (!/[^.]/.test(host)) throw new Error(`"${url}" has no host name. Use e.g. https://www.example.com`);
   return host.toLowerCase().replace(/^www\./, "");
 }
 
 const pad = (n) => String(n).padStart(2, "0");
 
-/** A local-time ID, YYYY-MM-DD_HHMM, with seconds added (_HHMMSS) when taken lists the minute's ID already. */
+const minuteOf = (t) => `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}`;
+
+/**
+ * A local-time ID, YYYY-MM-DD_HHMM, with seconds added (_HHMMSS) when taken lists the minute's ID already.
+ * When that second is taken too (a third save within it), the next free second is used, so an ID is never reused.
+ */
 export function newId(taken = [], now = new Date()) {
-  const minute = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
-  if (!taken.includes(minute)) return minute;
-  return `${minute}${pad(now.getSeconds())}`;
+  if (!taken.includes(minuteOf(now))) return minuteOf(now);
+  for (let t = now; ; t = new Date(t.getTime() + 1000)) {
+    const id = `${minuteOf(t)}${pad(t.getSeconds())}`;
+    if (!taken.includes(id)) return id;
+  }
 }
 
 export const siteDir = (dataDir = DEFAULT_DATA_DIR, site) => path.resolve(dataDir, domainOf(site));
