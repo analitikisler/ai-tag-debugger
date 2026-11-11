@@ -97,6 +97,9 @@ async function snapshotCookies(rec, tabId, url) {
   const cookies = await chrome.cookies.getAll({ domain: siteOf(host) }).catch(() => []);
   const out = [];
   for (const c of cookies) {
+    // Tag Manager's preview cookies belong to the debugging session (this extension's or Tag Assistant's), not to
+    // the site's tracking, so they are left out of what the recording says the site set.
+    if (/^gtm_(auth|debug|preview)$/.test(c.name)) continue;
     out.push({ name: c.name, domain: c.domain, hash: await hashOf(c.value), httpOnly: c.httpOnly, secure: c.secure, ...(c.expirationDate ? { expirationDate: Math.round(c.expirationDate) } : {}) });
   }
   await record(rec, { kind: "cookies", cookies: out }, tabId);

@@ -97,3 +97,20 @@ test("a preview found in the tabs is offered to its own site, and a newer link r
   assert.equal(G.freshen(servers, { url: "https://sgtm.shop.example", id: "GTM-OTHER11", auth: "x1y2z3w4", env: "env-1" }), null, "another container is not this connection");
   assert.equal(G.previewUrl({ url: "https://sgtm.shop.example", id: "GTM-SHOP111", auth: "olderauth", env: "env-4" }), "https://sgtm.shop.example/gtm/debug?id=GTM-SHOP111&gtm_auth=olderauth&gtm_preview=env-4");
 });
+
+test("in a batch, each event keeps only the GA4 send that carried it", async () => {
+  const S = await import("../extension/lib/server.js");
+  const messages = G.parseMemo(memo);
+  const second = messages.filter((m) => ["EVENT_STARTED", "TAG_STARTED", "TAG_STATUS"].includes(m.messageType))
+    .map((m) => ({ ...m, key: { ...m.key, eventId: 42 }, ...(m.eventData ? { eventData: { ...m.eventData, event_name: "scroll" } } : {}) }));
+  const sendFor = (en) => messages.filter((m) => m.messageType === "ASYNC_ACTION_RESOLVED").map((m) => {
+    const o = m.asyncActionInfo.outgoingHttpRequest;
+    return { ...m, asyncActionInfo: { outgoingHttpRequest: { ...o, request: { ...o.request, url: o.request.url.replace(/en=page_view/, `en=${en}`) } } } };
+  });
+  const groups = {};
+  G.addMessages(groups, [...messages.filter((m) => m.messageType !== "ASYNC_ACTION_RESOLVED"), ...second, ...sendFor("page_view"), ...sendFor("scroll")]);
+  const t = G.traceOf(groups["1a1bf6d7c7f044b4a1af2"]);
+  assert.equal(t.sends.length, 2);
+  assert.deepEqual(S.traceForEvent(t, 0).sends.map((s) => s.event), ["page_view"]);
+  assert.deepEqual(S.traceForEvent(t, 1).sends.map((s) => s.event), ["scroll"]);
+});

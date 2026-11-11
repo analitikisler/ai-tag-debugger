@@ -46,6 +46,10 @@ const text = (v, n = 300) => (typeof v === "string" ? v.slice(0, n) : null);
 const hostPath = (url) => {
   try { const u = new URL(url); return `${u.host}${u.pathname}`; } catch { return String(url ?? "").split("?")[0].slice(0, 200); }
 };
+// The event an outgoing GA4 request carries (en=…), so a batch's sends go to the event each one was for.
+const eventOf = (url) => {
+  try { return new URL(url).searchParams.get("en"); } catch { return null; }
+};
 const cookieNames = (headers) => {
   const list = headers?.["set-cookie"] ?? headers?.["Set-Cookie"] ?? [];
   return (Array.isArray(list) ? list : [list]).map((c) => String(c).split("=")[0].trim()).filter((n) => /^[\w.-]{1,64}$/.test(n));
@@ -91,7 +95,7 @@ export function addMessages(groups, messages) {
         const o = m.asyncActionInfo?.outgoingHttpRequest;
         if (!o || g.sends.length >= 50) break;
         g.sends.push({
-          from: text(o.batchedEntities?.tags?.[0], 120), method: text(o.request?.method, 10), to: hostPath(o.request?.url),
+          from: text(o.batchedEntities?.tags?.[0], 120), method: text(o.request?.method, 10), to: hostPath(o.request?.url), event: eventOf(o.request?.url),
           status: Number.isInteger(o.response?.statusCode) ? o.response.statusCode : null, error: text(o.response?.error ?? o.error),
         });
         break;

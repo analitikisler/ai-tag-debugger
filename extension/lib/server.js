@@ -90,7 +90,10 @@ export function traceForEvent(trace, index) {
   if (!trace) return null;
   if (trace.events.length <= 1) return { ...trace, event: trace.events[0] ?? null };
   const tags = trace.tags.filter((t) => t.event === index);
-  // A send names the tag that made it, not the event; a tag that ran for several events keeps its sends on each.
+  // A send names the tag that made it, and a GA4 one its event too (server-side GTM's preview gives it); without
+  // the event, a tag that ran for several events keeps its sends on each.
   const names = new Set(tags.map((t) => t.tag));
-  return { ...trace, event: trace.events[index] ?? null, tags, notFired: trace.notFired.filter((t) => t.event === index), sends: trace.sends.filter((s) => names.has(s.from)) };
+  const event = trace.events[index] ?? null;
+  const sends = trace.sends.filter((s) => names.has(s.from) && (!s.event || s.event === event));
+  return { ...trace, event, tags, notFired: trace.notFired.filter((t) => t.event === index), sends };
 }
