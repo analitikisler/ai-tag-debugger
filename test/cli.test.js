@@ -85,7 +85,10 @@ test("--providers still works, with a note that it is now --platforms", () => {
 });
 
 test("--no-ai alone is accepted: it implies --scripted", () => {
-  assert.doesNotMatch(runFails(["--no-ai"]).stderr, /needs --scripted/);
+  // A journey with no saved steps is refused as a scripted run would refuse it, not for lacking --scripted.
+  const { stderr } = runFails(["--no-ai", "--journey", "purchase", "--data-dir", mkdtempSync(path.join(tmpdir(), "aitd-"))]);
+  assert.match(stderr, /can't be replayed with --scripted: purchase/);
+  assert.doesNotMatch(stderr, /must be replayed from their fixed steps/);
 });
 
 test("--against says how to draft a plan when the site has none, and lists IDs for an unknown one", () => {

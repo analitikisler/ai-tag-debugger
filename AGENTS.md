@@ -5,11 +5,11 @@ An open-source Node CLI and MCP server that QA-tests a website's analytics and a
 ## Pipeline
 
 1. Plan and journeys: `src/discover.js` drafts a plan, `src/journeys.js` holds the ready-made journeys, `src/learn.js` learns one from a first run, `src/sheet.js` imports and exports it.
-2. Browse: `src/agent.js` runs the model loop through `src/providers.js`; `src/browser.js` (`AuditSession`) drives Chromium within the limits of `src/guard.js` and `src/egress.js`.
-3. Capture: `src/parsers.js` turns requests into hits, `src/redact.js` strips user data, `src/consent.js` and `src/inventory.js` add consent scenarios and the tag inventory, `src/gtm.js` reads a container export.
-4. Check: `src/checks.js` emits findings with no model call; `src/verify.js` adds owners and verify links; `src/changes.js` compares with the previous run.
+2. Browse: `src/agent.js` runs the model loop through `src/providers.js`; `src/browser.js` (`AuditSession`) drives Chromium within the limits of `src/guard.js` and `src/egress.js`; `src/login.js` holds the test account and saved sessions, `src/pool.js` runs journeys side by side, and `src/schema.js` checks configs and plans.
+3. Capture: `src/parsers.js` turns requests into hits, `src/redact.js` strips user data, `src/consent.js` and `src/inventory.js` add consent scenarios and the tag inventory, `src/gtm.js` reads a container export, `src/cmp.js` names the consent platform, `src/containers.js` and `src/frames.js` follow Google containers and iframes, and `src/hit-params.js` gives a hit's request parameters.
+4. Check: `src/checks.js` emits findings with no model call; `src/verify.js` adds owners and verify links; `src/changes.js` compares with the previous run; `src/metrics.js` computes the verdict, score and coverage, `src/baseline.js` applies accepted findings and `src/history.js` keeps the trend.
 5. Explain and report: `src/report.js` asks the model for causes and fixes and renders the Markdown and CSV reports; `src/html/` renders the HTML report (`shell.js` assembles the page, one module per section, `css.js` and `script.js` hold the stylesheet and the hashed script), all with strings from `src/i18n.js` through `src/report-shared.js`.
-6. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
+6. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites, `src/ci-output.js` writes `junit.xml` and `summary.json`, and `src/doctor.js` checks the setup. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
 
 ## Commands
 

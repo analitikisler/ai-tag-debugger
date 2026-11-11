@@ -8,8 +8,8 @@ import { validatePlan } from "./schema.js";
 
 export const EVENT_COLUMNS = ["event", "platform", "parameter", "required", "example", "trigger", "description"];
 // Optional columns that keep the rest of a plan on a round trip.
-export const EXTRA_EVENT_COLUMNS = ["custom", "journeys"];
-export const USER_PROPERTY_COLUMNS = ["name", "description", "example"];
+const EXTRA_EVENT_COLUMNS = ["custom", "journeys", "aliases", "allow_multiple"];
+const USER_PROPERTY_COLUMNS = ["name", "description", "example"];
 const TRIGGER_SEP = " > ";
 
 // ---------- plan <-> rows ----------
@@ -25,7 +25,7 @@ export function planToRows(plan) {
     const params = { ...(ev.parameters ?? {}) };
     for (const p of ev.required_params ?? []) params[p] ??= {};
     const required = new Set(ev.required_params ?? []);
-    const base = { event: ev.name, platform: ev.platform ?? "ga4", custom: ev.custom ? "yes" : "", journeys: (ev.journeys ?? []).join(", ") };
+    const base = { event: ev.name, platform: ev.platform ?? "ga4", custom: ev.custom ? "yes" : "", journeys: (ev.journeys ?? []).join(", "), aliases: (ev.aliases ?? []).join(", "), allow_multiple: ev.allow_multiple ? "yes" : "" };
     const names = Object.keys(params);
     // An event row (empty parameter) carries the event's own description; it is left out when the
     // event has parameters and nothing to say.
@@ -108,6 +108,8 @@ export function rowsToPlan({ events: eventRows = [], user_properties: upRows = n
       ev.trigger = { page: page.trim(), ...(rest.length ? { element: rest.join(TRIGGER_SEP).trim() } : {}) };
     }
     if (r.journeys && !ev.journeys) ev.journeys = r.journeys.split(",").map((s) => s.trim()).filter(Boolean);
+    if (r.aliases && !ev.aliases) ev.aliases = r.aliases.split(",").map((s) => s.trim()).filter(Boolean);
+    if (/^(yes|true)$/i.test(r.allow_multiple ?? "")) ev.allow_multiple = true;
     if (!r.parameter) {
       if (r.description) ev.description = r.description;
       continue;
@@ -122,13 +124,15 @@ export function rowsToPlan({ events: eventRows = [], user_properties: upRows = n
   }
   if (!byKey.size) throw fail("events: no events found. Add one row per event parameter below the column names.");
 
-  const events = [...byKey.values()].map(({ platform, name, custom, description, trigger, journeys, required_params, parameters }) => ({
+  const events = [...byKey.values()].map(({ platform, name, custom, description, trigger, journeys, aliases, allow_multiple, required_params, parameters }) => ({
     platform,
     name,
     ...(custom ? { custom: true } : {}),
     ...(description ? { description } : {}),
     ...(trigger ? { trigger } : {}),
     ...(journeys ? { journeys } : {}),
+    ...(aliases?.length ? { aliases } : {}),
+    ...(allow_multiple ? { allow_multiple: true } : {}),
     ...(required_params.length ? { required_params } : {}),
     ...(Object.keys(parameters).length ? { parameters } : {}),
   }));

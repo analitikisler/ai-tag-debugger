@@ -76,6 +76,10 @@ function skippedLine(run) {
 const audits = new Map();
 /** Browsers being started for an audit that has no id yet; they count toward MAX_OPEN_AUDITS. */
 let starting = 0;
+/** Browsers consent_matrix and make_plan have open right now; they count toward MAX_OPEN_AUDITS too. */
+let sideBrowsers = 0;
+const browsersInUse = () => audits.size + starting + sideBrowsers;
+const BUSY = (n) => `${n} browsers are already in use on this server (open audits, consent_matrix or make_plan). Finish an audit with finish_audit, or try again when the other call is done.`;
 /**
  * The reports this process wrote, by folder name: get_report reads these and nothing else. Kept here and not in
  * buildServer, because over HTTP every request gets a server of its own.
@@ -488,7 +492,7 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       await closeIdleAudits();
-      if (audits.size + starting >= MAX_OPEN_AUDITS) return fail(`${audits.size + starting} audits are already open. Finish one with finish_audit first.`);
+      if (browsersInUse() >= MAX_OPEN_AUDITS) return fail(sideBrowsers ? BUSY(browsersInUse()) : `${audits.size + starting} audits are already open. Finish one with finish_audit first.`);
       let session;
       try {
         if (live && !opts.allowLive) return fail("Live audits are off on this server: it was started without --allow-live. Leave live out to audit with tracking requests answered locally.");
@@ -712,12 +716,19 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       const config = { site: url.href, providers, allowed_hosts };
+      // Each choice is a browser of its own, so the choices tried at once fit in what the limit leaves free.
+      const free = MAX_OPEN_AUDITS - browsersInUse();
+      if (free < 1) return fail(BUSY(browsersInUse()));
+      const atOnce = Math.min(concurrency, free);
+      sideBrowsers += atOnce;
       let sc;
       try {
-        sc = await runConsentScenarios(config, { campaign, concurrency, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) });
+        sc = await runConsentScenarios(config, { campaign, concurrency: atOnce, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) });
       } catch (err) {
         // A page that would not open is not a page without a banner.
         return fail(`Could not compare the consent choices on ${url.href}: ${err.message}`);
+      } finally {
+        sideBrowsers -= atOnce;
       }
       if (!sc) return text(`No consent banner the tool can answer was found on ${url.href}, so the choices could not be compared. Walk the journey with start_audit and browser_action instead.`);
       const m = messages(language);
@@ -777,14 +788,20 @@ export function buildServer(opts) {
       const journey = { id: audit.journey };
       // After any action still running, so the run holds its step whole.
       const run = await inTurn(audit, async () => ({ ...collect(audit.session, journey, audit.viewport), completed, note, cookies: await audit.session.cookies().catch(() => []) }));
+      const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
+      let findings;
+      let reportPath;
+      try {
+        findings = filterFindings(checkRun(plan, run, { lang }), events);
+        ({ reportPath } = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false }));
+      } catch (err) {
+        // The browser is still open, so what it captured is not lost to a reports folder that can't be written.
+        return fail(`Could not write the report: ${err.message} The audit is still open: call finish_audit again once that is fixed.`);
+      }
+      written.set(path.basename(outDir), outDir);
       await closeAudit(audit_id);
-
-      const findings = filterFindings(checkRun(plan, run, { lang }), events);
       const grouped = groupFindings(findings);
       const counts = summarize(grouped);
-      const outDir = path.join(opts.reportsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${audit.journey}`);
-      const { reportPath } = await writeReports({ outDir, config: { site: audit.site }, plan, runs: [run], findings, explained: null, lang, against: againstPlan, branding: branding !== false });
-      written.set(path.basename(outDir), outDir);
       const m = messages(lang);
       const lines = [
         ...(run.live ? [LIVE_NOTE] : []),
@@ -840,6 +857,8 @@ export function buildServer(opts) {
         const refused = await navigationError(url.href, { isPrivate: privateHostChecker() });
         if (refused) return fail(`${refused} Over HTTP, plans are limited to public websites.`);
       }
+      if (browsersInUse() >= MAX_OPEN_AUDITS) return fail(BUSY(browsersInUse()));
+      sideBrowsers += 1;
       try {
         const provider = opts.provider ?? (await createProvider());
         const { plan } = await discoverPlan({ site: url.href, topic, provider, blockPrivate: opts.blockPrivate });
@@ -859,6 +878,8 @@ export function buildServer(opts) {
         // The CLI wording (--no-ai) means nothing to a chat app, so say it in this tool's terms.
         if (err.code === "NO_API_KEY") return fail("No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so it can't draft a plan. Set one and restart the server, or write the plan yourself from what an audit shows and pass it to finish_audit as measurement_plan.");
         return fail(`Could not draft the plan: ${err.message}`);
+      } finally {
+        sideBrowsers -= 1;
       }
     },
   );

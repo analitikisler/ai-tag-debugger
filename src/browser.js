@@ -542,7 +542,7 @@ export function identityOf(cookies, landingUrl) {
  * the tag sees consent, wherever it was set: gtag() in the page, or a consent platform's GTM template, which never
  * shows in the dataLayer. Not documented by Google; read defensively.
  */
-export function googleConsentStateInPage() {
+function googleConsentStateInPage() {
   const ics = window.google_tag_data?.ics;
   if (!ics || typeof ics !== "object") return null;
   const word = (v) => (v === true ? "granted" : v === false ? "denied" : undefined);
@@ -561,7 +561,7 @@ export function googleConsentStateInPage() {
  * Google tags that actually ran, however their script got in; and the addresses the page only preloads
  * (<link rel="preload">, "modulepreload", "prefetch"), which download a script without running it.
  */
-export function containersInPage() {
+function containersInPage() {
   const registry = window.google_tag_manager && typeof window.google_tag_manager === "object" ? Object.keys(window.google_tag_manager) : [];
   const preloads = [...document.querySelectorAll('link[rel~="preload"], link[rel~="modulepreload"], link[rel~="prefetch"]')].map((l) => l.href).filter(Boolean);
   return { registry: registry.slice(0, 200), preloads: preloads.slice(0, 200) };
@@ -573,7 +573,7 @@ export function containersInPage() {
  * the browser (the error screen a Next.js app shows when its scripts fail). Null for a page that looks like itself.
  * @returns {null | { kind: "challenge"|"crash", vendor?: string }}
  */
-export function pageProblemInPage() {
+function pageProblemInPage() {
   const title = (document.title || "").trim();
   const text = (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 3000);
   const has = (selector) => {

@@ -60,8 +60,10 @@ test("with nothing picked and no config journeys, a run has no journeys (and no 
   assert.deepEqual(planRun({ plan: { events: [{ platform: "ga4", name: "generate_lead", journeys: ["lead"] }] } }).journeys, []);
 });
 
-test("config journeys run when nothing is picked", () => {
-  assert.deepEqual(planRun({ config: { journeys: [{ id: "mine", goal: "x" }] } }).journeys.map((j) => j.id), ["mine"]);
+test("config journeys run without a plan", () => {
+  const run = planRun({ config: { journeys: [{ id: "mine", goal: "x" }] } });
+  assert.deepEqual(run.journeys.map((j) => j.id), ["mine"]);
+  assert.deepEqual(run.plan.events, []);
 });
 
 const sitePlan = {

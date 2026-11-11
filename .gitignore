@@ -4,3 +4,4 @@ aitd/
 .env
 saved/
 npm-shrinkwrap.json
+*.tgz

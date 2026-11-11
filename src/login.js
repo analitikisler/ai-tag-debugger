@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { domainOf } from "./workspace.js";
 
-export const LOGIN_ENV = { email: "AITD_LOGIN_EMAIL", username: "AITD_LOGIN_USERNAME", password: "AITD_LOGIN_PASSWORD" };
+const LOGIN_ENV = { email: "AITD_LOGIN_EMAIL", username: "AITD_LOGIN_USERNAME", password: "AITD_LOGIN_PASSWORD" };
 
 const PLACEHOLDER = /\{\{\s*login\.(email|username|password)\s*\}\}/g;
 

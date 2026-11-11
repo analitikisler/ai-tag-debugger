@@ -71,7 +71,7 @@ export function isUserDataKey(key) {
 const isPushUserKey = (path) => USER_OBJECTS.test(path.toLowerCase()) || PUSH_KEYS.has(path.toLowerCase().split(".").pop());
 
 /** "tv.1~em.<hash>" and plain hex or base64 digests count as hashed; anything with @ or spaces doesn't. */
-export function looksHashed(value) {
+function looksHashed(value) {
   const v = String(value);
   if (/[@\s]/.test(v)) return false;
   return v.split("~").every((p) => p === "" || /^tv\.\d+$/.test(p) || /^[A-Za-z0-9+/=_-]{32,}$/.test(p.replace(/^[a-z0-9]{1,4}\./i, "")));

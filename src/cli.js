@@ -136,7 +136,9 @@ async function main(args = process.argv.slice(2)) {
     if (!dirs.length) throw new Error("replay needs the folder of at least one site saved with --save-site.");
     let changed = false;
     for (const dir of dirs) {
-      const r = await replaySavedSite(dir, { update: values.update, outDir: dirs.length === 1 ? values.out : undefined }).catch((err) => {
+      // With several sites, each gets a folder of its own under --out.
+      const outDir = values.out ? (dirs.length === 1 ? values.out : path.join(values.out, path.basename(path.resolve(dir)))) : undefined;
+      const r = await replaySavedSite(dir, { update: values.update, outDir }).catch((err) => {
         console.log(`✗ ${dir}: could not replay: ${err.message.split("\n")[0]}`);
         changed = true;
         return null;
@@ -149,6 +151,7 @@ async function main(args = process.argv.slice(2)) {
       for (const k of r.missing) console.log(`    - ${k}`);
       for (const note of r.incomplete) console.log(`    ! ${note}`);
       for (const note of r.foundByText) console.log(`    ~ ${note}`);
+      for (const report of r.reportPaths) console.log(`    report: ${path.relative(process.cwd(), report).startsWith("..") ? report : path.relative(process.cwd(), report)}`);
     }
     if (changed && !values.update) process.exitCode = 1;
     return;
@@ -452,6 +455,9 @@ async function planSheet(action, arg, values) {
     domainOf(values.site);
     const { plan, warnings } = await readPlanSheet(arg, { site: values.site });
     for (const w of warnings) console.log(`Warning: ${w}`);
+    // A sheet has no place for the plan's own settings, so a site that turned Consent Mode checks off keeps them off.
+    const previous = await resolvePlan("latest", { dataDir, site: values.site }).then((found) => readJson(found.file)).catch(() => null);
+    if (previous?.consent_mode === false) plan.consent_mode = false;
     const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     console.log(`✓ Imported plan ${id}: ${plan.events.length} events and ${plan.user_properties.length} user properties in ${shown(dir)}`);
     return;

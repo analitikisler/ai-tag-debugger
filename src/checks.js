@@ -35,7 +35,7 @@ const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
  */
 
 /** Hosts of server containers seen in the run's network calls, the site's own or Stape's. */
-export function serverEndpoints(run) {
+function serverEndpoints(run) {
   const hosts = new Set();
   for (const c of run.network ?? []) {
     let u;
@@ -154,6 +154,8 @@ function visitorEmailIn(text, hit) {
     site = new URL(hit.params?.page_location ?? hit.pageUrl).hostname;
   } catch { /* no page address */ }
   return [...text.matchAll(EMAIL)].some((m) => {
+    // "logo@2x.png" has the shape of an address and is a file name.
+    if (/\.(png|jpe?g|gif|webp|avif|svg|ico|css|js|woff2?)$/i.test(m[0])) return false;
     const link = LINK_BEFORE.test(text.slice(Math.max(0, m.index - 16), m.index));
     return !(link && isOwnAddress(m[0].replace(/%40/i, "@"), site));
   });

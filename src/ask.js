@@ -33,8 +33,12 @@ const has = (s, re) => re.test(s);
 export function matchKeywords(sentence) {
   const s = ` ${sentence.toLowerCase()} `;
   const intent = { action: null, site: null, against: null, platforms: [], goal: null, journey: null, topic: null, question: null };
-  const site = sentence.match(/\b(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/\S*)?/i);
-  if (site) intent.site = site[1].toLowerCase();
+  // An address written out in full is kept as written (scheme, port and path); a bare host name becomes https://host.
+  // A word that only looks like a host ("node.js", "index.html") is not one.
+  const full = sentence.match(/\bhttps?:\/\/[^\s"'<>]+/i);
+  const bare = [...sentence.matchAll(/\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?:\/\S*)?/gi)].map((x) => x[1].toLowerCase()).find((host) => !/\.(js|ts|css|html?|json|txt|php|xml|csv|pdf|png|jpe?g)$/.test(host));
+  if (full) intent.site = full[0].replace(/[.,;:!?)]+$/, "");
+  else if (bare) intent.site = bare;
 
   if (has(s, /google analytics|\bga4?\b/)) intent.platforms.push("ga4");
   if (has(s, /google ads|adwords/)) intent.platforms.push("google_ads");

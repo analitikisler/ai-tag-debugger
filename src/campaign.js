@@ -1,8 +1,8 @@
 // Campaign parameters an ad click puts on the landing address. They have to survive the site's
 // redirects and show up in the page address its tags report, or the visit is credited to "direct".
 
-export const CLICK_IDS = ["gclid", "wbraid", "gbraid", "fbclid", "ttclid", "msclkid"];
-export const UTM_PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
+const CLICK_IDS = ["gclid", "wbraid", "gbraid", "fbclid", "ttclid", "msclkid"];
+const UTM_PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
 export const CAMPAIGN_PARAMS = [...CLICK_IDS, ...UTM_PARAMS];
 
 // Values a run adds to a landing address that has none of its own. Hits are held back by default
@@ -17,6 +17,13 @@ export function campaignParamsIn(url) {
   } catch {
     return {};
   }
+}
+
+/** The address without the test parameters a run added to it; campaign parameters of the site's own stay. */
+export function withoutTestParams(url) {
+  const u = new URL(url);
+  for (const [k, v] of Object.entries(TEST_PARAMS)) if (u.searchParams.get(k) === v) u.searchParams.delete(k);
+  return u.href;
 }
 
 /**

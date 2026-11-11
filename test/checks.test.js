@@ -216,3 +216,10 @@ test("one event to two accounts is not a duplicate, and events sharing an event 
   assert.equal(reused.filter((f) => f.check === "event_id_reused").length, 1);
   assert.deepEqual(reused.filter((f) => f.check === "matches_plan"), []);
 });
+
+test("an image file name with an @ in it is not an email address", () => {
+  const withImage = checkRun({ events: [] }, run({ hits: [hit("ga4", "view_item", 3, { image: "https://cdn.shop.com/img/logo@2x.png" })] }));
+  assert.deepEqual(withImage.filter((f) => f.check === "pii"), []);
+  const withEmail = checkRun({ events: [] }, run({ hits: [hit("ga4", "view_item", 3, { contact: "jane.doe@gmail.com" })] }));
+  assert.equal(withEmail.filter((f) => f.check === "pii").length, 1);
+});

@@ -10,7 +10,7 @@ import { PROVIDERS } from "./parsers.js";
 import { listRunIds, runsDir, siteDir } from "./workspace.js";
 
 /** The per-site index of run summaries, next to the plans and runs folders. */
-export const HISTORY_FILE = "history.json";
+const HISTORY_FILE = "history.json";
 export const historyFile = (dataDir, site) => path.join(siteDir(dataDir, site), HISTORY_FILE);
 
 const INDEX_VERSION = 1;
@@ -248,7 +248,7 @@ const label = (e) => `${platformLabel(e.platform)} ${e.event ?? ""}`.trim().conc
 /** The strings of ui.history in the report's language; an unknown language falls back to English rather than throwing. */
 const strings = (lang) => (LANGUAGES[lang] ?? LANGUAGES.en).ui.history;
 /** "GA4 purchase missing_params in 4 places": the problem with its place count when it is seen in more than one. */
-export const problemLabel = (e, lang = "en") => `${label(e)}${e.places?.length > 1 ? strings(lang).places(e.places.length) : ""}`;
+const problemLabel = (e, lang = "en") => `${label(e)}${e.places?.length > 1 ? strings(lang).places(e.places.length) : ""}`;
 
 const SPARK = "▁▂▃▄▅▆▇█";
 

@@ -138,8 +138,8 @@ Copy the `en` block in `src/i18n.js`, translate every string and function, and a
 The contract, from the header of `src/providers.js`: every provider is an object with
 
 ```
-conversation({ system, tools, firstMessage }) -> { next(), addToolResults(results), addUserText(text) }
-  next() returns { toolCalls: [{ id, name, input }], stop: "tool_use" | "end" | "refusal" | "max_tokens" }
+conversation({ system, tools, firstMessage }) -> { next({ signal }), addToolResults(results), addUserText(text) }
+  next({ signal }) returns { toolCalls: [{ id, name, input }], stop: "tool_use" | "end" | "refusal" | "max_tokens" }
 json({ system, texts, schema }) -> { value } or { error }
 ```
 

@@ -3,7 +3,7 @@ import { runAgentJourney, StepTimeout } from "./agent.js";
 import { splitRun } from "./frames.js";
 
 /** The goal of the browsing part: one page of each type, nothing submitted. */
-export const DISCOVER_GOAL = `Explore this site to draft its analytics measurement plan. You are not completing a purchase or any other task: visit ONE example of each kind of page that exists here and look at what a visitor can do on it, then call finish with success true.
+const DISCOVER_GOAL = `Explore this site to draft its analytics measurement plan. You are not completing a purchase or any other task: visit ONE example of each kind of page that exists here and look at what a visitor can do on it, then call finish with success true.
 Visit, where the site has them (a small site may have only a few; that is fine, don't look for pages that aren't linked): the home page, one category or listing page, one product, item or article page, the cart (add one item first if there is an add-to-cart button), the first checkout step, the search results (search for something the site sells), and the sign-up, login, contact or newsletter forms.
 Rules: never pay, never submit a form with personal details, never open more than one page of the same kind, and accept the cookie banner when it appears. Stop as soon as every kind of page above has been seen once.`;
 

@@ -49,13 +49,13 @@ export const scriptFailed = (script) => script.status === "failed" || (typeof sc
  * The answer to a load's script request (see recordScript in browser.js): the first one for the same container and
  * host from the load's step on, else the last before it. Null for runs saved by older versions.
  */
-export function scriptOf(run, load) {
+function scriptOf(run, load) {
   const same = (run.containerScripts ?? []).filter((s) => s.id === load.id && s.host === load.host);
   return same.find((s) => s.step >= (load.step ?? 0)) ?? same.at(-1) ?? null;
 }
 
 /** What a row or load shows of its script's answer: { version?, bytes?, transferBytes?, ms?, failed? }. */
-export function scriptFacts(script) {
+function scriptFacts(script) {
   if (!script) return {};
   // A load that already carries the facts (from loadSources) passes them on as they are.
   if (!("status" in script)) return Object.fromEntries(["version", "bytes", "transferBytes", "ms", "failed"].filter((k) => script[k] != null).map((k) => [k, script[k]]));
@@ -69,7 +69,7 @@ export function scriptFacts(script) {
 }
 
 /** origin + path, so a caller's query string (which may carry user data) is never kept. */
-export function scriptPath(url) {
+function scriptPath(url) {
   try {
     const u = new URL(url);
     return /^https?:$/.test(u.protocol) ? u.origin + u.pathname : null;

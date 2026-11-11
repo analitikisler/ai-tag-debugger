@@ -32,7 +32,7 @@ export function frameInfo(frame) {
 }
 
 /** Whether a hit, push or load came from the page itself or an iframe on the same site. */
-export const isSiteFrame = (x) => !x?.frame || x.frame.party !== "third";
+const isSiteFrame = (x) => !x?.frame || x.frame.party !== "third";
 
 // Account IDs as the hits and the containers name them: GA4's G-…, Google Ads' AW-… (a numeric conversion ID in
 // its hits), Meta's pixel ID and so on. Compared per platform family, without the AW- prefix.
@@ -169,7 +169,7 @@ export function isEventMessage(m) {
 }
 
 // How long after a message the page has to react for the reaction to count as its relay under another name.
-export const RELAY_WINDOW_MS = 3000;
+const RELAY_WINDOW_MS = 3000;
 
 /**
  * What the page did after each event message an iframe posted to it, one per iframe, name and step:

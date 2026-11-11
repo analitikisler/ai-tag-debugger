@@ -6,6 +6,7 @@ import path from "node:path";
 import { harName } from "./agent.js";
 import { runAudit } from "./audit.js";
 import { listRunIds, runsDir } from "./workspace.js";
+import { withoutTestParams } from "./campaign.js";
 
 export const SAVED_SITE_FILE = "site.json";
 /** The steps every run leaves in its folder, so the next run can repeat them without a model. */
@@ -25,6 +26,19 @@ export function replayableJourney(run) {
       .filter((s) => s.replay)
       .map((s) => ({ ...s.replay, reason: s.label, ...(s.acceptsConsent ? { accepts_consent: true } : {}), ...(s.rejectsConsent ? { rejects_consent: true } : {}), ...(s.error ? { optional: true } : {}) })),
   };
+}
+
+/**
+ * A journey's start as a config should hold it: on the audited site, the path alone and without the test campaign
+ * parameters the run added, so the config also runs against staging or another port. Elsewhere, the address as it is.
+ */
+function portableStart(start, site) {
+  try {
+    const u = new URL(withoutTestParams(start));
+    return u.origin === new URL(site).origin ? u.pathname + u.search + u.hash : start;
+  } catch {
+    return start;
+  }
 }
 
 /** What a run folder's steps.json holds: one entry per journey and viewport, leaving out journeys that took no repeatable step. */
@@ -86,7 +100,7 @@ export async function writeSavedSteps(file, { site, plan, journeys, runs }) {
     }
     const i = list.findIndex((j) => j.id === journey.id);
     const { start: _s, steps: _st, incomplete: _in, ...kept } = i === -1 ? { id: journey.id, ...(journey.goal ? { goal: journey.goal } : {}) } : list[i];
-    const entry = { ...kept, ...steps, id: journey.id };
+    const entry = { ...kept, ...steps, ...(steps.start ? { start: portableStart(steps.start, site) } : {}), id: journey.id };
     if (i === -1) list.push(entry);
     else list[i] = entry;
     saved.push(journey.id);

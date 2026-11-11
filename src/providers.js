@@ -2,8 +2,9 @@
 // OpenAI-compatible API (Kimi, GLM, DeepSeek, Mistral, Groq, OpenRouter, a local Ollama...).
 //
 // Every provider exposes the same two things:
-//   conversation({ system, tools, firstMessage }) -> { next(), addToolResults(results), addUserText(text) }
-//     next() returns { toolCalls: [{ id, name, input }], stop: "tool_use" | "end" | "refusal" | "max_tokens" }
+//   conversation({ system, tools, firstMessage }) -> { next({ signal }), addToolResults(results), addUserText(text) }
+//     next({ signal }) returns { toolCalls: [{ id, name, input }], stop: "tool_use" | "end" | "refusal" | "max_tokens" };
+//     aborting the signal cancels the request the step stopped waiting for
 //   json({ system, texts, schema }) -> { value } or { error }
 // Tools use one neutral shape: { name, description, schema } where schema is JSON Schema.
 
@@ -103,9 +104,9 @@ const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4/accounts";
 // --- Retries -----------------------------------------------------------------
 
 /** How many times a failed model request is tried in all (the first try included). */
-export const MODEL_ATTEMPTS = 3;
+const MODEL_ATTEMPTS = 3;
 /** The wait before the first retry; each later one waits twice as long, give or take some jitter. */
-export const RETRY_BASE_DELAY_MS = 2000;
+const RETRY_BASE_DELAY_MS = 2000;
 /** The longest wait a retry-after header is allowed to ask for, so a run never hangs on one request. */
 const RETRY_AFTER_MAX_MS = 60_000;
 /** How long one request may take before it counts as failed. The SDKs' own 10 minutes would outlast the step. */
@@ -177,7 +178,7 @@ function compatibleModel(model, env) {
 }
 
 /** The model to use: an explicit id, `cheap` for the provider's small CI model, else the default. */
-export function pickModel(name, model) {
+function pickModel(name, model) {
   if (model === "cheap") return PROVIDERS[name]?.cheapModel ?? PROVIDERS[name]?.defaultModel ?? model;
   return model ?? PROVIDERS[name].defaultModel;
 }
@@ -240,7 +241,7 @@ function anthropicProvider(client, model) {
       const messages = [{ role: "user", content: firstMessage }];
       const toolDefs = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
       return {
-        async next() {
+        async next({ signal } = {}) {
           const response = await client.beta.messages.create({
             model,
             max_tokens: 16000,
@@ -251,7 +252,7 @@ function anthropicProvider(client, model) {
             output_config: { effort: "low" },
             cache_control: { type: "ephemeral" },
             ...common,
-          });
+          }, { signal });
           if (response.stop_reason === "refusal") return { toolCalls: [], stop: "refusal" };
           messages.push({ role: "assistant", content: response.content });
           const toolCalls = response.content.filter((b) => b.type === "tool_use").map((b) => ({ id: b.id, name: b.name, input: b.input }));
@@ -301,8 +302,8 @@ function openaiProvider(client, model, { compatible = false, label } = {}) {
       ];
       const toolDefs = tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.schema } }));
       return {
-        async next() {
-          const response = await client.chat.completions.create({ model, messages, tools: toolDefs, ...effort("low") });
+        async next({ signal } = {}) {
+          const response = await client.chat.completions.create({ model, messages, tools: toolDefs, ...effort("low") }, { signal });
           const choice = response.choices[0];
           const message = choice.message;
           if (message.refusal) return { toolCalls: [], stop: "refusal" };
@@ -334,7 +335,8 @@ function openaiProvider(client, model, { compatible = false, label } = {}) {
           response_format: { type: "json_schema", json_schema: { name: "result", schema, strict: true } },
         });
       } catch (err) {
-        if (!compatible) throw err;
+        // A wrong key, a rate limit or a server error would fail the second call too, and hide the first error behind it.
+        if (!compatible || [401, 403, 429].includes(err?.status) || err?.status >= 500) throw err;
         // No structured outputs here: ask for plain JSON and describe the shape instead.
         response = await client.chat.completions.create({
           model,
@@ -366,8 +368,8 @@ function geminiProvider(ai, model, retry = {}) {
       };
       let pendingNames = new Map();
       return {
-        async next() {
-          const response = await generate({ model, contents, config });
+        async next({ signal } = {}) {
+          const response = await generate({ model, contents, config: signal ? { ...config, abortSignal: signal } : config });
           const candidate = response.candidates?.[0];
           if (!candidate?.content) return { toolCalls: [], stop: candidate?.finishReason === "MAX_TOKENS" ? "max_tokens" : "refusal" };
           contents.push(candidate.content);

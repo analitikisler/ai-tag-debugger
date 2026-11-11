@@ -689,7 +689,6 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .card.line .f-t{grid-column:2 / 4}
 .fnd .card.line .c-owner{display:none}
 .fnd .c-owner,.fnd .c-plat,.fnd .c-where{display:flex;gap:4px;align-items:center;min-width:0}
-.fnd .card.line .c-owner{display:none}
 .fnd .run-multi svg:first-child{margin-left:0}
 .fnd .run-multi .vp-desktop{color:var(--vp-desktop-fg)}
 .fnd .run-multi .vp-mobile{color:var(--vp-mobile-fg)}

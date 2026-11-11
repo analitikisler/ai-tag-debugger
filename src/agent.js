@@ -22,7 +22,7 @@ How to work:
 - Call finish as soon as the goal is reached.`;
 
 // The step descriptions end up in the report, so they follow the report language.
-export const systemPrompt = (lang) =>
+const systemPrompt = (lang) =>
   lang === "en" ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}\n- Write the reason field of browser_action and the note field of finish in ${messages(lang).name}.`;
 
 export const TOOLS = [
@@ -135,7 +135,13 @@ export async function runAgentJourney(session, journey, opts = {}) {
   });
 
   for (let turn = 0; turn < maxSteps; turn++) {
-    const { toolCalls, stop } = await withTimeout(chat.next(), limit.model, `The model did not answer within ${seconds(limit.model)}.`);
+    // A request the step stopped waiting for is cancelled: left alone, the SDK would keep retrying it for minutes
+    // after the report is written, and the process could not exit.
+    const waiting = new AbortController();
+    const { toolCalls, stop } = await withTimeout(chat.next({ signal: waiting.signal }), limit.model, `The model did not answer within ${seconds(limit.model)}.`).catch((err) => {
+      waiting.abort();
+      throw err;
+    });
     if (stop === "refusal") return { completed: false, note: "The model declined to continue this journey." };
     if (toolCalls.length === 0) {
       if (stop === "max_tokens") return { completed: false, note: "The model response was cut off." };
@@ -231,7 +237,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
 }
 
 /** The note of a journey that ended with an error. */
-export const journeyError = (err) => `The journey stopped with an error: ${err?.message ?? err}`;
+const journeyError = (err) => `The journey stopped with an error: ${err?.message ?? err}`;
 
 /** A journey that failed before anything was captured, so the report can still list it. */
 export function failedRun(journey, viewport, err, providers) {

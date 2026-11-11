@@ -148,3 +148,12 @@ test("a trigger given as text and a user property given as a name are exported, 
   assert.equal(rows.events[0].trigger, "After the form is sent");
   assert.deepEqual(rows.user_properties, [{ name: "customer_type", description: "", example: "" }]);
 });
+
+test("aliases and allow_multiple survive a round trip through the rows", () => {
+  const original = { consent_mode: true, events: [{ platform: "ga4", name: "purchase", aliases: ["order_done", "buy"], allow_multiple: true, required_params: ["value"], parameters: { value: {} } }], user_properties: [] };
+  const rows = planToRows(original);
+  const header = [...EVENT_COLUMNS, "custom", "journeys", "aliases", "allow_multiple"];
+  const { plan } = rowsToPlan({ events: [header, ...rows.events.map((r) => header.map((h) => r[h] ?? ""))] });
+  assert.deepEqual(plan.events[0].aliases, ["order_done", "buy"]);
+  assert.equal(plan.events[0].allow_multiple, true);
+});

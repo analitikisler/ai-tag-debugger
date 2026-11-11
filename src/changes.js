@@ -70,7 +70,7 @@ export async function routeHints(dataDir, site) {
 }
 
 /** Journeys whose route through the site differs from the previous run: [{ journeyId, viewport, before, after }]. */
-export function compareRoutes(prevRuns, runs) {
+function compareRoutes(prevRuns, runs) {
   const before = routes(prevRuns);
   const out = [];
   for (const [k, now] of routes(runs)) {

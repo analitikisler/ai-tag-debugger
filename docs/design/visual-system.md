@@ -1,6 +1,6 @@
 # Report visual system
 
-The HTML report is one self-contained file: inline CSS, inline SVG, images only as data URIs (the MCP server serves it with `default-src 'none'; style-src 'unsafe-inline'; img-src data:`). It is read on screen by marketers and developers, forwarded to clients as a PDF, and often printed in black and white. Every rule below follows from that. The working example is `docs/design/directions/d-inspector/mockup.html`, which `src/html/` implements; its tokens are the `TOKENS` constant in `src/html/css.js`.
+The HTML report is one self-contained file: inline CSS, inline SVG, images only as data URIs (the MCP server serves it with `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src` and the hash of its one inline script). It is read on screen by marketers and developers, forwarded to clients as a PDF, and often printed in black and white. Every rule below follows from that. The working example is `docs/design/directions/d-inspector/mockup.html`, which `src/html/` implements; its tokens are the `TOKENS` constant in `src/html/css.js`.
 
 ## 1. Tokens
 
@@ -124,7 +124,7 @@ Known risks with the system faces: `system-ui` gives Windows the static Segoe UI
 
 ## 3. Platform icons
 
-Today `src/report.js` embeds each platform icon as a base64 SVG in the `CSS` constant and paints it as a `background` on `.ptag::before` / `.dot`. That has two costs: browsers drop background images when "print background graphics" is off (the default in Chrome's print dialog), and a CSS background cannot take `currentColor`. The system keeps the same artwork and moves it into an inline `<svg hidden>` sprite of `<symbol id="p-ga4">` elements referenced with `<use href="#p-ga4">`. Sizes: **14px** inline in text and chips, **16px** in table rows and event lists, **20px** in finding-card headers and the run-facts row. Always `aria-hidden="true"` with the platform name as visible text beside it (or `<title>` when the name is not shown, as in step-row hit chips, where the event name is shown and the platform is in the `title` tooltip and `aria-label`).
+Up to 0.17 the report embedded each platform icon as a base64 SVG in its CSS and painted it as a `background` on `.ptag::before` / `.dot`. That had two costs: browsers drop background images when "print background graphics" is off (the default in Chrome's print dialog), and a CSS background cannot take `currentColor`. The system keeps the same artwork and moves it into an inline `<svg hidden>` sprite of `<symbol id="p-ga4">` elements referenced with `<use href="#p-ga4">`. Sizes: **14px** inline in text and chips, **16px** in table rows and event lists, **20px** in finding-card headers and the run-facts row. Always `aria-hidden="true"` with the platform name as visible text beside it (or `<title>` when the name is not shown, as in step-row hit chips, where the event name is shown and the platform is in the `title` tooltip and `aria-label`).
 
 Fallback for a platform with no artwork (new providers, white-label vendors): a 16px square with 2px corners (`--r-sm`) filled `--well` with the platform's first letter in mono 10px `--muted`, e.g. **K** for Klaviyo, **PW** for Piwik PRO when two words. Never a coloured square: colour would read as a severity.
 
