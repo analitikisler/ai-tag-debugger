@@ -9,7 +9,8 @@ An open-source Node CLI and MCP server that QA-tests a website's analytics and a
 3. Capture: `src/parsers.js` turns requests into hits, `src/redact.js` strips user data, `src/consent.js` and `src/inventory.js` add consent scenarios and the tag inventory, `src/gtm.js` reads a container export.
 4. Check: `src/checks.js` emits findings with no model call; `src/verify.js` adds owners and verify links; `src/changes.js` compares with the previous run.
 5. Explain and report: `src/report.js` asks the model for causes and fixes and renders the Markdown and CSV reports; `src/html/` renders the HTML report (`shell.js` assembles the page, one module per section, `css.js` and `script.js` hold the stylesheet and the hashed script), all with strings from `src/i18n.js` through `src/report-shared.js`.
-6. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
+6. The ai tag debugger Chrome extension (`extension/`) records a tab the user browses by hand and runs the same checks and report in the browser: `worker.js` and `bridge.js` capture, `lib/run.js` builds the run, `lib/analyze.js` checks and renders. It imports the shared modules from `extension/core/`, which `scripts/extension.js` copies from `src/` (gitignored).
+7. After the run: `src/audit.js` ties it together, `src/workspace.js` places the folders, `src/notify.js` sends alerts, `src/replay.js` replays saved sites. Entry points are `src/cli.js`, `src/ask.js` and `src/mcp.js`.
 
 ## Commands
 
@@ -19,6 +20,8 @@ npm test                          # all tests, no API key needed (fake model cli
 node --test test/checks.test.js   # one test file
 npm run demo:serve                # demo shop on http://localhost:4321
 npm run demo                      # scripted, no-AI run against it, saved under aitd/localhost/runs/
+npm run extension                 # copy the shared code into extension/core/ before loading extension/ unpacked
+npm run test:extension            # the extension end to end in Chromium against the demo shop
 ```
 
 ## Conventions
@@ -28,6 +31,8 @@ npm run demo                      # scripted, no-AI run against it, saved under 
 - Comments say why something is there, not what the code does.
 - All user-visible strings live in `src/i18n.js` and exist in every language in `LANGUAGES` (`en` and `tr`).
 - Every new flag, config field or MCP parameter gets a row in README's tables, and every user-visible change gets a line in CHANGELOG.md.
+- `src/version.js` carries the same version as `package.json`, so shared modules can name it without reading a file.
+- The modules the extension shares (everything `scripts/extension.js` lists from `EXTENSION_ROOTS`) import only other modules in `src/`: no `node:*`, Playwright or npm packages. `test/browser-safe.test.js` enforces it.
 - `server.json` carries the same version as `package.json` in two places; `test/server-json.test.js` enforces it. The Claude plugin in `plugin/` does too: `version` in `plugin/.claude-plugin/plugin.json` and the pinned `npx` package in `plugin/.mcp.json`, enforced by `test/plugin.test.js`.
 - The published package ships an `npm-shrinkwrap.json` that `prepack` writes from `package-lock.json` without development packages (`scripts/shrinkwrap.js`); never commit one.
 - Commit messages are one imperative sentence about what changed for the user.

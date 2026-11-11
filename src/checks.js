@@ -126,12 +126,39 @@ const isPurchase = (hit) => canonicalEvent(hit.name) === "purchase";
 const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
 
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
-function pageOf(hit) {
+export function pageOf(hit) {
   try {
     const p = new URL(hit.url).searchParams.get("_p");
     if (p) return p;
   } catch { /* no URL */ }
   return hit.params?.page_location ?? hit.pageUrl ?? "";
+}
+
+/**
+ * GA4 client ids that came back on more than one page load while the hit said analytics_storage was denied. A
+ * cookieless ping gets a fresh id per page load; the same one again means it was stored (a _ga cookie, localStorage
+ * or a server-set FPID) before consent.
+ * @returns {{ cid: string, pages: number, hits: object[], second: object }[]} second: the first hit from another page load
+ */
+export function persistedClientIds(hits) {
+  const byCid = new Map();
+  for (const hit of hits) {
+    const cid = hit.protocol?.cid;
+    if (hit.platform !== "ga4" || !cid || hit.consent?.analytics_storage !== "denied") continue;
+    if (!byCid.has(cid)) byCid.set(cid, { cid, pages: new Set(), hits: [] });
+    const g = byCid.get(cid);
+    g.pages.add(pageOf(hit));
+    g.hits.push(hit);
+  }
+  return [...byCid.values()].filter((g) => g.pages.size > 1)
+    .map((g) => ({ ...g, pages: g.pages.size, second: g.hits.find((h) => pageOf(h) !== pageOf(g.hits[0])) }));
+}
+
+const TIMING_PARAM = /(^|_)(time|timestamp|ts|engagement_time_msec|unique_?event_?id|event_?id)$/i;
+/** What a hit says, without the fields that change between two sends of the same thing. */
+function contentOf(hit) {
+  const params = Object.entries(hit.params ?? {}).filter(([k]) => !TIMING_PARAM.test(k)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(params);
 }
 
 // Just before an address: a mailto: link or a link field (link_url=..., "link_text":"...").
@@ -150,6 +177,13 @@ function visitorEmailIn(text, hit) {
     const link = LINK_BEFORE.test(text.slice(Math.max(0, m.index - 16), m.index));
     return !(link && isOwnAddress(m[0].replace(/%40/i, "@"), site));
   });
+}
+
+/** The same source named once with how many times it came, so three loads by one script read as one line. */
+function grouped(sources) {
+  const counts = new Map();
+  for (const s of sources) counts.set(s, (counts.get(s) ?? 0) + 1);
+  return [...counts].map(([s, n]) => ({ source: s, times: n }));
 }
 
 function expectedIn(planEvent, journeyId) {
@@ -227,13 +261,16 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     // page_view is enhanced measurement too, but a missing one means the GA4 tag itself did not send.
     const name = canonicalEvent(ev.name);
     const setting = ev.platform === "ga4" && name !== canonicalEvent("page_view") ? GA4_ENHANCED.get(name) : undefined;
+    // A hand recording (the Chrome extension) goes as far as the person browsing took it, not to a goal, so an
+    // event it never saw is "not reached", like an AI journey that stopped early, never "broken".
+    const byHand = run.source === "extension";
     findings.push({
       ...base,
-      severity: run.completed && !troubled.length ? "broken" : "info",
+      severity: run.completed && !troubled.length && !byHand ? "broken" : "info",
       check: "missing_event",
       platform: ev.platform,
       event: ev.name,
-      detail: troubled.length ? d.missingEventUnverified(ev.name) : !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
+      detail: troubled.length ? d.missingEventUnverified(ev.name) : byHand ? d.missingEventNotReached(ev.name) : !run.completed ? d.missingEventEarly(ev.name) : setting ? d.missingEnhanced(ev.name, setting) : d.missingEvent(ev.platform, ev.name),
     });
   }
 
@@ -262,10 +299,13 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   // The same event sent more than once by a single action on one page. A step that loads a
-  // new page can also carry the previous page's last hits, so the page is part of the key.
+  // new page can also carry the previous page's last hits, so the page is part of the key. So is the tracking ID:
+  // the same event sent to two Meta pixels or two GA4 properties is one send to each, not a duplicate.
   const perStep = new Map();
   for (const hit of run.hits) {
-    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}`;
+    // And so is what it says: three view_promotion hits for three banners on a page are three events, not one sent
+    // three times. Timing fields differ between true duplicates too, so they are left out of the comparison.
+    const k = `${hit.step}|${planKeyOf(hit)}|${pageOf(hit)}|${hit.id ?? ""}|${contentOf(hit)}`;
     perStep.set(k, [...(perStep.get(k) ?? []), hit]);
   }
   for (const [, hits] of perStep) {
@@ -355,7 +395,9 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
     }).filter((p) => p.server.length);
     // Only name the platforms whose server-side copies this run would have checked.
     const unseenServer = ["meta", "tiktok"].filter((p) => !run.providers || run.providers.includes(p)).map(platformName);
-    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) });
+    // The ai tagging server names itself on its responses, so the report can say which server it is.
+    const aits = (run.network ?? []).some((c) => c.serverSoftware === "ai-tagging-server");
+    for (const p of byPlatform) findings.push({ ...base, severity: "info", check: "server_side", platform: p.platform, detail: d.serverSide(p.platform, p.server, p.browser, unseenServer) + (aits ? ` ${d.serverIsAits}` : "") });
   }
   const serverVendors = [...new Set((run.network ?? []).map((c) => c.provider).filter((p) => p === "stape" || p === "elevar"))];
   // Server containers the browser talked to: GA4 hits on a non-Google host, and GTM or gtag.js
@@ -377,7 +419,7 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   const ui = messages(lang).ui.containers;
   const source = (l) => ui.kinds[l.kind](l.by);
   for (const dup of duplicateLoads(run).filter((x, i, all) => all.findIndex((y) => y.id === x.id) === i)) {
-    findings.push({ ...base, severity: "warning", check: "container_duplicate", step: stepLabel(dup.loads[1].step), detail: d.containerDuplicate(dup.id, dup.loads.map(source), stepLabel(dup.loads[1].step)), evidence: dup.loads.map((l) => `${l.id} ${l.kind}${l.by ? ` ${l.by}` : ""} ${l.page ?? ""}`).join("\n") });
+    findings.push({ ...base, severity: "warning", check: "container_duplicate", step: stepLabel(dup.loads[1].step), detail: d.containerDuplicate(dup.id, dup.loads.length, grouped(dup.loads.map(source)), stepLabel(dup.loads[1].step)), evidence: dup.loads.map((l) => `${l.id} ${l.kind}${l.by ? ` ${l.by}` : ""} ${l.page ?? ""}`).join("\n") });
   }
   const loads = loadSources(run);
   for (const l of loads.filter((x, i, all) => x.environment && all.findIndex((y) => y.environment && y.id === x.id) === i)) {
@@ -595,10 +637,14 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   }
 
   const beforeConsent = new Map();
+  // Within the step consent was granted in, the update's own time decides: a hand recording often loads the page,
+  // fires its tags and gets the visitor's answer all in one step.
+  const grantPush = run.dataLayerLog.find((e) => isConsentCommand(e, "update") && e.value[2]?.ad_storage === "granted" && e.step === granted);
+  const beforeGrantInStep = (hit) => hit.step === granted && typeof hit.t === "number" && typeof grantPush?.t === "number" && hit.t < grantPush.t;
   for (const hit of legalHits) {
     // Hits from the reject click on are covered by the after_reject check.
     if (rejectStep !== null && hit.step >= rejectStep) continue;
-    const early = granted === null || hit.step < granted;
+    const early = granted === null || hit.step < granted || beforeGrantInStep(hit);
     if (!early) continue;
     const adPlatform = NON_GOOGLE_AD_PLATFORMS.has(hit.platform);
     if (adPlatform || claimsGranted(hit)) {
@@ -616,6 +662,11 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       step: stepLabel(hit.step),
       detail: fromWidget(hit, granted === null ? d.beforeConsentNever(hit.platform, hit.name) : d.beforeConsent(hit.platform, hit.name)),
     });
+  }
+
+  for (const p of persistedClientIds(legalHits)) {
+    const { second } = p;
+    findings.push({ ...base, severity: "risk", check: "client_id_persisted", platform: "ga4", event: second.name, step: stepLabel(second.step), detail: fromWidget(second, d.clientIdPersisted(p.cid, p.pages)), evidence: p.hits.map((h) => `${h.name} cid=${p.cid} gcs=${h.protocol?.gcs ?? ""} ${pageOf(h)}`).join("\n") });
   }
 
   // Personal data in hits.
@@ -642,6 +693,24 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
   const plainPush = run.dataLayerLog.find((e) => e.userData?.plain?.length);
   if (plainPush) {
     findings.push({ ...base, severity: "warning", check: "pii_datalayer", step: stepLabel(plainPush.step), detail: d.piiDataLayer(plainPush.userData.plain) });
+  }
+
+  // Tracking requests that failed or got an error answer on a live run (the Chrome extension, or a run with hits let
+  // through): those events never reached the platform. Not on other runs, where the browser answers tracking
+  // requests itself and a keepalive request it answered can still read as aborted.
+  if (run.live) {
+    const failedCalls = new Map();
+    for (const c of run.network ?? []) {
+      const bad = c.status === "failed" || (typeof c.status === "number" && c.status >= 400);
+      if (!bad || c.blocked || ["gtm", "consent"].includes(c.provider)) continue;
+      const k = `${c.provider}|${c.status}`;
+      const entry = failedCalls.get(k) ?? { provider: c.provider, status: c.status, n: 0, step: c.step };
+      entry.n += 1;
+      failedCalls.set(k, entry);
+    }
+    for (const f of failedCalls.values()) {
+      findings.push({ ...base, severity: "broken", check: "hit_failed", platform: f.provider, step: stepLabel(f.step), detail: d.hitFailed(f.provider, f.n, f.status, stepLabel(f.step)) });
+    }
   }
 
   // Events that are not in the plan. Without a plan every event would be listed, which says nothing.

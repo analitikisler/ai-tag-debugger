@@ -765,6 +765,41 @@ HTTP modunda sunucu yerelde olduğundan daha kısıtlıdır:
 
 Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://analitikisler.com) Cloud sürümünün bir parçasıdır.
 
+## Chrome eklentisi (önizleme)
+
+**ai tag debugger** (Chrome eklentisi), siteyi kendi Chrome'unuzda kendiniz gezerken izlemeyi kaydeder ve durdurduğunuzda CLI ile aynı kontrolleri çalıştırır. Elle daha hızlı olan işler için kullanın: giriş gerektiren bir alan, gerçek bir test kartıyla bir ödeme, yapay zekânın ulaşamadığı bir sayfa ya da yayından önce hızlı bir bakış. Hiçbir yapay zekâ modeli kullanılmaz; kontroller CLI'ın deterministik kontrolleridir ve siz dışa aktarmadıkça hiçbir şey tarayıcınızdan çıkmaz.
+
+Henüz Chrome Web Mağazası'nda değil. Kaynaktan yüklemek için:
+
+```bash
+npm run extension   # paylaşılan kontrol ve rapor kodunu extension/core/ klasörüne kopyalar
+```
+
+Sonra `chrome://extensions` adresini açın, Geliştirici modunu açın, **Paketlenmemiş öğe yükle**'yi seçin ve `extension/` klasörünü gösterin. Yan paneli açmak için araç çubuğundaki simgeye tıklayın.
+
+1. Siteyi açın. İlk kullanımda kısa bir tur gösterilir. Kurulumda test edilecek platformları seçin (sayfada bulunanlar "sayfada" diye işaretlenir; diğerleri yine kaydedilir ve "Seçilmeyenler" filtresinin arkasında durur), isterseniz bir ölçüm planı (`measurement-plan.json`) ekleyin ve **Kaydı başlat**'a basın. İlk sayfanın etiketleri de kaydedilsin diye sayfa yeniden yüklenir; platformlar ve plan site başına saklanır.
+2. Seçenekler: kayıt başlarken sayfayı yeniden yükle (varsayılan olarak açık) ve ilk kez gelen bir ziyaretçi gibi test etmek için önce sitenin çerezlerini temizle.
+3. Gezinin. Her sayfa yüklemesi ve tek sayfalı uygulama rotası bir adımdır; "Sepete ekle" gibi bir sonraki anı adlandırmak için bir ad yazıp **Adımı işaretle**'ye basın. İstekler geldikçe, sayfa sayfa; parametreleri, çözülmüş GA4 ürünleri ve onay durumuyla görünür; başarısız olan ya da 503 alan bir istek işaretlenir, diğerleri işaretlenmez. Siz başka sekmelere bakarken panel kaydedilen sitede kalır. dataLayer push'ları, bir GTM konteyneri olsun ya da olmasın, ilkinden itibaren kaydedilir.
+4. **Durdur**'a basın. Puan, karar ve bulgular **Bulgular** sekmesinde görünür; **İsteği göster** bulgunun ilgili olduğu isteğe gider, **Tam raporu aç** ise CLI'ın yazdığı HTML raporun aynısını Türkçe ya da İngilizce gösterir. **Baştan başla** kuruluma döner; işareti kaldırılmadıkça kayıt Geçmiş'te kalır.
+
+| Panel denetimi | Ne yapar |
+| --- | --- |
+| Kaydı başlat / Durdur / Baştan başla | Geçerli sekmenin kaydını başlatır, durdurur ve kuruluma döner (Alt+R, Alt+N). |
+| Platformlar | Kontrol edilen ve gösterilen platformlar; kurulumda seçilir, site başına saklanır. |
+| Ölçüm planı | Karşılaştırılacak plan dosyası, site başına saklanır. Plan yoksa kontroller plansız çalışır. |
+| Adımı işaretle | Adı olan bir adım başlatır; bulgular olayın nerede olduğunu söyler. |
+| Olaylar, dataLayer, İzin, Bulgular, Geçmiş | Sayfa sayfa istekler (platforma ve gönderildiği yere göre süzün; etiketli parametreler, kullanıcı özellikleri, ürünler, izin ve istek için, açıklamalı tüm parametreler ya da ham istek için bir satırı açın), dataLayer push'ları ve her birinin tetiklediği istekler (gtm.* olayları varsayılan olarak gizli), izin durumu ve etiketlerin buna uyup uymadığı, kontrollerin sonucu ve sitenin geçmiş kayıtları. |
+| Tema | Sistem, açık ya da koyu. |
+| Dil | Panelin ve raporun dili: Türkçe ya da İngilizce. Başta Chrome'un dilini izler. |
+| Kişisel verileri ekranda gizle | Ekran paylaşımı için paneldeki e-postaları, telefonları ve kullanıcı kimliklerini gizler. |
+| capture.json / report.html dışa aktar | Çalıştırmayı ve raporu maskelenmiş olarak indirir. |
+| Kayıtlar | Sitenin bu tarayıcıda saklanan son 20 kaydı. |
+| Sunucu container'ı… | Sitenin sunucu container'ını bağlar: bir [ai tagging server](https://github.com/analitikisler/ai-tagging-server)'ı adresi ve yönetici anahtarıyla ya da Google'ın sunucu tarafı GTM'ini önizleme bağlantısıyla. Aşağıya bakın. |
+
+**İstek başına sunucu tarafı etiketler.** Site isteklerini bir [ai tagging server](https://github.com/analitikisler/ai-tagging-server)'a gönderiyorsa, ⋯ menüsünden sunucunun adresi ve `ADMIN_TOKEN` değeriyle bağlayın. Anahtar denenir, ardından yalnızca bu tarayıcıda saklanır ve yalnızca o sunucuya gönderilir. Bir sonraki kayıttan itibaren sunucuya giden her istekte sunucunun onunla ne yaptığı görünür: hangi istemcinin aldığı, hangi etiketlerin çalıştığı, başarısız olduğu ya da atlandığı ve nedeni, hangi etiketlerin koşullarının sağlanmadığı ve GA4'e, Meta CAPI'ye ve diğerlerine iletilen her istek ile yanıtının durumu. Panel sunucunun kendi kayıt listesini (`/admin/api/traces`; `TRACE_BUFFER` 0'dan büyükken tutulur) okur ve yalnızca sekmenin gönderdiği isteklerin kayıtlarını saklar; böylece diğer ziyaretçilerin istekleri asla kayda girmez. Bir ai tagging server her izleme yanıtında kendini de tanıtır (`x-tagging-server`); böylece istekleri bağlanmadan da onun istekleri olarak etiketlenir ve panel bağlanmayı önerir. **Google'ın sunucu tarafı GTM'i.** Tag Manager'da sunucu container'ını açıp **Önizleme**'ye basın; Tag Manager `https://sgtm.ornek.com/gtm/debug?id=GTM-…&gtm_auth=…&gtm_preview=env-…` gibi bir bağlantı açar. Eklenti bu sekmenin açıldığını fark eder: kurulum ekranı site için tek tıkla **Bağlan** önerir, zaten bağlı bir container da Önizleme'ye her yeniden basıldığında yeni bağlantıyı kendiliğinden alır. Yakalanmazsa (örneğin sekme eklenti kurulmadan önce açıldıysa) sekmenin adresini kopyalayıp **Sunucu container'ı…** alanına yapıştırın; bu ekran her adımı da anlatır. Kayıt sürerken eklenti bu önizlemeyi tarayıcı için açık tutar, container'ın önizleme akışını (`/gtm/get_memo`) okur ve container'a giden her istekte onu hangi istemcinin aldığını, her etiketin durumunu, çalışabilecekken çalışmayan etiketleri, container'ın ilettiği her isteği durumuyla birlikte ve yazdığı çerezleri (yalnızca adları) gösterir. Önizlemede yalnızca bu tarayıcının istekleri çalışır; diğer ziyaretçiler asla görünmez. Önizlemede container'ın etiketleri, Tag Manager'ın kendi önizlemesinde olduğu gibi gerçekten gönderim yapar. Kayıt durunca önizleme çerezleri silinir ve tarayıcı önizleme modundan çıkar. İstekler container'a ulaşıp önizlemesine düşmüyorsa panel bağlantının eskidiğini söyler: Önizleme'ye yeniden basıp yeni bağlantıyı yapıştırın.
+
+CLI'dan farkları: tarayıcıyı siz kullandığınız için yapay zekâ yolculukları ve onay senaryoları yoktur; kayıt, içinde bulunduğunuz onay durumunu kontrol eder. İstekler, her ziyarette olduğu gibi sitenin gerçek analitik ve reklam hesaplarına ulaşır ve rapor bunu söyler. Panelde değerler, istemci ve oturum kimlikleri dahil, gönderildiği gibi gösterilir, çünkü hata ayıkladığınız şey budur; dışa aktarılan dosyalar CLI'ın dosyaları gibi maskelenir.
+
 ## Güvenlik
 
 - Ajana kolay test verisi kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir yolculuk gerçek bir ödeme ya da hesap gerektiriyorsa durur ve bunu bildirir.
@@ -776,6 +811,7 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 - Bir [test hesabı](#giriş-yapmak) yalnızca denetlenen sitenin sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
 - **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
 - Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
+- Chrome eklentisi tüm sitelere erişim ister ve Chrome bunu kurulumda verir (bir eklentinin izleme isteklerini görmesinin tek yolu budur), ama sayfa kancasını yalnızca kaydettiğiniz sitede çalıştırır, yalnızca kaydedilen sekmenin izleme isteklerini okur ve kayıtları tarayıcınızda tutar. Sunucusu yoktur ve hiçbir yere bir şey göndermez; dışa aktardığı dosyalar maskelenir.
 - Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.
 - HTTP sunucusunu başkaları için barındırıyor musunuz? Ek bir savunma katmanı olarak özel ve bulut meta veri adres aralıklarını ağ düzeyinde de engelleyin (bir çıkış güvenlik duvarı ya da yalıtılmış bir ağ).
 
@@ -792,6 +828,8 @@ npm run setup   # Node'u denetler, bağımlılıkları ve Chromium'u kurar, bir 
 npm test        # ayrıştırıcılar, kontroller, her AI sağlayıcısı ve MCP sunucusu; demo mağazaya karşı uçtan uca
 npm run test:unit   # yalnızca tarayıcı gerektirmeyen testler, yaklaşık on saniyede
 npm run lint    # ESLint, yalnızca önerilen kurallar: tanımsız adlar, kullanılmayan import'lar ve benzerleri
+npm run extension        # paylaşılan kodu extension/core/ klasörüne kopyalar (--pack ayrıca Chrome Web Mağazası için bir zip yazar)
+npm run test:extension   # Chrome eklentisini Chromium'da yükler ve demo mağazada bir yolculuk kaydeder
 ```
 
 Depoda ayrıca bir geliştirme konteyneri (`.devcontainer/devcontainer.json`) vardır. VS Code'da Dev Containers eklentisiyle ya da GitHub Codespaces'te açın; Chromium'un sistem kütüphaneleri dahil `npm run setup`'ı sizin yerinize çalıştırır. Oradaki bir AI modelini kullanmak için anahtarınızı bir Codespaces sırrı olarak ekleyin ya da konteynerin terminalinde dışa aktarın.

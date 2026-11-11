@@ -5,7 +5,7 @@
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
 import { canonicalEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
-import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent.js";
+import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent-table.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
 
@@ -32,8 +32,8 @@ const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
 const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 // Consent findings that say the visitor's "no" was not honoured, against the ones that say the setup is risky.
 const CONSENT_FAIL_CHECKS = new Set(["after_reject", "cookies_after_reject", "reject_ignored", "reject_button_failed"]);
-const CONSENT_ATTENTION_CHECKS = new Set(["before_consent", "cookies_before_consent", "consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update"]);
-const CONSENT_CHECK = /^(consent_|cookies_|reject_|before_consent|after_reject)/;
+const CONSENT_ATTENTION_CHECKS = new Set(["before_consent", "cookies_before_consent", "consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update", "client_id_persisted"]);
+const CONSENT_CHECK = /^(consent_|cookies_|reject_|before_consent|after_reject|client_id_persisted)/;
 
 // Ecommerce parameters sites send under another name (UA-style products/revenue, order ids), as checks.js reads them.
 const PARAM_ALIASES = {
@@ -213,7 +213,11 @@ export function platformParity({ runs = [] } = {}) {
         // A value that is not a number (a template left unresolved, a product name) stays as the text the
         // tag sent, so the report shows what the platform received instead of NaN. Only numbers are compared.
         const n = Number(value);
-        return [platform, { names: uniq(hits.map((h) => h.name)), count: hits.length, value: value === undefined ? null : Number.isFinite(n) ? n : String(value), currency: paramOf(valued, "currency") ?? null }];
+        // Counted per tracking ID: a site that sends to two Meta pixels sends each event twice, once to each,
+        // which is not the platform disagreeing with GA4.
+        const ids = uniq(hits.map((h) => h.id).filter(Boolean));
+        const perId = ids.length > 1 ? Math.max(...ids.map((id) => hits.filter((h) => h.id === id).length)) : hits.length;
+        return [platform, { names: uniq(hits.map((h) => h.name)), count: perId, ...(ids.length > 1 ? { ids } : {}), value: value === undefined ? null : Number.isFinite(n) ? n : String(value), currency: paramOf(valued, "currency") ?? null }];
       }));
       if (byPlatform.size < 2) {
         const [[platform, p]] = Object.entries(platforms);
@@ -286,7 +290,8 @@ export function consentCompliance({ plan = null, runs = [], findings = [], conse
     const beforeConsent = distinct("before_consent", platform);
     const afterReject = distinct("after_reject", platform) + (scenarioCount(platform, "reject", true) ?? 0);
     const afterAnalyticsOnly = AD_PLATFORMS.has(platform) ? scenarioCount(platform, "analytics", true) : null;
-    const status = afterReject ? "fail" : beforeConsent || afterAnalyticsOnly ? "attention" : "pass";
+    const keptId = distinct("client_id_persisted", platform);
+    const status = afterReject ? "fail" : beforeConsent || afterAnalyticsOnly || keptId ? "attention" : "pass";
     const scenarios = table ? Object.fromEntries(["before", ...CONSENT_STATES].map((s) => [s, scenarioCount(platform, s, false)])) : null;
     return { platform, ad: AD_PLATFORMS.has(platform), beforeConsent, afterReject, afterAnalyticsOnly, scenarios, status };
   });

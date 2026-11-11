@@ -18,7 +18,8 @@ test("one status line per platform with severity, counts per choice and a link t
   // The platform chip names the platform once: decorative artwork, then the visible name, no extra sr label.
   assert.match(ga4, /<span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span>/);
   assert.match(h, /<li class="card sev-ok cs-row" id="consent-ga4">/);
-  assert.match(ga4, /<span class="chip chip-sev ok">.*OK<\/span>/);
+  // A clean line says the tag respected consent, not just "OK", which read as if consent had been granted.
+  assert.match(ga4, /<span class="chip chip-sev ok">.*Respects consent<\/span>/);
   assert.match(ga4, /<span class="chip chip-consent denied">2 · denied<\/span>/);
   assert.match(ga4, /<span class="chip chip-consent granted">2 · granted<\/span>/);
   assert.doesNotMatch(ga4, /Finding/);

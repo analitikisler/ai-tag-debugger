@@ -1,6 +1,6 @@
 // The Consent section: one status line per platform, the Consent Mode card and the scenarios card. Denied is red,
 // granted green and "no signal" grey, all by token through chip("consent", ...).
-import { consentMatrix, consentTable, IGNORE, SCENARIO_COLUMNS } from "../consent.js";
+import { consentMatrix, consentTable, IGNORE, SCENARIO_COLUMNS } from "../consent-table.js";
 import { cmpFacts } from "../cmp.js";
 import { isConsentEntry } from "../report-shared.js";
 import { tagConsentStates } from "../checks.js";
@@ -10,7 +10,7 @@ import { PLATFORM_ART, chip, esc, platformLabel, safeKey, sectionBlock, sortPlat
 const GOOGLE = new Set(["ga4", "google_ads"]);
 // The status line per platform keeps to no choice, accept and reject; the card lists every column that ran.
 const STATUS_SCENARIOS = ["before", "accept", "reject"];
-const LINE_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing"]);
+const LINE_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing", "client_id_persisted"]);
 const MODE_CHECKS = new Set(["consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update"]);
 const SEVERITY_RANK = { broken: 0, risk: 1, warning: 2, info: 3 };
 
@@ -78,7 +78,7 @@ export function render(ctx) {
     const sev = row?.severity ?? (!own.length && metrics.consent.platforms.find((p) => p.platform === platform)?.status !== "pass" ? "risk" : "ok");
     const cells = STATUS_SCENARIOS.filter((s) => sc && afterOf(sc, s))
       .map((s) => `<span class="cs-p"><span class="cs-k">${esc(t.cols[s])}</span>${total(platform, s)}</span>`).join("");
-    return `<li class="card sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
+    return `<li class="card sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, sev === "ok" ? t.respected : m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
   }).join("");
   const list = lines ? `<ul class="cs-list" aria-label="${esc(t.statusLabel)}">${lines}</ul>` : "";
 

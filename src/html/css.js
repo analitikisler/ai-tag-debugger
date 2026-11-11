@@ -3,7 +3,7 @@
 // only its own constant, so parallel changes never touch the same lines.
 // No url(data:...) anywhere (test/html-shell.test.js checks it): icons come from the inline sprite. The search icon the
 // mockup drew as a data URI in the filter bar is the sprite's ui-search, placed by the filter bar's markup.
-import { brandCss } from "../whitelabel.js";
+import { brandCss } from "../brand-css.js";
 
 // ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts, motion ----------
 const TOKENS = `/* Tally design system tokens, under the names the builders already use. Light on :root; dark twice
@@ -1047,7 +1047,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent details.card>summary .chip.plain{color:var(--muted)}
 /* Consent Mode body */
 #consent .cm-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
-#consent .cm-list li{display:grid;grid-template-columns:64px minmax(0,220px) minmax(0,1fr);align-items:center;gap:var(--s2) var(--s3);padding:8px var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page)}
+#consent .cm-list li{display:grid;grid-template-columns:minmax(64px,max-content) minmax(0,220px) minmax(0,1fr);align-items:center;gap:var(--s2) var(--s3);padding:8px var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page)}
 #consent .cm-l{font-weight:600}
 #consent .cm-w{font-size:12.5px;color:var(--muted)}
 #consent .cm-s{display:flex;flex-wrap:wrap;gap:6px}
@@ -1056,6 +1056,8 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent .cm-timing li{display:flex;align-items:center;flex-wrap:wrap;gap:4px var(--s3)}
 #consent .cm-timing .chip{min-width:92px}
 #consent .cm-runs{margin:var(--s3) 0 var(--s2)}
+#consent .cm-tag{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--border)}
+#consent .cm-tag>p{margin:0 0 var(--s2)}
 #consent .cm-find{margin-top:var(--s2)}
 #consent .cs-none{margin:var(--s2) 0 0}
 /* scenarios table */

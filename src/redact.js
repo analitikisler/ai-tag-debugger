@@ -80,10 +80,16 @@ export function looksHashed(value) {
 const marker = (value) => `[redacted: ${String(value).length} chars, ${looksHashed(value) ? "looks hashed" : "plain"}]`;
 const emptyFound = () => ({ fields: [], plain: [] });
 
+// The site's own user ID (GA4 uid / user_id): a pseudonymous ID that GA4 expects as it is, not hashed. It is still
+// masked, but counts as plain personal data only when it is an email address or a phone number.
+const ID_KEY = /(^|\.)(uid|user_id|_uid)$/i;
+const PHONE = /^(\+\d{7,15}|0\d{9,10})$/;
+const isContactValue = (v) => EMAIL.test(String(v).trim()) || PHONE.test(String(v).replace(/[\s()-]/g, ""));
+
 /** Collects what was redacted: { fields: keys, plain: keys whose value was not hashed }. */
 function note(found, key, value) {
   found.fields.push(key);
-  if (!looksHashed(value)) found.plain.push(key);
+  if (!looksHashed(value) && (!ID_KEY.test(String(key)) || isContactValue(value))) found.plain.push(key);
   return marker(value);
 }
 

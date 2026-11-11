@@ -1,12 +1,12 @@
 // What the Markdown and the HTML renderers share: the version, escaping, the grouped findings, platform names and
 // order, the plan-check lines and the verdict sentence. src/report.js and src/html/*.js both import from here and
 // this module imports neither, so the two renderers never import each other.
-import { readFileSync } from "node:fs";
 import { groupFindings } from "./checks.js";
 import { messages } from "./i18n.js";
 import { PROVIDERS } from "./parsers.js";
+import { VERSION } from "./version.js";
 
-export const VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+export { VERSION };
 
 const SEVERITIES = ["broken", "risk", "warning", "info"];
 
@@ -72,7 +72,8 @@ function mdScope(m, runs, lead) {
 function mdHeadline(m, runs, rows, metrics) {
   const v = metrics.verdict;
   const lead = mdLead(rows, metrics);
-  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
+  const subject = lead && !lead.event && lead.platform ? m.ui.md.platformSubject[lead.check] : null;
+  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : subject ? subject(platformLabel(lead.platform)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
   const scope = mdScope(m, runs, lead);
   const incomplete = runs.find((r) => !r.completed);
   const ctx = { key: v.headline, what, scope, journey: incomplete ? String(incomplete.journeyId) : "", events: metrics.coverage?.checkable ?? 0, journeys: runs.length, counts: v.counts, lead };

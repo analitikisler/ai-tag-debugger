@@ -1,0 +1,5 @@
+{
+  "name": { "message": "ai tag debugger – GA4, dataLayer, Consent Mode ve piksel denetimi" },
+  "description": { "message": "Site gezilirken GA4, Ads, Meta ve TikTok hit’leri, dataLayer push’ları ve onay durumu kaydedilir, ölçüm planıyla karşılaştırılır." },
+  "action": { "message": "ai tag debugger’ı aç" }
+}

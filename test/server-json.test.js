@@ -15,3 +15,9 @@ test("server.json matches package.json", async () => {
   assert.equal(server.packages[0].identifier, pkg.name);
   assert.equal(server.packages[0].version, pkg.version);
 });
+
+test("src/version.js matches package.json", async () => {
+  const pkg = await read("package.json");
+  const { VERSION } = await import("../src/version.js");
+  assert.equal(VERSION, pkg.version, "bump src/version.js with package.json");
+});

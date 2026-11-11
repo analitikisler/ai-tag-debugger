@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeGcd, parseTrackingRequest } from "../src/parsers.js";
+import { decodeGcd, parseTrackingRequest, providerOf } from "../src/parsers.js";
 
 test("parses a GA4 hit with ecommerce params and consent state", () => {
   const [hit] = parseTrackingRequest(
@@ -145,4 +145,11 @@ test("gcd as gtag.js sent it for each consent sequence decodes to that sequence"
   // A default of ad_storage denied, analytics_storage granted, ad_user_data denied, ad_personalization granted.
   const mixed = decodeGcd("13p3t3p3t5l1");
   assert.deepEqual(Object.fromEntries(Object.entries(mixed).map(([k, v]) => [k, v.default])), { ad_storage: "denied", analytics_storage: "granted", ad_user_data: "denied", ad_personalization: "granted" });
+});
+
+test("the Google tag's pings to pagead2.googlesyndication.com are Google Ads, while AdSense's own scripts stay AdSense", () => {
+  assert.equal(providerOf("https://pagead2.googlesyndication.com/ccm/collect?en=page_view&gcs=G100").key, "google_ads");
+  assert.equal(providerOf("https://pagead2.googlesyndication.com/pagead/1p-user-list/10825810614/?random=1").key, "google_ads");
+  assert.equal(providerOf("https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1").key, "adsense");
+  assert.equal(providerOf("https://tpc.googlesyndication.com/simgad/123").key, "adsense");
 });

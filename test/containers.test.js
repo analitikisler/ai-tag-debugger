@@ -57,6 +57,12 @@ before(async () => {
     if (req.url === "/preload") {
       return res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><link rel="preload" href="/gtm.js?id=GTM-PRE" as="script"><script>window.google_tag_manager = { "GTM-GHOST": {} };</script>`);
     }
+    // A consent platform's auto-blocking (as efilli's does on a Next.js site): it builds copies of the GTM script,
+    // sets their src, adds one as text/plain and drops the others; only one is added as a script that runs.
+    if (req.url === "/blocker") {
+      const copy = 'var c=document.createElement("script");c.src="/gtm.js?id=GTM-ONCE";';
+      return res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><script>(function(){${copy}${copy}var b=document.createElement("script");b.type="text/plain";b.src="/gtm.js?id=GTM-ONCE";document.head.appendChild(b);var r=document.createElement("script");r.async=true;r.src="/gtm.js?id=GTM-ONCE";document.head.appendChild(r);})();</script>`);
+    }
     // The usual Next.js pattern: a preload hint in the head, then the script itself.
     if (req.url === "/next") {
       return res.writeHead(200, { "content-type": "text/html" }).end(`<!doctype html><link rel="preload" href="/gtm.js?id=GTM-NEXT" as="script"><script async src="/gtm.js?id=GTM-NEXT"></script>`);
@@ -308,4 +314,24 @@ test("a preload followed by the script itself is one ordinary load", async () =>
   }
   assert.deepEqual(containerRows([run]).map((r) => `${r.id} ${r.kind} ran:${r.ran}`), ["GTM-NEXT html ran:true"]);
   assert.deepEqual(checkRun({ events: [] }, run).filter((f) => f.check.startsWith("container_")).map((f) => f.check), []);
+});
+
+test("copies of a container a consent blocker builds but never runs are not loads, so no duplicate is reported", async () => {
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], quietMs: 0 });
+  await session.start();
+  let run;
+  try {
+    await session.act({ action: "goto", url: `${url}blocker` });
+    await session.act({ action: "wait", ms: 300 });
+    run = { ...collect(session, { id: "j" }, "desktop"), completed: true };
+  } finally {
+    await session.close();
+  }
+  assert.deepEqual(run.containerLoads.map((l) => `${l.id} ${l.how}`), ["GTM-ONCE script"]);
+  assert.deepEqual(checkRun({ events: [] }, run).filter((f) => f.check === "container_duplicate"), []);
+});
+
+test("Google's gtg_health copy of a first-party served container is a probe, not a container load", () => {
+  assert.equal(containerOf("https://www.googletagmanager.com/gtm.js?id=GTM-ABC12&gtg_health=1"), null);
+  assert.equal(containerOf("https://sgtm.example.com/gtm.js?id=GTM-ABC12").served, "site");
 });

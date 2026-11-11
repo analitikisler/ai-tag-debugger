@@ -765,6 +765,41 @@ In HTTP mode, the server is more locked down than locally:
 
 A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](https://analitikisler.com) Cloud version.
 
+## Chrome extension (preview)
+
+**ai tag debugger** (the Chrome extension) records a site's tracking while you browse it yourself, in your own Chrome, and runs the same checks as the CLI when you stop. Use it for what is quicker by hand: a logged-in area, a checkout with a real test card, a page the AI can't reach, or a quick look before a release. No AI model is involved; the checks are the CLI's deterministic ones, and nothing leaves your browser unless you export it.
+
+It is not in the Chrome Web Store yet. To load it from source:
+
+```bash
+npm run extension   # copies the shared checks and report code into extension/core/
+```
+
+Then open `chrome://extensions`, turn on Developer mode, choose **Load unpacked** and pick the `extension/` folder. Click the toolbar icon to open the side panel.
+
+1. Open your site. A short tour shows on first use. In setup, pick the platforms you are testing (the ones found on the page are marked "on page"; the others are still recorded, behind the "Not selected" filter), optionally a measurement plan (`measurement-plan.json`), then press **Start recording**. The page reloads, so the first page's tags are recorded too; the platforms and the plan are kept per site.
+2. Options: reload the page when recording starts (on by default), and clear the site's cookies first to test as a first-time visitor.
+3. Browse. Each page load and single-page-app route is a step; type a name and press **Mark step** to name the next moment, such as "Add to cart". Hits show as they land, page by page, with their parameters, decoded GA4 items and consent; a request that failed or got a 503 is marked, others are not. The panel stays with the recorded site while you look at other tabs. dataLayer pushes are recorded from the first one, with or without a GTM container.
+4. Press **Stop**. The score, verdict and findings appear under **Findings**; **Show hit** jumps to the hit a finding is about, and **Open full report** shows the same HTML report the CLI writes, in English or Turkish. **Start over** goes back to setup, keeping the recording in History unless you untick it.
+
+| Panel control | What it does |
+| --- | --- |
+| Start recording / Stop / Start over | Starts and stops recording the current tab, and goes back to setup (Alt+R, Alt+N). |
+| Platforms | The platforms checked and shown, chosen in setup and kept per site. |
+| Measurement plan | A plan file to check against, kept per site. Without one, the checks run plan-free. |
+| Mark step | Starts a named step, so findings say where things happened. |
+| Events, dataLayer, Consent, Findings, History | The hits page by page (filter by platform and by where they were sent; open a row for its labelled parameters, user properties, items, consent and request, or every parameter with an explanation, or the raw request), the dataLayer pushes and the hits each one fired (gtm.* events hidden by default), the consent state and whether tags respected it, the checks' result, and the site's past recordings. |
+| Theme | System, light or dark. |
+| Language | The panel's and report's language: English or Turkish. Follows Chrome's language at first. |
+| Mask personal data on screen | Hides emails, phone numbers and user IDs in the panel, for screen sharing. |
+| Export capture.json / report.html | Downloads the run and the report, redacted. |
+| Recordings | The last 20 recordings of the site, kept in this browser. |
+| Server container… | Connects the site's server container: an [ai tagging server](https://github.com/analitikisler/ai-tagging-server) by its address and admin token, or Google's server-side GTM by its preview link. See below. |
+
+**Server-side tags per hit.** If the site sends its hits to an [ai tagging server](https://github.com/analitikisler/ai-tagging-server), connect it from the ⋯ menu with the server's address and its `ADMIN_TOKEN`. The token is tested, then kept in this browser only and sent only to that server. From the next recording, each hit sent to the server shows what the server did with it: which client claimed it, which tags fired, failed or skipped and why, which tags' conditions did not match, and each request it sent onward (GA4, Meta CAPI and the others) with the answer's status. The panel reads the server's own trace list (`/admin/api/traces`, kept while `TRACE_BUFFER` is above 0) and keeps only the traces of requests your tab sent, so other visitors' hits are never recorded. An ai tagging server also names itself on every tracking response (`x-tagging-server`), so its hits are labelled as its own without connecting, and the panel offers to connect. **Google's server-side GTM.** In Tag Manager, open the server container and press **Preview**; Tag Manager opens a link such as `https://sgtm.example.com/gtm/debug?id=GTM-…&gtm_auth=…&gtm_preview=env-…`. The extension notices that tab opening: setup then offers **Connect** for the site with one click, and a container already connected takes the new link by itself each time Preview is pressed again. If it is not picked up (say, the tab was opened before the extension was installed), copy the tab's address and paste it in **Server container…**; the sheet also explains each step. While you record, the extension keeps that preview open for your browser, reads the container's preview stream (`/gtm/get_memo`), and shows under each hit sent to the container which client claimed it, each tag's status, the tags that could have run but did not, each request the container sent onward with its status, and the cookies it set (names only). Only your browser's requests run in preview; other visitors are never seen. In preview the container's tags still send for real, as in Tag Manager's own preview. When the recording stops, the preview cookies are removed, so the browser leaves preview mode. If hits reach the container but not its preview, the panel says the link is out of date: press Preview again and paste the new one.
+
+Differences from the CLI: you drive, so there are no AI journeys and no consent scenarios; the recording checks the consent state you were in. Hits reach the site's real analytics and ad accounts, as with any visit, and the report says so. In the panel, values are shown as they were sent, client and session IDs included, because that is what you are debugging; exports are redacted like the CLI's files.
+
 ## Safety
 
 - The agent is told to use obvious test data and **never to enter real payment details**. If a journey needs a real payment or account, it stops and reports that instead.
@@ -776,6 +811,7 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 - A [test account](#logging-in) is typed only into the audited site's pages, never shown to the model, and turned back into its placeholders in everything the tool keeps. A saved login session is readable only by you and is never used by an HTTP server.
 - **User data sent for ad matching is redacted** before it is stored in `capture.json` or shown in the report: emails, phone numbers, names, addresses and user ids in GA4 and Google Ads enhanced conversions (`em`, `ph`, `uid`, …), Meta advanced matching (`ud[*]`, `udff[*]`), TikTok `context.user`, and the `user_data` the site pushes to the dataLayer for enhanced conversions. Any value that looks like an email address is redacted whatever its field is called, except the audited site's own address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, …), such as a contact link in a GTM click event, which is not visitor data. Each value becomes a marker such as `[redacted: 64 chars, looks hashed]`, and a value that wasn't hashed is reported as a personal data risk. `--keep-bodies` (`"keep_bodies": true`) stores requests as sent, for debugging.
 - Stored request bodies are capped at 32 KB per request and 2 MB per journey. Past that, the report says the body wasn't stored.
+- The Chrome extension needs access to all sites, which Chrome grants at install (it is the only way an extension can see tracking requests), but it runs its page hook only on the site you are recording, reads only the recorded tab's tracking requests, and keeps recordings in your browser. It has no server and sends nothing anywhere; the files it exports are redacted.
 - Only run it against sites you own or are authorized to test.
 - Hosting the HTTP server for other people? Also block private and cloud metadata address ranges at the network level (an egress firewall or an isolated network), as defense in depth.
 
@@ -792,6 +828,8 @@ npm run setup   # checks Node, installs the dependencies and Chromium, says whet
 npm test        # parsers, checks, each AI provider and the MCP server, end to end against the demo shop
 npm run test:unit   # only the tests that need no browser, in about ten seconds
 npm run lint    # ESLint, the recommended rules only: undefined names, unused imports and the like
+npm run extension        # copies the shared code into extension/core/ (--pack also writes a zip for the Chrome Web Store)
+npm run test:extension   # loads the Chrome extension in Chromium and records a journey on the demo shop
 ```
 
 The repository also has a dev container (`.devcontainer/devcontainer.json`). Open it in VS Code with the Dev Containers extension, or in GitHub Codespaces, and it runs `npm run setup` for you, Chromium's system libraries included. To use an AI model there, add your key as a Codespaces secret or export it in the container's terminal.

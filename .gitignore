@@ -4,3 +4,5 @@ aitd/
 .env
 saved/
 npm-shrinkwrap.json
+extension/core/
+dist/

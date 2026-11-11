@@ -170,3 +170,14 @@ test("an empty capture renders, metrics given or computed give the same bytes", 
   assert.equal(summary(input), summary({ ...input, metrics: undefined }));
   assert.equal(summary(input), summary(reportInput()));
 });
+
+test("the consent card judges the default by the four tracking signals, so security_storage granted is still denied", () => {
+  const withDefault = (value) => {
+    const input = reportInput();
+    input.runs = input.runs.map((r, i) => (i ? r : { ...r, dataLayerLog: [{ step: 0, t: 1, value: ["consent", "default", value] }, ...(r.dataLayerLog ?? []).filter((e) => !(Array.isArray(e.value) && e.value[0] === "consent"))] }));
+    return cardOf(summary(input), "consent")?.[1] ?? "";
+  };
+  const denied = { ad_storage: "denied", analytics_storage: "denied", ad_user_data: "denied", ad_personalization: "denied", functionality_storage: "denied", security_storage: "granted" };
+  assert.match(withDefault(denied), /chip-consent denied">denied</);
+  assert.match(withDefault({ ...denied, analytics_storage: "granted" }), /partly granted/);
+});

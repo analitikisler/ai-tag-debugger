@@ -3,6 +3,7 @@
 // headline is verdictHeadline's (the CLI's, the alerts' and the Markdown title's), and the cost lines are the score's
 // own deductions.
 import { VERSION, summaryParts } from "../report-shared.js";
+import { CONSENT_SIGNALS } from "../parsers.js";
 import { PLATFORM_ART, UI_SYMBOLS, chip, esc, fmt, platformLabel, safeKey, sectionBlock, sortPlatforms, use } from "./lib.js";
 
 const PROBLEMS = ["broken", "risk", "warning"];
@@ -233,10 +234,16 @@ function eventsCard(ctx) {
   return card("ui-events", t.events, "coverage", t.plannedSeen(cov.planned, cov.counts.implemented + cov.counts.missing_params), esc(t.withParams(cov.percent.implemented)));
 }
 
-/** The state of the first Consent Mode default pushed: denied or granted when every key agrees, mixed otherwise. */
+/**
+ * The state of the first Consent Mode default pushed, by the four signals that decide what tags may do (ad_storage,
+ * analytics_storage, ad_user_data, ad_personalization): denied or granted when they agree, mixed otherwise. Other
+ * types (security_storage, usually granted) don't count, so "all tracking denied" never reads as mixed.
+ */
 function defaultState(runs) {
   const push = runs.flatMap((r) => r.dataLayerLog ?? []).map((e) => e.value).find((v) => Array.isArray(v) && v[0] === "consent" && v[1] === "default");
-  const states = Object.values(push?.[2] ?? {});
+  const all = push?.[2] ?? {};
+  const signals = CONSENT_SIGNALS.filter((k) => k in all).map((k) => all[k]);
+  const states = signals.length ? signals : Object.values(all);
   if (!states.length) return null;
   return states.every((s) => s === "denied") ? "denied" : states.every((s) => s === "granted") ? "granted" : "mixed";
 }

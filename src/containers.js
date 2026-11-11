@@ -1,5 +1,5 @@
 // How each Google container got onto the page: GTM (gtm.js) and Google tag (gtag/js) scripts, with what
-// inserted them. The browser records every container script as it is added (see CONTAINER_HOOK in browser.js):
+// inserted them. The browser records every container script as it is added (see CONTAINER_HOOK in page-hook.js):
 // parser-inserted from the HTML, or set by a script, with the scripts on the call stack at that moment. This
 // module turns that into a load source: the snippet, a script tag in the HTML, another script on the page,
 // a tag or Zone in another container, or a gtag config or send_to command the Google tag acted on.
@@ -23,6 +23,9 @@ export function containerOf(url) {
   if (!CONTAINER_ID.test(id)) return null;
   const script = /\/gtm\.js$/.test(u.pathname) ? "gtm" : /\/gtag\/js$/.test(u.pathname) ? "gtag" : null;
   if (!script) return null;
+  // A container served from the site's own domain fetches Google's copy with gtg_health=1 to check that serving
+  // works. That copy is a probe, not a second install of the container.
+  if (u.searchParams.has("gtg_health")) return null;
   const environment = u.searchParams.get("gtm_preview") || (u.searchParams.has("gtm_auth") ? "unnamed" : null);
   return {
     id,

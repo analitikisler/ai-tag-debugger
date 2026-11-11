@@ -57,7 +57,8 @@ One module per concern in `src/`, in the order a run goes through them.
 
 - `parsers.js`: turns requests into normalized hits. `VENDORS`, the parsers, `parseTrackingRequest`, `isCollectionEndpoint`, `providerOf`, `vendorOf`, `resolveProviders`.
 - `redact.js`: replaces user data sent for ad matching with a marker before anything is stored (`redactUrl`, `redactBody`, `redactParams`, `redactPush`).
-- `consent.js`: the consent scenarios, one fresh browser per consent choice, and the table the report shows.
+- `page-hook.js`: `INIT_SCRIPT`, the script that runs in every page and frame before the site's own and records dataLayer pushes, container loads and iframe messages. The CLI injects it through Playwright, the Chrome extension as a content script.
+- `consent.js`: the consent scenarios, one fresh browser per consent choice. `consent-table.js`: the tables the report shows from them.
 - `inventory.js`: `buildInventory`, the tag inventory (vendors, party, pages, cookie names).
 - `gtm.js`: reads a GTM container export to name the tag and trigger behind a hit.
 
@@ -75,6 +76,7 @@ One module per concern in `src/`, in the order a run goes through them.
 - `i18n.js`: every user-visible string, in `LANGUAGES`.
 - `glossary.js`: what each request parameter means, for the `?` tips in the Network tab.
 - `brand.js` and `whitelabel.js`: the embedded logos (written by `node scripts/brand.js` from `brand/ai/assets/`; the brand guide is `brand/ai/BRAND.md`), and the `report` setting (name, logo, color, PDF).
+- `brand-css.js`, `sha256.js` and `version.js`: the brand colour's CSS, the report script's CSP hash and the package version, kept apart from Node so the Chrome extension renders the same report.
 
 **After the run**
 
@@ -82,6 +84,12 @@ One module per concern in `src/`, in the order a run goes through them.
 - `workspace.js`: the `aitd/<domain>/plans/<id>` and `runs/<id>` folders, IDs, and `resolvePlan` for `--against`.
 - `notify.js`: Slack and email alerts with the "since last run" diff.
 - `replay.js`: saved sites, replayed offline to compare a new version of the tool against known findings.
+
+**Chrome extension** (`extension/`)
+
+- The ai tag debugger Chrome extension, Manifest V3: `worker.js` (the service worker: tracking requests, page loads, cookies), `bridge.js` (the content script that passes the page hook's events on), `panel/` (the side panel), `report/` (the report tab and its sandbox), `lib/run.js` (raw events into the run object `checkRun` reads, and `redactRun` for exports), `lib/analyze.js` (checks and report), `lib/store.js` (IndexedDB) and `lib/body.js` (request bodies).
+- It imports the shared modules from `extension/core/`, which `npm run extension` (`scripts/extension.js`) copies from `src/` unchanged; Chrome loads only files inside the extension's folder. `extension/core/` is gitignored. `test/browser-safe.test.js` fails when a module the extension needs imports Node, Playwright or an npm package, so keep `checks.js`, `parsers.js`, `redact.js`, `i18n.js`, `metrics.js` and `html/` free of those.
+- To work on it: `npm run extension`, then load `extension/` unpacked at `chrome://extensions` (Developer mode) and reload it there after each change. `npm run test:extension` records a journey on the demo shop in Chromium; `test/extension-run.test.js` covers the pipeline without a browser.
 
 **Entry points**
 
@@ -150,6 +158,7 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 - Every user-visible string goes through `src/i18n.js`, in every language in `LANGUAGES`.
 - Every option is documented in README's tables: "All options" for flags, the config table for config fields, the MCP tools table for tool parameters. README.tr.md gets the same change.
 - Every user-visible change gets a CHANGELOG line under the version it ships in. Entries are one sentence each, in the README's voice.
+- `src/version.js` must say the same version as `package.json`; `test/server-json.test.js` fails otherwise. The Chrome extension has its own version in `extension/manifest.json`.
 - `server.json` must say the same version as `package.json`, in `version` and in `packages[0].version`, and its description must stay within 100 characters; `test/server-json.test.js` fails otherwise.
 - The published package ships `npm-shrinkwrap.json`: `npm pack` and `npm publish` write it from `package-lock.json` without the development-only packages (`scripts/shrinkwrap.js`, run as `prepack`) and remove it afterwards, so every install from npm gets the tested dependency tree. Keep `package-lock.json` current and never commit a shrinkwrap: in the repository npm would prefer it and leave out the development tools. `test/shrinkwrap.test.js` checks both.
 - The Claude plugin in `plugin/` pins the same version: `version` in `plugin/.claude-plugin/plugin.json` and the package in `plugin/.mcp.json` (`@analitikisler/ai-tag-debugger@<version>`; the plugin directory refuses an unpinned `npx` launcher). `test/plugin.test.js` fails otherwise. Check the plugin with `claude plugin validate plugin --profile directory --strict` and the marketplace with `claude plugin validate . --strict`.
@@ -157,7 +166,7 @@ Tools are registered in `buildServer` in `src/mcp.js` with `server.registerTool(
 
 ## Releasing
 
-1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), both version fields in `server.json`, the plugin's `version` and pinned package in `plugin/.claude-plugin/plugin.json` and `plugin/.mcp.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
+1. Bump `version` in `package.json` (and `package-lock.json` through `npm install`), `src/version.js`, both version fields in `server.json`, the plugin's `version` and pinned package in `plugin/.claude-plugin/plugin.json` and `plugin/.mcp.json`, and the pinned version in the examples (`ATD_VERSION` in both `examples/github-actions/` workflows, the `npm install` line in `examples/cron/run-audit.sh`).
 2. Add the `## x.y.z (date)` section at the top of CHANGELOG.md with the lines collected for it. Update the version in README's Playwright install commands if Playwright changed.
 3. Run `npm test`, then merge to `main` with a commit such as `Release 0.16.0`.
 4. `.github/workflows/publish.yml` runs on every push to `main` that touches `package.json` (or by hand from the Actions tab). Its `check` job looks the version up on npm and stops if it is already there; otherwise `test` runs `npm ci`, installs Chromium and runs `npm test` on Node 22, and `publish` publishes with npm trusted publishing (OIDC, no stored token) from the `npm` environment with `npm publish --access public`.
