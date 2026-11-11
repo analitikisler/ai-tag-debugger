@@ -579,15 +579,17 @@ The trend never triggers an alert on its own. If a channel fails, the run prints
 
 ```
 aitd "<sentence>" [-y]
-aitd plan --site <url> [--topic <name>] [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+aitd plan --site <url> [--topic <name>] [--headed] [--provider <name>] [--model <id>] [--base-url <url>] [--max-steps <n>]
+          [--allow-host <host>] [--connect <url>] [--lang en|tr] [--no-branding] [--data-dir <dir>]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
 aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--config <file>] [--events <names>]
          [--max-steps <n>] [--viewport desktop|mobile] [--concurrency <n>] [--platforms <list>] [--data-dir <dir>]
-         [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
+         [--provider anthropic|openai|gemini|vercel|cloudflare|openai-compatible] [--model <id>] [--base-url <url>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
          [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>] [--connect <url>]
+         [--allow-host <host>] [--keep-bodies] [--no-branding] [--yes]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live]
@@ -683,7 +685,7 @@ Output:
 
   Every card starts collapsed except the Summary; each section has Expand all and Collapse all. The page carries one small script, allowed by its hash in the page's Content Security Policy, for the rail, the filters, the tabs and the deep links; without JavaScript the sections stack into one document, which is also the print layout. Keyboard: `[` folds the rail, `1`–`7` jump to a section. The logos are embedded, so nothing is loaded from the internet. `--no-branding` leaves out the Analitik İşler logo and credit line.
 - `timeline.csv`: the same timeline as one row per hit, dataLayer push and network call, ready for Excel or Google Sheets.
-- `report.md`: the report in Markdown for a pull request comment, a Slack message or a mail, around 100 lines and under 8 KB for a four-journey run. Its title is the verdict (`# shop.example: purchase tracking is broken on mobile`), then one meta line, the status with the data quality score, and the counts. Then, in this order: **Changed since last run** and **Trend** (when the site has earlier runs), **Plan vs. site** (with `--against`), **Priorities** (the to-do list per owner: Developer, Tag Manager, Marketing), **Findings** (up to five full blocks with Where, Impact, Cause, Evidence, Also fine on, Owner, Fix, How to verify and a link into `report.html`; the rest one line each under *Also*), **Consent** (the Consent Mode timing sentence and the scenario table with a reason in every cell), **What passed**, **Journeys** (one row per run, then only the steps that carry a problem), **Not checked** (what the run could not judge, with the config key that enables it), the **Tag inventory** and **Google containers**. The per-hit timeline is not in the file; `timeline.csv` has it.
+- `report.md`: the report in Markdown for a pull request comment, a Slack message or a mail, a little over 100 lines and under 8 KB for a four-journey run. Its title is the verdict (`# shop.example: purchase tracking is broken on mobile`), then one meta line, the status with the data quality score, and the counts. Then, in this order: **Changed since last run** and **Trend** (when the site has earlier runs), **Plan vs. site** (with `--against`), **Priorities** (the to-do list per owner: Developer, Tag Manager, Marketing), **Findings** (up to five full blocks with Where, Impact, Cause, Evidence, Also fine on, Owner, Fix, How to verify and a link into `report.html`; the rest one line each under *Also*), **Consent** (the Consent Mode timing sentence and the scenario table with a reason in every cell), **What passed**, **Journeys** (one row per run, then only the steps that carry a problem), **Not checked** (what the run could not judge, with the config key that enables it), the **Tag inventory** and **Google containers**. The per-hit timeline is not in the file; `timeline.csv` has it.
 - `capture.json`: everything captured, for your own analysis, including the tool `version`, the `ai` provider and the computed `metrics` (verdict, score, plan coverage, funnel, platform parity, consent compliance, conversion integrity, timing, priorities).
 - `plan-check.json`: with `--against`, one entry per planned event with its bucket.
 - `junit.xml`: the findings as JUnit test results, one suite per journey and viewport, for CI systems to show as test failures (see above).
@@ -710,7 +712,7 @@ Tools the server offers:
 | `get_hit` | Shows one hit in full, by its `step` and `[h]` number: every parameter its request carried, its place in a batched request, where it was sent, and `gcd` decoded per consent signal (default and update). |
 | `get_step` | Shows what an earlier `step` captured again, as `browser_action` showed it, including a page_view that came late and was added to it. |
 | `finish_audit` | Checks everything against your measurement plan (JSON), a saved one given as `against` (`latest`, `first`, a plan ID, or on a local server a path), or the ready-made journey's events, optionally only the `events` you name, and writes the full HTML report with the timeline. The site comes from the audit. The result ends with a compact JSON timeline, one entry per step: the hits with their consent, consent commands, other tracking calls, the Google tag's consent when it changed, and the cookies and ids that changed. `completed` and `note` say whether and how the journey reached its goal, `language` is the report language (`en` or `tr`), and `branding: false` leaves the logo and credit line out. |
-| `consent_matrix` | Opens a site's start page like an ad click once per consent choice (no choice and on to the next page, accept all, reject all, analytics only), each in a fresh browser, and returns which tags sent after each choice and the [consent matrix](#consent-scenarios). `campaign` takes the campaign parameters to check (as in `start_audit`), `concurrency` how many choices run at once (default 2, at most 4), `providers` the platforms to count, `allowed_hosts` other hosts the pages may load from, and `language` the language of the answer. About half a minute. |
+| `consent_matrix` | Opens a site's start page like an ad click once per consent choice (no choice and on to the next page, accept all, reject all, analytics only), each in a fresh browser, and returns which tags sent after each choice and the [consent matrix](#consent-scenarios). `campaign` takes the campaign parameters to check (as in `start_audit`), `concurrency` how many choices run at once (default 2, at most 4), `providers` the platforms to count, `allowed_hosts` other hosts the pages may load from, and `language` the language of the answer. It takes from a few seconds to a couple of minutes, depending on the site. |
 | `get_containers` | Lists every GTM container and Google tag the open audit's pages loaded so far, with how each reached the page (see [Google containers](#google-containers)), its dataLayer, host, GTM environment and the step it loaded at, as text and JSON. |
 | `get_widgets` | Lists every embedded third-party widget the open audit's pages had so far (see [Embedded widgets and iframes](#embedded-widgets-and-iframes)): where it was embedded, its containers, the tracking it sent to its own accounts and to the site's, its own dataLayer events, and the events that never reached the site's accounts, as text and JSON. |
 | `get_report` | Reads a report this server wrote, by the name `finish_audit` or `run_audit` gave: `part` `markdown` (default, `report.md`), `summary` (`summary.json`), `timeline` (the JSON timeline of every journey, with the containers each step loaded) `containers` (every Google container with how it reached the page, as JSON) `widgets` (every embedded widget with its tracking and dataLayer events, as JSON) or `messages` (every event an iframe posted to the page, with what the page did next, as JSON). Only this server's own reports, over HTTP too. |
@@ -786,7 +788,7 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 ## Roadmap
 
 - Consent Check: deeper audits of cookie banners and Consent Mode v2 against GDPR/KVKK.
-- Measurement Plan: draft a plan and dataLayer spec from a URL.
+- Measurement Plan: a dataLayer spec next to the plan `aitd plan` already drafts from a URL.
 - Hosted version with scheduled runs, deploy webhooks, a hosted MCP server and multi-site dashboards for agencies at [analitikisler.com](https://analitikisler.com).
 
 ## Development

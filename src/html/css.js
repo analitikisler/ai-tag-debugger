@@ -101,8 +101,8 @@ color-scheme:light dark;
 // ---------- end of tokens ----------
 
 // ---------- components: chips, badges, cards, tabs, filter bar, tables, scorecard ----------
-const COMPONENTS = `/* Direction D shared components. Written against CONTRACT.md "Generic behaviors"; no section ids here.
-   Colours only through tokens.css. Order: reset, type, chips, badges, cards, tabs, filter bar, tables,
+const COMPONENTS = `/* Direction D shared components. Generic behaviours only; no section ids here.
+   Colours only through the tokens above. Order: reset, type, chips, badges, cards, tabs, filter bar, tables,
    info grid, scorecard, print. */
 
 /* ---------- reset and type ---------- */
@@ -356,7 +356,7 @@ const SHELL = `/* Page shell: skip link, top bar, rail (expanded 200 px, collaps
 /* JS hides with the hidden attribute; a section rule that sets display must not bring a hidden row back on screen. */
 @media screen{[hidden]{display:none!important}}
 
-/* shell-level helpers (C had them; components.css does not) */
+/* shell-level helpers (not part of the shared components) */
 .js-only{display:none!important}
 html.js .js-only{display:inline-flex!important}
 html.js .sec-tools.js-only{display:flex!important}
@@ -497,7 +497,7 @@ const PRODUCT = `.plate{fill:var(--card);stroke:var(--border);stroke-width:1}
 
 // ---------- summary: #summary ----------
 const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "about this run" cards.
-   Scoped by .sm, the class on both #summary and #failed-summary; components.css supplies .scorecard, .chip, .grid>.info. */
+   Scoped by .sm, the class on #summary; the shared components supply .scorecard, .chip, .grid>.info. */
 .sm>.scorecard{margin-top:var(--s4)}
 .sm>.sm-about{margin-top:var(--s5)}
 
@@ -604,7 +604,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 
 // ---------- findings: #findings ----------
 const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so no rule leaks into another section.
-   Generic pieces (.card, .tabs, .chip, .filterbar, .badge, .n) come from components.css; this file only tunes them. */
+   Generic pieces (.card, .tabs, .chip, .filterbar, .badge, .n) come from the shared components; this part only tunes them. */
 
 /* ---------- filter bar: one line at 1280, a "Filters (n)" fold under 720 ---------- */
 .fnd .filterbar{position:relative;margin-top:var(--s2);gap:8px 10px;padding:8px 12px;counter-reset:fc}
@@ -783,7 +783,7 @@ a.chip.chip-sev:hover{text-decoration:none}
 
 // ---------- journeys: #journeys ----------
 const JOURNEYS = `/* Journeys (Direction D): journey tabs + viewport switch, step timeline, step pane with Hits / Data Layer / Requests tabs.
-   Section-scoped; generic .tabs/.card/.chip come from components.css. No max-width anywhere: the pane takes what is left. */
+   Section-scoped; generic .tabs/.card/.chip come from the shared components. No max-width anywhere: the pane takes what is left. */
 #journeys{min-width:0}
 
 /* ---------- picker: journey tabs, viewport switch on the same line (right) ---------- */
@@ -1027,7 +1027,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 
 // ---------- consent: #consent ----------
 const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Scenarios cards. Colours only through tokens;
-   denied/granted/none come from .chip-consent in components.css (denied is the crimson red token, never amber). */
+   denied/granted/none come from .chip-consent in the shared components (denied is the crimson red token, never amber). */
 #consent .cs-list{list-style:none;margin:var(--s3) 0 var(--s2);padding:0;display:grid;gap:var(--s2)}
 #consent .cs-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);min-height:48px;padding:8px var(--s4);margin:0}
 #consent .cs-cells{display:flex;flex-wrap:wrap;align-items:center;gap:6px var(--s4);min-width:0}
@@ -1064,7 +1064,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 @media print{
 #consent .cs-row{break-inside:avoid}
 }
-/* journeys.css still has a bare .t (mono time); keep the card title independent of it */
+/* the journeys rules have a bare .t (mono time); keep the card title independent of it */
 #consent details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
 #consent .cs-tbl{min-width:560px}
 #consent .cs-tbl td,#consent .cs-tbl th{white-space:nowrap}`;
@@ -1072,7 +1072,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 
 // ---------- scope: #coverage, #inventory and #run ----------
 const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by section id; colours only through tokens. */
-/* journeys.css still has a bare .t (mono time); keep the card titles independent of it */
+/* the journeys rules have a bare .t (mono time); keep the card titles independent of it */
 #coverage details.card>summary>.t,#inventory details.card>summary>.t,#run details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
 #coverage .card+.card,#run .card{margin-top:var(--s2)}
 

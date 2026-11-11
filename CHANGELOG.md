@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Fixes from a full review of the project. No new features, but three changes can alter results you already rely on: an unfinished journey now exits with 1, ad pixels of every platform are checked for consent, and more cookies count as tracking cookies.
+Fixes from a full review of the project. The one addition is `aitd plan --lang`. Three changes can alter results you already rely on: an unfinished journey now exits with 1, ad pixels of every platform are checked for consent, and more cookies count as tracking cookies.
 
 - MCP over HTTP: `get_report` now finds the reports earlier requests wrote (it always answered that the server had written none), a request with a malformed address no longer stops the server, and `start_audit` calls made side by side can no longer open more browsers than the limit of four.
 - MCP: an inline `measurement_plan` is checked like a saved one before the browser closes, so a plan the checks cannot read no longer costs the run. Tool calls on one audit run one after another, so two sent together no longer share a step. `consent_matrix` says when the page would not open instead of "no consent banner", and answers wholly in the language asked for. The stdio server exits when the app that started it goes away, even with an audit open. `aitd mcp --data-dir <dir>` is now honoured: it was accepted and ignored.
@@ -29,6 +29,13 @@ Fixes from a full review of the project. No new features, but three changes can 
 - Over HTTP the MCP server no longer refuses public sites whose address starts with 192.0 (WordPress.com's among them) as private: only the two reserved blocks, 192.0.0.x and 192.0.2.x, are refused, and the documentation ranges 198.51.100.x and 203.0.113.x now are too.
 - Docs say what the HTTP server serves (the report files in its reports folder, earlier audits' included), and no longer promise that `--providers` and `run --out` will be removed: both keep working.
 - Removed from the repository: design notes the shipped report replaced (`docs/design/directions/`, `ux-spec.md`, `ux-audit.md`, `report-brief.md`, `copy-guide.md`, `a11y-checklist.md`, `reference-ux.md`) and the retired brand files in `brand/retired/`. They remain in the git history.
+- `plan.html` is written in the report language: `aitd plan --lang tr` (and `plan import`, and the plan a first run learns) gives a Turkish page. It was English only.
+- A hit's parameter tips are the ones its own platform means: a Meta or Pinterest hit no longer explains `v` or `tid` with GA4's meaning.
+- A duplicate is counted once and shown the same everywhere: the Summary and the Findings card use the check's own number and both say "per action".
+- Redaction: a JSON body cut at the 32 KB limit now loses email addresses inside arrays and everything under `user_data`, as a whole body does. A GA4 event parameter named `country`, `city`, `region` or `zip` is still redacted but no longer reported as user data sent in plain text.
+- report.md no longer says "no plain-text email or user data in any hit" when an `--events` filter left the finding out.
+- Turkish: the report shows the language as "Türkçe", and "temel dosya", "banner" and "Görünüm" are used the same way throughout.
+- Speed: a report for a long run (5,000 hits) renders in less than half the time, and an audit reads the site's runs folder once instead of once per journey.
 - Removed: strings, icons and mock-up code the report never used. The report's inline script changed, so its CSP hash did too.
 - Docs: README rows for `--topic`, `--yes` and `detect_providers`, the commands each option applies to, the `decline_cookies` journey, the four tabs of a step, and `--host` and `--reports` for the MCP server; the project layout in CONTRIBUTING lists every module.
 

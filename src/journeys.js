@@ -220,7 +220,7 @@ export function journeysFromPlan(plan, max = MAX_PLAN_JOURNEYS) {
     let id = base;
     for (let n = 2; journeys.some((j) => j.id === id); n++) id = `${base}_${n}`;
     const goal = presetId === id ? JOURNEY_PRESETS[presetId].goal : group.merged ? group.merged.map((g) => goalFor(g.page, g.events)).join(" Then ") : goalFor(group.page, group.events);
-    journeys.push({ id, goal, planEvents: group.events.map((e) => e.name) });
+    journeys.push({ id, goal });
     for (const e of group.events) ids.set(e, id);
   }
   return {

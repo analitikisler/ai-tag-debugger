@@ -51,7 +51,7 @@ function tallyOf(rows, runs, metrics, findings) {
 }
 
 /**
- * @typedef {object} Ctx  What every section's render(ctx) receives. CONTRACT-IMPL.md describes each field.
+ * @typedef {object} Ctx  What every section's render(ctx) receives.
  * @property {object} m  messages(lang)
  * @property {string} lang
  * @property {string} title

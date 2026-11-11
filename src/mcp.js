@@ -692,7 +692,7 @@ export function buildServer(opts) {
     {
       title: "Compare every consent choice side by side",
       description:
-        "Opens the site's start page like an ad click in a fresh browser once per consent choice: no choice and on to the next page, accept all, reject all and analytics only. Returns which tags sent after each choice, and a matrix of the first Google hit's consent, whether the campaign parameters reached it, whether the GA4 client id was kept, the _gcl_aw cookie, the cookies set, when each tag was called and the Google tag's own consent, with what should not happen marked. Needs a consent banner the tool can answer. Takes about half a minute per choice.",
+        "Opens the site's start page like an ad click in a fresh browser once per consent choice: no choice and on to the next page, accept all, reject all and analytics only. Returns which tags sent after each choice, and a matrix of the first Google hit's consent, whether the campaign parameters reached it, whether the GA4 client id was kept, the _gcl_aw cookie, the cookies set, when each tag was called and the Google tag's own consent, with what should not happen marked. Needs a consent banner the tool can answer. Takes from a few seconds to a couple of minutes, depending on the site.",
       inputSchema: {
         site: z.string().describe("The page to start from, e.g. https://www.example.com/"),
         campaign: campaignSchema().describe(`The campaign parameters to open the start page with, as the UTM check. ${CAMPAIGN_DOC}`),

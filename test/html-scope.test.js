@@ -182,12 +182,12 @@ test("Turkish: every word of the three sections comes from the tr strings", () =
   assert.match(html, /<b>9<\/b> olaydan 11|11 olaydan <b>9<\/b>/);
   assert.match(html, /2 olayda eksik parametre/);
   assert.match(html, /placeholder="Olay ara"/);
-  assert.match(html, /<b>2<\/b> geçti|4 satın almadan <b>2<\/b> geçti/);
+  assert.match(html, /4 satın almadan <b>2<\/b> geçti/);
   assert.match(html, /aria-label="Etiket envanteri"/);
   assert.match(html, /Kontrol edildi, görülmedi/);
   assert.match(html, /<b>36<\/b> istek/);
   assert.match(html, /<dt>Oluşturulma<\/dt>/);
-  assert.match(html, /<dt>Sürüm<\/dt>|<dt>[^<]+<\/dt><dd><code>\d/);
+  assert.match(html, /<dt>Sürüm<\/dt><dd><code>\d/);
   assert.match(html, /ilk istek <b>50–63<\/b> ms/);
   for (const en of ["Search events", "missing params", "Seen<", "Generated", "first hit", "Needs<", "None seen"]) assert.ok(!html.includes(en), en);
 });

@@ -4,7 +4,10 @@
 // { plan, runs, findings, consentScenarios } (no I/O, no AI, no HTML) and returns plain data; the
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
-import { canonicalEvent, carriesAutoEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
+import {
+  canonicalEvent, carriesAutoEvent, EMPTY_LIST, expectedIn, GOOGLE_PLATFORMS, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, paramOf, PLAN_BUCKETS, planCheck,
+  sentBefore, SEVERITY_ORDER, summarize, tagConsentStates, V2_SIGNALS,
+} from "./checks.js";
 import { AD_PLATFORMS, CONSENT_STATES, IGNORE, consentTable } from "./consent.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
@@ -26,44 +29,22 @@ export const SCORE_WEIGHTS = {
 export const CONVERSION_EVENTS = new Set(["purchase", "generatelead", "lead", "signup", "completeregistration", "subscribe"]);
 
 const PROBLEM_SEVERITIES = ["broken", "risk", "warning"];
-const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
-const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
-// Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
-const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 // Consent findings that say the visitor's "no" was not honoured, against the ones that say the setup is risky.
 const CONSENT_FAIL_CHECKS = new Set(["after_reject", "cookies_after_reject", "reject_ignored", "reject_button_failed"]);
 const CONSENT_ATTENTION_CHECKS = new Set(["before_consent", "cookies_before_consent", "consent_default_missing", "consent_default_late", "consent_default_not_applied", "consent_v2_missing", "consent_v2_update"]);
 const CONSENT_CHECK = /^(consent_|cookies_|reject_|before_consent|after_reject)/;
 
-// Ecommerce parameters sites send under another name (UA-style products/revenue, order ids), as checks.js reads them.
-const PARAM_ALIASES = {
-  items: ["products", "item_list", "contents"],
-  value: ["revenue", "total"],
-  transaction_id: ["order_id", "orderid", "oid"],
-  currency: ["currency_code", "cu"],
-};
-const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
-
+// The parameter aliases, the event order and the Consent Mode signals are the checks' own (checks.js), so a metric can
+// never read a hit differently from the finding about it.
 const isConversion = (name) => CONVERSION_EVENTS.has(canonicalEvent(name));
 const isProblem = (f) => PROBLEM_SEVERITIES.includes(f.severity);
-const expectedIn = (ev, journeyId) => !ev.journeys || ev.journeys.includes(journeyId);
 const checked = (ev, run) => !run.providers || run.providers.includes(ev.platform);
 const lowerPlatform = (ev) => ({ ...ev, platform: String(ev.platform ?? "").toLowerCase() });
 const round = (n, digits = 0) => (n == null ? null : Math.round(n * 10 ** digits) / 10 ** digits);
 const percent = (part, whole) => (whole ? Math.round((part / whole) * 100) : null);
 const emptyCounts = () => ({ broken: 0, risk: 0, warning: 0, info: 0, ok: 0 });
-/** Whether a happened before b: an earlier step, or the same step and an earlier time when both have one. */
-const sentBefore = (a, b) => a.step < b.step || (a.step === b.step && a.t != null && b.t != null && a.t < b.t);
 const byTime = (a, b) => (sentBefore(a, b) ? -1 : sentBefore(b, a) ? 1 : 0);
 const uniq = (list) => [...new Set(list)];
-
-/** A hit's parameter under its own name or the first common alias it carries. */
-function paramOf(hit, name) {
-  for (const n of [name, ...(PARAM_ALIASES[name] ?? [])]) {
-    if (hit.params?.[n] !== undefined && hit.params[n] !== "") return hit.params[n];
-  }
-  return undefined;
-}
 
 /** The run's step with this index, or with this label when the finding only carries the label. */
 const stepOf = (run, ref) => (run?.steps ?? []).find((s) => (typeof ref === "number" ? s.index === ref : s.label === ref)) ?? null;

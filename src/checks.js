@@ -11,14 +11,14 @@ import { messageOutcomes, widgetSummaries, widgetsOf } from "./frames.js";
 const platformName = (p) => PROVIDERS[p] ?? p;
 // Ad pixels with no consent signal of their own: a hit before consent or after a reject is a problem whatever it says.
 export const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok", "pinterest", "snapchat", "x", "linkedin", "microsoft_ads", "criteo"]);
-const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
+export const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
 
 /** Whether a happened before b: an earlier step, or the same step and an earlier time when both have one. */
-const sentBefore = (a, b) => a.step < b.step || (a.step === b.step && a.t != null && b.t != null && a.t < b.t);
+export const sentBefore = (a, b) => a.step < b.step || (a.step === b.step && a.t != null && b.t != null && a.t < b.t);
 
 const EMAIL = /[A-Z0-9._%+-]+(@|%40)[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 // Consent Mode v2 added two signals to ad_storage and analytics_storage. Google requires them for EEA/UK traffic.
-const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
+export const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 // The signals a "reject all" must keep denied. functionality_storage and security_storage cover what
 // the site needs to work, and personalization_storage its own features, so CMPs grant them on reject too.
 const TRACKING_SIGNALS = CONSENT_SIGNALS;
@@ -26,7 +26,7 @@ const TRACKING_SIGNALS = CONSENT_SIGNALS;
 const claimsGranted = (hit) => TRACKING_SIGNALS.some((k) => hit.consent?.[k] === "granted");
 // The analytics and ad cookies of the vendors the tag inventory names (COOKIE_VENDORS in inventory.js lists the same ones by vendor).
 export const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_gac_.+|_fbp|_fbc|_ttp|_tt_.+|ttclid|_uet(sid|vid|msclkid)|MUID|_clck|_clsk|_hj.+|_pin_.+|_pinterest_.+|_scid|sc_at|_cto_.+|cto_.+|__kla_id|IDE|test_cookie|fr|li_.+|_li_.+|bcookie|lidc|UserMatchHistory|_dc_gtm_.+)$/;
-const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
+export const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
  * @typedef {{ platform: string, name: string, aliases?: string[], required_params?: string[], journeys?: string[], allow_multiple?: boolean }} PlanEvent
@@ -122,7 +122,7 @@ export function hasParam(hit, name) {
 }
 
 /** A hit's parameter under its own name or the first common alias it carries. */
-function paramOf(hit, name) {
+export function paramOf(hit, name) {
   for (const n of [name, ...(PARAM_ALIASES[name] ?? [])]) {
     if (hit.params?.[n] !== undefined && hit.params[n] !== "") return hit.params[n];
   }
@@ -130,7 +130,7 @@ function paramOf(hit, name) {
 }
 
 const isPurchase = (hit) => canonicalEvent(hit.name) === "purchase";
-const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
+export const EMPTY_LIST = /^\s*(\[\s*\])?\s*$/;
 
 /** The page load a hit came from: GA4's page load id (_p) when it has one, else the page address. */
 function pageOf(hit) {
@@ -161,7 +161,7 @@ function visitorEmailIn(text, hit) {
   });
 }
 
-function expectedIn(planEvent, journeyId) {
+export function expectedIn(planEvent, journeyId) {
   return !planEvent.journeys || planEvent.journeys.includes(journeyId);
 }
 

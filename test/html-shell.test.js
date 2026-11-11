@@ -135,7 +135,8 @@ test("ids: a finding's place links to the hit that carried its event, and steps 
   const run = runs[3];
   assert.equal(stepTitle(run, run.steps[1]), "Open Home");
   assert.equal(stepTitle(run, run.steps[11]), "Place the order");
-  assert.equal(pageTitle(run, 11), pageTitle(run, 11).replace(/ · .*$/, ""));
+  // "Thank you · Demo Shop" without the site's name, which repeats on every page.
+  assert.equal(pageTitle(run, 11), "Thank you");
   // The sprite keeps only what the page uses, with the new icons available.
   assert.match(sprite('<use href="#ui-desktop"/>'), /<symbol id="ui-desktop"/);
   assert.doesNotMatch(sprite('<use href="#ui-desktop"/>'), /ui-mobile/);

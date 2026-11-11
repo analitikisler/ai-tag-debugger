@@ -172,7 +172,7 @@ test("ported 0.17 behaviors: push pairing, hit order, sources, tips, GA4 batches
   // Skipped out-of-scope requests, the GTM request, an unknown platform's initials, the flagged hit and its finding link.
   assert.match(s1, /4 out-of-scope requests were skipped in this step: Microsoft Clarity 3, DoubleClick 1\./);
   assert.match(s1, /gtm\.js/);
-  assert.match(s1, /<span class="plat-fb s14" aria-hidden="true">P<\/span>|<use href="#p-pinterest"\/>/);
+  assert.match(s1, /<use href="#p-pinterest"\/>/);
   assert.match(s1, /<details class="card jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open>/);
   assert.match(s1, /<a href="#f-ga4-add_to_cart-missing_params">Finding →<\/a>/);
   assert.match(html, /<span class="muted">No dataLayer push with this event name in this step\./);

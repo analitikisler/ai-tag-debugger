@@ -282,8 +282,8 @@ from the index when one exists and reads the capture when it does not, so a run 
 version of the tool (no index yet), a folder copied in from another machine, or a corrupt index all
 still work; the only cost is the capture reads for the runs that are missing from the index. Deleting
 `history.json` is always safe. An index entry wins over its capture once written, so a hand-edited
-capture is not re-read; that is acceptable because nobody edits captures, and `aitd history --rebuild`
-(delete the file, load, write) covers the rest.
+capture is not re-read; that is acceptable because nobody edits captures, and deleting `history.json`
+(it is rebuilt from the captures on the next load) covers the rest.
 
 Where to call it: in `audit.js` right after `writeReports`, only for runs saved in the runs folder (not
 `--out`), with `{ id: path.basename(outDir), capture: { runs, findings }, version: VERSION, ai }`; the

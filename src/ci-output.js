@@ -71,7 +71,6 @@ export function renderJunit({ runs = [], findings = [], lang = "en", failOn = "b
 export function buildSummary({ runs = [], findings = [], counts, plan = null, against = null, ai = null, lang = "en", reportPath, outDir, changes = null, version = "", site = "", metrics = null, trend = null }) {
   // Only the run folder's name and file names relative to it: a summary uploaded as a CI artifact must not carry the runner's paths.
   const dir = outDir ?? (reportPath ? path.dirname(reportPath) : ".");
-  const file = (name) => name;
   return {
     version,
     site,
@@ -99,6 +98,6 @@ export function buildSummary({ runs = [], findings = [], counts, plan = null, ag
     })),
     changes: changes ? { fixed: changes.fixed ?? [], new: changes.new ?? [] } : null,
     run: path.basename(dir),
-    files: { html: file("report.html"), md: file("report.md"), csv: file("timeline.csv"), capture: file("capture.json"), ...(against ? { planCheck: file("plan-check.json") } : {}), junit: file("junit.xml"), summary: file("summary.json") },
+    files: { html: "report.html", md: "report.md", csv: "timeline.csv", capture: "capture.json", ...(against ? { planCheck: "plan-check.json" } : {}), junit: "junit.xml", summary: "summary.json" },
   };
 }
