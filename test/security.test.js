@@ -48,6 +48,9 @@ test("private, loopback, link-local and mapped addresses are recognized", async 
     assert.ok(isPrivateAddress(ip), ip);
   }
   for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::1"]) assert.ok(!isPrivateAddress(ip), ip);
+  // Of 192.0.x.x only the two reserved blocks are refused; the rest are public hosts (192.0.78.x serves WordPress.com sites).
+  for (const ip of ["192.0.0.5", "192.0.2.10", "198.51.100.7", "203.0.113.9"]) assert.ok(isPrivateAddress(ip), ip);
+  for (const ip of ["192.0.78.9", "192.0.66.2"]) assert.ok(!isPrivateAddress(ip), ip);
   assert.match(await navigationError("file:///etc/passwd"), /Only http and https/);
   assert.match(await navigationError("http://localhost/", { isPrivate: async () => true }), /private network address/);
 });

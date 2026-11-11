@@ -252,8 +252,8 @@ async function main(args = process.argv.slice(2)) {
   }
   const maxSteps = values["max-steps"] ? Number(values["max-steps"]) : undefined;
   if (maxSteps !== undefined && !(Number.isInteger(maxSteps) && maxSteps > 0)) throw new Error("--max-steps must be a positive whole number.");
-  // run --out is a hidden alias kept for one minor version; --data-dir replaces it.
-  if (values.out) console.log("Note: run --out will be removed in a later version. Runs are saved in aitd/<domain>/runs/<id>/; use --data-dir <dir> to keep them elsewhere.");
+  // run --out is the old way to say where a run is written; it still works, and --data-dir is what the docs name.
+  if (values.out) console.log("Note: run --out is the old option. Runs are saved in aitd/<domain>/runs/<id>/; use --data-dir <dir> to keep them elsewhere.");
   const baselineFile = values.baseline ?? loaded.baselineFile ?? null;
   if (values["update-baseline"] && !baselineFile) throw new Error('--update-baseline needs --baseline <file> or "baseline" in the config.');
   // A baseline that doesn't exist yet is fine when this run writes it.

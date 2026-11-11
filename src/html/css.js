@@ -435,7 +435,6 @@ main:focus{outline:none}
 .sec>h2:focus{outline:none}
 main [id]{scroll-margin-top:calc(var(--top) + var(--s3))}
 html:not(.js) main>.sec+.sec{margin-top:var(--s7);padding-top:var(--s5);border-top:1px solid var(--border)}
-/* The failed run is a mockup-only state reached through the top-bar switch, so without JS it stays out of the page. */
 /* expand / collapse all, top right of the section, level with its h2 */
 .sec-tools{position:absolute;top:-4px;right:0;gap:var(--s1)}
 .sec-tools .btn{height:26px;padding:0 8px;font-size:12px;color:var(--muted)}

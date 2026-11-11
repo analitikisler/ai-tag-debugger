@@ -63,7 +63,7 @@ With a `gtm_container` export, each broken event also names the GTM tag that sen
 
 ### Choose the platforms to check
 
-By default an audit checks GA4, Google Ads, Meta and TikTok, and also any other platform the site turns out to use. That platform is checked from its first request, with no setting needed. Choosing platforms turns this detection off. Pick a fixed list with `--platforms ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo and Piwik PRO. Clarity and Hotjar show their tag loads, and the others show their network requests. `--providers` still works as the old name of `--platforms` for one more minor version and prints a note.
+By default an audit checks GA4, Google Ads, Meta and TikTok, and also any other platform the site turns out to use. That platform is checked from its first request, with no setting needed. Choosing platforms turns this detection off. Pick a fixed list with `--platforms ga4,meta,x`, `"providers"` in the config, or `providers` on the MCP `start_audit` and `run_audit` tools. You can choose from `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` and `adsense`. Events are parsed for GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo and Piwik PRO. Clarity and Hotjar show their tag loads, and the others show their network requests. `--providers` still works as the old name of `--platforms` and prints a note.
 
 Requests to platforms you didn't choose are still answered locally, so they never reach those accounts either. They are left out of the timeline, the CSV and the checks, and only counted: the report lists them with their request counts (for example "61 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick"), and each step says how many it skipped. Without `--platforms`, any platform your measurement plan names or the site sends to is added to the default list. Planned events for platforms you did leave out are listed in one info finding instead of being reported as missing. Tag manager and consent platform requests are always shown.
 
@@ -610,7 +610,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--events <names>` | run | Only check these events, e.g. `purchase,add_to_cart`. |
 | `--viewport <name>` | run | `desktop` or `mobile` (repeatable). |
 | `--concurrency <n>` | run | How many journeys to run at once, each in its own browser: `1` (default) to `8`. Side by side, each journey's log lines start with `[journey/viewport]`, and `--headed` opens that many browser windows. Same as `concurrency` in the config. |
-| `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. Replaces `--providers`, which still works for one more minor version. |
+| `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. `--providers` is its old name and still works. |
 | `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
 | `--lang <code>` | run, history | Report language: `en` or `tr`. For `history`, the language of the trend lines. |
 | `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
@@ -627,7 +627,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--json` | history | Print the trend series, the finding timeline and the journey stability as JSON instead of text. |
 | `--format xlsx\|csv` | plan export | The spreadsheet format. Default: `xlsx`. |
 | `--update` | replay | Make this replay's findings the expected ones. |
-| `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
+| `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` is the old way to choose where a run is written; it still works and prints a note, but `--data-dir` is the one to use. |
 | `--base-url <url>` | plan, run | The API address for an OpenAI-compatible provider. |
 | `--allow-host <host>` | plan, run, login | Another host the browser may visit (repeatable), such as a hosted checkout or a single sign-on page. Same as `allowed_hosts`. |
 | `--topic <name>` | plan | Draft a plan for one kind of event only: `custom-events`, `ecommerce`, `forms` or `consent`. |
@@ -762,7 +762,7 @@ The server prints a URL with a random secret path, like `https://<your-tunnel-ad
 
 In HTTP mode, the server is more locked down than locally:
 
-- It doesn't read measurement plans or configs from your disk (pass the plan as JSON text in the chat, or name a saved plan with `against: latest`, `first` or its ID), and `run_audit` isn't offered. It only serves the reports it wrote itself.
+- It doesn't read measurement plans or configs from your disk (pass the plan as JSON text in the chat, or name a saved plan with `against: latest`, `first` or its ID), and `run_audit` isn't offered. Behind the secret path it serves only the report files (`report.html`, `report.md`, `timeline.csv`) in its reports folder, earlier audits' included.
 - The browser opens only `http` and `https` pages, and refuses `localhost` and private network addresses (such as `192.168.x.x` or `169.254.169.254`), so the URL can't be used to look into your network. All browser traffic, WebSockets included, goes through a small built-in proxy that resolves each host once and connects only to the address it checked, so a DNS answer that changes mid-audit can't get around the check. To audit a local staging site this way anyway, start the server with `--allow-private-network`.
 - Tracking requests are answered inside the browser, so audits never reach the audited site's accounts. `start_audit` with `live: true` lets them through only when the server was started with `--allow-live`.
 - Audits left open for 15 minutes are closed, and request bodies are limited to 1 MB.

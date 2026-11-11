@@ -17,7 +17,7 @@ Most readers never open `report.html`: the Markdown goes into a pull request com
 
 | # | Heading (H-level) | Lines | Content |
 |---|---|---|---|
-| 1 | `# {Site}: {verdict sentence}` (H1) | 1 | The deterministic verdict from `ux-spec.md` §3, with the site, so the title alone tells the story in a notification. |
+| 1 | `# {Site}: {verdict sentence}` (H1) | 1 | The deterministic verdict (`metrics.md`), with the site, so the title alone tells the story in a notification. |
 | 2 | meta line | 2 | "Generated {date} · {j} journeys · {p} platforms · ai-tag-debugger {version} · [HTML report](report.html)". Counts line in bold: "**2 broken · 1 risk · 1 warning · 4 passed**". |
 | 3 | `## Changed since last run` (H2) | ≤ 6 | Only when a previous run exists: one bold line, then fixed / new / still open as `- ` items with finding titles. "First run" is one line. |
 | 4 | `## Priorities` (H2) | ≤ 12 | One `### {Owner}` (H3) per owner with findings, numbered items: `1. **Broken** purchase without value, currency · checkout · mobile · step 11`. Owners with nothing get one line: "Marketing: nothing to do". |

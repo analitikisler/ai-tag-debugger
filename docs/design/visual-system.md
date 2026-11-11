@@ -1,6 +1,6 @@
 # Report visual system
 
-The HTML report is one self-contained file: inline CSS, inline SVG, images only as data URIs (the MCP server serves it with `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src` and the hash of its one inline script). It is read on screen by marketers and developers, forwarded to clients as a PDF, and often printed in black and white. Every rule below follows from that. The working example is `docs/design/directions/d-inspector/mockup.html`, which `src/html/` implements; its tokens are the `TOKENS` constant in `src/html/css.js`.
+The HTML report is one self-contained file: inline CSS, inline SVG, images only as data URIs (the MCP server serves it with `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src` and the hash of its one inline script). It is read on screen by marketers and developers, forwarded to clients as a PDF, and often printed in black and white. Every rule below follows from that. The working example is the report itself: `npm run demo:serve` and `npm run demo` write one under `aitd/localhost/runs/`. Its tokens are the `TOKENS` constant in `src/html/css.js`.
 
 ## 1. Tokens
 

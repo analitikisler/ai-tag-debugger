@@ -63,7 +63,7 @@ GA4 istekleri başka bir ana makinedeki bir sunucu konteynerine gidiyorsa ya da 
 
 ### Kontrol edilecek platformları seçin
 
-Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder; ayrıca sitenin kullandığı başka her platformu, ilk isteğinden itibaren kontrol eder. Bunun için bir ayar gerekmez. Platform seçmek bu otomatik algılamayı kapatır. Sabit bir liste için `--platforms ga4,meta,x` kullanın, ayar dosyasında `"providers"` ya da MCP `start_audit` ve `run_audit` araçlarında `providers` verin. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo ve Piwik PRO için event'ler ayrıştırılır. Clarity ve Hotjar etiket yüklemelerini gösterir; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak bir minör sürüm daha çalışır ve bir not yazdırır.
+Varsayılan olarak bir denetim GA4, Google Ads, Meta ve TikTok'u kontrol eder; ayrıca sitenin kullandığı başka her platformu, ilk isteğinden itibaren kontrol eder. Bunun için bir ayar gerekmez. Platform seçmek bu otomatik algılamayı kapatır. Sabit bir liste için `--platforms ga4,meta,x` kullanın, ayar dosyasında `"providers"` ya da MCP `start_audit` ve `run_audit` araçlarında `providers` verin. Seçenekler: `ga4`, `google_ads`, `meta`, `tiktok`, `x`, `linkedin`, `microsoft_ads`, `pinterest`, `snapchat`, `criteo`, `klaviyo`, `adobe`, `matomo`, `piwik_pro`, `clarity`, `hotjar`, `doubleclick` ve `adsense`. GA4, Google Ads, Meta, TikTok, X, LinkedIn, Microsoft Ads, Pinterest, Snapchat, Criteo, Klaviyo, Adobe Analytics, Matomo ve Piwik PRO için event'ler ayrıştırılır. Clarity ve Hotjar etiket yüklemelerini gösterir; diğerlerinin ağ istekleri gösterilir. `--providers` eski adı olarak çalışmaya devam eder ve bir not yazdırır.
 
 Seçmediğiniz platformlara giden istekler de yerelde yanıtlanır, yani o hesaplara da ulaşmaz. Bu istekler zaman akışına, CSV'ye ve kontrollere alınmaz, sadece sayılır: rapor bunları istek sayılarıyla listeler (örneğin "Kapsam dışı 61 istek atlandı: Microsoft Clarity, DoubleClick") ve her adım kaç istek atladığını gösterir. `--platforms` vermezseniz, ölçümleme planınızda geçen ya da sitenin gönderdiği her platform varsayılan listeye eklenir. Dışarıda bıraktığınız platformlar için planlanmış event'ler eksik olarak raporlanmaz, tek bir bilgi bulgusunda listelenir. Etiket yöneticisi ve çerez onayı platformu istekleri her zaman gösterilir.
 
@@ -610,7 +610,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--events <adlar>` | run | Yalnızca bu event'leri kontrol et, örneğin `purchase,add_to_cart`. |
 | `--viewport <ad>` | run | `desktop` ya da `mobile` (tekrarlanabilir). |
 | `--concurrency <n>` | run | Aynı anda kaç yolculuğun çalışacağı, her biri kendi tarayıcısında: `1` (varsayılan) ile `8` arası. Yan yana çalışırken her yolculuğun günlük satırları `[yolculuk/görünüm]` ile başlar ve `--headed` o kadar tarayıcı penceresi açar. Ayar dosyasındaki `concurrency` ile aynıdır. |
-| `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers`'ın yerine geçer; o da bir minör sürüm daha çalışır. |
+| `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers` da çalışmaya devam eder. |
 | `--max-steps <n>` | plan, run | Yolculuk başına en fazla yapay zekâ adımı (`plan` için varsayılan 25). |
 | `--lang <kod>` | run, history | Rapor dili: `en` ya da `tr`. `history` için eğilim satırlarının dili. |
 | `--fail-on <düzey>` | run | Bu düzeyde çıkış kodu 1 olur: `broken` (varsayılan), `risk`, `warning` ya da `never`. |
@@ -627,7 +627,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--json` | history | Eğilim serisini, bulgu zaman çizelgesini ve yolculuk kararlılığını metin yerine JSON olarak yazdır. |
 | `--format xlsx\|csv` | plan export | Elektronik tablo biçimi. Varsayılan: `xlsx`. |
 | `--update` | replay | Bu tekrarın bulgularını beklenen bulgular yap. |
-| `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
+| `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out`, çalıştırmanın yazılacağı yeri seçmenin eski yoludur; çalışmaya devam eder ve bir not yazdırır, ama kullanılması gereken `--data-dir`'dir. |
 | `--base-url <url>` | plan, run | OpenAI uyumlu bir sağlayıcının API adresi. |
 | `--allow-host <ana makine>` | plan, run, login | Tarayıcının ziyaret edebileceği başka bir ana makine (tekrarlanabilir); örneğin barındırılan bir ödeme sayfası ya da tek oturum açma sayfası. `allowed_hosts` ile aynıdır. |
 | `--topic <ad>` | plan | Yalnızca bir tür event için plan hazırlar: `custom-events`, `ecommerce`, `forms` ya da `consent`. |
@@ -762,7 +762,7 @@ Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol iç
 
 HTTP modunda sunucu yerelde olduğundan daha kısıtlıdır:
 
-- Ölçümleme planlarını ya da ayar dosyalarını diskinizden okumaz (planı sohbette JSON metni olarak verin ya da `against: latest`, `first` ya da kimliğiyle kayıtlı bir planı adlandırın) ve `run_audit` sunulmaz. Yalnızca kendi yazdığı raporları sunar.
+- Ölçümleme planlarını ya da ayar dosyalarını diskinizden okumaz (planı sohbette JSON metni olarak verin ya da `against: latest`, `first` ya da kimliğiyle kayıtlı bir planı adlandırın) ve `run_audit` sunulmaz. Gizli yolun ardında yalnızca rapor klasöründeki rapor dosyalarını (`report.html`, `report.md`, `timeline.csv`) sunar; önceki denetimlerinkiler de buna dahildir.
 - Tarayıcı yalnızca `http` ve `https` sayfalarını açar ve `localhost` ile özel ağ adreslerini (`192.168.x.x` ya da `169.254.169.254` gibi) reddeder; böylece URL, ağınızı incelemek için kullanılamaz. WebSocket'ler dahil tüm tarayıcı trafiği, her ana makineyi bir kez çözüp yalnızca kontrol ettiği adrese bağlanan küçük bir yerleşik proxy üzerinden geçer; denetim sırasında değişen bir DNS yanıtı kontrolü atlatamaz. Yerel bir staging sitesini bu şekilde yine de denetlemek için sunucuyu `--allow-private-network` ile başlatın.
 - Takip istekleri tarayıcının içinde yanıtlanır, bu yüzden denetimler denetlenen sitenin hesaplarına hiç ulaşmaz. `start_audit`'teki `live: true` onları yalnızca sunucu `--allow-live` ile başlatıldıysa geçirir.
 - 15 dakika açık kalan denetimler kapatılır ve istek gövdeleri 1 MB ile sınırlıdır.
