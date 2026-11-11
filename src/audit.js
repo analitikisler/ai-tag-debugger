@@ -141,6 +141,8 @@ export async function runAudit(opts) {
   if (config.session_file) config = { ...config, session_file: resolveSessionFile(config.session_file, { site: config.site, dataDir: opts.dataDir ?? DEFAULT_DATA_DIR }) };
   const lang = opts.lang ?? config.language ?? "en";
   if (!LANGUAGES[lang]) throw new Error(`Language must be one of ${Object.keys(LANGUAGES).join(", ")}.`);
+  // What the run prints as it goes, in the report language.
+  const t = messages(lang).ui.run;
   const useAi = opts.ai !== false;
   if (!useAi && !opts.scripted) throw new Error("Without an AI model, journeys must be replayed from their fixed steps (scripted).");
 
@@ -176,15 +178,15 @@ export async function runAudit(opts) {
 
   if (against) {
     const notChecked = plan.events.filter((e) => Array.isArray(e.journeys) && !e.journeys.some((j) => journeys.some((jj) => jj.id === j))).length;
-    log(`Checking against plan ${against.label}: ${journeys.length} ${journeys.length === 1 ? "journey" : "journeys"}${notChecked ? `, ${notChecked} planned ${notChecked === 1 ? "event" : "events"} not checked in this run` : ""}`);
+    log(t.checkingAgainst(against.label, journeys.length, notChecked));
     for (const j of journeys) {
       const expected = plan.events.filter((e) => !e.journeys || e.journeys.includes(j.id)).map((e) => e.name);
-      log(`  - ${j.id}: ${j.goal ?? "fixed steps"}${expected.length ? ` [${[...new Set(expected)].join(", ")}]` : ""}`);
+      log(`  - ${j.id}: ${j.goal ?? t.fixedSteps}${expected.length ? ` [${[...new Set(expected)].join(", ")}]` : ""}`);
     }
   }
 
   const provider = useAi ? await createProvider({ name: opts.provider ?? config.provider, model: opts.model ?? config.model, baseUrl: opts.baseUrl ?? config.base_url, log }) : null;
-  if (provider) log(`Using ${provider.name} (${provider.model})${provider.via ? ` via ${provider.via}` : ""}${alsoSet(provider.key)}`);
+  if (provider) log(`${t.using(provider.name, provider.model, provider.via)}${alsoSet(provider.key)}`);
 
   if (opts.saveSite) await mkdir(opts.saveSite, { recursive: true });
   // Repeat runs start from the route the last completed run took. Not with --out or a replay, which have no history to learn from.
@@ -198,21 +200,21 @@ export async function runAudit(opts) {
     jobLog(`\n▶ ${journey.id} (${viewport})`);
     const hint = hints.get(`${journey.id}|${viewport}`);
     const routeHint = hint && hint.goal === journey.goal ? hint.pages : undefined;
-    if (routeHint) jobLog(`  Starting from the route of the last completed run (${routeHint.length} ${routeHint.length === 1 ? "page" : "pages"})`);
+    if (routeHint) jobLog(`  ${t.routeFrom(routeHint.length)}`);
     const last = replayed.get(`${journey.id}|${viewport}`);
-    if (last) jobLog(`  Replaying the steps of run ${last.runId}${last.viewport === viewport ? "" : ` (${last.viewport})`}`);
+    if (last) jobLog(`  ${t.replaying(last.runId, last.viewport === viewport ? null : last.viewport)}`);
     const fixed = last ? { ...journey, ...(last.start ? { start: last.start } : {}), steps: last.steps, stepsFrom: last.runId } : journey;
     // runJourney keeps its own errors in the run. This catches the rest, such as a browser that won't close,
     // so one journey can't cost the report of the others.
-    const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log: jobLog, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers));
-    jobLog(`  ${run.completed ? "✓" : "✗"} ${run.note} · ${run.hits.length} tracking hits captured`);
+    const run = await runJourney(config, fixed, viewport, { scripted: opts.scripted, provider, routeHint, maxSteps: opts.maxSteps, headed: opts.headed, lang, log: jobLog, saveSite: opts.saveSite, replaySite: opts.replaySite }).catch((err) => failedRun(journey, viewport, err, config.providers, lang));
+    jobLog(`  ${run.completed ? "✓" : "✗"} ${t.journeyDone(run.note, run.hits.length)}`);
     return run;
   });
 
   // Consent scenarios need the live site, so a replay from a saved site skips them. "consent_scenarios": false turns them off.
   const consentScenarios = opts.replaySite || config.consent_scenarios === false
     ? null
-    : await runConsentScenarios(config, { headed: opts.headed, log, concurrency }).catch((err) => (log(`  Consent scenarios failed: ${err.message}`), null));
+    : await runConsentScenarios(config, { headed: opts.headed, log, concurrency, lang }).catch((err) => (log(`  ${t.scenariosFailed(err.message)}`), null));
 
   const findings = annotateFindings(filterFindings(runs.flatMap((run) => checkRun(plan, run, { lang })), events), gtmContainer, runs, { lang });
   // Applied before anything reads the findings, so the explanation, the reports, the alerts and the counts all skip accepted ones.
@@ -221,17 +223,17 @@ export async function runAudit(opts) {
   if (opts.saveSite) {
     try {
       await writeSavedSite(opts.saveSite, { config, plan, runs, findings });
-      log(`\nSaved the site for offline replay in ${opts.saveSite}`);
+      log(`\n${t.siteSaved(opts.saveSite)}`);
     } catch (err) {
       // A site.json from an earlier save would no longer match the recordings next to it.
       await rm(path.join(opts.saveSite, SAVED_SITE_FILE), { force: true });
       saveError = err.message;
-      log(`\nCould not save the site in ${opts.saveSite}: ${err.message}`);
+      log(`\n${t.siteSaveFailed(opts.saveSite, err.message)}`);
     }
   }
   let explained = null;
   if (provider) {
-    log("\nAsking the model to explain the findings…");
+    log(`\n${t.explaining}`);
     explained = await explainFindings({ findings, plan, runs, gtmContainer, provider, lang, log });
   }
 
@@ -241,8 +243,8 @@ export async function runAudit(opts) {
   const { reportPath, summaryPath, changes, metrics, verdict, trend, stability } = await writeReports({ outDir, config, plan, runs, findings, explained, lang, ai: provider ? { name: provider.name, model: provider.model } : null, against, branding: opts.branding ?? config.branding !== false, previous, planChanges: against ? await previousPlanChanges(opts.dataDir, config.site, against.id, plan).catch(() => null) : null, consentScenarios, brand: opts.brand ?? null, failOn: opts.failOn, history: previous === undefined ? null : { dataDir: opts.dataDir } });
   if (config.notify && changes) {
     const { sent, errors } = await sendAlerts({ notify: config.notify, site: new URL(config.site).hostname, changes: { run: path.basename(outDir), ...changes }, lang, reportPath, verdict, trend });
-    if (sent.length) log(`\nSent the changes since the last run to ${sent.join(" and ")}.`);
-    for (const e of errors) log(`\nCould not send an alert. ${e}`);
+    if (sent.length) log(`\n${t.alertsSent(sent)}`);
+    for (const e of errors) log(`\n${t.alertFailed(e)}`);
   }
   const counts = summarize(groupFindings(findings));
   // Accepted counts every finding the baseline matched; a problem accepted in some places only is still counted, and reported as partial.

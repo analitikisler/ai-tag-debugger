@@ -124,8 +124,9 @@ export async function runAgentJourney(session, journey, opts = {}) {
   const maxSteps = opts.maxSteps ?? 30;
   const log = opts.log ?? (() => {});
   const limit = { ...TIMEOUTS, ...opts.timeouts };
-  const seconds = (ms) => (ms % 60_000 ? `${Math.round(ms / 1000)} seconds` : ms === 60_000 ? "a minute" : `${ms / 60_000} minutes`);
-  const readPage = () => withTimeout(session.snapshot(), limit.page, `The page stopped responding: it could not be read for ${seconds(limit.page)}.`);
+  // A journey's note ends up in the report, so it is written in the report language.
+  const t = messages(opts.lang ?? "en").ui.run;
+  const readPage = () => withTimeout(session.snapshot(), limit.page, t.pageTimeout(t.duration(limit.page)));
 
   const first = await readPage();
   const chat = provider.conversation({
@@ -138,13 +139,13 @@ export async function runAgentJourney(session, journey, opts = {}) {
     // A request the step stopped waiting for is cancelled: left alone, the SDK would keep retrying it for minutes
     // after the report is written, and the process could not exit.
     const waiting = new AbortController();
-    const { toolCalls, stop } = await withTimeout(chat.next({ signal: waiting.signal }), limit.model, `The model did not answer within ${seconds(limit.model)}.`).catch((err) => {
+    const { toolCalls, stop } = await withTimeout(chat.next({ signal: waiting.signal }), limit.model, t.modelTimeout(t.duration(limit.model))).catch((err) => {
       waiting.abort();
       throw err;
     });
-    if (stop === "refusal") return { completed: false, note: "The model declined to continue this journey." };
+    if (stop === "refusal") return { completed: false, note: t.modelDeclined };
     if (toolCalls.length === 0) {
-      if (stop === "max_tokens") return { completed: false, note: "The model response was cut off." };
+      if (stop === "max_tokens") return { completed: false, note: t.modelCutOff };
       chat.addUserText("Continue with a browser_action, or call finish.");
       continue;
     }
@@ -167,13 +168,13 @@ export async function runAgentJourney(session, journey, opts = {}) {
         continue;
       }
       log(`  ${call.input.reason}`);
-      const error = await withTimeout(session.act(call.input), limit.action, `The browser action did not finish within ${seconds(limit.action)}.`);
+      const error = await withTimeout(session.act(call.input), limit.action, t.actionTimeout(t.duration(limit.action)));
       results.push({ id: call.id, content: pageView(await readPage(), error) });
     }
     if (finished) return finished;
     chat.addToolResults(results);
   }
-  return { completed: false, note: `Stopped after ${maxSteps} steps without reaching the goal.` };
+  return { completed: false, note: t.stoppedAfter(maxSteps) };
 }
 
 /**
@@ -182,21 +183,22 @@ export async function runAgentJourney(session, journey, opts = {}) {
  */
 export async function runScriptedJourney(session, journey, opts = {}) {
   const log = opts.log ?? (() => {});
+  const t = messages(opts.lang ?? "en").ui.run;
   if (!journey.steps?.length && !journey.incomplete) throw new Error(`Journey "${journey.id}" has no "steps" for --scripted mode.`);
   for (const step of journey.steps ?? []) {
     log(`  ${step.reason ?? `${step.action} ${step.selector ?? step.url ?? ""}`}`);
     const error = await session.act(step);
     if (error && !step.optional) {
-      const failed = `Step "${step.reason ?? step.action}" failed: ${error}`;
+      const failed = t.stepFailed(step.reason ?? step.action, error);
       // Saved steps stop fitting when the site changes; only a model can find the new way through.
-      return { completed: false, note: journey.stepsFrom ? `${failed} The steps saved by run ${journey.stepsFrom} no longer fit the site. Run the journey with an AI model once to save new ones.` : failed };
+      return { completed: false, note: journey.stepsFrom ? `${failed} ${t.stepsStale(journey.stepsFrom)}` : failed };
     }
   }
   // Tags often send a moment after the last click (GA4 batches events). An AI run gives them that time
   // while the model answers; a scripted run would otherwise close the browser first.
   await session.page.waitForTimeout(LAST_STEP_WAIT_MS).catch(() => {});
   if (journey.incomplete) return { completed: false, note: journey.incomplete };
-  return { completed: true, note: "All scripted steps completed." };
+  return { completed: true, note: t.scriptedDone };
 }
 
 /** The file a saved site keeps one journey's recorded responses in. */
@@ -208,6 +210,7 @@ export const harName = (journeyId, viewport) => `${String(journeyId).replace(/[^
  */
 export async function runJourney(config, journey, viewport, opts = {}) {
   const har = (dir) => (dir ? path.join(dir, harName(journey.id, viewport)) : undefined);
+  const t = messages(opts.lang ?? "en").ui.run;
   const session = new AuditSession({
     viewport, site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
     blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
@@ -219,7 +222,7 @@ export async function runJourney(config, journey, viewport, opts = {}) {
     const startUrl = config.campaign_checks === false ? start : withCampaignParams(start);
     const startError = await session.act({ action: "goto", url: startUrl, reason: `Open ${start}` });
     // A replayed journey that was unfinished when saved keeps its saved note, however it fails this time.
-    if (startError) return { ...collect(session, journey, viewport), completed: false, note: journey.incomplete ?? `Could not open the start page: ${startError}` };
+    if (startError) return { ...collect(session, journey, viewport), completed: false, note: journey.incomplete ?? t.startFailed(startError) };
 
     const outcome = await (opts.scripted ? runScriptedJourney(session, journey, opts) : runAgentJourney(session, journey, opts)).catch((err) => {
       if (err instanceof StepTimeout) return { completed: false, note: err.message };
@@ -229,20 +232,20 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   } catch (err) {
     // The model's API, the browser or the site can fail in many ways. That ends this journey, not the run,
     // and what was captured until then is kept.
-    return { ...collect(session, journey, viewport), completed: false, note: journeyError(err) };
+    return { ...collect(session, journey, viewport), completed: false, note: journeyError(err, opts.lang) };
   } finally {
-    if (opts.saveSite) opts.log?.("  Writing the recording…");
+    if (opts.saveSite) opts.log?.(`  ${t.writingRecording}`);
     await session.close();
   }
 }
 
 /** The note of a journey that ended with an error. */
-const journeyError = (err) => `The journey stopped with an error: ${err?.message ?? err}`;
+const journeyError = (err, lang = "en") => messages(lang).ui.run.journeyError(err?.message ?? err);
 
 /** A journey that failed before anything was captured, so the report can still list it. */
-export function failedRun(journey, viewport, err, providers) {
+export function failedRun(journey, viewport, err, providers, lang = "en") {
   return {
-    journeyId: journey.id, viewport, completed: false, note: journeyError(err), hits: [], steps: [], consentStep: null, rejectStep: null,
+    journeyId: journey.id, viewport, completed: false, note: journeyError(err, lang), hits: [], steps: [], consentStep: null, rejectStep: null,
     cookieLog: [], cookieChanges: [], dataLayerLog: [], containerLoads: [], network: [], widgetHits: [], widgetDataLayerLog: [], containerScripts: [], containersRunning: [], containerPreloads: [], frameMessages: [], loginStep: null, providers, skipped: {}, bodyBudgetStep: null, startedAt: Date.now(), pageErrors: [],
   };
 }

@@ -11,6 +11,7 @@ import {
   sectionBlock, use, plat, platIcon, badge, chip, n, esc, secs, pathOf, hostPath, safeKey, platformLabel, sortPlatforms, detailHtml,
   whereTarget, missingParamRows, pageTitle, stepTitle, stepAnchor, hitsOf, pushesOf, requestsOf, hitId, pushId, requestId,
   hitFinding,
+  eventKey, pushEvent, pushText, cell,
 } from "./lib.js";
 
 const VP_ORDER = ["desktop", "mobile"];
@@ -18,23 +19,10 @@ const worstOf = (sevs) => sevs.filter((s) => s in SEVERITY_RANK).sort((a, b) => 
 const rankOf = (sev) => SEVERITY_RANK[sev] ?? 9;
 const trunc = (s, max = 40) => { const t = String(s ?? ""); return t.length > max ? `${t.slice(0, max - 1)}…` : t; };
 const money = (v, c) => (v !== undefined && v !== null && v !== "" ? `${v}${c ? ` ${c}` : ""}` : null);
-const cell = (v) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 const vpIcon = (vp) => (vp === "mobile" ? "ui-mobile" : "ui-desktop");
 
 /* ---------- dataLayer pairing, moved from the 0.17 renderer: a hit shows the push and the request behind it ---------- */
 
-// Pixel event names and their GA4 / dataLayer counterparts, so a Meta or TikTok hit can be shown next to the push behind it.
-const EVENT_ALIASES = {
-  pageview: "pageview", viewcontent: "viewitem", addtocart: "addtocart", addtowishlist: "addtowishlist", initiatecheckout: "begincheckout",
-  addpaymentinfo: "addpaymentinfo", purchase: "purchase", completepayment: "purchase", placeanorder: "purchase", lead: "generatelead",
-  completeregistration: "signup", search: "search", contact: "generatelead", submitform: "generatelead", subscribe: "subscribe", starttrial: "starttrial",
-  viewbasket: "viewcart", tracktransaction: "purchase",
-};
-const normName = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const eventKey = (s) => EVENT_ALIASES[normName(s)] ?? normName(s);
-// GTM-style pushes are objects ({event: "add_to_cart"}); gtag.js records arrays (["event", "add_to_cart", {...}]).
-const pushEvent = (value) => (Array.isArray(value) ? (value[0] === "event" ? value[1] : undefined) : value && typeof value === "object" ? value.event : undefined);
-const pushText = (value) => (Array.isArray(value) && typeof value[0] === "string" ? `gtag(${value.map((v) => JSON.stringify(v, null, 2)).join(", ")})` : JSON.stringify(value, null, 2));
 
 // Per run: step index -> event key -> the pushes with that event name. Built once so rendering stays linear.
 const pushIndexCache = new WeakMap();
@@ -66,12 +54,12 @@ function pushesForHit(run, hit) {
 
 /* ---------- request parameters ---------- */
 
-/** Parameter rows with a glossary tip: the "?" shows the tip on hover and takes no focus; screen readers read the hidden span. */
+/** Parameter rows with a glossary tip, written once: screen readers read it, and hovering the "?" shows the same text; it takes no focus. */
 function paramRows(lang, entries, platform) {
   return entries.map(([k, v]) => {
     const tip = paramTip(k, lang, platform);
     const isItem = /^pr\d+$/.test(k);
-    return `<tr${isItem ? ' class="pr"' : ""}><th scope="row"><span class="pk">${esc(k)}</span>${tip ? `<span class="q" aria-hidden="true" data-tip="${esc(tip)}">?</span><span class="sr">${esc(tip)}</span>` : ""}</th><td>${isItem ? `<span class="muted">${esc(tip ?? "")}</span>` : esc(v)}</td></tr>`;
+    return `<tr${isItem ? ' class="pr"' : ""}><th scope="row"><span class="pk">${esc(k)}</span>${tip ? `<span class="q"><span aria-hidden="true">?</span><span class="sr">${esc(tip)}</span></span>` : ""}</th><td>${isItem ? `<span class="muted">${esc(tip ?? "")}</span>` : esc(v)}</td></tr>`;
   }).join("");
 }
 

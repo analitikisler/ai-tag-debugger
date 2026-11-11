@@ -649,7 +649,7 @@ The exit code is `1` when findings reach `--fail-on` (default `broken`) or a jou
 
 ```yaml
       - run: aitd run --config ai-tag-debugger.config.json --data-dir tracking-report
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit

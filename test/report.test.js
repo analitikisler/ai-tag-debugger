@@ -79,7 +79,7 @@ test("each step row lists its hits in time order, its dataLayer pushes and its n
   // dataLayer pushes and network requests are listed too, with parameter tips that take no focus.
   assert.match(html, /<code class="jr-ev">consent update<\/code>/);
   assert.match(html, /gtm\.js\?id=GTM-X/);
-  assert.match(html, /<span class="q" aria-hidden="true" data-tip="Meta event name\.">\?<\/span><span class="sr">Meta event name\.<\/span>/);
+  assert.match(html, /<span class="q"><span aria-hidden="true">\?<\/span><span class="sr">Meta event name\.<\/span><\/span>/);
   assert.doesNotMatch(html, /Other dataLayer pushes and network calls/);
   // Findings link to the hit (the step's GA4 add_to_cart, …-h1), flagged events are marked with the finding and link
   // back to its card, and page values are escaped. Hit cards start collapsed; a flagged one opens when printed.
@@ -111,8 +111,8 @@ test("GA4 batches show every event, items are decoded, and out-of-scope provider
   assert.match(html, /1 of 2 in one request/);
   assert.match(html, /2 of 2 in one request/);
   assert.match(html, /<span class="jr-rev"><code>scroll<\/code><span class="muted">2 of 2 in one request<\/span><\/span>/);
-  assert.match(html, /data-tip="Number event parameter: percent_scrolled\."/);
-  assert.match(html, /data-tip="Measurement ID \(G-…\): which GA4 property the request goes to\."/);
+  assert.match(html, /<span class="sr">Number event parameter: percent_scrolled\.<\/span>/);
+  assert.match(html, /<span class="sr">Measurement ID \(G-…\): which GA4 property the request goes to\.<\/span>/);
   // Items from the GA4 item string and from the dataLayer push, now rows of an items table (cards before the
   // inspector design), with custom parameters in their own column.
   assert.ok((html.match(/<td class="mono">42<\/td><td>Shoe<\/td><td class="num">10<\/td><td class="num">2<\/td>/g) ?? []).length >= 2);

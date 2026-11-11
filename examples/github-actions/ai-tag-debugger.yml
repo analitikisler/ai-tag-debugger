@@ -25,13 +25,13 @@ jobs:
       - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --data-dir tracking-report'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: tracking-report
           path: tracking-report
       # The findings as JUnit test results, for a JUnit reporter action or a quick download.
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit

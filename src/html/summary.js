@@ -3,11 +3,10 @@
 // headline is verdictHeadline's (the CLI's, the alerts' and the Markdown title's), and the cost lines are the score's
 // own deductions.
 import { VERSION, summaryParts } from "../report-shared.js";
-import { PLATFORM_ART, UI_SYMBOLS, chip, esc, fmt, platformLabel, safeKey, sectionBlock, sortPlatforms, use } from "./lib.js";
+import { PLATFORM_ART, UI_SYMBOLS, chip, esc, fmt, platformLabel, safeKey, sectionBlock, sortPlatforms, use, VERDICT_SEV } from "./lib.js";
 
 const PROBLEMS = ["broken", "risk", "warning"];
 const SEVERITIES = [...PROBLEMS, "info", "ok"];
-const VERDICT_SEV = { fail: "broken", attention: "warning", pass: "ok" };
 // Screen readers read the cost line's parts as one sentence; the separator keeps them apart.
 const SEP = '<span class="sr"> · </span>';
 const same = (a, b) => (a ?? null) === (b ?? null);

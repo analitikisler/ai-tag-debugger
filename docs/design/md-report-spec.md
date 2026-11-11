@@ -31,6 +31,8 @@ Most readers never open `report.html`: the Markdown goes into a pull request com
 
 Sections 3, 9 and 10 are omitted when empty; the others always render (an empty Findings section is the "What passed" list promoted one level).
 
+Added since this table was written, each only when the run has something to show: the model's summary under the meta line, **Trend** (from the second saved run on), **Plan vs. site** (with `--against`, capped at 20 rows), the consent platform line and the **Consent matrix** inside Consent, and after the inventory **Google containers**, **Embedded widgets** and **Messages from iframes**. The counts line reads "2 broken · 1 risk · 1 warning · 0 info · 4 ok", the inventory heading is "Tag inventory", and the field labels are "Likely cause" and "How to verify".
+
 ### Finding block fields (fixed order, one line each; omit only "GTM tags" when no container was given)
 
 ```

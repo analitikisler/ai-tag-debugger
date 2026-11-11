@@ -16,7 +16,7 @@ const capture = JSON.parse(readFileSync(new URL("./fixtures/demo-capture.json", 
 const demo = { title: "ai tag debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, lang: "en", consentScenarios: capture.consentScenarios };
 const render = (props = {}) => renderHtml({ ...demo, ...props });
 
-test("the verdict block states the verdict and a headline without a model, and the AI headline stays secondary", () => {
+test("the summary states the verdict and a headline without a model, and the AI headline stays secondary", () => {
   const html = render();
   // The inspector design moved the verdict into the Summary section's scorecard; the page's one h1 names the site.
   const verdict = html.slice(html.indexOf('id="summary"'), html.indexOf('id="findings"'));
@@ -55,7 +55,7 @@ test("the verdict block states the verdict and a headline without a model, and t
   assert.equal(render({ metrics }), html);
 });
 
-test("priorities link to the finding cards, whose ids are stable and unique", () => {
+test("the summary's cost lines link to the finding cards, whose ids are stable and unique", () => {
   const html = render();
   // Finding rows are collapsed <details> cards since the inspector design.
   const ids = [...html.matchAll(/<details class="card sev-[a-z]+" id="([^"]+)"/g)].map((x) => x[1]);

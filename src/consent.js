@@ -8,6 +8,7 @@ import { CONSENT_SIGNALS, providerLabel } from "./parsers.js";
 import { NON_GOOGLE_AD_PLATFORMS, TRACKING_COOKIE } from "./checks.js";
 import { campaignParamsIn, withCampaignParams } from "./campaign.js";
 import { mdText } from "./report-shared.js";
+import { messages } from "./i18n.js";
 
 export const CONSENT_STATES = ["accept", "reject", "analytics"];
 // The visitor who leaves the banner unanswered and opens the next page. Browsing on is no consent under the GDPR or
@@ -237,14 +238,15 @@ export async function runConsentScenarios(config, opts = {}) {
   const first = await runState(config, "accept", opts);
   if (first.error) throw new Error(first.error);
   if (!first.via) return null;
-  log(`\n▶ consent scenarios (${first.via})`);
+  const t = messages(opts.lang ?? "en").ui.run;
+  log(`\n▶ ${t.scenarios(first.via)}`);
   // The first choice shows whether there is a banner to answer at all; the others don't depend on each other.
   const results = [first, ...(await runPool([IGNORE, ...CONSENT_STATES.slice(1)], opts.concurrency ?? 1, (state) => runState(config, state, opts)))];
   const states = {};
   for (const state of [IGNORE, ...CONSENT_STATES]) {
     const r = results.find((x) => x.state === state);
     states[state] = r.error ? { via: null, error: r.error } : { via: r.via, ...(r.after ? { after: r.after } : {}), ...(r.facts ? { facts: r.facts } : {}) };
-    log(`  ${state}: ${r.error ? `✗ ${r.error}` : r.via ? `${Object.values(r.after ?? {}).reduce((s, e) => s + Object.values(e).reduce((a, b) => a + b.n, 0), 0)} tracking hits` : "not supported here"}`);
+    log(`  ${state}: ${r.error ? `✗ ${r.error}` : r.via ? t.scenarioHits(Object.values(r.after ?? {}).reduce((s, e) => s + Object.values(e).reduce((a, b) => a + b.n, 0), 0)) : t.scenarioUnsupported}`);
   }
   return { cmp: first.via, landing: first.landing, before: first.before, beforeFacts: first.beforeFacts, states };
 }

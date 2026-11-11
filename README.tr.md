@@ -14,17 +14,17 @@ Bir yapay zekâ modeli gerçek bir tarayıcıyı, sitenizdeki temel yolculuklar�
 [Analitik İşler](https://analitikisler.com) tarafından geliştirilmiştir. MIT lisanslıdır.
 
 ```
-▶ ödeme (mobil)
-  Çerezleri kabul et
-  İlk ürünü aç
-  Sepete ekle
-  Sepeti aç
-  Ödemeye geç
+▶ checkout (mobile)
+  Accept cookies
+  Open the first product
+  Add to cart
+  Open the cart
+  Go to checkout
   …
-  Siparişi ver
-  ✓ Tüm adımlar tamamlandı. · 20 takip isteği yakalandı
+  Place the order
+  ✓ Tüm sabit adımlar tamamlandı. · 20 izleme isteği yakalandı
 
-2 hatalı · 1 risk · 1 uyarı · 4 uygun
+2 bozuk · 1 risk · 1 uyarı · 0 bilgi · 4 sorunsuz
 Rapor: reports/demo/localhost/runs/2026-10-16_0800/report.html
 ```
 
@@ -649,7 +649,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 
 ```yaml
       - run: aitd run --config ai-tag-debugger.config.json --data-dir tracking-report
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit

@@ -8,6 +8,7 @@ import { changeLabel, fixSteps, platformRank, summaryParts } from "../report-sha
 import {
   PLATFORM_ART, OWNERS, alsoFineOn, badge, chip, detailHtml, esc, fmt, hitAnchor, hitFor, hitsOf, hostPath, missingParamRows, ownerOf,
   passedRows, pathOf, platformLabel, pushesOf, safeKey, secs, sectionBlock, sortPlatforms, stepTitle, use, whereTarget,
+  eventKey, pushEvent, pushText, cell,
 } from "./lib.js";
 
 const SEVERITIES = ["broken", "risk", "warning", "info", "ok"];
@@ -64,20 +65,6 @@ function attrs({ sev, owner, plats, places, text, accepted }) {
 
 /* ---------- reading the capture ---------- */
 
-// Pixel event names and their GA4 / dataLayer counterparts, so a Meta "Purchase" finds the "purchase" push (as the
-// 0.17 step rows paired them; Journeys has the same table).
-const EVENT_ALIASES = {
-  pageview: "pageview", viewcontent: "viewitem", addtocart: "addtocart", addtowishlist: "addtowishlist", initiatecheckout: "begincheckout",
-  addpaymentinfo: "addpaymentinfo", purchase: "purchase", completepayment: "purchase", placeanorder: "purchase", lead: "generatelead",
-  completeregistration: "signup", search: "search", contact: "generatelead", submitform: "generatelead", subscribe: "subscribe", starttrial: "starttrial",
-  viewbasket: "viewcart", tracktransaction: "purchase",
-};
-const normName = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const eventKey = (s) => EVENT_ALIASES[normName(s)] ?? normName(s);
-// GTM-style pushes are objects ({event: "add_to_cart"}); gtag.js records arrays (["event", "add_to_cart", {...}]).
-const pushEvent = (value) => (Array.isArray(value) ? (value[0] === "event" ? value[1] : undefined) : value && typeof value === "object" ? value.event : undefined);
-const pushText = (value) => (Array.isArray(value) && typeof value[0] === "string" ? `gtag(${value.map((v) => JSON.stringify(v, null, 2)).join(", ")})` : JSON.stringify(value, null, 2));
-const cell = (v) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** The parameters a missing_params row lacks: the grouped row drops them, the raw findings keep them. */
 const paramsOf = (ctx, f) => ctx.findings.find((x) => x.severity === f.severity && x.check === f.check && x.platform === f.platform && x.event === f.event && x.detail === f.detail && x.params)?.params ?? null;

@@ -295,7 +295,7 @@ async function main(args = process.argv.slice(2)) {
 
   const m = messages(result.lang);
   console.log(`\n${m.ui.counts(result.counts)}`);
-  if (result.baseline) console.log(`${result.baseline.accepted} accepted (baseline ${baselineFile}), ${result.baseline.partial ? `${result.baseline.partial} ${result.baseline.partial === 1 ? "problem" : "problems"} accepted in some places only (still counted), ` : ""}${result.baseline.stale.length} stale baseline ${result.baseline.stale.length === 1 ? "entry" : "entries"}`);
+  if (result.baseline) console.log(m.ui.run.baseline(result.baseline.accepted, baselineFile, result.baseline.partial, result.baseline.stale.length));
   if (result.verdict) console.log(m.ui.cli.verdict(result.verdict.statusText, result.verdict.headline, result.verdict.score));
   // The trend needs two saved runs; with one there is nothing to say yet.
   if (result.trend?.runs >= 2) {
@@ -303,11 +303,11 @@ async function main(args = process.argv.slice(2)) {
     for (const line of historySummaryLines(result.trend, result.lang, result.stability ?? []).slice(0, 3)) console.log(line);
   }
   const shown = (p) => (path.relative(process.cwd(), p).startsWith("..") ? p : path.relative(process.cwd(), p));
-  console.log(`Report: ${shown(result.reportPath)}`);
-  console.log(`Summary: ${shown(result.summaryPath)} (junit.xml next to it)`);
+  console.log(m.ui.run.report(shown(result.reportPath)));
+  console.log(m.ui.run.summary(shown(result.summaryPath)));
   if (values["update-baseline"]) {
     const n = await writeBaseline(baselineFile, { site: loaded.config.site, findings: result.findings });
-    console.log(`Baseline ${baselineFile} now holds ${n} ${n === 1 ? "finding" : "findings"}. Later runs with --baseline fail only on new ones.`);
+    console.log(m.ui.run.baselineWritten(baselineFile, n));
   }
 
   // A site whose config already carries a plan has one; the offer is for a site with none.
@@ -323,10 +323,10 @@ async function main(args = process.argv.slice(2)) {
   if (values["save-steps"]) {
     try {
       const { saved, skipped } = await writeSavedSteps(values["save-steps"], { site: loaded.config.site, plan: result.plan, journeys: result.journeys, runs: result.runs });
-      if (saved.length) console.log(`Saved the steps of ${saved.join(", ")} in ${values["save-steps"]}. Repeat them with: aitd run --config ${values["save-steps"]} --scripted --no-ai`);
-      if (skipped.length) console.log(`No steps to save for ${skipped.join(", ")}.`);
+      if (saved.length) console.log(m.ui.run.stepsSaved(saved.join(", "), values["save-steps"], `aitd run --config ${values["save-steps"]} --scripted --no-ai`));
+      if (skipped.length) console.log(m.ui.run.noStepsToSave(skipped.join(", ")));
     } catch (err) {
-      console.log(`Could not save the steps in ${values["save-steps"]}: ${err.message}`);
+      console.log(m.ui.run.stepsSaveFailed(values["save-steps"], err.message));
       process.exitCode = 1;
     }
   }
@@ -371,16 +371,18 @@ async function offerLearnedPlan(result, site, values) {
   const { learnPlan } = await import("./learn.js");
   const plan = learnPlan(site, result.runs);
   if (!plan) return;
-  console.log(`\nNo plan yet for this site. It already sends ${plan.events.length} ${plan.events.length === 1 ? "event" : "events"}: ${plan.events.map((e) => `${e.platform}:${e.name}`).join(", ")}`);
+  const t = messages(result.lang).ui.run;
+  console.log(`\n${t.noPlanYet(plan.events.length, plan.events.map((e) => `${e.platform}:${e.name}`).join(", "))}`);
   let save = values.yes;
-  if (!save && process.stdin.isTTY) save = ["", "y", "yes"].includes((await ask("Save them as the site's plan? (Y/n) ")).toLowerCase());
+  // Enter, yes, or evet where the question is asked in Turkish.
+  if (!save && process.stdin.isTTY) save = ["", "y", "yes", "e", "evet"].includes((await ask(t.savePlanQuestion)).toLowerCase());
   if (!save) {
-    if (!process.stdin.isTTY && !values.yes) console.log("Add --yes to save them as the plan, or draft a fuller one with: aitd plan --site " + site);
+    if (!process.stdin.isTTY && !values.yes) console.log(t.addYes(site));
     return;
   }
   const { id, dir } = await savePlan(plan, { dataDir, site, branding: !values["no-branding"], lang: result.lang });
   const rel = path.relative(process.cwd(), dir);
-  console.log(`✓ Saved plan ${id} in ${rel.startsWith("..") ? dir : rel}. Next runs can check against it with --against latest.`);
+  console.log(`✓ ${t.planSaved(id, rel.startsWith("..") ? dir : rel)}`);
 }
 
 // aitd "check my GA tags": shows the matching command and runs it once confirmed.

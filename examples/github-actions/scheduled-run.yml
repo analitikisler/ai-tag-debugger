@@ -33,7 +33,7 @@ jobs:
       - run: npm install --prefix "$RUNNER_TEMP/atd" "@analitikisler/ai-tag-debugger@$ATD_VERSION"
       - run: '"$RUNNER_TEMP/atd/node_modules/.bin/playwright" install --with-deps chromium'
       # Each cache entry has a unique key, so the restore key picks up the newest saved history.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: ${{ env.DATA_DIR }}
           key: ai-tag-debugger-history-${{ github.run_id }}
@@ -41,19 +41,19 @@ jobs:
       - run: '"$RUNNER_TEMP/atd/node_modules/.bin/ai-tag-debugger" run --config ai-tag-debugger.config.json --data-dir "$DATA_DIR" --fail-on broken'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: tracking-report
           path: ${{ env.DATA_DIR }}
       # The findings as JUnit test results, for a JUnit reporter action or a quick download.
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: junit
           path: ${{ env.DATA_DIR }}/**/junit.xml
       # Save even when the audit failed, so the failing run is the baseline for the next one.
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always()
         with:
           path: ${{ env.DATA_DIR }}

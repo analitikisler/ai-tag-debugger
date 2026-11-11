@@ -278,13 +278,32 @@ function passedRows({ findings, metrics }) {
   return out;
 }
 
+/* ---------- event names and pushes: how a hit is paired with the dataLayer push behind it ---------- */
+
+// Pixel event names and their GA4 / dataLayer counterparts, so a Meta or TikTok hit can be shown next to the push behind it.
+const EVENT_ALIASES = {
+  pageview: "pageview", viewcontent: "viewitem", addtocart: "addtocart", addtowishlist: "addtowishlist", initiatecheckout: "begincheckout",
+  addpaymentinfo: "addpaymentinfo", purchase: "purchase", completepayment: "purchase", placeanorder: "purchase", lead: "generatelead",
+  completeregistration: "signup", search: "search", contact: "generatelead", submitform: "generatelead", subscribe: "subscribe", starttrial: "starttrial",
+  viewbasket: "viewcart", tracktransaction: "purchase",
+};
+const normName = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const eventKey = (s) => EVENT_ALIASES[normName(s)] ?? normName(s);
+const pushEvent = (value) => (Array.isArray(value) ? (value[0] === "event" ? value[1] : undefined) : value && typeof value === "object" ? value.event : undefined);
+const pushText = (value) => (Array.isArray(value) && typeof value[0] === "string" ? `gtag(${value.map((v) => JSON.stringify(v, null, 2)).join(", ")})` : JSON.stringify(value, null, 2));
+/** A parameter value as the tables show it. */
+const cell = (v) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
+
+/** The severity a verdict is drawn with. */
+const VERDICT_SEV = { fail: "broken", attention: "warning", pass: "ok" };
+
 /** A section of the page: <section class="sec" id> with its <h2>, as the shell's routing and the rail expect. heading is HTML. */
 const sectionBlock = (id, heading, body, cls = "") => `<section class="sec${cls ? ` ${cls}` : ""}" id="${id}" aria-labelledby="${id}-h"><h2 id="${id}-h">${heading}</h2>
 ${body}
 </section>`;
 
 export {
-  sectionBlock, UI_SYMBOLS, PLATFORM_ART, use, sprite, platIcon, plat, badge, hostPath, pathOf, whereTarget, cardIds, alsoFineOn,
+  sectionBlock, eventKey, pushEvent, pushText, cell, VERDICT_SEV, UI_SYMBOLS, PLATFORM_ART, use, sprite, platIcon, plat, badge, hostPath, pathOf, whereTarget, cardIds, alsoFineOn,
   missingParamRows, hitFor, fmt, detailHtml, esc, escapeHtml, platformLabel, safeKey, sortPlatforms, ownerOf, OWNERS, chip, n, secs,
   pageTitle, stepTitle, passedRows, stepAnchor, hitsOf, pushesOf, requestsOf, hitId, pushId, requestId, hitAnchor, hitFinding,
 };

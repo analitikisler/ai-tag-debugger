@@ -125,7 +125,7 @@ svg{flex:none}
 .ic{width:16px;height:16px;flex:none;vertical-align:-3px}
 .muted{color:var(--muted)}
 .xs{font-size:12.5px}
-.num,.tnum{font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 ::selection{background:var(--selection);color:var(--fg)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -266,7 +266,6 @@ html:not(.js) .filterbar{display:none}
 .tbl tbody tr:last-child>*{border-bottom:0}
 .tbl tbody tr:hover>*{background:var(--card-2)}
 .tbl .num{text-align:right;font-family:var(--font-mono);white-space:nowrap}
-.tbl .bad{color:var(--sev-broken-fg);font-weight:600}
 .tbl .dim{color:var(--muted)}
 
 /* ---------- info grid (Summary option cards) ----------
@@ -294,9 +293,9 @@ html:not(.js) .filterbar{display:none}
      <ul class="sc-costs"><li class="sev-broken"><span class="pts">−60</span>…</li></ul>
      <div class="sc-chips chips">…chip-sev lg…</div>
    </div> */
-.band-fail{--band:var(--score-fail);--band-fg:var(--score-fail-fg);--band-bg:var(--score-fail-bg)}
-.band-mid{--band:var(--score-mid);--band-fg:var(--score-mid-fg);--band-bg:var(--score-mid-bg)}
-.band-pass{--band:var(--score-pass);--band-fg:var(--score-pass-fg);--band-bg:var(--score-pass-bg)}
+.band-fail{--band:var(--score-fail);--band-fg:var(--score-fail-fg)}
+.band-mid{--band:var(--score-mid);--band-fg:var(--score-mid-fg)}
+.band-pass{--band:var(--score-pass);--band-fg:var(--score-pass-fg)}
 .scorecard{display:grid;grid-template-columns:120px minmax(0,1fr);grid-template-areas:"ring verdict" "ring head" "ring costs" "chips chips";column-gap:var(--s6);align-items:start;padding:var(--s5) var(--s6);background:var(--card);border:1px solid var(--border);border-top:3px solid var(--band);border-radius:var(--r-md)}
 .sc-ring{grid-area:ring;position:relative;width:120px;height:120px;display:grid;place-items:center;align-self:center}
 .sc-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
@@ -383,9 +382,9 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .top-verdict .sc-l{color:var(--muted)}
 .top-verdict:hover{text-decoration:none;background:var(--card-2)}
 .top-verdict .sc{font-weight:500;color:var(--muted)}
-.v-fail{--v:var(--score-fail);--v-fg:var(--score-fail-fg);--v-bg:var(--score-fail-bg)}
-.v-mid{--v:var(--score-mid);--v-fg:var(--score-mid-fg);--v-bg:var(--score-mid-bg)}
-.v-pass{--v:var(--score-pass);--v-fg:var(--score-pass-fg);--v-bg:var(--score-pass-bg)}
+.v-fail{--v:var(--score-fail);--v-fg:var(--score-fail-fg)}
+.v-mid{--v:var(--score-mid);--v-fg:var(--score-mid-fg)}
+.v-pass{--v:var(--score-pass);--v-fg:var(--score-pass-fg)}
 .top-end{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
 .byline{display:inline-flex;align-items:center;gap:var(--s2);font-size:12px;color:var(--muted);margin-right:var(--s2)}
 .icon-btn{align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:var(--r-ctl);background:none;color:var(--muted);cursor:pointer}
@@ -401,7 +400,6 @@ html.rail-anim .rail{transition:width var(--t-base) var(--ease)}
 .r-toggle{width:40px;border:0;background:none;color:var(--muted);cursor:pointer}
 .r-toggle .ic{transform:rotate(180deg);transition:transform var(--t-base) var(--ease)}
 .r-toggle:hover,.rail a[href]:hover{background:var(--card-2);text-decoration:none}
-.rail a[aria-disabled]{color:var(--muted);opacity:.6}
 .rail a[aria-current]{background:var(--accent-bg);color:var(--accent-fg);font-weight:600;box-shadow:inset 2px 0 var(--accent)}
 .rail .ic{width:18px;height:18px}
 .r-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity var(--t-fast) var(--ease)}
@@ -729,8 +727,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd-raw[open]>summary::before{transform:rotate(45deg)}
 .fnd-raw pre{margin-top:var(--s2);max-height:240px;overflow:auto}
 .fnd-fix{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13.5px}
-.fnd-snip{margin-top:var(--s3);padding:var(--s3);overflow-x:auto;white-space:pre}
-.fnd-snip code,.fnd pre code{background:none;padding:0;font-size:12px;overflow-wrap:normal}
+.fnd pre code{background:none;padding:0;font-size:12px;overflow-wrap:normal}
 .fnd-where{list-style:none;display:grid;gap:6px}
 .fnd-where li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px}
 .fnd-step{min-width:0}
@@ -960,7 +957,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .chip .plat>svg{width:13px;height:13px}
 #journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:var(--r-sm);font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
 #journeys .q:hover{border-color:var(--accent);color:var(--accent-fg)}
-#journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-ctl);box-shadow:var(--shadow-overlay);white-space:normal;text-align:left}
+#journeys .q:hover>.sr{position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;height:auto;overflow:visible;clip:auto;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-ctl);box-shadow:var(--shadow-overlay);white-space:normal;text-align:left}
 #journeys .jr-kvt .pk{font-family:var(--font-mono)}
 #journeys .jr-kvt tr.pr td{font-family:var(--font-sans)}
 #journeys .jr-batch{margin-bottom:6px}

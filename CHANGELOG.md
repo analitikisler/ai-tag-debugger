@@ -36,6 +36,13 @@ Fixes from a full review of the project. The one addition is `aitd plan --lang`.
 - report.md no longer says "no plain-text email or user data in any hit" when an `--events` filter left the finding out.
 - Turkish: the report shows the language as "Türkçe", and "temel dosya", "banner" and "Görünüm" are used the same way throughout.
 - Speed: a report for a long run (5,000 hits) renders in less than half the time, and an audit reads the site's runs folder once instead of once per journey.
+- A run in another language prints in that language: with `--lang tr` the progress lines, the note a journey ends with (which the reports show), the lines after the run and the offer to save a learned plan are Turkish. They were English whatever the language.
+- The verdict headline names a problem that has no event of its own in plain words ("the Consent Mode default carries a consent or data risk") instead of the check's internal name, in both languages.
+- Steps saved from one address of a site replay on the address being audited now: a config written by `--save-steps` keeps page loads as paths, and steps reused from an earlier run follow the site to another port, `www` or `https`.
+- A button inside a consent banner drawn in a shadow root (Usercentrics, Efilli) is no longer refused as "covered by" its own banner when something small overlaps it.
+- A page stuck in a script costs each step one two-second wait instead of four in a row.
+- The report writes each parameter tip once; hovering the "?" shows the same text screen readers get.
+- The MCP Registry workflow installs one pinned release of `mcp-publisher` and checks its checksum, and the example workflows use the current `actions/cache` and `actions/upload-artifact`.
 - Removed: strings, icons and mock-up code the report never used. The report's inline script changed, so its CSP hash did too.
 - Docs: README rows for `--topic`, `--yes` and `detect_providers`, the commands each option applies to, the `decline_cookies` journey, the four tabs of a step, and `--host` and `--reports` for the MCP server; the project layout in CONTRIBUTING lists every module.
 

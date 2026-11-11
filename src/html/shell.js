@@ -6,7 +6,7 @@ import { summarize } from "../checks.js";
 import { computeMetrics } from "../metrics.js";
 import { LOGOS } from "../brand.js";
 import { VERSION, attachExplanations, escapeHtml, verdictHeadline } from "../report-shared.js";
-import { cardIds, logo, passedRows, sprite, use } from "./lib.js";
+import { cardIds, logo, passedRows, sprite, use, VERDICT_SEV } from "./lib.js";
 import { CSS, brandCss } from "./css.js";
 import { SCRIPT, scriptCspSource } from "./script.js";
 import * as summary from "./summary.js";
@@ -18,7 +18,6 @@ import * as scope from "./scope.js";
 /** The rail's entries in order (1–7 on the keyboard) and their sprite icons. */
 export const SECTIONS = ["summary", "findings", "journeys", "consent", "coverage", "inventory", "run"];
 const RAIL_ICONS = { summary: "ui-gtm", findings: "ui-cause", journeys: "ui-journeys", consent: "ui-consent", coverage: "ui-events", inventory: "ui-vendors", run: "ui-clock" };
-const VERDICT_SEV = { fail: "broken", attention: "warning", pass: "ok" };
 const PROBLEM_RANK = { broken: 0, risk: 1, warning: 2 };
 const CONSENT_CHECKS = new Set(["before_consent", "after_reject", "consent_default_missing"]);
 const ATD_REPO = "https://github.com/analitikisler/ai-tag-debugger";

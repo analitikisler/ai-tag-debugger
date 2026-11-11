@@ -100,7 +100,7 @@ test("a flagged hit: missing parameters, consent chips, its badge, and a link ba
   assert.match(hit, /<span class="jr-c-s"><span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span><\/span>/);
   assert.match(hit, /<p class="jr-flag sev-broken">[^]*?<code>purchase<\/code> was sent without <code>value<\/code> and <code>currency<\/code>\.<\/span><a href="#f-ga4-purchase-missing_params">Finding →<\/a><\/p>/);
   // The parameters with glossary tips that take no focus, the missing ones last, the items table and the source.
-  assert.match(hit, /<th scope="row"><span class="pk">tid<\/span><span class="q" aria-hidden="true" data-tip="Measurement ID \(G-…\): which GA4 property the request goes to\.">\?<\/span><span class="sr">Measurement ID/);
+  assert.match(hit, /<th scope="row"><span class="pk">tid<\/span><span class="q"><span aria-hidden="true">\?<\/span><span class="sr">Measurement ID \(G-…\): which GA4 property the request goes to\.<\/span><\/span>/);
   assert.match(hit, /<tr class="jr-mr"><th scope="row"><span class="pk">currency<\/span><\/th><td><span class="chip chip-sev broken">missing<\/span><\/td><\/tr>/);
   assert.match(hit, /<table class="tbl jr-it" aria-label="Items">[^]*?<td class="mono">TEE-01<\/td><td>Basic Tee<\/td><td class="num">19\.9<\/td><td class="num">1<\/td>/);
   assert.match(hit, /<a class="mono" href="#j3-s11-d\d">purchase · \+6\.6 s<\/a>/);
@@ -164,7 +164,7 @@ test("ported 0.17 behaviors: push pairing, hit order, sources, tips, GA4 batches
   // A GA4 batch: each hit shows its own parameter set with tips; the request row lists both events.
   assert.match(s1, /1 of 2 in one request/);
   assert.match(s1, /2 of 2 in one request/);
-  assert.match(s1, /data-tip="Number event parameter: percent_scrolled\."/);
+  assert.match(s1, /<span class="sr">Number event parameter: percent_scrolled\.<\/span>/);
   assert.match(s1, /<span class="jr-rev"><code>scroll<\/code><span class="muted">2 of 2 in one request<\/span><\/span>/);
   // Items decoded from the GA4 item string and from the push, with their custom parameters.
   assert.match(s1, /<th scope="col">Custom item parameters<\/th>/);

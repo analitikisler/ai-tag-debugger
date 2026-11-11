@@ -86,6 +86,8 @@ const BUSY = (n) => `${n} browsers are already in use on this server (open audit
  */
 const written = new Map();
 
+// A tool result is read by the chat app's model, which answers the user in the user's own language, so results are
+// English. Only what a tool returns to be shown as it is (a table, a diff) follows that tool's language parameter.
 const text = (t) => ({ content: [{ type: "text", text: t }] });
 const fail = (t) => ({ content: [{ type: "text", text: t }], isError: true });
 
