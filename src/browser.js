@@ -1267,8 +1267,20 @@ export class AuditSession {
         const r = el.getBoundingClientRect();
         const x = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth - 1);
         const y = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
-        const hit = document.elementFromPoint(x, y);
-        if (!hit || hit === el || el.contains(hit)) return null;
+        // A banner drawn in a shadow root (Usercentrics, Efilli) answers a point with its host, and contains() stops at
+        // the root, so both the element under a point and "is inside" are followed through shadow roots.
+        const deepHit = (px, py) => {
+          let h = document.elementFromPoint(px, py);
+          for (let inner = h?.shadowRoot?.elementFromPoint(px, py); inner && inner !== h; inner = h.shadowRoot?.elementFromPoint(px, py)) h = inner;
+          return h;
+        };
+        const up = (n) => n.parentElement ?? (n.getRootNode() instanceof ShadowRoot ? n.getRootNode().host : null);
+        const within = (n, ancestor) => {
+          for (let a = n; a; a = up(a)) if (a === ancestor) return true;
+          return false;
+        };
+        const hit = deepHit(x, y);
+        if (!hit || within(hit, el)) return null;
         // A part of the element nothing covers, to click there with real mouse events.
         let free = null;
         for (const fy of [0.5, 0.25, 0.75, 0.1, 0.9]) {
@@ -1276,14 +1288,15 @@ export class AuditSession {
             const px = r.left + r.width * fx;
             const py = r.top + r.height * fy;
             if (px < 0 || py < 0 || px >= window.innerWidth || py >= window.innerHeight) continue;
-            const h = document.elementFromPoint(px, py);
-            if (h && (h === el || el.contains(h))) { free = { x: r.width * fx, y: r.height * fy }; break; }
+            const h = deepHit(px, py);
+            if (h && within(h, el)) { free = { x: r.width * fx, y: r.height * fy }; break; }
           }
           if (free) break;
         }
         const describe = (n) => `${n.tagName.toLowerCase()}${n.id ? `#${n.id}` : ""}${n.getAttribute("role") ? ` role=${n.getAttribute("role")}` : ""} "${(n.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60)}"`;
         const screen = window.innerWidth * window.innerHeight;
-        for (let n = hit; n && n !== document.body && n !== document.documentElement && !n.contains(el); n = n.parentElement) {
+        // Up from what covers it, stopping at the first thing that holds the element too: its own banner is not in its way.
+        for (let n = hit; n && n !== document.body && n !== document.documentElement && !within(el, n); n = up(n)) {
           const b = n.getBoundingClientRect();
           const modal = n.matches("dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]");
           // Cookie and consent banners block even when they cover only part of the screen.
@@ -1338,21 +1351,23 @@ export class AuditSession {
    */
   async observe() {
     await this.trackCookies();
-    if (!this.cmp) {
-      const cmp = await this.evaluateWithin(detectCmpInPage);
-      if (cmp) this.cmp = { ...cmp, step: this.currentStep };
-    }
-    const problem = await this.evaluateWithin(pageProblemInPage);
+    // Four reads of the same page that don't depend on each other, asked together: a page stuck in a script then costs
+    // one timeout, not four in a row.
+    const [cmp, problem, tagConsent, found] = await Promise.all([
+      this.cmp ? null : this.evaluateWithin(detectCmpInPage),
+      this.evaluateWithin(pageProblemInPage),
+      this.evaluateWithin(googleConsentStateInPage),
+      this.evaluateWithin(containersInPage),
+    ]);
+    if (cmp) this.cmp = { ...cmp, step: this.currentStep };
     if (problem) {
       const refused = this.refusedScripts.get(this.currentStep) ?? 0;
       this.steps[this.currentStep].pageProblem = { ...problem, ...(refused ? { refusedScripts: refused } : {}) };
     }
     // Kept on the step only when it changed, so the steps that hold one are where the Google tag's state moved.
-    const tagConsent = await this.evaluateWithin(googleConsentStateInPage);
     const before = this.steps.slice(0, this.currentStep).map((st) => st.tagConsent).filter(Boolean).at(-1);
     if (tagConsent && JSON.stringify(tagConsent) !== JSON.stringify(before)) this.steps[this.currentStep].tagConsent = tagConsent;
     // Which containers ran, and which the page only preloaded: a container can download and never run.
-    const found = await this.evaluateWithin(containersInPage);
     for (const id of (found?.registry ?? []).map((k) => String(k).toUpperCase()).filter(isContainerId)) {
       if (!this.containersRunning.has(id)) this.containersRunning.set(id, this.currentStep);
     }

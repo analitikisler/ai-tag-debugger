@@ -100,6 +100,13 @@ const pages = {
     root.innerHTML = '<button id="inner">Shadow button</button>';
     document.querySelector("#toggle").onclick = () => { root.querySelector("#inner").style.display = "none"; };
   </script>`,
+  // A consent platform that draws its banner in a shadow root (Usercentrics does), with a badge over the middle of its button.
+  "/shadow-banner": `<!doctype html><div id="usercentrics-root" style="position:fixed;bottom:0;left:0"></div><script>
+    window.dataLayer = [];
+    const root = document.querySelector("#usercentrics-root").attachShadow({ mode: "open" });
+    root.innerHTML = '<div style="position:relative;width:320px;height:60px"><button id="accept" style="width:320px;height:60px">Accept all</button><span style="position:absolute;left:140px;top:10px;width:40px;height:40px;background:red"></span></div>';
+    root.querySelector("#accept").onclick = () => dataLayer.push({ event: "accepted" });
+  </script>`,
 };
 let small;
 let base;
@@ -194,5 +201,14 @@ test("a sticky header with an AEM cmp-* class is not mistaken for a consent bann
     assert.equal(await session.act({ action: "click", selector: "#buy" }), null);
     assert.ok(events(session).includes("buy"));
     assert.ok(session.steps.at(-1).forced, "the header did overlap the button");
+  });
+});
+
+test("a button inside a banner's shadow root is not taken for covered by its own banner", async () => {
+  await withPage("/shadow-banner", async (session) => {
+    assert.equal(await session.act({ action: "click", selector: "#accept" }), null);
+    assert.ok(events(session).includes("accepted"));
+    // The badge over its middle is small, so a free part of the button got a real click.
+    assert.match((await session.snapshot()).note, /not covered by span/);
   });
 });

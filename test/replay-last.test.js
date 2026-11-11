@@ -115,3 +115,15 @@ test("a --scripted run repeats the steps the last completed run saved for a jour
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("steps saved on one address of a site are replayed on the address being audited now", async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), "aitd-steps-"));
+  const runDir = path.join(dataDir, "localhost", "runs", "2026-10-16_0900");
+  await mkdir(runDir, { recursive: true });
+  const journey = { id: "browse", viewport: "desktop", start: "http://localhost:4321/?utm_source=aitd", steps: [{ action: "goto", url: "http://localhost:4321/cart.html" }, { action: "goto", url: "https://pay.example/checkout" }, { action: "click", text: "Buy" }] };
+  await writeFile(path.join(runDir, "steps.json"), JSON.stringify({ site: "http://localhost:4321/", journeys: [journey] }));
+  const last = await lastSteps(dataDir, "http://localhost:4399/", { journeyId: "browse", viewport: "desktop" });
+  assert.equal(last.start, "http://localhost:4399/?utm_source=aitd");
+  // Only addresses on the saved site move; a hosted checkout elsewhere stays where it is.
+  assert.deepEqual(last.steps.map((s) => s.url ?? s.text), ["http://localhost:4399/cart.html", "https://pay.example/checkout", "Buy"]);
+});

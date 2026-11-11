@@ -87,6 +87,8 @@ for (const lang of Object.keys(LANGUAGES)) {
       for (const key of Object.keys(m[block])) assert.ok(CHECKS.includes(key), `${lang} ${block}.${key} is not a check in checks.js`);
     }
     for (const c of CATEGORIES) assert.ok(m.categoryLabel[c]?.trim(), `${lang} categoryLabel.${c}`);
+    // Every check has a name for the headline, and no name is left for a check that no longer exists.
+    assert.deepEqual(Object.keys(m.ui.md.topic).sort(), [...CHECKS].sort());
   });
 
   test(`${lang} consequences are one sentence under 160 characters`, () => {

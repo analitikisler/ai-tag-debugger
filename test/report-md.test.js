@@ -142,7 +142,7 @@ test("the verdict headline follows the verdict key, with a fallback per key and 
   assert.equal(headline([], [run(), run({ journeyId: "browse", completed: false, note: "stuck" })]).headline, "the browse journey did not finish, so its events could not be checked");
   assert.equal(headline([{ ...broken, severity: "risk", check: "before_consent" }], [run()]).headline, "purchase tracking carries a consent or data risk");
   assert.equal(headline([{ ...broken, severity: "warning", check: "duplicate" }], [run()]).headline, "purchase tracking needs attention");
-  assert.equal(headline([{ journey: "checkout", viewport: "desktop", severity: "risk", check: "consent_default_missing", detail: "x" }], [run()]).headline, "the consent default missing check carries a consent or data risk");
+  assert.equal(headline([{ journey: "checkout", viewport: "desktop", severity: "risk", check: "consent_default_missing", detail: "x" }], [run()]).headline, "the Consent Mode default carries a consent or data risk");
   assert.equal(headline([], [run({ hits: [] })]).headline, "no tracking hits were captured");
   assert.deepEqual(headline([], []), { status: "attention", statusText: "Needs attention", headline: "nothing was tested", score: null });
   assert.equal(headline([], [run()], { events: [{ platform: "ga4", name: "purchase" }] }).headline, "the planned event fired correctly on 1 journey");

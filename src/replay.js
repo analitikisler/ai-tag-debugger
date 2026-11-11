@@ -41,6 +41,18 @@ function portableStart(start, site) {
   }
 }
 
+/** An address on the site the steps were saved from, moved to the same path on another address of that site; any other address as it is. */
+function rebased(url, from, to) {
+  try {
+    const u = new URL(url);
+    const target = new URL(to);
+    if (!from || u.origin !== new URL(from).origin || u.origin === target.origin) return url;
+    return new URL(u.pathname + u.search + u.hash, target.origin).href;
+  } catch {
+    return url;
+  }
+}
+
 /** What a run folder's steps.json holds: one entry per journey and viewport, leaving out journeys that took no repeatable step. */
 export function savedSteps({ site, runs }) {
   return { site, journeys: runs.map(replayableJourney).filter((j) => j.steps.length || j.start) };
@@ -57,7 +69,10 @@ export async function lastSteps(dataDir, site, { journeyId, viewport }, read = s
   for (const runId of (await read.ids()).reverse()) {
     const saved = await read.steps(runId);
     const done = (saved?.journeys ?? []).filter((j) => j.id === journeyId && !j.incomplete && (j.steps?.length || j.start));
-    const pick = (j) => ({ runId, viewport: j.viewport, start: j.start, steps: j.steps ?? [] });
+    // The runs of http://localhost:4321 and http://localhost:4399 share a folder (as do www and non-www, http and
+    // https), so the saved addresses are moved onto the site being audited now.
+    const here = (url) => rebased(url, saved.site, site);
+    const pick = (j) => ({ runId, viewport: j.viewport, start: j.start && here(j.start), steps: (j.steps ?? []).map((s) => (s.action === "goto" && s.url ? { ...s, url: here(s.url) } : s)) });
     const same = done.find((j) => j.viewport === viewport);
     if (same) return pick(same);
     if (done.length && !other) other = pick(done[0]);
@@ -116,7 +131,9 @@ export async function writeSavedSteps(file, { site, plan, journeys, runs }) {
     }
     const i = list.findIndex((j) => j.id === journey.id);
     const { start: _s, steps: _st, incomplete: _in, ...kept } = i === -1 ? { id: journey.id, ...(journey.goal ? { goal: journey.goal } : {}) } : list[i];
-    const entry = { ...kept, ...steps, ...(steps.start ? { start: portableStart(steps.start, site) } : {}), id: journey.id };
+    // Page loads later in the journey are kept as paths too, for the same reason as the start.
+    const portable = steps.steps.map((s) => (s.action === "goto" && s.url ? { ...s, url: portableStart(s.url, site) } : s));
+    const entry = { ...kept, ...steps, ...(steps.start ? { start: portableStart(steps.start, site) } : {}), steps: portable, id: journey.id };
     if (i === -1) list.push(entry);
     else list[i] = entry;
     saved.push(journey.id);

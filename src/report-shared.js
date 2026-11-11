@@ -72,7 +72,8 @@ function mdScope(m, runs, lead) {
 function mdHeadline(m, runs, rows, metrics) {
   const v = metrics.verdict;
   const lead = mdLead(rows, metrics);
-  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
+  // A problem with no event of its own is named by what its check is about; a check without a name falls back to its id.
+  const what = lead ? (lead.event ? m.ui.md.tracking(String(lead.event)) : m.ui.md.topic[lead.check] ?? m.ui.md.setup(String(lead.check).replace(/_/g, " "))) : "";
   const scope = mdScope(m, runs, lead);
   const incomplete = runs.find((r) => !r.completed);
   // Without the runs (a headline built from findings alone), the finding itself names the journey.
