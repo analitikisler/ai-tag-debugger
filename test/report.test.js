@@ -84,7 +84,7 @@ test("each step row lists its hits in time order, its dataLayer pushes and its n
   // Findings link to the hit (the step's GA4 add_to_cart, …-h1), flagged events are marked with the finding and link
   // back to its card, and page values are escaped. Hit cards start collapsed; a flagged one opens when printed.
   assert.match(html, /href="#j0-s1-h1"/);
-  assert.match(html, /<details class="card jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open>/);
+  assert.match(html, /<details class="rcard jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open>/);
   assert.match(html, /<p class="jr-flag sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg><span><code>add_to_cart<\/code> was sent without <code>value<\/code>\.<\/span><a href="#f-ga4-add_to_cart-missing_params">Finding →<\/a><\/p>/);
   assert.doesNotMatch(html, /<img src=x/);
   // The MCP server's CSP allows the fixed script by its hash and nothing else.
@@ -121,7 +121,7 @@ test("GA4 batches show every event, items are decoded, and out-of-scope provider
   // card that replaced the providers table, and the step's skipped count.
   assert.match(html, /<dt>Platforms<\/dt><dd><span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span><span class="chip chip-plat meta"><svg[^>]*><use href="#p-meta"\/><\/svg>Meta<\/span><\/dd>/);
   assert.match(html, /4 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick\./);
-  assert.match(html, /<details class="card inv" id="inv-ga4" data-seen="yes"><summary><span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span><span class="chip chip-sev ok"><svg[^>]*><use href="#sev-ok"\/><\/svg>Seen<\/span><span class="inv-m"><b>1<\/b> request<\/span>/);
+  assert.match(html, /<details class="rcard inv" id="inv-ga4" data-seen="yes"><summary><span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span><span class="chip chip-sev ok"><svg[^>]*><use href="#sev-ok"\/><\/svg>Seen<\/span><span class="inv-m"><b>1<\/b> request<\/span>/);
   assert.match(html, /id="inv-meta"[^>]*>.*?<span class="badge sev-info"><svg[^>]*><use href="#sev-info"\/><\/svg>Checked, not seen<\/span>/);
   assert.match(html, /<li><span>Microsoft Clarity<\/span><span class="badge">Out of scope<\/span><span class="inv-n"><b>3<\/b> requests<\/span><\/li>/);
   assert.match(html, /4 out-of-scope requests were skipped in this step: Microsoft Clarity 3, DoubleClick 1\./);
@@ -147,7 +147,7 @@ test("structured summaries and explanations render, findings are grouped by seve
   assert.match(html, /<ol class="fix-steps"><li><span>Open GTM\.<\/span><\/li><li><span>Add the tag\.<\/span><\/li><\/ol>/);
   // Broken findings come first, and every card starts collapsed (the design opens one on a click or a deep link).
   assert.ok(html.indexOf('data-sev="broken"') < html.indexOf('data-sev="warning"') && html.indexOf('data-sev="broken"') > 0);
-  const cards = [...html.matchAll(/<details class="card sev-[a-z]+" id="f-[^"]+"([^>]*)>/g)].map((x) => x[1].replace(/"[^"]*"/g, '""'));
+  const cards = [...html.matchAll(/<details class="rcard sev-[a-z]+" id="f-[^"]+"([^>]*)>/g)].map((x) => x[1].replace(/"[^"]*"/g, '""'));
   assert.equal(cards.length, 2);
   assert.deepEqual(cards.filter((attrs) => /\sopen(\s|$)/.test(attrs)), []);
   const md = renderMarkdown({ title: "t", generatedAt: "now", findings: f, explained, runs: [run], lang: "en" });
@@ -167,7 +167,7 @@ test("reports carry the logos and credit line, and branding false leaves out the
   assert.match(branded, /This report was made with the open source <a class="f-atd" href="https:\/\/github\.com\/analitikisler\/ai-tag-debugger"/);
   assert.match(branded, /<a href="https:\/\/analitikisler\.com" class="byline"/);
   assert.match(branded, /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml;base64,/);
-  // The brand's logos are sprite symbols whose ink is the text colour and whose point is the brand red (brand/ai/BRAND.md §4),
+  // The brand's logos are sprite symbols whose ink is the text colour and whose point is the brand red (BRAND.md §4),
   // and the favicon tiles are data URIs, so the report needs no files and fetches nothing.
   assert.match(branded, /<symbol id="logo-master" viewBox="[^"]+"><path fill="currentColor" d="[^"]+"\/>.*<path style="fill:var\(--brand-point\)" d="[^"]+"\/><\/symbol>/);
   assert.match(branded, /<a class="f-atd"[^>]*><span class="logo f-mark"><img class="l-light" src="data:image\/svg\+xml;base64,[^"]+" alt="" height="16"><img class="l-dark" src="data:image\/svg\+xml;base64,/);
@@ -196,7 +196,7 @@ test("the report has seven sections, flagged steps are marked even with nothing 
   assert.doesNotMatch(html, /<section class="sec[^>]* hidden/);
   // Step 2, which the finding points at, is flagged although nothing was captured in it.
   assert.match(html, /<li class="jr-st zero sev-broken" data-flagged="broken"><button type="button" data-select-target="#j0-s2"/);
-  assert.match(html, /<article class="card jr-pane sev-broken" id="j0-s2" [^>]*data-flagged="broken"/);
+  assert.match(html, /<article class="rcard jr-pane sev-broken" id="j0-s2" [^>]*data-flagged="broken"/);
   // With no hit in step 2, the Where chip falls back to the step's pane.
   assert.match(html, /<a class="chip chip-vp desktop" href="#j0-s2"><svg[^>]*><use href="#ui-desktop"\/><\/svg>checkout · desktop<\/a><span class="fnd-step"><span class="muted">step 2 ·<\/span> Checkout/);
   // Coverage: sent, not sent, not expected on this journey, and a provider that was not checked.
@@ -272,7 +272,7 @@ test("a step's dataLayer pushes come in time order after its hits, and a hit wit
   const html2 = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [extra], lang: "en" });
   assert.match(html2, /<code class="jr-ev">page_view<\/code>[\s\S]*?<span class="lbl">Data Layer<\/span><span class="muted">No dataLayer push with this event name in this step\./);
   // Flagged hits stay flagged, with the severity as text (hit cards start collapsed).
-  assert.match(step, /<details class="card jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open><summary>[\s\S]*?<span class="jr-c-s"><span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span>/);
+  assert.match(step, /<details class="rcard jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open><summary>[\s\S]*?<span class="jr-c-s"><span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span>/);
   const tr = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [run], lang: "tr" });
   assert.match(tr, /Bu adımdaki istekler/);
 });

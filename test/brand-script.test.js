@@ -35,7 +35,7 @@ test("a colour outside the brand, a dark file with other shapes, or a missing fi
   assert.throws(() => symbolOf(LIGHT, logoSvg("#F1ECE2", "#FA6B6D", "M1 1Z"), "x"), /the dark file draws other shapes/);
   const dir = assets("icons/favicon-ai-16.svg");
   try {
-    assert.throws(() => render(dir), /icons\/favicon-ai-16\.svg for "favicon-light"\. Copy design\/13-ai-brand/);
+    assert.throws(() => render(dir), /icons\/favicon-ai-16\.svg for "favicon-light"\. Copy the Çini kit's dist\/ to cini\//);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -55,8 +55,8 @@ test("src/brand.js evaluates to every symbol and image the script names", async 
   }
 });
 
-test("the committed src/brand.js is the script's output for brand/ai/assets, so the logos never drift from the brand folder", () => {
-  const text = render(fileURLToPath(new URL("../brand/ai/assets", import.meta.url)));
+test("the committed src/brand.js is the script's output for cini/logos, so the logos never drift from the Çini kit", () => {
+  const text = render(fileURLToPath(new URL("../cini/logos", import.meta.url)));
   for (const [key, value] of Object.entries(LOGO_ART)) assert.ok(text.includes(`${JSON.stringify(key)}: ${JSON.stringify(value)},`), `${key} differs: run node scripts/brand.js`);
   for (const [key, value] of Object.entries(LOGOS)) assert.ok(text.includes(`${JSON.stringify(key)}: ${JSON.stringify(value)},`), `${key} differs: run node scripts/brand.js`);
   assert.deepEqual(Object.keys(LOGO_ART), Object.keys(ART));

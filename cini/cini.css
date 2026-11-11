@@ -1,0 +1,161 @@
+/* Çini · Mercan kit, built 2026-11-11 from analitikisler 97701e7 (styles/tokens.json). Do not edit: rebuild with cini-kit/build.ts. */
+/* Çini · Mercan: the base and the common controls for the Analitik İşler tools (plain HTML or React without Tailwind).
+   Load after tokens.css and fonts.css. Everything reads the roles in tokens.css, never a hex value, so light and dark
+   follow the theme. The class names are the website's (analitikisler.com), so a component copied across keeps working.
+   Unlayered on purpose: put it inside @layer if the tool has layers of its own. */
+
+/* ---- base ---- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: var(--font-weight-regular) var(--text-step-0) / var(--text-leading-normal) var(--font-body);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+h1, h2, h3, h4, h5, h6 { margin: 0 0 0.5em; color: var(--color-text-strong); font-family: var(--font-display); font-weight: var(--font-weight-display); line-height: var(--text-leading-snug); letter-spacing: var(--text-tracking-title); text-wrap: balance; }
+h1 { font-size: var(--text-step-5); line-height: var(--text-leading-tight); letter-spacing: var(--text-tracking-display); }
+h2 { font-size: var(--text-step-3); }
+h3 { font-size: var(--text-step-2); }
+h4 { font-size: var(--text-step-1); }
+p { margin: 0 0 1em; text-wrap: pretty; }
+b, strong { font-weight: var(--font-weight-bold); color: var(--color-text-strong); }
+small { font-size: var(--text-step--1); }
+a {
+  color: var(--color-accent);
+  text-decoration: underline var(--border-width-hair) color-mix(in oklab, currentColor 45%, transparent);
+  text-underline-offset: 0.22em;
+  transition: text-decoration-color var(--motion-fast) var(--motion-ease-out);
+}
+a:hover { text-decoration-color: currentColor; text-decoration-thickness: var(--border-width-thin); }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+::selection { background: var(--color-selection); color: var(--color-text); }
+code, kbd, samp, pre { font-family: var(--font-mono); font-size: 0.875em; }
+:not(pre) > code { padding: 0.1em 0.35em; background: var(--color-code-bg); border-radius: var(--radius-sm); color: var(--color-code-text); }
+pre { margin: 0 0 1em; padding: var(--space-4) var(--space-5); overflow-x: auto; background: var(--color-code-bg); border: var(--border-width-hair) solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-code-text); line-height: var(--text-leading-loose); }
+hr { height: 0; margin: var(--space-7) 0; border: 0; border-top: var(--border-width-hair) solid var(--color-border); }
+img, svg, video { max-width: 100%; height: auto; }
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+
+/* ---- layout helpers ---- */
+.wrap { width: min(100% - 2 * var(--space-gutter), 1200px); margin-inline: auto; }
+.stack > * + * { margin-top: var(--stack-gap, var(--space-4)); }
+.muted { color: var(--color-muted); }
+.mono { font-family: var(--font-mono); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { color: var(--color-muted); font: var(--font-weight-medium) var(--text-step--2) / 1.3 var(--font-mono); letter-spacing: var(--text-tracking-caps); text-transform: uppercase; }
+
+/* ---- Button: primary (ink) | secondary (outline) | text (red link); sizes sm 40 | md 44 | lg 52 ---- */
+.button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 44px; padding: 0 18px;
+  border: var(--border-width-hair) solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-strong);
+  font: var(--font-weight-bold) 0.9375rem / 1.1 var(--font-body); white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease-out), border-color var(--motion-fast) var(--motion-ease-out), color var(--motion-fast) var(--motion-ease-out), transform var(--motion-press) var(--motion-ease-out); }
+.button:active:not([disabled], [aria-disabled="true"]) { transform: scale(0.97); }
+.button[data-variant="primary"] { background: var(--color-action); color: var(--color-on-action); }
+.button[data-variant="primary"]:hover { background: var(--color-action-hover); }
+.button[data-variant="secondary"] { border-color: var(--color-border-strong); }
+.button[data-variant="secondary"]:hover { border-color: var(--color-text-strong); background: var(--color-surface); }
+.button[data-variant="text"] { padding-inline: 2px; color: var(--color-accent); text-decoration: underline var(--border-width-hair) color-mix(in oklab, currentColor 45%, transparent); text-underline-offset: 6px; }
+.button[data-variant="text"]:hover { text-decoration-color: currentColor; text-decoration-thickness: var(--border-width-thin); }
+.button[data-variant="danger"] { background: var(--color-bad); color: var(--color-bg); }
+.button[data-size="sm"] { min-height: 40px; padding-inline: 14px; font-size: 0.875rem; }
+.button[data-size="lg"] { min-height: 52px; padding-inline: 22px; font-size: 1rem; }
+.button:is([disabled], [aria-disabled="true"]) { background: var(--color-surface-2); border-color: var(--color-border); color: var(--color-muted); text-decoration: none; cursor: not-allowed; }
+.button[data-variant="text"]:is([disabled], [aria-disabled="true"]) { background: transparent; border-color: transparent; }
+
+/* ---- Fields: label above, 1.5px edge, the coral ring on focus, wine on error ---- */
+.field { display: grid; gap: var(--space-2); }
+.field > label, .label { color: var(--color-text-strong); font-weight: var(--font-weight-medium); }
+.field__hint { color: var(--color-muted); font-size: var(--text-step--1); }
+.field__error { color: var(--color-bad); font-size: var(--text-step--1); }
+.input, .select, .textarea { width: 100%; min-height: 44px; padding: 0 var(--space-3); background: var(--color-surface); border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text-strong); }
+.textarea { min-height: 7.5rem; padding-block: var(--space-3); line-height: var(--text-leading-lead); resize: vertical; }
+.select { appearance: none; padding-right: 2.25rem; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+:is(.input, .select, .textarea):hover { border-color: var(--color-text); }
+:is(.input, .select, .textarea):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 1px; border-color: var(--color-text-strong); }
+:is(.input, .select, .textarea)[aria-invalid="true"] { border-color: var(--color-bad); }
+:is(.input, .select, .textarea):disabled { background: var(--color-surface-2); color: var(--color-muted); cursor: not-allowed; }
+.input::placeholder, .textarea::placeholder { color: var(--color-muted); }
+.check { display: inline-flex; align-items: center; gap: var(--space-2); }
+.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--color-action); }
+
+/* ---- Switch: role="switch", on = the ink track ---- */
+.switch { position: relative; flex: none; width: 42px; height: 24px; padding: 0; border: 1.5px solid var(--color-border-strong); border-radius: 12px; background: var(--color-surface-2); cursor: pointer; transition: background-color var(--motion-fast) var(--motion-ease-out); }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--color-text-strong); transition: transform var(--motion-fast) var(--motion-ease-out); }
+.switch[aria-checked="true"] { background: var(--color-action); border-color: var(--color-action); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); background: var(--color-on-action); }
+
+/* ---- Card: surface with a hairline edge; a.card draws a red rule along the top on hover ---- */
+.card { position: relative; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-6); background: var(--color-surface);
+  border: var(--border-width-hair) solid var(--color-border); border-radius: var(--radius-lg); color: inherit; text-decoration: none; }
+a.card { transition: border-color var(--motion-fast) var(--motion-ease-out); }
+a.card::before { content: ""; position: absolute; inset: -1px -1px auto; height: var(--border-width-thin); background: var(--color-accent); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  transform: scaleX(0); transform-origin: 0 50%; transition: transform var(--motion-base) var(--motion-ease-out); }
+a.card:hover { border-color: var(--color-border-strong); }
+a.card:hover::before, a.card:focus-visible::before { transform: scaleX(1); }
+
+/* ---- Status: glyph + word, always both. ok/measured teal, warn olive, bad/broken wine, info quiet blue ---- */
+.status { display: inline-flex; align-items: center; gap: 6px; font: var(--font-weight-medium) var(--text-step--2) / 1.2 var(--font-mono); white-space: nowrap; }
+.status[data-tone="ok"] { color: var(--color-ok); }
+.status[data-tone="warn"] { color: var(--color-warn); }
+.status[data-tone="bad"] { color: var(--color-bad); }
+.status[data-tone="info"] { color: var(--color-info); }
+.status[data-tone="neutral"] { color: var(--color-muted); }
+.status[data-tone="ok"]::before { content: "✓"; } .status[data-tone="warn"]::before { content: "!"; }
+.status[data-tone="bad"]::before { content: "×"; } .status[data-tone="info"]::before { content: "i"; } .status[data-tone="neutral"]::before { content: "–"; }
+.status[data-glyph="none"]::before { content: none; }
+
+/* ---- Tag: outline, sentence case, mono ---- */
+.tag { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border: var(--border-width-hair) solid var(--color-border-strong);
+  border-radius: var(--radius-sm); color: var(--color-text); font: var(--font-weight-medium) var(--text-step--2) / 1.2 var(--font-mono); white-space: nowrap; text-decoration: none; }
+.tag[data-variant="accent"] { border-color: color-mix(in oklab, var(--color-accent) 60%, transparent); color: var(--color-accent-ink); }
+.tag[data-tone="ok"] { border-color: color-mix(in oklab, var(--color-ok) 60%, transparent); color: var(--color-ok); background: var(--color-ok-soft); }
+.tag[data-tone="warn"] { border-color: color-mix(in oklab, var(--color-warn) 60%, transparent); color: var(--color-warn); background: var(--color-warn-soft); }
+.tag[data-tone="info"] { border-color: color-mix(in oklab, var(--color-info) 60%, transparent); color: var(--color-info); }
+.tag[data-tone="neutral"] { color: var(--color-muted); }
+.tag[data-tone][data-glyph]::before { content: attr(data-glyph); }
+.tag[data-tone="bad"] { border-color: color-mix(in oklab, var(--color-bad) 60%, transparent); color: var(--color-bad); background: var(--color-bad-soft); }
+
+/* ---- Callout: an aside with a red rule; data-tone for a status ---- */
+.callout { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--space-6); background: var(--color-surface);
+  border: var(--border-width-hair) solid var(--color-border); border-left: var(--border-width-thin) solid var(--color-accent); border-radius: var(--radius-sm); }
+.callout[data-tone="ok"] { border-left-color: var(--color-ok); }
+.callout[data-tone="warn"] { border-left-color: var(--color-warn); }
+.callout[data-tone="bad"] { border-left-color: var(--color-bad); background: var(--color-bad-soft); }
+.callout > * { margin: 0; }
+
+/* ---- Table: one rule under the head, a faint zebra, numbers right and tabular ---- */
+.table { max-width: 100%; overflow-x: auto; }
+.table table, table.table { width: 100%; border-collapse: collapse; font-size: var(--text-step--1); line-height: var(--text-leading-lead); }
+.table :is(th, td) { padding: var(--space-3) var(--space-4) var(--space-3) 0; text-align: left; vertical-align: top; }
+.table :is(th, td):first-child { padding-left: var(--space-3); }
+.table thead th { color: var(--color-muted); border-bottom: var(--border-width-hair) solid var(--color-border-strong); font: var(--font-weight-medium) var(--text-step--2) / 1.3 var(--font-mono); white-space: nowrap; }
+.table tbody tr:nth-child(even) > :is(th, td) { background: color-mix(in srgb, var(--color-text-strong) 4%, transparent); }
+.table tbody th { color: var(--color-text-strong); font-weight: var(--font-weight-bold); }
+.table :is(th, td)[data-num] { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---- Metric: one figure, its label under it; the answer mark (one 3px ink bar) once per section at most ---- */
+.metric { display: grid; gap: var(--space-1); }
+.metric__value { justify-self: start; color: var(--color-text-strong); font: var(--font-weight-medium) var(--text-step-3) / 1 var(--font-mono); letter-spacing: var(--text-tracking-figure); font-variant-numeric: tabular-nums; }
+.metric__label { color: var(--color-muted); font-size: var(--text-step--1); }
+.mark { box-shadow: inset 0 calc(-1 * var(--border-width-thick)) 0 var(--color-mark); }
+
+/* ---- Missing data: the Pano ring hatch (pano.js hatchMask), on any box ---- */
+.is-missing { position: relative; }
+.is-missing::after { content: ""; position: absolute; inset: 0; background: var(--color-data-missing); mask: var(--pattern-missing) 0 0 / 8px 8px; pointer-events: none; }
+
+/* ---- Pano: a field or band drawn by pano.js, filling its box ---- */
+.pano > svg, svg.pano { display: block; width: 100%; height: 100%; }
+
+/* ---- Header and footer of a tool: the master logo or the tool's lockup at the left, the band of Pano above the foot ---- */
+.tool-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); min-height: 64px; padding: var(--space-2) var(--space-gutter); border-bottom: var(--border-width-hair) solid var(--color-border); background: var(--color-bg); }
+.tool-header img, .tool-header svg { height: 26px; width: auto; }
+.tool-footer { border-top: var(--border-width-hair) solid var(--color-border); color: var(--color-muted); font-size: var(--text-step--1); }
+.tool-footer__band { height: 48px; }
+.tool-footer__body { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding: var(--space-5) var(--space-gutter); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }

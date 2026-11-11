@@ -5,7 +5,8 @@ import js from "@eslint/js";
 import globals from "globals";
 
 export default [
-  { ignores: ["node_modules/", "reports/", "aitd/", "saved/"] },
+  // cini/ is the Çini kit, copied unchanged from its build; it is not ours to lint.
+  { ignores: ["node_modules/", "reports/", "aitd/", "saved/", "cini/"] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2024, sourceType: "module", globals: { ...globals.node, ...globals.browser } },

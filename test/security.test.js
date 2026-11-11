@@ -154,7 +154,7 @@ test("the HTTP server rejects short tokens, big bodies and wrong secrets, and se
     const report = await fetch(`${base}/mcp/${token}/reports/audit1/report.html`);
     assert.equal(report.status, 200);
     // The report's own tab script is allowed by its hash; no other script, style source or image source is.
-    assert.equal(report.headers.get("content-security-policy"), `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}`);
+    assert.equal(report.headers.get("content-security-policy"), `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src ${scriptCspSource()}`);
     assert.equal(report.headers.get("x-content-type-options"), "nosniff");
   } finally {
     server.close();

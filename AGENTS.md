@@ -28,6 +28,7 @@ npm run demo                      # scripted, no-AI run against it, saved under 
 - Comments say why something is there, not what the code does.
 - All user-visible strings live in `src/i18n.js` and exist in every language in `LANGUAGES` (`en` and `tr`).
 - Every new flag, config field or MCP parameter gets a row in README's tables, and every user-visible change gets a line in CHANGELOG.md.
+- Colours, fonts, logos and the Pano pattern come from the Çini kit in `cini/`, copied unchanged from its build (`brand/README.md`). The report's CSS names kit roles only, never a colour value; after copying the kit again, run `node scripts/cini.js` and `node scripts/brand.js`.
 - `server.json` carries the same version as `package.json` in two places; `test/server-json.test.js` enforces it. The Claude plugin in `plugin/` does too: `version` in `plugin/.claude-plugin/plugin.json` and the pinned `npx` package in `plugin/.mcp.json`, enforced by `test/plugin.test.js`.
 - The published package ships an `npm-shrinkwrap.json` that `prepack` writes from `package-lock.json` without development packages (`scripts/shrinkwrap.js`); never commit one.
 - Commit messages are one imperative sentence about what changed for the user.

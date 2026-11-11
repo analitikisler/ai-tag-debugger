@@ -10,6 +10,7 @@
   },
   "files": [
     "src",
+    "cini/pano.js",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

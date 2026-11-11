@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 import { browserEnv, installBrowser } from "./browser.js";
+import { KIT_COLORS } from "./cini.js";
 
 const LOGO_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml" };
 const MAX_LOGO_BYTES = 512 * 1024;
@@ -54,15 +55,13 @@ export const contrast = (a, b) => {
 };
 const MIN_TEXT_CONTRAST = 4.5;
 const MIN_MARK_CONTRAST = 3;
-// The grounds of visual-system.md §1 the accent is drawn on, in each theme: card (Tally's surface), page (bg), card-2
-// (surface-2: hovered and selected rows, hovered controls) and well. Links sit on all four; the tint is added per colour.
-const GROUNDS = {
-  light: ["#ffffff", "#f4f6fa", "#ecf1f8", "#e9eef5"],
-  dark: ["#0e1e34", "#071529", "#15263f", "#040e1f"],
-};
+// The grounds the accent is drawn on, in each theme: the kit's surface (the card), bg (the page), surface-2 (hovered and
+// selected rows, hovered controls) and well. Links sit on all four; the tint is added per colour.
+const ground = (theme) => ["surface", "bg", "surface-2", "well"].map((role) => KIT_COLORS[theme][role]);
+const GROUNDS = { light: ground("light"), dark: ground("dark") };
 const BLACK = [0, 0, 0];
 const WHITE = [255, 255, 255];
-// The dark tint is the brand colour laid on the navy card, as the default --accent-bg is.
+// The dark tint is the brand colour laid on the dark card.
 const DARK_CARD_RGB = rgb(GROUNDS.dark[0]);
 
 /**
@@ -81,7 +80,7 @@ function readable(hex, toward, grounds, min) {
 
 /**
  * The three accent tokens for a brand colour, per theme. The tint (--accent-bg) is the brand colour on the card: 10% on
- * white in light, 25% on the navy in dark. The link colour (--accent-fg) is darkened (light) or lightened (dark) until it
+ * white in light, 25% on the dark card in dark. The link colour (--accent-fg) is darkened (light) or lightened (dark) until it
  * reads at 4.5:1 on the card, the page, card-2, the well and that tint; the colour for marks (--accent: the active tab
  * and rail rule, focus rings, pressed filter edges) until it reaches 3:1 on the same grounds. A colour that already
  * passes is left as it is.
@@ -112,7 +111,8 @@ export function brandCss(color) {
 }
 
 // A forwarded PDF loses its file name, so every page carries the document title and the page number (Chromium fills the spans).
-const PDF_FOOTER = '<div style="width:100%;font:9px \'Google Sans\',system-ui,sans-serif;color:#566479;padding:0 10mm;display:flex;justify-content:space-between"><span class="title"></span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>';
+// It is a separate page that sees neither the report's CSS nor its fonts, so it takes the kit's muted colour from tokens.json.
+const PDF_FOOTER = `<div style="width:100%;font:9px system-ui,sans-serif;color:${KIT_COLORS.light.muted};padding:0 10mm;display:flex;justify-content:space-between"><span class="title"></span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
 
 /** Prints an HTML report to a PDF with Chromium. The print styles stack every tab and open every details, so the PDF holds the whole report. */
 export async function writePdf(htmlPath, pdfPath) {

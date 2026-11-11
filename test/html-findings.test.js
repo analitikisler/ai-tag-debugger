@@ -17,20 +17,20 @@ const demo = section(reportInput());
 const rowOf = (html, id) => {
   const start = html.indexOf(` id="${id}"`);
   assert.ok(start > 0, id);
-  const next = html.slice(start + 1).search(/<(details class="card|div class="card line) /);
+  const next = html.slice(start + 1).search(/<(details class="rcard|div class="rcard line) /);
   return next < 0 ? html.slice(start) : html.slice(start, start + 1 + next);
 };
 const DEMO_IDS = ["f-ga4-purchase-missing_params", "f-meta-purchase-missing_params", "f-meta-pageview-before_consent", "f-ga4-add_to_cart-duplicate"];
 
 test("the section is the filter bar, then Failed and Passed, every card collapsed with the shared ids", () => {
   assert.match(demo, /^<section class="sec fnd" id="findings" aria-labelledby="findings-h"><h2 id="findings-h">Findings<\/h2>/);
-  const ids = [...demo.matchAll(/<details class="card sev-([a-z]+)" id="([^"]+)"/g)].map((x) => x[2]);
+  const ids = [...demo.matchAll(/<details class="rcard sev-([a-z]+)" id="([^"]+)"/g)].map((x) => x[2]);
   assert.deepEqual(ids, DEMO_IDS);
   assert.deepEqual([...context(reportInput()).ids.values()], ids, "the ids are the context's, in row order");
   assert.equal(new Set(ids).size, ids.length);
   // Attribute values are dropped first: a row's data-text may say "open".
-  for (const tag of demo.match(/<details class="card[^>]*>/g)) assert.doesNotMatch(tag.replace(/"[^"]*"/g, '""'), /\sopen[\s>]/, "every card starts collapsed");
-  assert.deepEqual([...demo.matchAll(/<div class="card line sev-ok" id="(f-ok-\d)"/g)].map((x) => x[1]), ["f-ok-1", "f-ok-2", "f-ok-3", "f-ok-4", "f-ok-5"]);
+  for (const tag of demo.match(/<details class="rcard[^>]*>/g)) assert.doesNotMatch(tag.replace(/"[^"]*"/g, '""'), /\sopen[\s>]/, "every card starts collapsed");
+  assert.deepEqual([...demo.matchAll(/<div class="rcard line sev-ok" id="(f-ok-\d)"/g)].map((x) => x[1]), ["f-ok-1", "f-ok-2", "f-ok-3", "f-ok-4", "f-ok-5"]);
   // Group counts come from the tally the rail and the Summary read; no Unverified group without info rows.
   assert.match(demo, /<div class="group" id="f-failed" data-filter-group><h3><span class="chip lg chip-group failed"><b data-group-count>4<\/b> Failed<\/span><\/h3>/);
   assert.match(demo, /<details class="group" id="f-passed" data-filter-group><summary><h3><span class="chip lg chip-group passed"><b data-group-count>5<\/b> Passed<\/span><\/h3><\/summary>/);
@@ -168,7 +168,7 @@ test("Changed since last run is a collapsed card between the filter bar and the 
   const html = section(reportInput({ changes }));
   const card = html.slice(html.indexOf('id="changes"'), html.indexOf('<div class="fnd-list"'));
   assert.ok(html.indexOf('<div class="filterbar"') < html.indexOf('id="changes"'));
-  assert.match(html, /<details class="card fnd-changes" id="changes"><summary><h3 class="t">Changed since last run<\/h3><span class="end muted">1 problem fixed, 1 new problem<\/span><\/summary>/);
+  assert.match(html, /<details class="rcard fnd-changes" id="changes"><summary><h3 class="t">Changed since last run<\/h3><span class="end muted">1 problem fixed, 1 new problem<\/span><\/summary>/);
   assert.match(card, /Compared with run 2026-10-18_0900, by health findings/);
   assert.match(card, /<span class="badge sev-ok">.*Fixed<\/span> GA4 view_item \(gone\)/);
   assert.match(card, /<span class="badge sev-broken">.*New<\/span> <a href="#f-ga4-add_to_cart-duplicate">GA4 add_to_cart \(twice\)<\/a>/);
@@ -184,10 +184,10 @@ test("Changed since last run is a collapsed card between the filter bar and the 
 
 test("the failed run: two Failed cards and eleven single-line Unverified rows linking to coverage, nothing Passed", () => {
   const html = section(failedInput());
-  assert.deepEqual([...html.matchAll(/<details class="card sev-([a-z]+)" id="([^"]+)"/g)].map((x) => `${x[1]} ${x[2]}`), ["risk f-site-consent_default_missing", "warning f-site-journey_incomplete"]);
+  assert.deepEqual([...html.matchAll(/<details class="rcard sev-([a-z]+)" id="([^"]+)"/g)].map((x) => `${x[1]} ${x[2]}`), ["risk f-site-consent_default_missing", "warning f-site-journey_incomplete"]);
   assert.match(html, /<b data-group-count>2<\/b> Failed/);
   assert.match(html, /<details class="group" id="f-unverified" data-filter-group><summary><h3><span class="chip lg chip-group unverified"><b data-group-count>11<\/b> Unverified/);
-  const lines = [...html.matchAll(/<div class="card line sev-info" id="([^"]+)"/g)].map((x) => x[1]);
+  const lines = [...html.matchAll(/<div class="rcard line sev-info" id="([^"]+)"/g)].map((x) => x[1]);
   assert.equal(lines.length, 11);
   assert.ok(lines.every((id) => /^f-(ga4|meta)-[a-z_]+-missing_event$/.test(id)));
   assert.match(rowOf(html, "f-ga4-purchase-missing_event"), /<span class="f-t"><code>purchase<\/code> <span class="muted">· not reached<\/span><\/span>.*<span class="chip plain run-multi" title="checkout · desktop, checkout · mobile">.*checkout<\/span>.*<a class="go" href="#cov-ga4-purchase" aria-label="Show where">/s);

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Çini kit</title>
+<link rel="icon" href="logos/favicon/analitik-isler-bars.svg">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="cini.css">
+<script src="pano.global.js"></script>
+<style>
+  main { padding-block: var(--space-8) var(--space-10); }
+  section { padding-block: var(--space-8); border-top: var(--border-width-hair) solid var(--color-border); }
+  section > h2 { margin-bottom: var(--space-5); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+  .sw { display: grid; gap: 6px; font: var(--text-step--2) / 1.3 var(--font-mono); color: var(--color-muted); }
+  .sw i { display: block; height: 56px; border: var(--border-width-hair) solid var(--color-border); border-radius: var(--radius-md); }
+  .sw b { color: var(--color-text-strong); font-weight: var(--font-weight-medium); }
+  .swatches { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .ramp { display: flex; height: 36px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: var(--space-3); }
+  .ramp i { flex: 1; }
+  .pano-box { height: 120px; border-radius: var(--radius-lg); overflow: hidden; }
+  .logos { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .logos figure { margin: 0; padding: var(--space-5); display: grid; place-items: center; min-height: 110px; background: var(--color-surface); border: var(--border-width-hair) solid var(--color-border); border-radius: var(--radius-lg); }
+  .logos img { max-height: 44px; width: auto; }
+  .bar { position: relative; height: 22px; background: var(--color-data-measured); }
+  .theme { display: inline-flex; gap: 4px; }
+  .type-1 { font: var(--font-weight-display) var(--text-step-6) / var(--text-leading-flat) var(--font-display); letter-spacing: var(--text-tracking-display); color: var(--color-text-strong); }
+  .only-dark { display: none; }
+  :root[data-theme="dark"] .only-dark { display: revert; } :root[data-theme="dark"] .only-light { display: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .only-dark { display: revert; } :root:not([data-theme="light"]) .only-light { display: none; } }
+</style>
+</head>
+<body>
+<header class="tool-header">
+  <img class="only-light" src="logos/master/analitik-isler-light.svg" alt="analitik işler">
+  <img class="only-dark" src="logos/master/analitik-isler-dark.svg" alt="analitik işler">
+  <div class="theme" role="group" aria-label="Theme">
+    <button class="button" data-variant="secondary" data-size="sm" data-set="">Auto</button>
+    <button class="button" data-variant="secondary" data-size="sm" data-set="light">Light</button>
+    <button class="button" data-variant="secondary" data-size="sm" data-set="dark">Dark</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <p class="eyebrow">Design kit · Çini · Mercan</p>
+  <h1>One system for every tool</h1>
+  <p class="muted" style="max-width:60ch">Built from analitikisler.com's own tokens. Red and coral on glaze white, ink for text and buttons, teal for what is measured, wine for what is broken, and the Pano lattice as the surface. <span id="version">Çini · Mercan kit, built 2026-11-11 from analitikisler 97701e7 (styles/tokens.json).</span></p>
+
+  <section>
+    <h2>Colour</h2>
+    <div class="swatches" id="swatches"></div>
+    <h3 style="margin-top:var(--space-6)">Charts</h3>
+    <div class="ramp" id="cat"></div>
+    <div class="ramp" id="seq"></div>
+    <div class="ramp" id="div"></div>
+  </section>
+
+  <section>
+    <h2>Type</h2>
+    <p class="type-1">End-to-end</p>
+    <h1>Heading 1 · Gabarito 700</h1>
+    <h2>Heading 2 · Doğru veri, isabetli kararlar</h2>
+    <h3>Heading 3 · ğüşıöç İĞÜŞÖÇ</h3>
+    <p>Body text in Gabarito 400. A purchase without <code>value</code> and <code>currency</code> is counted but adds no revenue. <a href="#">A link in the brand red.</a></p>
+    <pre>gtag('event', 'purchase', { transaction_id: 'T-1042', value: 129.9, currency: 'TRY' });</pre>
+  </section>
+
+  <section>
+    <h2>Buttons</h2>
+    <div class="row">
+      <button class="button" data-variant="primary" data-size="lg">Let’s talk</button>
+      <button class="button" data-variant="primary">Run the check</button>
+      <button class="button" data-variant="secondary">See the report</button>
+      <button class="button" data-variant="text">Read the plan</button>
+      <button class="button" data-variant="danger">Delete the run</button>
+      <button class="button" data-variant="primary" disabled>Disabled</button>
+      <button class="button" data-variant="primary" data-size="sm">Small</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Fields</h2>
+    <div class="grid">
+      <div class="field"><label for="f1">Site address</label><input class="input" id="f1" placeholder="https://example.com"><span class="field__hint">The page the run starts from.</span></div>
+      <div class="field"><label for="f2">Journey</label><select class="select" id="f2"><option>purchase</option><option>lead</option><option>sign_up</option></select></div>
+      <div class="field"><label for="f3">Container</label><input class="input" id="f3" value="GTM-XXXX" aria-invalid="true" aria-describedby="f3e"><span class="field__error" id="f3e">× Not a container ID.</span></div>
+      <div class="field"><label for="f4">Notes</label><textarea class="textarea" id="f4">Orders in the back office: 1,000</textarea></div>
+    </div>
+    <div class="row" style="margin-top:var(--space-4)">
+      <label class="check"><input type="checkbox" checked> Consent Mode v2</label>
+      <button class="switch" role="switch" aria-checked="true" aria-label="Alerts" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked') !== 'true')"></button><span>Alerts</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Status, tags, callouts</h2>
+    <div class="row">
+      <span class="status" data-tone="ok">sent</span><span class="status" data-tone="warn">1 warning</span><span class="status" data-tone="bad">2 broken</span><span class="status" data-tone="info">note</span>
+    </div>
+    <div class="row">
+      <span class="tag">GA4</span><span class="tag" data-variant="accent">Open source · MIT</span><span class="tag" data-tone="ok">passes</span><span class="tag" data-tone="warn">Early development</span><span class="tag" data-tone="bad">fails</span>
+    </div>
+    <div class="grid">
+      <div class="callout"><p><b>Note.</b> Leave out the last two days, which GA4 may still be processing.</p></div>
+      <div class="callout" data-tone="ok"><p><b>Adds up.</b> Every planned event was sent.</p></div>
+      <div class="callout" data-tone="bad"><p><b>Broken.</b> <code>purchase</code> never fires on the mobile template.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cards, metrics, table</h2>
+    <div class="grid">
+      <a class="card" href="#"><span class="eyebrow">Service</span><h3>Analytics audit</h3><p class="muted">Which orders are missing, and why.</p></a>
+      <div class="card"><div class="metric"><span class="metric__value mark">78%</span><span class="metric__label">of orders counted by GA4</span></div></div>
+      <div class="card"><div class="metric"><span class="metric__value">1,184</span><span class="metric__label">purchases recorded</span></div>
+        <div style="display:flex;height:22px;margin-top:var(--space-3)"><div class="bar" style="width:78%"></div><div class="is-missing" style="width:22%;border:1.5px dashed var(--color-text-strong)"></div></div>
+        <span class="field__hint">teal = measured, the ring hatch = missing</span></div>
+    </div>
+    <div class="table" style="margin-top:var(--space-5)"><table>
+      <thead><tr><th>Event</th><th>Platform</th><th data-num>Planned</th><th data-num>Sent</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><th>page_view</th><td>GA4</td><td data-num>12</td><td data-num>12</td><td><span class="status" data-tone="ok">adds up</span></td></tr>
+        <tr><th>begin_checkout</th><td>GA4</td><td data-num>4</td><td data-num>3</td><td><span class="status" data-tone="bad">1 missing</span></td></tr>
+        <tr><th>Purchase</th><td>Meta</td><td data-num>1,000</td><td data-num>1,150</td><td><span class="status" data-tone="warn">150 extra</span></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Pano</h2>
+    <div class="grid">
+      <div class="pano-box pano" id="p-field"></div>
+      <div class="pano-box pano" id="p-panel" style="background:var(--color-tile)"></div>
+    </div>
+    <p class="field__hint" style="margin-top:var(--space-3)">A field (seeded, the route ending at the coral point) and a framed panel. A band below, above the footer.</p>
+  </section>
+
+  <section>
+    <h2>Logos</h2>
+    <div class="logos" id="logos"></div>
+  </section>
+</main>
+
+<footer class="tool-footer">
+  <div class="tool-footer__band pano" id="p-band"></div>
+  <div class="tool-footer__body"><span>ai tag debugger · by analitik işler</span><a href="#">How this tool is measured</a></div>
+</footer>
+
+<script>
+  const root = document.documentElement;
+  const css = (n) => getComputedStyle(root).getPropertyValue(n).trim();
+  const ROLES = [['accent', 'link red'], ['point', 'coral'], ['action', 'ink · buttons'], ['bg', 'glaze ground'], ['surface', 'surface'], ['surface-2', 'surface 2'], ['text', 'text'], ['muted', 'muted text'], ['border', 'border'], ['focus', 'focus'], ['ok', 'measured · ok'], ['warn', 'warn'], ['bad', 'broken · error'], ['info', 'info'], ['tile', 'tile'], ['tile-accent', 'route']];
+  function paint() {
+    document.getElementById('swatches').innerHTML = ROLES.map(([r, l]) => `<div class="sw"><i style="background:var(--color-${r})"></i><b>${l}</b><span>--color-${r} ${css('--color-' + r)}</span></div>`).join('');
+    const ramp = (id, pre, n) => (document.getElementById(id).innerHTML = Array.from({ length: n }, (_, i) => `<i style="background:var(--color-data-${pre}-${i + 1})" title="--color-data-${pre}-${i + 1}"></i>`).join(''));
+    ramp('cat', 'cat', 6); ramp('seq', 'seq', 9); ramp('div', 'div', 9);
+  }
+  document.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.set; v ? root.setAttribute('data-theme', v) : root.removeAttribute('data-theme'); paint();
+  }));
+  const q = new URLSearchParams(location.search).get('theme'); if (q) root.setAttribute('data-theme', q);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+  paint();
+  document.getElementById('p-field').innerHTML = Pano.field({ cols: 12, rows: 4, seed: 'demo', startRow: 1, endRow: 2 });
+  document.getElementById('p-panel').innerHTML = Pano.panel({ cols: 12, rows: 4, seed: 'demo' });
+  document.getElementById('p-band').innerHTML = Pano.field({ cols: 60, rows: 3, seed: 'footer', startRow: 1, endRow: 1, align: 'xMaxYMid' });
+  const L = ['master/analitik-isler', 'mark/ai-mark', 'lockups/ai-tag-debugger', 'lockups/ai-tagging-server', 'lockups/ai-visibility', 'lockups/ai-analyst', 'lockups/ai-cloud', 'lockups/ai-tag-debugger-endorsed'];
+  document.getElementById('logos').innerHTML = L.map((p) => `<figure><img class="only-light" src="logos/${p}-light.svg" alt="${p.split('/')[1]}"><img class="only-dark" src="logos/${p}-dark.svg" alt=""></figure>`).join('');
+</script>
+</body>
+</html>

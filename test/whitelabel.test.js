@@ -6,6 +6,7 @@ import path from "node:path";
 import { loadReportBrand, brandCss, brandTokens, contrast, writePdf } from "../src/whitelabel.js";
 import { renderHtml, renderMarkdown } from "../src/report.js";
 import { TOKENS } from "../src/html/css.js";
+import { KIT_COLORS } from "../src/cini.js";
 import { chromium } from "playwright";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
@@ -42,9 +43,10 @@ test("brandCss sets the accent for light and dark", () => {
   assert.match(css, /prefers-color-scheme:dark/);
 });
 
-// The grounds the accent is drawn on, read from the report's own tokens so a change there is checked here too.
-const themeBlocks = { light: TOKENS.split("@media")[0], dark: TOKENS.split(':root[data-theme="dark"]{')[1] };
-const grounds = (theme) => Object.fromEntries(["card", "page", "card-2", "well"].map((n) => [n, themeBlocks[theme].match(new RegExp(`--${n}:(#[0-9a-f]{6})`))[1]]));
+// The grounds the accent is drawn on: the kit roles the report's --card, --page, --card-2 and --well point at, read from the
+// report's own tokens and the kit's values so a change in either is checked here too.
+const groundRole = (n) => TOKENS.match(new RegExp(`--${n}:var\\(--color-([a-z0-9-]+)\\)`))[1];
+const grounds = (theme) => Object.fromEntries(["card", "page", "card-2", "well"].map((n) => [n, KIT_COLORS[theme][groundRole(n)]]));
 
 /** HSL hue in degrees, or null for a grey. */
 function hue(hex) {
@@ -96,7 +98,8 @@ test("white label: a pale brand colour gets darker light tokens, a dark one ligh
 test("white label: a brand colour that already reads is left as it was", () => {
   assert.deepEqual(brandTokens("#0a7d5a"), {
     light: { accent: "#0a7d5a", fg: "#086448", bg: "#e7f2ef" },
-    dark: { accent: "#3b977b", fg: "#85bead", bg: "#0d363e" },
+    // The dark tint is the colour laid on the kit's dark surface.
+    dark: { accent: "#3b977b", fg: "#85bead", bg: "#183227" },
   });
 });
 

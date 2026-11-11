@@ -9,7 +9,7 @@ import { hitAnchor, hitId, hitsOf, pushesOf, requestsOf, pushId, requestId } fro
 import { reportInput, failedInput } from "./helpers/demo-capture.js";
 
 const section = (opts) => render(context(reportInput(opts)));
-const pane = (html, id) => html.slice(html.indexOf(`<article class="card jr-pane`, html.lastIndexOf(`id="${id}"`) - 120), html.indexOf("</article>", html.indexOf(`id="${id}"`)));
+const pane = (html, id) => html.slice(html.indexOf(`<article class="rcard jr-pane`, html.lastIndexOf(`id="${id}"`) - 120), html.indexOf("</article>", html.indexOf(`id="${id}"`)));
 
 test("journey tabs in capture order, the worst run opened, a viewport switch per journey", () => {
   const html = section();
@@ -52,7 +52,7 @@ test("the status line, the plan line and the step list grouped by page", () => {
 test("the step pane: title, action and selector, viewport, tabs with counts, flagged state", () => {
   const html = section();
   const p = pane(html, "j3-s11");
-  assert.match(p, /<article class="card jr-pane sev-broken" id="j3-s11" data-select-pane data-step="11" data-flagged="broken" data-selected tabindex="-1" aria-labelledby="j3-s11-t">/);
+  assert.match(p, /<article class="rcard jr-pane sev-broken" id="j3-s11" data-select-pane data-step="11" data-flagged="broken" data-selected tabindex="-1" aria-labelledby="j3-s11-t">/);
   assert.match(p, /<h3 id="j3-s11-t"><span class="jr-n">11<\/span><span>Place the order<\/span><\/h3>/);
   assert.match(p, /<p class="jr-ph-m"><span>\/thanks\.html<\/span><span>click button\[type=submit\]<\/span><span>\+6\.6 s<\/span><\/p>/);
   assert.match(p, /<span class="chip chip-vp mobile">/);
@@ -72,8 +72,8 @@ test("hits, pushes and requests carry the ids the contract defines, and Findings
   const html = render(ctx);
   ctx.runs.forEach((run, ri) => {
     for (const step of run.steps.filter((s) => s.index > 0)) {
-      hitsOf(run, step.index).forEach((h, k) => assert.match(html, new RegExp(`<details class="card jr-hit[^"]*" id="${hitId(ri, step.index, k)}"[^>]*><summary><span class="jr-c-p"><span class="chip chip-plat ${h.platform}">[^]*?<code class="jr-ev">${h.name}</code>`)));
-      pushesOf(run, step.index).forEach((_, k) => assert.match(html, new RegExp(`<details class="card jr-push" id="${pushId(ri, step.index, k)}">`)));
+      hitsOf(run, step.index).forEach((h, k) => assert.match(html, new RegExp(`<details class="rcard jr-hit[^"]*" id="${hitId(ri, step.index, k)}"[^>]*><summary><span class="jr-c-p"><span class="chip chip-plat ${h.platform}">[^]*?<code class="jr-ev">${h.name}</code>`)));
+      pushesOf(run, step.index).forEach((_, k) => assert.match(html, new RegExp(`<details class="rcard jr-push" id="${pushId(ri, step.index, k)}">`)));
       requestsOf(run, step.index).forEach((_, k) => assert.match(html, new RegExp(`<tr id="${requestId(ri, step.index, k)}">`)));
     }
   });
@@ -94,7 +94,7 @@ test("hits, pushes and requests carry the ids the contract defines, and Findings
 test("a flagged hit: missing parameters, consent chips, its badge, and a link back to its finding card", () => {
   const html = section();
   const hit = html.slice(html.indexOf('id="j3-s11-h0"') - 60, html.indexOf('id="j3-s11-h1"'));
-  assert.match(hit, /<details class="card jr-hit sev-broken" id="j3-s11-h0" data-flagged="broken" data-print-open><summary>/);
+  assert.match(hit, /<details class="rcard jr-hit sev-broken" id="j3-s11-h0" data-flagged="broken" data-print-open><summary>/);
   assert.match(hit, /<span class="chip chip-sev broken jr-miss"><span class="k">currency<\/span>missing<\/span><span class="chip chip-sev broken jr-miss"><span class="k">value<\/span>missing<\/span><span class="jr-kv"><span class="k">items<\/span><span class="v">1<\/span><\/span>/);
   assert.match(hit, /<span class="chip chip-consent granted" title="ad_storage: granted"><span class="k" aria-hidden="true">ad<\/span><span aria-hidden="true">✓<\/span><span class="sr">ad_storage granted<\/span><\/span>/);
   assert.match(hit, /<span class="jr-c-s"><span class="badge sev-broken"><svg[^>]*><use href="#sev-broken"\/><\/svg>Broken<\/span><\/span>/);
@@ -105,7 +105,7 @@ test("a flagged hit: missing parameters, consent chips, its badge, and a link ba
   assert.match(hit, /<table class="tbl jr-it" aria-label="Items">[^]*?<td class="mono">TEE-01<\/td><td>Basic Tee<\/td><td class="num">19\.9<\/td><td class="num">1<\/td>/);
   assert.match(hit, /<a class="mono" href="#j3-s11-d\d">purchase · \+6\.6 s<\/a>/);
   assert.match(hit, /<a class="mono" href="#j3-s11-q0">POST region1\.google-analytics\.com\/g\/collect 204<\/a><span class="muted">blocked by the audit: answered locally, never reached GA4<\/span>/);
-  assert.match(hit, /<details class="card jr-raw"><summary><span class="t">Raw request<\/span>/);
+  assert.match(hit, /<details class="rcard jr-raw"><summary><span class="t">Raw request<\/span>/);
   // Meta sends no consent signal; an unflagged hit has no badge and no data-flagged.
   assert.match(html, /id="j3-s11-h2"><summary><span class="jr-c-p"><span class="chip chip-plat meta">[^]*?<span class="chip chip-consent none" title="No consent signal on this hit">no signal<\/span><\/span><span class="jr-c-s"><\/span>/);
 });
@@ -113,7 +113,7 @@ test("a flagged hit: missing parameters, consent chips, its badge, and a link ba
 test("dataLayer pushes and requests: consent chips, a clear push, the blocked state", () => {
   const html = section();
   const s1 = pane(html, "j3-s1");
-  assert.match(s1, /<details class="card jr-push" id="j3-s1-d0"><summary><code class="jr-ev">consent default<\/code><span class="jr-c-k"><span class="chip chip-consent denied" title="ad_storage: denied">/);
+  assert.match(s1, /<details class="rcard jr-push" id="j3-s1-d0"><summary><code class="jr-ev">consent default<\/code><span class="jr-c-k"><span class="chip chip-consent denied" title="ad_storage: denied">/);
   assert.match(s1, /<code class="jr-ev">\{&quot;ecommerce&quot;:null\}<\/code><span class="jr-c-k"><span class="muted">clear<\/span><\/span>/);
   assert.match(s1, /<code class="jr-ev">view_item_list<\/code><span class="jr-c-k"><span class="jr-kv"><span class="k">value<\/span><span class="v">41\.4 EUR<\/span><\/span><span class="jr-kv"><span class="k">items<\/span><span class="v">3<\/span><\/span><\/span>/);
   assert.match(s1, /<table class="tbl jr-req" aria-label="Network requests"><thead><tr><th scope="col">Platform<\/th>/);
@@ -173,7 +173,7 @@ test("ported 0.17 behaviors: push pairing, hit order, sources, tips, GA4 batches
   assert.match(s1, /4 out-of-scope requests were skipped in this step: Microsoft Clarity 3, DoubleClick 1\./);
   assert.match(s1, /gtm\.js/);
   assert.match(s1, /<span class="plat-fb s14" aria-hidden="true">P<\/span>|<use href="#p-pinterest"\/>/);
-  assert.match(s1, /<details class="card jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open>/);
+  assert.match(s1, /<details class="rcard jr-hit sev-broken" id="j0-s1-h1" data-flagged="broken" data-print-open>/);
   assert.match(s1, /<a href="#f-ga4-add_to_cart-missing_params">Finding →<\/a>/);
   assert.match(html, /<span class="muted">No dataLayer push with this event name in this step\./);
   assert.doesNotMatch(html, /<img src=x/);

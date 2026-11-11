@@ -8,7 +8,7 @@ import { CSS } from "../src/html/css.js";
 import { failedInput, reportInput } from "./helpers/demo-capture.js";
 
 const html = (input) => render(context(input));
-const cards = (h) => [...h.matchAll(/<details class="card"([^>]*)>/g)];
+const cards = (h) => [...h.matchAll(/<details class="rcard"([^>]*)>/g)];
 
 test("one status line per platform with severity, counts per choice and a link to the worst finding", () => {
   const h = html(reportInput());
@@ -17,13 +17,13 @@ test("one status line per platform with severity, counts per choice and a link t
   assert.match(ga4, /^id="consent-ga4"/);
   // The platform chip names the platform once: decorative artwork, then the visible name, no extra sr label.
   assert.match(ga4, /<span class="chip chip-plat ga4"><svg[^>]*><use href="#p-ga4"\/><\/svg>GA4<\/span>/);
-  assert.match(h, /<li class="card sev-ok cs-row" id="consent-ga4">/);
+  assert.match(h, /<li class="rcard sev-ok cs-row" id="consent-ga4">/);
   assert.match(ga4, /<span class="chip chip-sev ok">.*OK<\/span>/);
   assert.match(ga4, /<span class="chip chip-consent denied">2 · denied<\/span>/);
   assert.match(ga4, /<span class="chip chip-consent granted">2 · granted<\/span>/);
   assert.doesNotMatch(ga4, /Finding/);
-  const meta = h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="card" id="consent-mode"'));
-  assert.match(h, /<li class="card sev-risk cs-row" id="consent-meta">/);
+  const meta = h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="rcard" id="consent-mode"'));
+  assert.match(h, /<li class="rcard sev-risk cs-row" id="consent-meta">/);
   assert.match(meta, /<span class="chip chip-sev risk">.*Risk<\/span>/);
   assert.match(meta, /<span class="chip chip-consent none">1 · no signal<\/span>/);
   assert.match(meta, /<a class="cs-go" href="#f-meta-pageview-before_consent">Finding →<\/a>/);
@@ -40,7 +40,7 @@ test("every card is collapsed, ids are unique and no heading sits under the h2",
 
 test("the Consent Mode card: default first, timing per run, the first default and update as consent chips", () => {
   const h = html(reportInput());
-  const mode = h.slice(h.indexOf('<details class="card" id="consent-mode"'), h.indexOf('<details class="card" id="consent-scenarios"'));
+  const mode = h.slice(h.indexOf('<details class="rcard" id="consent-mode"'), h.indexOf('<details class="rcard" id="consent-scenarios"'));
   assert.match(mode, /<span class="t">Consent Mode<\/span>/);
   assert.match(mode, /<span class="chip chip-sev ok">.*Default first<\/span>/);
   assert.match(mode, /<span class="chip plain mono">.*<b>27–53 ms<\/b><\/span>/);
@@ -69,7 +69,7 @@ test("runs that sent different commands get their own rows with their run chips"
 
 test("the scenarios card: tags by choice, a not-supported choice, and the problem cells with the finding link", () => {
   const h = html(reportInput());
-  const card = h.slice(h.indexOf('<details class="card" id="consent-scenarios"'));
+  const card = h.slice(h.indexOf('<details class="rcard" id="consent-scenarios"'));
   assert.match(card, /<span class="t">Scenarios<\/span>/);
   assert.match(card, /<span class="chip chip-consent none">Analytics only · not supported<\/span>/);
   assert.match(card, /<span class="end"><span class="chip chip-sev risk">.*2 problems<\/span><\/span>/);
@@ -89,24 +89,24 @@ test("a baseline-accepted finding no longer colours the Meta line or its cell", 
   const input = reportInput();
   input.findings = input.findings.map((f) => (f.check === "before_consent" ? { ...f, accepted: true } : f));
   const h = html(input);
-  assert.match(h, /<li class="card sev-ok cs-row" id="consent-meta">/);
-  assert.doesNotMatch(h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="card" id="consent-mode"')), /Finding/);
+  assert.match(h, /<li class="rcard sev-ok cs-row" id="consent-meta">/);
+  assert.doesNotMatch(h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="rcard" id="consent-mode"')), /Finding/);
 });
 
 test("with no finding row for Meta, the metric's after-reject verdict still marks its line Risk, without a link", () => {
   const input = reportInput();
   input.findings = input.findings.filter((f) => !(f.platform === "meta" && f.check === "before_consent"));
   const h = html(input);
-  const meta = h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="card" id="consent-mode"'));
-  assert.match(h, /<li class="card sev-risk cs-row" id="consent-meta">/);
+  const meta = h.slice(h.indexOf('id="consent-meta"'), h.indexOf('<details class="rcard" id="consent-mode"'));
+  assert.match(h, /<li class="rcard sev-risk cs-row" id="consent-meta">/);
   assert.doesNotMatch(meta, /Finding/);
-  assert.match(h, /<li class="card sev-ok cs-row" id="consent-ga4">/);
+  assert.match(h, /<li class="rcard sev-ok cs-row" id="consent-ga4">/);
 });
 
 test("a run that never loaded: no platform lines, no default, scenarios not run, the finding linked", () => {
   const h = html(failedInput());
   assert.doesNotMatch(h, /cs-list/);
-  const mode = h.slice(h.indexOf('<details class="card" id="consent-mode"'));
+  const mode = h.slice(h.indexOf('<details class="rcard" id="consent-mode"'));
   assert.match(mode, /<span class="chip chip-sev risk">.*No default<\/span>/);
   assert.match(mode, /<span class="end muted xs">0 of 4 runs<\/span>/);
   assert.match(mode, /No Consent Mode default command was seen on any journey\./);

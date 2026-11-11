@@ -11,6 +11,7 @@ import { CSS, logo, renderHtml, SCRIPT, scriptCspSource } from "../src/report.js
 import { computeMetrics } from "../src/metrics.js";
 import { runSummary, trend } from "../src/history.js";
 import { brandCss } from "../src/whitelabel.js";
+import { KIT_CSS } from "../src/cini.js";
 
 const capture = JSON.parse(readFileSync(new URL("./fixtures/demo-capture.json", import.meta.url), "utf8"));
 const demo = { title: "ai tag debugger report: localhost", site: "localhost", generatedAt: "2026-10-19 06:39 UTC", findings: capture.findings, explained: null, runs: capture.runs, plan: capture.config.plan, lang: "en", consentScenarios: capture.consentScenarios };
@@ -58,7 +59,7 @@ test("the verdict block states the verdict and a headline without a model, and t
 test("priorities link to the finding cards, whose ids are stable and unique", () => {
   const html = render();
   // Finding rows are collapsed <details> cards since the inspector design.
-  const ids = [...html.matchAll(/<details class="card sev-[a-z]+" id="([^"]+)"/g)].map((x) => x[1]);
+  const ids = [...html.matchAll(/<details class="rcard sev-[a-z]+" id="([^"]+)"/g)].map((x) => x[1]);
   assert.deepEqual(ids, ["f-ga4-purchase-missing_params", "f-meta-purchase-missing_params", "f-meta-pageview-before_consent", "f-ga4-add_to_cart-duplicate"]);
   const summary = html.slice(html.indexOf('id="summary"'), html.indexOf('id="findings"'));
   // The priorities list became the score's cost lines: one line per fix (GA4 and Meta purchase are one fix, −60),
@@ -104,7 +105,7 @@ test("a finding card carries severity, owner, where with page, evidence with mis
   assert.match(ai, /<p class="fnd-impact"><svg[^>]*><use href="#ui-impact"\/><\/svg><span>No revenue for <code>purchase<\/code>\.<\/span><\/p>/);
   assert.match(ai, /<ol class="fix-steps"><li><span>Add <code>value<\/code>\.<\/span><\/li><li><span>Re-test\.<\/span><\/li><\/ol>/);
   // Every card starts collapsed (the design opens a card on a click or a deep link, none by default).
-  const cards = [...html.matchAll(/<details class="card sev-[a-z]+" id="f-[^"]+"([^>]*)>/g)].map((x) => x[1].replace(/"[^"]*"/g, '""'));
+  const cards = [...html.matchAll(/<details class="rcard sev-[a-z]+" id="f-[^"]+"([^>]*)>/g)].map((x) => x[1].replace(/"[^"]*"/g, '""'));
   assert.equal(cards.length, 4);
   assert.deepEqual(cards.filter((attrs) => /\sopen(\s|$)/.test(attrs)), []);
 });
@@ -130,27 +131,30 @@ test("platform icons are one inline sprite with <use>, with a letter fallback fo
   for (const id of ["sev-broken", "sev-risk", "sev-warning", "sev-info", "sev-ok", "ui-chevron", "p-ga4", "p-meta", "p-google_ads", "p-tiktok"]) assert.match(sprite, new RegExp(`<symbol id="${id}"`));
   assert.doesNotMatch(sprite, /p-pinterest/, "only the platforms the page shows");
   assert.doesNotMatch(CSS, /data:image/);
-  // The design system's families are named first with the system behind them; the report ships no font files.
-  assert.match(CSS, /--font-sans:"Google Sans","Segoe UI Variable Text",system-ui,/);
-  assert.match(CSS, /--font-display:"Google Sans Flex","Google Sans","Segoe UI Variable Display",system-ui,/);
-  assert.match(CSS, /--font-mono:"Google Sans Code",ui-monospace,/);
+  // Text is the kit's Gabarito and code its Azeret Mono: the report's sheet names the kit's roles and carries no font of its
+  // own; the kit's fonts.css, inlined ahead of it, carries both faces.
+  assert.match(CSS, /--font-sans:var\(--font-body\);/);
+  assert.doesNotMatch(CSS, /--font-(display|mono):/);
   assert.doesNotMatch(CSS, /@font-face|url\(/);
-  assert.doesNotMatch(html, /url\("data:image\/svg/);
+  assert.deepEqual([...html.matchAll(/font-family: "([^"]+)"; src: url\("data:font\/woff2;base64,/g)].map((x) => x[1]), ["Gabarito", "Azeret Mono"]);
+  // The one image data URI in CSS is the kit's missing-data hatch.
+  assert.equal((html.match(/url\("data:image\/svg/g) ?? []).length, 1);
   const klaviyo = renderHtml({ title: "t", generatedAt: "now", findings: [], explained: null, runs: [{ journeyId: "j", viewport: "desktop", startedAt: 0, completed: true, steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Open", t: 1 }], hits: [{ platform: "klaviyo", name: "Viewed Product", params: {}, url: "https://a.klaviyo.com/x", step: 1, t: 2 }], dataLayerLog: [] }] });
   // Journeys draws a hit's platform at 14 px (the hit row's icon size), so the initials square is s14.
   assert.match(klaviyo, /<span class="plat-fb s14" aria-hidden="true">K<\/span><span>Klaviyo<\/span>/);
 });
 
 test("the theme has both dark selectors, logos follow the text colour, and brandCss follows the same selectors", () => {
-  assert.match(CSS, /@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
-  assert.match(CSS, /:root\[data-theme="dark"\]\{/);
-  assert.match(CSS, /--sev-risk:#964799/);
+  // The kit's tokens switch for dark mode by the OS or by <html data-theme>; the report's names point at them.
+  assert.match(KIT_CSS, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\], \.light\) \{/);
+  assert.match(KIT_CSS, /:root\[data-theme="dark"\], :root\.dark \{/);
+  assert.match(CSS, /--sev-risk:var\(--color-bad\);/);
   // A brand logo is drawn from the sprite so its ink takes the text colour (BRAND.md §4); its width keeps the viewBox's proportions.
   assert.match(logo("atd-lockup", "ai tag debugger", 26, "logo-atd"), /^<svg class="logo logo-atd" width="189\.9" height="26" role="img" aria-label="ai tag debugger"><use href="#logo-atd-lockup"\/><\/svg>$/);
   assert.match(logo("mark", "", 24, "l-mark"), /^<svg class="logo l-mark" width="23\.9" height="24" aria-hidden="true"><use href="#logo-mark"\/><\/svg>$/);
   // An image logo, the favicon tile, still comes as its light and dark files.
   assert.match(logo("favicon", "", 16, "f-mark"), /^<span class="logo f-mark"><img class="l-light" src="data:[^"]+" alt="" height="16"><img class="l-dark" src="data:[^"]+" alt="" height="16"><\/span>$/);
-  assert.match(CSS, /--brand-point:#c12d30;/);
+  assert.match(CSS, /--brand-point:var\(--color-brand-point\);/);
   assert.match(CSS, /svg\.logo\{display:inline-block;flex:none;color:var\(--fg-strong\)\}/);
   const css = brandCss("#0a7d5a");
   assert.match(css, /^:root\{--accent:#0a7d5a;--accent-fg:#[0-9a-f]{6};--accent-bg:#[0-9a-f]{6}\}@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{--accent:/);
@@ -169,9 +173,9 @@ test("the inline script is allowed by its hash in the page CSP and the MCP serve
   assert.equal(scripts[0], SCRIPT);
   const hash = `'sha256-${createHash("sha256").update(scripts[0]).digest("base64")}'`;
   assert.equal(scriptCspSource(), hash);
-  assert.match(html, new RegExp(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${hash.replace(/[+/]/g, "\\$&")}">`));
+  assert.match(html, new RegExp(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src ${hash.replace(/[+/]/g, "\\$&")}">`));
   const mcp = readFileSync(new URL("../src/mcp.js", import.meta.url), "utf8");
-  assert.match(mcp, /"Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src \$\{scriptCspSource\(\)\}`/);
+  assert.match(mcp, /"Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src \$\{scriptCspSource\(\)\}`/);
   assert.doesNotMatch(html, / on[a-z]+="/);
   assert.doesNotMatch(html, /(src|srcset|href)="(?!data:|#|https:\/\/(analitikisler\.com|github\.com\/analitikisler\/ai-tag-debugger|tagassistant\.google\.com|support\.google\.com|www\.facebook\.com|chromewebstore\.google\.com|developers\.google\.com))/);
 });
@@ -184,7 +188,7 @@ test("print rules stack the tabs and open the cards; tips take no focus; every t
   assert.match(CSS, /main>\.sec\+\.sec\{break-before:page\}/);
   // Cards start collapsed, so print opens the flagged ones by CSS alone (writePdf runs without JavaScript), and
   // every tab panel prints under its label.
-  assert.match(CSS, /details\.card\[data-print-open\]::details-content\{content-visibility:visible;display:block\}/);
+  assert.match(CSS, /details\.rcard\[data-print-open\]::details-content\{content-visibility:visible;display:block\}/);
   assert.match(CSS, /\.tabs \[role=tabpanel\],\.tabs \[role=tabpanel\]\[hidden\]\{display:block\}/);
   assert.match(CSS, /\.chip,\.badge,\.n\{background:none!important;border:1px solid currentColor\}/);
   assert.doesNotMatch(html, /tabindex="0"/);
@@ -200,7 +204,7 @@ test("the Trend card appears only with a history of at least two runs; a lone ch
   const changes = { previous: "2026-10-02_0900", mode: "findings", fixed: [], new: [{ platform: "ga4", event: "add_to_cart", check: "duplicate", detail: "twice" }], routes: [] };
   const html = render({ trend: t, changes });
   // The trend is a collapsed card in the Run section; its title is the summary line.
-  assert.match(html, /<details class="card" id="trend"><summary><span class="t">Trend<\/span>/);
+  assert.match(html, /<details class="rcard" id="trend"><summary><span class="t">Trend<\/span>/);
   assert.match(html, /<svg class="spark" viewBox="0 0 280 64"[^>]*role="img" aria-label="Broken: 2, 2, 2; Risk: 1, 1, 1; Warning: 0, 1, 1">/);
   assert.match(html, /<circle class="sev-broken hollow"/);
   assert.match(html, /<strong>Getting worse<\/strong> <span class="muted">over 3 runs, 2026-10-01 to 2026-10-03<\/span>/);
@@ -212,12 +216,12 @@ test("the Trend card appears only with a history of at least two runs; a lone ch
   assert.doesNotMatch(render(), /id="trend"/);
   // The changes card is the Findings section's collapsed card.
   const lone = render({ changes });
-  assert.match(lone, /<details class="card fnd-changes" id="changes">/);
+  assert.match(lone, /<details class="rcard fnd-changes" id="changes">/);
   assert.equal((lone.match(/id="changes"/g) ?? []).length, 1);
   // With a history the changes card stays in Findings and the Trend card links to it instead of embedding a copy:
   // one #changes anchor, the one the route line and the trend link to.
   assert.equal((html.match(/id="changes"/g) ?? []).length, 1);
-  assert.match(html.slice(html.indexOf('id="findings"'), html.indexOf('id="journeys"')), /<details class="card fnd-changes" id="changes">/);
+  assert.match(html.slice(html.indexOf('id="findings"'), html.indexOf('id="journeys"')), /<details class="rcard fnd-changes" id="changes">/);
   assert.match(html.slice(html.indexOf('id="trend"')), /<a href="#changes"><strong>1 new problem<\/strong><\/a>/);
 });
 
@@ -232,11 +236,11 @@ test("the Journeys, Consent and Scope sections carry the consent, funnel, parity
   const journeys = html.slice(html.indexOf('id="journeys"'), html.indexOf('id="consent"'));
   // The step row became the step list item and the step pane, with the label, path and action in its header.
   assert.match(journeys, /<li class="jr-st sev-broken" data-flagged="broken"><button type="button" data-select-target="#j3-s11"/);
-  assert.match(journeys, /<article class="card jr-pane sev-broken" id="j3-s11" [^>]*data-flagged="broken"[^>]*>\n<header class="jr-ph"><h3 id="j3-s11-t"><span class="jr-n">11<\/span><span>Place the order<\/span><\/h3><span class="jr-ph-e"><span class="badge sev-broken">/);
+  assert.match(journeys, /<article class="rcard jr-pane sev-broken" id="j3-s11" [^>]*data-flagged="broken"[^>]*>\n<header class="jr-ph"><h3 id="j3-s11-t"><span class="jr-n">11<\/span><span>Place the order<\/span><\/h3><span class="jr-ph-e"><span class="badge sev-broken">/);
   assert.match(journeys, /<p class="jr-ph-m"><span>\/thanks\.html<\/span><span>click<\/span>/);
   // Cards start collapsed: the flagged step is the selected pane, and its flagged hit prints open.
   assert.match(journeys, /id="j3-s11" [^>]*data-selected/);
-  assert.match(journeys, /<details class="card jr-hit sev-broken" id="j3-s11-h0" data-flagged="broken" data-print-open>/);
+  assert.match(journeys, /<details class="rcard jr-hit sev-broken" id="j3-s11-h0" data-flagged="broken" data-print-open>/);
   assert.match(journeys, /<span class="jr-plan-h">Expected vs observed<\/span><span class="jr-plan-t">.*?11 of 11 expected events fired, 9 with every required parameter\./);
   assert.match(journeys, /<a class="chip chip-sev broken" href="#j3-s11-h0" title="without currency, value">.*?<code>purchase<\/code><span class="sr"> without currency, value<\/span><\/a>/);
   const step4 = journeys.slice(journeys.indexOf('id="j3-s4"'), journeys.indexOf("</article>", journeys.indexOf('id="j3-s4"')));
@@ -344,17 +348,18 @@ test("in a browser the report has one h1, no heading skips, named tables, select
   }
 });
 
-test("without Google Sans the score sits in the middle of its ring and each score line's points stay beside its first line", async (t) => {
+test("in the kit's faces or another the score sits in the middle of its ring and each score line's points stay beside its first line", async (t) => {
   let browser;
   try { browser = await chromium.launch(); } catch { return t.skip("Chromium is not installed"); }
   const dir = mkdtempSync(path.join(tmpdir(), "aitd-fonts-"));
   try {
     const file = path.join(dir, "report.html");
     writeFileSync(file, render());
-    // Most readers have none of the Google Sans family: the report then lays out in whatever the stacks fall back to.
-    // Two very different stand-ins (the system face, and a monospace face with its own tall metrics) must give the same geometry.
-    const strip = (name) => CSS.match(new RegExp(`--font-${name}:([^;]+);`))[1].split(",").filter((f) => !/google sans/i.test(f)).join(",");
-    const stacks = [`${strip("sans")}|${strip("display")}|${strip("mono")}`, "monospace|monospace|monospace"];
+    // The page carries Gabarito and Azeret Mono, but the geometry must not depend on them: the kit's faces, the system face
+    // they fall back to, and a monospace face with its own tall metrics must all give the same layout.
+    const fallback = (name) => KIT_CSS.match(new RegExp(`--font-${name}: var\\(--font-${name}-face\\), ([^;]+);`))[1];
+    const kit = (name) => `var(--font-${name}-face), ${fallback(name)}`;
+    const stacks = [`${kit("body")}|${kit("display")}|${kit("mono")}`, `${fallback("body")}|${fallback("display")}|${fallback("mono")}`, "monospace|monospace|monospace"];
     for (const stack of stacks) {
       const [sans, display, mono] = stack.split("|");
       // The score lines sit side by side from 1100px and stack below it. Neither layout wraps a line of the demo at its

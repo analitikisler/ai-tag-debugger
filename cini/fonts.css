@@ -1,0 +1,21 @@
+/* Çini · Mercan kit, built 2026-11-11 from analitikisler 97701e7 (styles/tokens.json). Do not edit: rebuild with cini-kit/build.ts.
+   Gabarito (wght 400–900) for everything people read and press, Azeret Mono (wght 400–600) for code, event names and
+   figures. Both SIL OFL 1.1 (fonts/OFL-*.txt). The fallbacks are Arial scaled to Gabarito's metrics, so text does not
+   jump when the font arrives. Paths are relative to this file: keep fonts/ next to it. */
+@font-face { font-family: "Gabarito"; src: url("./fonts/gabarito.woff2") format("woff2"); font-weight: 400 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Azeret Mono"; src: url("./fonts/azeret-mono.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+@font-face { font-family: display-fallback; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 1 749; size-adjust: 93.9%; ascent-override: 100.12%; descent-override: 27.69%; line-gap-override: 0%; }
+@font-face { font-family: display-fallback; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 750 1000; size-adjust: 94.6%; ascent-override: 99.40%; descent-override: 27.49%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback; src: local("Arial"), local("ArialMT"); font-weight: 1 449; size-adjust: 98.9%; ascent-override: 95.08%; descent-override: 26.30%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback; src: local("Arial"), local("ArialMT"); font-weight: 450 549; size-adjust: 99.6%; ascent-override: 94.37%; descent-override: 26.10%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 550 1000; size-adjust: 93.3%; ascent-override: 100.76%; descent-override: 27.87%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback-tr; src: local("Arial"), local("ArialMT"); font-weight: 1 449; size-adjust: 97.6%; ascent-override: 96.29%; descent-override: 26.63%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback-tr; src: local("Arial"), local("ArialMT"); font-weight: 450 549; size-adjust: 98.5%; ascent-override: 95.43%; descent-override: 26.40%; line-gap-override: 0%; }
+@font-face { font-family: body-fallback-tr; src: local("Arial Bold"), local("Arial-BoldMT"); font-weight: 550 1000; size-adjust: 92.6%; ascent-override: 101.54%; descent-override: 28.08%; line-gap-override: 0%; }
+:root { --font-body-fallback: body-fallback; }
+:root:lang(tr) { --font-body-fallback: body-fallback-tr; }
+:root {
+  --font-display-face: "Gabarito", display-fallback;
+  --font-body-face: "Gabarito", var(--font-body-fallback);
+  --font-mono-face: "Azeret Mono";
+}

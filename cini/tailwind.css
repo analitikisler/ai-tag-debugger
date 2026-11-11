@@ -1,0 +1,157 @@
+/* Çini · Mercan kit, built 2026-11-11 from analitikisler 97701e7 (styles/tokens.json). Do not edit: rebuild with cini-kit/build.ts. */
+/* Çini · Mercan for Tailwind v4 and shadcn/ui (ai analyst, ai visibility, ai listening).
+
+   In the tool's main CSS, in this order:
+     @import "tailwindcss";
+     @import "./cini/tokens.css";
+     @import "./cini/fonts.css";
+     @import "./cini/tailwind.css";
+
+   tokens.css stays unlayered, so its values beat Tailwind's layered theme; the shadcn names below only point at the
+   Çini roles, so every shadcn component restyles at once and follows light and dark with them. */
+
+/* dark: the OS setting unless the page says otherwise (data-theme="light" | "dark", or shadcn's .dark class) */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"], .light) *) { @slot; }
+  }
+  &:where([data-theme="dark"] *, .dark *) { @slot; }
+}
+
+/* shadcn/ui's names, on the Çini roles */
+:root {
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-action);          /* buttons are ink, not red */
+  --primary-foreground: var(--color-on-action);
+  --secondary: var(--color-surface-2);
+  --secondary-foreground: var(--color-text-strong);
+  --muted: var(--color-surface-2);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-surface-2);        /* shadcn's "accent" is a hover ground, not the brand red */
+  --accent-foreground: var(--color-text-strong);
+  --destructive: var(--color-bad);         /* wine, far from the brand red */
+  --destructive-foreground: var(--color-bg);
+  --border: var(--color-border);
+  --input: var(--color-border-strong);
+  --ring: var(--color-focus);
+  --chart-1: var(--color-data-cat-1);
+  --chart-2: var(--color-data-cat-2);
+  --chart-3: var(--color-data-cat-3);
+  --chart-4: var(--color-data-cat-4);
+  --chart-5: var(--color-data-cat-5);
+  --radius: var(--radius-lg);
+  --sidebar: var(--color-well);
+  --sidebar-foreground: var(--color-text);
+  --sidebar-primary: var(--color-action);
+  --sidebar-primary-foreground: var(--color-on-action);
+  --sidebar-accent: var(--color-surface-2);
+  --sidebar-accent-foreground: var(--color-text-strong);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-focus);
+}
+
+@theme inline {
+  /* shadcn */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Çini's own roles as utilities (bg-surface, text-link, border-strong, text-ok, bg-tile …). Names that shadcn
+     already uses (accent, muted, border) keep shadcn's meaning: bg-muted is a ground, so muted TEXT is
+     text-muted-foreground or text-subtle; the brand red is `link`; charts are cat-1 … cat-6. */
+  --color-bg: var(--color-bg);
+  --color-well: var(--color-well);
+  --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-text: var(--color-text);
+  --color-strong: var(--color-text-strong);
+  --color-subtle: var(--color-muted);
+  --color-border-strong: var(--color-border-strong);
+  --color-link: var(--color-accent);
+  --color-action: var(--color-action);
+  --color-on-action: var(--color-on-action);
+  --color-focus: var(--color-focus);
+  --color-point: var(--color-point);
+  --color-ok: var(--color-ok);
+  --color-ok-soft: var(--color-ok-soft);
+  --color-warn: var(--color-warn);
+  --color-warn-soft: var(--color-warn-soft);
+  --color-bad: var(--color-bad);
+  --color-bad-soft: var(--color-bad-soft);
+  --color-info: var(--color-info);
+  --color-measured: var(--color-data-measured);
+  --color-missing: var(--color-data-missing);
+  --color-broken: var(--color-data-broken);
+  --color-tile: var(--color-tile);
+  --color-tile-line: var(--color-tile-line);
+  --color-tile-accent: var(--color-tile-accent);
+  --color-code: var(--color-code-bg);
+  --color-code-text: var(--color-code-text);
+  --color-overlay: var(--color-overlay);
+  --color-cat-1: var(--color-data-cat-1);
+  --color-cat-2: var(--color-data-cat-2);
+  --color-cat-3: var(--color-data-cat-3);
+  --color-cat-4: var(--color-data-cat-4);
+  --color-cat-5: var(--color-data-cat-5);
+  --color-cat-6: var(--color-data-cat-6);
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+}
+
+/* Missing data: the Pano ring hatch over the box (class="hatch-missing", on a positioned box) */
+@utility hatch-missing {
+  position: relative;
+  &::after { content: ""; position: absolute; inset: 0; background: var(--color-data-missing); mask: var(--pattern-missing) 0 0 / 8px 8px; pointer-events: none; }
+}
+
+/* The base, as cini.css sets it, for pages that use Tailwind only */
+@layer base {
+  body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); font-synthesis: none; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { color: var(--color-text-strong); font-family: var(--font-display); font-weight: var(--font-weight-display); letter-spacing: var(--text-tracking-title); }
+  /* only plain links are red: an anchor with classes (a card, a row, a button) keeps the colour its classes give it */
+  a:not([class]) { color: var(--color-accent); text-underline-offset: 0.22em; }
+  :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+  ::selection { background: var(--color-selection); color: var(--color-text); }
+  code, kbd, pre { font-family: var(--font-mono); }
+}

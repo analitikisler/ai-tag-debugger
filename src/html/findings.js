@@ -321,7 +321,7 @@ function failedRow(ctx, f) {
   const text = [unquote(title), platformLabel(f.platform ?? ""), f.event, ...(paramsOf(ctx, f) ?? []), unquote(f.detail), ...places.map(placeText), ...steps, m.ui.owners[owner]].filter(Boolean).join(" ");
   const accepted = f.accepted === true;
   const note = accepted ? `<p class="note xs"><span class="badge">${use("sev-ok", 14)}${esc(m.html.accepted)}</span> ${esc(m.html.acceptedNote)}</p>` : "";
-  return `<details class="card sev-${f.severity}" id="${id}" data-print-open${attrs({ sev: f.severity, owner, plats: [f.platform], places, text, accepted })}>
+  return `<details class="rcard sev-${f.severity}" id="${id}" data-print-open${attrs({ sev: f.severity, owner, plats: [f.platform], places, text, accepted })}>
 <summary>${badge(f.severity, m.severity[f.severity])}<span class="f-t">${detailHtml(title)}${accepted ? ` ${badge("", m.html.accepted)}` : ""}</span><span class="c-owner">${ownerChip(m, owner)}</span><span class="c-plat">${f.platform ? platChip(f.platform) : ""}</span><span class="c-where">${whereCell(ctx, places)}</span></summary>
 <div class="body">${note}<div class="tabs" data-tabs><div role="tablist" aria-label="${esc(m.html.findings.details(unquote(title)))}">${tabs.map(([k, label, count], i) => `<button type="button" role="tab" aria-controls="${id}-${k}" aria-selected="${i === 0}">${esc(label)}${count ? ` <span class="n">${count}</span>` : ""}</button>`).join("")}</div>
 ${tabs.map(([k, label, , body]) => `<div role="tabpanel" id="${id}-${k}" data-label="${esc(label)}">${body}</div>`).join("\n")}</div></div></details>`;
@@ -331,7 +331,7 @@ ${tabs.map(([k, label, , body]) => `<div role="tabpanel" id="${id}-${k}" data-la
 function lineRow(ctx, { id, sev, titleHtml, text, owner = "", plats, places, go, accepted = false }) {
   const { m } = ctx;
   const link = go ? `<a class="go" href="#${go}" aria-label="${esc(m.html.findings.showWhere)}">${use("ui-chevron", 16)}</a>` : "";
-  return `<div class="card line sev-${sev}" id="${id}"${attrs({ sev, owner, plats, places, text, accepted })}>${badge(sev, m.severity[sev])}<span class="f-t">${titleHtml}${accepted ? ` ${badge("", m.html.accepted)}` : ""}</span><span class="c-owner"></span><span class="c-plat">${sortPlatforms(uniq(plats)).map(platChip).join("")}</span><span class="c-where">${whereCell(ctx, places)}</span>${link}</div>`;
+  return `<div class="rcard line sev-${sev}" id="${id}"${attrs({ sev, owner, plats, places, text, accepted })}>${badge(sev, m.severity[sev])}<span class="f-t">${titleHtml}${accepted ? ` ${badge("", m.html.accepted)}` : ""}</span><span class="c-owner"></span><span class="c-plat">${sortPlatforms(uniq(plats)).map(platChip).join("")}</span><span class="c-where">${whereCell(ctx, places)}</span>${link}</div>`;
 }
 
 /** An info row: an event the journey never reached reads "`event` · not reached" and links to its coverage row. */
@@ -431,7 +431,7 @@ function changesCard(ctx) {
   if (!ch) return "";
   const line = ch.previous ? m.ui.changesLine(ch) : "";
   const summary = `<summary><h3 class="t">${esc(m.ui.changesTitle)}</h3>${line ? `<span class="end muted">${esc(line)}</span>` : ""}</summary>`;
-  if (!ch.previous) return `<details class="card fnd-changes" id="changes">${summary}<div class="body"><p class="muted">${esc(m.ui.noPreviousRun)}</p></div></details>`;
+  if (!ch.previous) return `<details class="rcard fnd-changes" id="changes">${summary}<div class="body"><p class="muted">${esc(m.ui.noPreviousRun)}</p></div></details>`;
   const open = new Map(ctx.rows.filter((f) => FAILED.has(f.severity) || f.severity === "info").map((f) => [problemKey(f), f]));
   const item = (sev, tag, c, was) => {
     const text = esc(`${changeLabel(c)} (${ch.mode === "findings" ? c.detail : m.ui.bucket[was]})`);
@@ -441,7 +441,7 @@ function changesCard(ctx) {
   };
   const items = [...ch.fixed.map((c) => item("ok", m.ui.changeFixed, c, c.was)), ...ch.new.map((c) => item("broken", m.ui.changeNew, c, c.bucket))];
   const routes = (ch.routes ?? []).map((r) => `<li>${esc(`${r.journeyId} (${r.viewport}): ${r.before.join(" → ")} ⇒ ${r.after.join(" → ")}`)}</li>`);
-  return `<details class="card fnd-changes" id="changes">${summary}<div class="body"><p class="muted xs">${esc(m.ui.changesLead(ch.previous, ch.mode))}</p>${items.length ? `<ul class="fnd-change-list">${items.join("")}</ul>` : ""}${routes.length ? `<ul class="fnd-change-list">${routes.join("")}</ul>` : ""}</div></details>`;
+  return `<details class="rcard fnd-changes" id="changes">${summary}<div class="body"><p class="muted xs">${esc(m.ui.changesLead(ch.previous, ch.mode))}</p>${items.length ? `<ul class="fnd-change-list">${items.join("")}</ul>` : ""}${routes.length ? `<ul class="fnd-change-list">${routes.join("")}</ul>` : ""}</div></details>`;
 }
 
 /**
@@ -454,7 +454,7 @@ function aiSummaryCard(ctx) {
   if (!s?.points?.length && !s?.also_check?.length) return "";
   const points = s.points.length ? `<ul class="fnd-change-list">${s.points.map((p) => `<li>${badge(p.severity, m.severity[p.severity])}<span>${fmt(p.text)}</span></li>`).join("")}</ul>` : "";
   const also = s.also_check.length ? `<p class="xs muted">${esc(m.ui.alsoCheck)}</p><ul class="fnd-change-list also">${s.also_check.map((x) => `<li>${fmt(x)}</li>`).join("")}</ul>` : "";
-  return `<details class="card fnd-changes" id="ai-summary"><summary><h3 class="t">${esc(m.html.aiSummary)}</h3></summary><div class="body">${points}${also}</div></details>`;
+  return `<details class="rcard fnd-changes" id="ai-summary"><summary><h3 class="t">${esc(m.html.aiSummary)}</h3></summary><div class="body">${points}${also}</div></details>`;
 }
 
 /* ---------- section ---------- */

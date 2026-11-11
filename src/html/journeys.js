@@ -1,6 +1,6 @@
 // The Journeys section: journey tabs with a desktop/mobile switch, then per run a status line, the step list grouped by
 // page and one step pane with Hits, Data Layer and Requests tabs. Generic markup only ([data-tabs], [data-inspector],
-// [data-vp-switch], details.card), so shell.js drives it; the JOURNEYS script in script.js only keeps the viewport
+// [data-vp-switch], details.rcard), so shell.js drives it; the JOURNEYS script in script.js only keeps the viewport
 // when the journey changes. Ids come from lib.js (stepAnchor, hitId, pushId, requestId) so Findings links land here.
 import { canonicalEvent } from "../checks.js";
 import { CONSENT_SIGNALS, parseTrackingRequest, providerOf, PROVIDERS } from "../parsers.js";
@@ -191,7 +191,7 @@ function hitCard(ctx, t, rows, run, ri, step, hit, k) {
   const paramTable = event.length || missing.length
     ? `<table class="tbl jr-kvt" aria-label="${esc(m.ui.eventParams)}"><tbody>${paramRows(lang, event)}${missRows}</tbody></table>`
     : `<p class="muted xs">${esc(m.ui.noParameters)}</p>`;
-  const ctxTable = context.length ? `<details class="card jr-ctx"><summary><span class="t">${esc(m.ui.contextParams)} ${n(context.length)}</span></summary><div class="body"><table class="tbl jr-kvt" aria-label="${esc(m.ui.contextParams)}"><tbody>${paramRows(lang, context)}</tbody></table></div></details>` : "";
+  const ctxTable = context.length ? `<details class="rcard jr-ctx"><summary><span class="t">${esc(m.ui.contextParams)} ${n(context.length)}</span></summary><div class="body"><table class="tbl jr-kvt" aria-label="${esc(m.ui.contextParams)}"><tbody>${paramRows(lang, context)}</tbody></table></div></details>` : "";
   const pushes = pushesForHit(run, hit);
   const stepPushes = pushesOf(run, step.index);
   const stepCalls = requestsOf(run, step.index);
@@ -204,12 +204,12 @@ function hitCard(ctx, t, rows, run, ri, step, hit, k) {
     ? calls.map((c) => `<a class="mono" href="#${requestId(ri, c.step, (c.step === step.index ? stepCalls : requestsOf(run, c.step)).indexOf(c))}">${esc(c.method ?? "")} ${esc(hostPath(c.url))} ${esc(c.status ?? "")}</a>${c.blocked ? `<span class="muted">${esc(m.html.blockedBy(label))}</span>` : ""}`).join("")
     : `<span class="mono">${esc(hostPath(hit.url))}</span>`;
   const card = flag ? ids.get(flag) : null;
-  return `<details class="card jr-hit${sev ? ` sev-${sev}` : ""}" id="${id}"${sev ? ` data-flagged="${sev}" data-print-open` : ""}><summary><span class="jr-c-p">${platChip(hit.platform)}</span><code class="jr-ev">${esc(hit.name)}</code><span class="jr-c-k">${keyBits(ctx, t, hit, flag, run)}</span><span class="jr-c-c">${hitConsent(t, hit.consent)}</span><span class="jr-c-s">${sev ? badge(sev, m.severity[sev]) : ""}</span><span class="jr-tm">${esc(secs(run, hit.t))}</span></summary>
+  return `<details class="rcard jr-hit${sev ? ` sev-${sev}` : ""}" id="${id}"${sev ? ` data-flagged="${sev}" data-print-open` : ""}><summary><span class="jr-c-p">${platChip(hit.platform)}</span><code class="jr-ev">${esc(hit.name)}</code><span class="jr-c-k">${keyBits(ctx, t, hit, flag, run)}</span><span class="jr-c-c">${hitConsent(t, hit.consent)}</span><span class="jr-c-s">${sev ? badge(sev, m.severity[sev]) : ""}</span><span class="jr-tm">${esc(secs(run, hit.t))}</span></summary>
 <div class="body">${flag ? `<p class="jr-flag sev-${sev}">${use(`sev-${sev}`, 14)}<span>${detailHtml(flag.detail)}</span>${card ? `<a href="#${card}">${esc(m.html.findingLink)}</a>` : ""}</p>` : ""}
 <div class="jr-hb"><div><h4 class="jr-h">${esc(m.ui.parameters)}${n(event.length + missing.length)}</h4>${batch ? `<p class="muted xs jr-batch">${esc(m.ui.inBatch(batch[0], batch[1]))}</p>` : ""}${paramTable}${ctxTable}</div>
 ${items.length ? `<div><h4 class="jr-h">${esc(m.ui.items)}${n(items.length)}</h4>${itemsTable(m, t, items)}</div>` : ""}
 <div><h4 class="jr-h">${esc(m.ui.source)}</h4><ul class="jr-src"><li><span class="lbl">${esc(t.dataLayer)}</span>${pushLine}</li><li><span class="lbl">${esc(m.ui.request)}</span>${reqLine}</li></ul></div></div>
-<details class="card jr-raw"><summary><span class="t">${esc(m.ui.rawRequest)}</span><span class="end mono xs muted">${esc(hostPath(call?.url ?? hit.url))}</span></summary><div class="body"><pre>${esc(rawText(call?.url ?? hit.url, call?.postData))}</pre></div></details>
+<details class="rcard jr-raw"><summary><span class="t">${esc(m.ui.rawRequest)}</span><span class="end mono xs muted">${esc(hostPath(call?.url ?? hit.url))}</span></summary><div class="body"><pre>${esc(rawText(call?.url ?? hit.url, call?.postData))}</pre></div></details>
 </div></details>`;
 }
 
@@ -231,7 +231,7 @@ function pushCard(ctx, t, run, ri, step, e, k) {
     if (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && v.ecommerce === null) out.push(`<span class="muted">${esc(t.clear)}</span>`);
     bits = out.join("");
   }
-  return `<details class="card jr-push" id="${pushId(ri, step.index, k)}"><summary><code class="jr-ev">${esc(name)}</code><span class="jr-c-k">${bits}</span><span class="jr-tm">${esc(secs(run, e.t))}</span></summary>
+  return `<details class="rcard jr-push" id="${pushId(ri, step.index, k)}"><summary><code class="jr-ev">${esc(name)}</code><span class="jr-c-k">${bits}</span><span class="jr-tm">${esc(secs(run, e.t))}</span></summary>
 <div class="body">${items.length ? `<h4 class="jr-h">${esc(m.ui.items)}${n(items.length)}</h4>${itemsTable(m, t, items)}` : ""}<pre>${esc(pushText(v))}</pre></div></details>`;
 }
 
@@ -323,7 +323,7 @@ function stepPane(ctx, t, rows, run, ri, step, sev, selected) {
     ? `<div class="tabs jr-tabs" data-tabs><div role="tablist" aria-label="${esc(t.stepOf(step.index))}">${tabs.map(([k, label, , c]) => `<button type="button" role="tab" aria-controls="${id}-${k}" aria-selected="${first[0] === k}"${live(k, c) ? "" : " disabled"}>${label} ${n(c)}</button>`).join("")}</div>
 ${tabs.map(([k, , dataLabel, c, html]) => `<div role="tabpanel" id="${id}-${k}" data-label="${esc(dataLabel)}"${live(k, c) ? "" : ' class="jr-none"'}>${html}</div>`).join("")}</div>`
     : `<p class="muted xs jr-empty">${esc(t.nothing)}</p>`;
-  return `<article class="card jr-pane${sev ? ` sev-${sev}` : ""}" id="${id}" data-select-pane data-step="${step.index}"${sev ? ` data-flagged="${sev}"` : ""}${selected ? " data-selected" : ""} tabindex="-1" aria-labelledby="${id}-t">
+  return `<article class="rcard jr-pane${sev ? ` sev-${sev}` : ""}" id="${id}" data-select-pane data-step="${step.index}"${sev ? ` data-flagged="${sev}"` : ""}${selected ? " data-selected" : ""} tabindex="-1" aria-labelledby="${id}-t">
 <header class="jr-ph"><h3 id="${id}-t"><span class="jr-n">${step.index}</span><span>${esc(stepTitle(run, step))}</span></h3><span class="jr-ph-e">${sev ? badge(sev, m.severity[sev]) : ""}${vpChip(run.viewport)}</span><p class="jr-ph-m">${meta}</p></header>
 ${parityNote(m, run, step, ctx.metrics.parity?.[ri])}${body}
 </article>`;

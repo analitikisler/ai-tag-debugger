@@ -36,7 +36,7 @@ test("the three sections come in rail order, each with its h2, and every card st
 
 test("Coverage: the plan card's summary carries the answer; its matrix has one row per planned event", () => {
   const html = slice(scope(reportInput()), "coverage");
-  assert.match(html, /<details class="card" id="cov-plan"><summary><span class="t">Measurement plan coverage<\/span><span class="chip chip-sev warning"><b>9<\/b> of 11<\/span><span class="chip plain mono"><b>82%<\/b><\/span><span class="chip chip-sev broken">.*2 missing params<\/span>/);
+  assert.match(html, /<details class="rcard" id="cov-plan"><summary><span class="t">Measurement plan coverage<\/span><span class="chip chip-sev warning"><b>9<\/b> of 11<\/span><span class="chip plain mono"><b>82%<\/b><\/span><span class="chip chip-sev broken">.*2 missing params<\/span>/);
   assert.match(html, /<span class="cv-bar" role="img" aria-label="9 complete, 2 with a missing parameter, 0 not sent">(<i class="(ok|params)"><\/i>){11}<\/span>/);
   assert.match(html, /<span class="chip chip-plat ga4">.*GA4 <b>6\/7<\/b><\/span>/);
   assert.equal((html.match(/<tr id="cov-/g) ?? []).length, 11);
@@ -51,7 +51,7 @@ test("Coverage: the plan card's summary carries the answer; its matrix has one r
   assert.match(html, /<span class="cv-search"><svg[^>]*><use href="#ui-search"\/><\/svg><input type="search" data-filter-search placeholder="Search events" aria-label="Search events"><\/span>/);
   assert.match(html, /<th scope="col" class="cv-c"><a href="#j3" class="cv-run"><span class="chip chip-vp mobile">.*checkout<span class="sr"> · mobile<\/span><\/span><\/a><\/th>/);
   // Conversion integrity: two of four purchases pass.
-  assert.match(html, /<details class="card" id="cov-conversion"><summary><span class="t">Conversion integrity<\/span><span class="chip chip-sev warning">.*<b>2<\/b> of 4 pass<\/span><span class="chip chip-sev broken">.*2 fail<\/span><\/summary>/);
+  assert.match(html, /<details class="rcard" id="cov-conversion"><summary><span class="t">Conversion integrity<\/span><span class="chip chip-sev warning">.*<b>2<\/b> of 4 pass<\/span><span class="chip chip-sev broken">.*2 fail<\/span><\/summary>/);
   assert.match(html, /2 of 4 purchases pass every check\./);
   assert.match(html, /<th scope="col" class="cv-c">Not duplicated<\/th>/);
   assert.doesNotMatch(html, /id="plan-vs-site"/);
@@ -73,7 +73,7 @@ test("Plan vs site appears only with a plan check, with its buckets and the plan
   const planChanges = { previous: "2026-10-01_0900", same: false, added: [{ platform: "ga4", event: "sign_up" }], removed: [], changed: [{ platform: "ga4", event: "add_to_cart", what: ["required parameters"] }] };
   const input = { ...empty, findings, runs, plan, against: "p1", planCheck: planCheck(plan, runs, findings), planChanges };
   const html = scope(input);
-  const card = html.match(/<details class="card" id="plan-vs-site">.*?<\/details>/s)[0];
+  const card = html.match(/<details class="rcard" id="plan-vs-site">.*?<\/details>/s)[0];
   assert.match(card, /<summary><span class="t">Plan vs\. site<\/span>/);
   assert.match(card, /Missing params <b>1<\/b>/);
   assert.match(card, /<strong>Coverage 0 of 1 \(0%\)/);
@@ -90,8 +90,8 @@ test("Inventory: one line per platform checked or seen, seen ones open to hosts,
   const html = slice(scope(reportInput()), "inventory");
   assert.match(html, /<ul class="inv-rows" aria-label="Tag inventory">/);
   assert.deepEqual([...html.matchAll(/id="(inv-[a-z0-9_]+)" data-seen="(yes|no)"/g)].map((x) => `${x[1]}:${x[2]}`), ["inv-ga4:yes", "inv-google_ads:no", "inv-meta:yes", "inv-tiktok:no"]);
-  assert.match(html, /<details class="card inv" id="inv-ga4" data-seen="yes"><summary><span class="chip chip-plat ga4">.*GA4<\/span><span class="chip chip-sev ok">.*Seen<\/span><span class="inv-m"><b>36<\/b> requests<\/span><span class="inv-m"><b>5<\/b> pages<\/span><span class="inv-m zero"><b>0<\/b> cookies<\/span><\/summary>/);
-  assert.match(html, /<div class="card inv-line" id="inv-google_ads" data-seen="no">.*<span class="badge sev-info"><svg[^>]*><use href="#sev-info"\/><\/svg>Checked, not seen<\/span><\/div>/);
+  assert.match(html, /<details class="rcard inv" id="inv-ga4" data-seen="yes"><summary><span class="chip chip-plat ga4">.*GA4<\/span><span class="chip chip-sev ok">.*Seen<\/span><span class="inv-m"><b>36<\/b> requests<\/span><span class="inv-m"><b>5<\/b> pages<\/span><span class="inv-m zero"><b>0<\/b> cookies<\/span><\/summary>/);
+  assert.match(html, /<div class="rcard inv-line" id="inv-google_ads" data-seen="no">.*<span class="badge sev-info"><svg[^>]*><use href="#sev-info"\/><\/svg>Checked, not seen<\/span><\/div>/);
   assert.match(html, /<div role="tabpanel" id="inv-meta-hosts" data-label="Hosts"><ul class="inv-list"><li><code>www\.facebook\.com<\/code><span class="inv-n"><b>22<\/b> requests<\/span><span class="chip plain">Third party<\/span>/);
   assert.match(html, /Checked but never seen: Google Ads, TikTok\./);
   // No vendor name on a platform line.
@@ -116,7 +116,7 @@ test("Inventory ties first-party hosts and cookies to their platform and counts 
   assert.match(inv, /<div role="tabpanel" id="inv-meta-cookies" data-label="Cookies"><ul class="inv-list"><li><code>_fbp<\/code><\/li><\/ul><\/div>/);
   assert.match(inv, /<span class="inv-m"><b>1<\/b> cookie<\/span>/);
   assert.match(inv, /Other cookies: <code>sessionid<\/code> <span class="muted">\(First party\)<\/span>/);
-  assert.match(inv, /<details class="card inv" id="inv-out-of-scope"><summary><span class="t">Out of scope<\/span><span class="chip plain"><b>4<\/b> requests<\/span>/);
+  assert.match(inv, /<details class="rcard inv" id="inv-out-of-scope"><summary><span class="t">Out of scope<\/span><span class="chip plain"><b>4<\/b> requests<\/span>/);
   assert.match(inv, /<li><span>Microsoft Clarity<\/span><span class="badge">Out of scope<\/span><span class="inv-n"><b>3<\/b> requests<\/span><\/li>/);
   assert.match(slice(html, "run"), /4 out-of-scope requests were skipped: Microsoft Clarity, DoubleClick\./);
   assert.match(slice(scope(empty), "inventory"), /No vendor requests were recorded\./);
@@ -132,7 +132,7 @@ test("Run: the facts grid, run chips with their durations, and the Timing card",
   assert.match(html, /<dt>Consent<\/dt><dd><span class="chip plain">banner<\/span><span class="chip plain">3 scenarios<\/span><\/dd>/);
   assert.match(html, /<a href="#j3" class="chip chip-run completed">.*checkout .*mobile <b>6\.6 s<\/b><\/a><span class="xs muted">4 runs, all completed<\/span>/);
   assert.match(html, /<div class="wide"><dt>Files<\/dt><dd><code class="file">.*report\.md<\/code>/);
-  assert.match(html, /<details class="card" id="run-timing"><summary><span class="t">Timing<\/span><span class="chip plain mono">.*<b>18\.5<\/b> s<\/span><span class="chip plain">first hit <b>50–63<\/b> ms<\/span><\/summary>/);
+  assert.match(html, /<details class="rcard" id="run-timing"><summary><span class="t">Timing<\/span><span class="chip plain mono">.*<b>18\.5<\/b> s<\/span><span class="chip plain">first hit <b>50–63<\/b> ms<\/span><\/summary>/);
   assert.match(html, /<th scope="col" class="num">Median first hit<\/th>/);
   assert.doesNotMatch(html, /id="trend"/);
 });
@@ -142,7 +142,7 @@ test("Run: the Trend card appears only with two or more saved runs and links the
   const history = ["2026-10-01_0900", "2026-10-02_0900", "2026-10-03_0900"].map((id, i) => runSummary(id, { runs: cap.runs.map((r) => ({ ...r, completed: i === 1 ? r.viewport === "desktop" : true })), findings: i === 0 ? cap.findings.filter((f) => f.check !== "duplicate") : cap.findings }));
   const changes = { previous: "2026-10-02_0900", mode: "findings", fixed: [], new: [{ platform: "ga4", event: "add_to_cart", check: "duplicate", detail: "twice" }], routes: [] };
   const html = slice(scope(reportInput({ trend: trend(history), changes })), "run");
-  assert.match(html, /<details class="card" id="trend"><summary><span class="t">Trend<\/span><span class="chip chip-sev broken">.*Getting worse<\/span><span class="xs muted">over 3 runs, 2026-10-01 to 2026-10-03<\/span><\/summary>/);
+  assert.match(html, /<details class="rcard" id="trend"><summary><span class="t">Trend<\/span><span class="chip chip-sev broken">.*Getting worse<\/span><span class="xs muted">over 3 runs, 2026-10-01 to 2026-10-03<\/span><\/summary>/);
   assert.match(html, /<svg class="spark" viewBox="0 0 280 64"[^>]*role="img" aria-label="Broken: 2, 2, 2; Risk: 1, 1, 1; Warning: 0, 1, 1">/);
   assert.match(html, /<circle class="sev-broken hollow"/);
   assert.match(html, /<strong>Getting worse<\/strong> <span class="muted">over 3 runs, 2026-10-01 to 2026-10-03<\/span>/);

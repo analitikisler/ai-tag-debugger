@@ -78,14 +78,14 @@ export function render(ctx) {
     const sev = row?.severity ?? (!own.length && metrics.consent.platforms.find((p) => p.platform === platform)?.status !== "pass" ? "risk" : "ok");
     const cells = STATUS_SCENARIOS.filter((s) => sc && afterOf(sc, s))
       .map((s) => `<span class="cs-p"><span class="cs-k">${esc(t.cols[s])}</span>${total(platform, s)}</span>`).join("");
-    return `<li class="card sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
+    return `<li class="rcard sev-${sev} cs-row" id="consent-${safeKey(platform)}">${platChip(platform)}${sevChip(sev, m.severity[sev])}${cells ? `<span class="cs-cells">${cells}</span>` : ""}${findingLink(row, "cs-go")}</li>`;
   }).join("");
   const list = lines ? `<ul class="cs-list" aria-label="${esc(t.statusLabel)}">${lines}</ul>` : "";
 
   /* ---- consent platform ---- */
   const platform = cmpFacts(m, runs);
   const platformCard = platform
-    ? `<details class="card" id="consent-platform"><summary><span class="t">${esc(m.ui.cmp.title)}</span>${plain(esc(platform.vendor))}</summary><div class="body"><ul class="xs cm-timing">${platform.facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div></details>\n`
+    ? `<details class="rcard" id="consent-platform"><summary><span class="t">${esc(m.ui.cmp.title)}</span>${plain(esc(platform.vendor))}</summary><div class="body"><ul class="xs cm-timing">${platform.facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div></details>\n`
     : "";
 
   /* ---- Consent Mode ---- */
@@ -139,7 +139,7 @@ export function render(ctx) {
   const modeBody = withDefault.length
     ? `${timing ? `<ul class="cm-timing">${timing}</ul>` : ""}${viaTag}${groupHtml}${tagHtml}${resent ? `<p class="xs muted cm-rep">${use("ui-clock", 12)} ${esc(t.resent(resent))}</p>` : ""}${modeFindings ? `<p class="xs cm-find">${modeFindings}</p>` : ""}`
     : `<p class="muted xs">${esc(none)}</p>${tagHtml}${modeFindings ? `<p class="xs cm-find">${modeFindings}</p>` : ""}`;
-  const modeCard = `<details class="card" id="consent-mode"><summary><span class="t">${esc(m.html.consentMode)}</span>${modeHead}${modeChips}<span class="end muted xs">${esc(t.runsWith(withDefault.length, runs.length))}</span></summary><div class="body">${modeBody}</div></details>`;
+  const modeCard = `<details class="rcard" id="consent-mode"><summary><span class="t">${esc(m.html.consentMode)}</span>${modeHead}${modeChips}<span class="end muted xs">${esc(t.runsWith(withDefault.length, runs.length))}</span></summary><div class="body">${modeBody}</div></details>`;
 
   /* ---- scenarios ---- */
   if (!sc) return sectionBlock("consent", esc(m.html.shell.sections.consent), `${list}\n${platformCard}${modeCard}\n<p class="muted xs cs-none" id="consent-scenarios">${esc(m.ui.md.noScenarios)}</p>`);
@@ -168,10 +168,10 @@ export function render(ctx) {
   // Captures from before the no-choice scenario existed have no column for it.
   const summaryChips = SCENARIO_COLUMNS.filter((s) => s !== IGNORE || sc.states?.[IGNORE]).map((s) => (supported(s) ? plain(esc(t.cols[s])) : chip("consent", "none", esc(`${t.cols[s]} · ${t.notSupported}`)))).join("");
   const probChip = problemCount ? sevChip("risk", t.problems(problemCount)) : sevChip("ok", t.noProblems);
-  const scenarios = `<details class="card" id="consent-scenarios"><summary><span class="t">${esc(t.scenarios)}</span>${summaryChips}<span class="end">${probChip}</span></summary><div class="body"><div class="tscroll"><table class="tbl cs-tbl"><caption class="sr">${esc(m.ui.scenarios)}</caption><thead><tr><th scope="col">${esc(m.ui.scenarioTag)}</th>${cols.map((s) => `<th scope="col">${esc(t.cols[s])}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div></details>`;
+  const scenarios = `<details class="rcard" id="consent-scenarios"><summary><span class="t">${esc(t.scenarios)}</span>${summaryChips}<span class="end">${probChip}</span></summary><div class="body"><div class="tscroll"><table class="tbl cs-tbl"><caption class="sr">${esc(m.ui.scenarios)}</caption><thead><tr><th scope="col">${esc(m.ui.scenarioTag)}</th>${cols.map((s) => `<th scope="col">${esc(t.cols[s])}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div></details>`;
   const matrix = consentMatrix(m, sc);
   const matrixCard = matrix
-    ? `\n<details class="card" id="consent-matrix"><summary><span class="t">${esc(m.ui.matrix.title)}</span>${matrix.rows.some((r) => r.cells.some((c) => c.problem)) ? sevChip("risk", t.problems(matrix.rows.reduce((n, r) => n + r.cells.filter((c) => c.problem).length, 0))) : sevChip("ok", t.noProblems)}</summary><div class="body">${matrix.landing ? `<p class="xs muted">${esc(m.ui.matrix.intro(matrix.landing))}</p>` : ""}<div class="tscroll"><table class="tbl cs-tbl"><caption class="sr">${esc(m.ui.matrix.title)}</caption><thead><tr><th scope="col"></th>${matrix.cols.map((c) => `<th scope="col">${esc(t.cols[c])}</th>`).join("")}</tr></thead><tbody>${matrix.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((c) => (c.problem ? `<td class="cs-bad"><span class="cs-c">${esc(c.text)}${badge("risk", "⚠")}<span class="sr"> ${esc(m.ui.matrix.problem)}</span></span></td>` : `<td class="xs">${esc(c.text)}</td>`)).join("")}</tr>`).join("")}</tbody></table></div><p class="xs muted">${esc(m.ui.matrix.legend)}</p></div></details>`
+    ? `\n<details class="rcard" id="consent-matrix"><summary><span class="t">${esc(m.ui.matrix.title)}</span>${matrix.rows.some((r) => r.cells.some((c) => c.problem)) ? sevChip("risk", t.problems(matrix.rows.reduce((n, r) => n + r.cells.filter((c) => c.problem).length, 0))) : sevChip("ok", t.noProblems)}</summary><div class="body">${matrix.landing ? `<p class="xs muted">${esc(m.ui.matrix.intro(matrix.landing))}</p>` : ""}<div class="tscroll"><table class="tbl cs-tbl"><caption class="sr">${esc(m.ui.matrix.title)}</caption><thead><tr><th scope="col"></th>${matrix.cols.map((c) => `<th scope="col">${esc(t.cols[c])}</th>`).join("")}</tr></thead><tbody>${matrix.rows.map((r) => `<tr><th scope="row">${esc(r.label)}</th>${r.cells.map((c) => (c.problem ? `<td class="cs-bad"><span class="cs-c">${esc(c.text)}${badge("risk", "⚠")}<span class="sr"> ${esc(m.ui.matrix.problem)}</span></span></td>` : `<td class="xs">${esc(c.text)}</td>`)).join("")}</tr>`).join("")}</tbody></table></div><p class="xs muted">${esc(m.ui.matrix.legend)}</p></div></details>`
     : "";
   return sectionBlock("consent", esc(m.html.shell.sections.consent), `${list}\n${platformCard}${modeCard}\n${scenarios}${matrixCard}`);
 }

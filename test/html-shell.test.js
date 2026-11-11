@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { renderHtml, context, SECTIONS } from "../src/html/shell.js";
 import { CSS, brandCss } from "../src/html/css.js";
+import { KIT_CSS } from "../src/cini.js";
 import { SCRIPT, scriptCspSource } from "../src/html/script.js";
 import { hitAnchor, pageTitle, passedRows, stepTitle, sprite } from "../src/html/lib.js";
 import { LANGUAGES } from "../src/i18n.js";
@@ -39,7 +40,7 @@ test("the one inline script is allowed by its hash, holds no words, and is the s
   assert.deepEqual(scripts, [SCRIPT]);
   const hash = `'sha256-${createHash("sha256").update(SCRIPT).digest("base64")}'`;
   assert.equal(scriptCspSource(), hash);
-  assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${hash}">`));
+  assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src ${hash}">`));
   assert.doesNotMatch(SCRIPT, /"Clear"|\{n\} of \{m\}/);
   // The words the script shows come from <main>.
   assert.match(html, /<main id="main" tabindex="-1" data-clear-label="Clear" data-filter-count="\{n\} of \{m\}">/);
@@ -50,11 +51,15 @@ test("the one inline script is allowed by its hash, holds no words, and is the s
   assert.doesNotMatch(html, / on[a-z]+="/);
 });
 
-test("the stylesheet has both dark selectors, no data URI, and the white label's accent follows them", () => {
-  assert.match(CSS, /@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{/);
-  assert.match(CSS, /:root\[data-theme="dark"\]\{/);
+test("dark mode comes from the kit's two dark selectors, the report's own sheet has no data URI, and the white label's accent follows them", () => {
+  // The report's sheet names kit roles only; the Çini kit ahead of it switches them, by the OS or by <html data-theme>.
+  const html = render();
+  assert.ok(html.includes(`<style>${KIT_CSS}\n${CSS}`));
+  assert.match(KIT_CSS, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\], \.light\) \{/);
+  assert.match(KIT_CSS, /:root\[data-theme="dark"\], :root\.dark \{/);
   assert.doesNotMatch(CSS, /data:/);
-  assert.doesNotMatch(render(), /url\("?data:/);
+  // The page's only data URIs in CSS are the kit's two fonts and its missing-data hatch.
+  assert.deepEqual([...html.matchAll(/url\("?data:([a-z]+\/[a-z0-9+-]+)/g)].map((x) => x[1]), ["image/svg+xml", "font/woff2", "font/woff2"]);
   const accent = brandCss("#0a7d5a");
   assert.match(accent, /^:root\{--accent:#0a7d5a;--accent-fg:#[0-9a-f]{6};--accent-bg:#[0-9a-f]{6}\}@media \(prefers-color-scheme:dark\)\{:root:not\(\[data-theme="light"\]\)\{--accent:/);
   assert.match(accent, /\}:root\[data-theme="dark"\]\{--accent:/);

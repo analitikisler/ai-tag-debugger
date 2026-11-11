@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The HTML report and `plan.html` take the look of Çini · Mercan, the Analitik İşler design system, from its kit (now in `cini/`): glaze-white grounds and a warm near-black in dark, the brand red for links and the selected rule, ink for text, Gabarito for text and Azeret Mono for code and figures (both carried in the file, so a report still needs nothing next to it), and the kit's logos and favicons. Statuses keep their glyph and word in the kit's colours: broken and risk in wine, warning in olive, info in the quiet blue, ok in teal. Events that were not sent and a missing score show the kit's missing-data hatch, and a Pano band sits above the footer of an Analitik İşler report. The report's CSP and the MCP server's header allow fonts from data URIs only (`font-src data:`). Nothing in the report's data, text or structure changes.
+- Development: `brand/` points to the kit and its brand guide instead of keeping a copy; `node scripts/cini.js` writes `src/cini.js` from `cini/`, and `node scripts/brand.js` now reads the logos from `cini/logos/`.
+
 ## 0.22.8 (2026-11-04)
 
 - Reproducible installs from npm: the package ships an `npm-shrinkwrap.json`, so `npx`, `npm install -g` and the Claude plugin install the exact dependency versions this release was tested with, each checked against its checksum, instead of resolving the version ranges afresh. A newer release of a dependency, or anything it ships, no longer reaches users until a release of ai-tag-debugger takes it. The shrinkwrap holds only the runtime packages (development tools such as ESLint are left out), and is written when the package is packed, from `package-lock.json`.

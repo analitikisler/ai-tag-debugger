@@ -2,13 +2,15 @@ import { VERSION } from "./report-shared.js";
 import { TOKENS, COMPONENTS, PRODUCT } from "./html/css.js";
 import { chip, escapeHtml, logo, plat, platformLabel, sprite } from "./html/lib.js";
 import { LOGOS } from "./brand.js";
+import { KIT_CSS } from "./cini.js";
+import { field } from "../cini/pano.js";
 
 const e = escapeHtml;
 const text = (v) => (v === undefined || v === null || v === "" ? `<span class="muted">–</span>` : e(v));
 
 // Only what the plan page needs on top of the report's tokens and components: the top bar (a trimmed copy of the
-// report shell's, which this page does not load, with no rail or verdict), the page column, and the event list. Colours come from tokens, so dark mode
-// follows both selectors in TOKENS and nothing here names a colour.
+// report shell's, which this page does not load, with no rail or verdict), the page column, and the event list. Colours come from the
+// Çini kit's roles (KIT_CSS, then TOKENS), so dark mode follows the kit and nothing here names a colour.
 const PLAN_CSS = `
 .top{display:flex;align-items:center;gap:var(--s3);height:var(--top);padding:0 var(--s4);background:var(--card);border-bottom:1px solid var(--border);white-space:nowrap}
 .top .brand{display:inline-flex;align-items:center;flex:none}
@@ -23,11 +25,10 @@ svg.logo{display:inline-block;flex:none;color:var(--fg-strong)}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .logo .l-light{display:none}html:not([data-theme="light"]) .logo .l-dark{display:inline}}
-.eyebrow{font:500 12px/1.4 var(--font-sans);color:var(--muted)}
 .plan{max-width:1100px;margin:0 auto;padding:var(--s5) var(--s6) var(--s7)}
 .plan-title{display:grid;gap:var(--s2);margin-bottom:var(--s5)}
 .plan-title .chips{margin-top:var(--s1)}
-.plan .card+.card{margin-top:var(--s4)}
+.plan .rcard+.rcard{margin-top:var(--s4)}
 .pl-card-h{padding:var(--s3) var(--s4);border-bottom:1px solid var(--border)}
 .pl-card-d{margin-top:2px;font-size:12.5px;color:var(--muted)}
 .pl-empty{padding:var(--s3) var(--s4)}
@@ -39,7 +40,7 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .pl-trigger{font-size:12px;color:var(--muted);margin-bottom:10px}
 .pl-trigger b{font-weight:500;color:var(--fg)}
 .chip .plat{display:inline-flex;align-items:center;gap:5px}
-.chip.on{--k:var(--accent);--k-fg:var(--accent-fg)}
+.chip.on{--k:var(--border-strong);--k-fg:var(--fg-strong)}
 .chip.req{--k:var(--sev-warning);--k-fg:var(--sev-warning-fg)}
 .pl-card-body{padding:var(--s4)}
 .tbl td,.tbl th{vertical-align:top}
@@ -47,6 +48,8 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 .plan .tbl{min-width:480px}
 .plan .tbl td:first-child code{white-space:nowrap}
 .footer{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border-top:1px solid var(--border);background:var(--card)}
+.f-band{display:block;border-top:1px solid var(--border)}
+.f-band+.footer{border-top:0}
 .footer a{color:var(--fg)}
 .logo-link{display:inline-flex}
 .f-links{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4)}
@@ -59,7 +62,7 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
   .plan{padding:var(--s4) var(--s4) var(--s6)}
   .footer{flex-wrap:wrap}
 }
-@media print{.top{display:none}.plan{padding:0}}
+@media print{.top,.f-band{display:none}.plan{padding:0}}
 `;
 
 const flag = (label, cls = "") => `<span class="chip ${cls}">${e(label)}</span>`;
@@ -92,7 +95,7 @@ function userPropertiesCard(props) {
         .map((p) => `<tr><td><code>${e(p.name)}</code></td><td class="mono">${text(p.example)}</td><td>${text(p.description)}</td></tr>`)
         .join("")}</tbody></table></div></div>`
     : `<p class="pl-empty muted xs">No user properties.</p>`;
-  return `<section class="card"><div class="pl-card-h"><h2>User properties</h2></div>${body}</section>`;
+  return `<section class="rcard"><div class="pl-card-h"><h2>User properties</h2></div>${body}</section>`;
 }
 
 /** A single self-contained, readable page for a measurement plan. Respects branding false like the report. */
@@ -108,15 +111,15 @@ export function renderPlanHtml(plan, { id = "", generatedAt = "", branding = tru
   const body = `<header class="top"><span class="brand">${logo("atd-lockup", "ai tag debugger", 22, "l-lockup")}${logo("mark", "ai tag debugger", 24, "l-mark")}</span><span class="top-site"><span class="eyebrow">Measurement plan</span>${plan.site ? `<b>${e(plan.site)}</b>` : ""}</span><div class="top-end">${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>by</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : ""}</div></header>
 <main class="plan">
 <div class="plan-title"><div class="eyebrow">Measurement plan</div><h1>${e(title)}</h1><div class="muted xs">${e(meta)}</div><div class="chips">${consent}</div></div>
-<section class="card"><div class="pl-card-h"><h2>Events</h2><p class="pl-card-d">What should be tracked, where it fires and which parameters it carries.</p></div>${events.length ? events.map(eventCard).join("") : `<p class="pl-empty muted xs">No events.</p>`}</section>
+<section class="rcard"><div class="pl-card-h"><h2>Events</h2><p class="pl-card-d">What should be tracked, where it fires and which parameters it carries.</p></div>${events.length ? events.map(eventCard).join("") : `<p class="pl-empty muted xs">No events.</p>`}</section>
 ${userPropertiesCard(plan.user_properties ?? [])}
 </main>
-<footer class="footer">${footer}</footer>`;
+${branding ? `<div class="pano tool-footer__band f-band" aria-hidden="true">${field({ cols: 60, rows: 3, seed: plan.site ?? title, startRow: 1, endRow: 1, align: "xMaxYMid" })}</div>\n` : ""}<footer class="footer">${footer}</footer>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>${e(title)}</title><link rel="icon" type="image/svg+xml" href="${LOGOS["favicon-light"]}">
-<style>${TOKENS}\n${COMPONENTS}\n${PRODUCT}\n${PLAN_CSS}</style></head><body>
+<title>${e(title)}</title><link rel="icon" type="image/svg+xml" href="${LOGOS["favicon-light"]}"><link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="${LOGOS["favicon-dark"]}">
+<style>${KIT_CSS}\n${TOKENS}\n${COMPONENTS}\n${PRODUCT}\n${PLAN_CSS}</style></head><body>
 ${sprite(body)}
 ${body}
 </body></html>`;

@@ -1,47 +1,45 @@
 // The report's stylesheet: one constant per part, joined in this order: tokens, components, shell, product (the few
 // rules the product's markup needs beyond the mockup's), then the sections in rail order. Each section's builder edits
 // only its own constant, so parallel changes never touch the same lines.
-// No url(data:...) anywhere (test/html-shell.test.js checks it): icons come from the inline sprite. The search icon the
-// mockup drew as a data URI in the filter bar is the sprite's ui-search, placed by the filter bar's markup.
+// The Çini kit's own sheets (src/cini.js) come first on the page; this one names no colour and adds no data URI (test/
+// html-shell.test.js checks it): icons come from the inline sprite, and the only data URIs on the page are the kit's two
+// fonts and its missing-data hatch. The search icon is the sprite's ui-search, placed by the filter bar's markup.
 import { brandCss } from "../whitelabel.js";
 
-// ---------- tokens: colours (light, then dark under both selectors), spacing, radii, fonts, motion ----------
-const TOKENS = `/* Tally design system tokens, under the names the builders already use. Light on :root; dark twice
-   (OS preference unless the page forces light, and the forced dark theme), so <html data-theme> beats the OS both ways.
-   Which Tally token each name follows: --page bg, --card surface, --card-2 surface-2, --well well, --fg text,
-   --fg-strong text-strong, --muted muted, --border border, --border-strong border-strong, --accent and --accent-fg accent,
-   --accent-bg accent-soft, --selection selection, --shadow-overlay the overlay shadow (popovers and tooltips only).
-   Severity: broken bad, warning warn, ok ok, info accent (its value, not var(--accent), so a white label never moves it).
-   Risk keeps a hue of its own, a plum (allowed by Tally when risk and broken sit side by side): the report puts them next
-   to each other in the score lines, the filter dots, the rail and the card rules, where a dot or a 3 px rule has no room
-   for the glyph. Risk still carries its diamond glyph and its word everywhere it has room.
-   Each status is one colour for text and marks (-fg = solid); its -bg tint is the colour mixed into --card, 10% light
-   and 16% dark. Categories (owners, platforms, viewports, consent) keep their hues, retuned for the navy grounds; GA4 is
-   Tally's orange (mark, mark-ink). Every -fg passes 4.5:1 on --page, --card, --card-2, --well and its own -bg, every
-   solid 3:1 on --page, --card and --well, in both modes (docs/design/visual-system.md has the table). Builders reference
-   these names only, never a hex. --brand-point is the logos' point: the brand's one red, the same as broken
-   (brand/ai/BRAND.md §4), so a page never shows two reds. */
+// ---------- tokens: the kit's roles under the builders' names, spacing, radii, fonts, motion ----------
+const TOKENS = `/* The report's names for the Çini · Mercan roles (cini/tokens.css, inlined ahead of this sheet by src/cini.js). No
+   colour is written here: every name points at a kit role, and the kit switches them for dark mode (the OS preference
+   unless <html data-theme> forces one), so nothing below repeats per theme.
+   Grounds: --page bg, --card surface, --card-2 surface-2, --well well. Text: --fg text, --fg-strong text-strong, --muted
+   muted. --accent is the kit's red (links, the selected rule) and what a white label recolours (brandCss).
+   Statuses keep the kit's one job per colour, and always show their glyph and word: broken and risk are wine (bad), the
+   diamond and the word telling risk apart; warning is olive (warn); info is the one quiet blue (info); ok is teal (ok).
+   A status's -bg is its kit soft tint, or for info the colour laid 12% on the surface.
+   Categories are not statuses: owners take chart colours 2, 4 and 6 (their text mixed a quarter towards text-strong so it
+   reads in both themes); platforms and viewports show their own logo or icon on a plain chip; the timing bars, a chart,
+   take colours 1 and 2 in order. Consent: denied is wine, granted teal, none the neutral muted tone.
+   --brand-point is the logos' point, the kit's brand point. */
 :root{
-color-scheme:light dark;
---page:#f4f6fa;--card:#ffffff;--card-2:#ecf1f8;--well:#e9eef5;--fg:#142338;--fg-strong:#071529;--muted:#566479;--border:#d5dde8;--border-strong:#78869a;
---accent:#1161bb;--accent-fg:#1161bb;--accent-bg:#deedff;--selection:#c6defc;
---shadow-overlay:0 16px 48px rgb(7 21 41 / 14%);
---brand-point:#c12d30;--sev-broken:#c12d30;--sev-broken-fg:#c12d30;--sev-broken-bg:#f9eaea;
---sev-risk:#964799;--sev-risk-fg:#964799;--sev-risk-bg:#f5edf5;
---sev-warning:#8b6200;--sev-warning-fg:#8b6200;--sev-warning-bg:#f3efe6;
---sev-info:#1161bb;--sev-info-fg:#1161bb;--sev-info-bg:#e7eff8;
---sev-ok:#197746;--sev-ok-fg:#197746;--sev-ok-bg:#e8f1ed;
---owner-developer:#7b7ee4;--owner-developer-fg:#5b5bbd;--owner-developer-bg:#f2f2fc;
---owner-gtm:#2194b9;--owner-gtm-fg:#086f8d;--owner-gtm-bg:#e9f4f8;
---owner-marketing:#d85f92;--owner-marketing-fg:#af3a6f;--owner-marketing-bg:#fbeff4;
---plat-ga4:#d46700;--plat-ga4-fg:#b14c00;--plat-ga4-bg:#fbf0e6;
---plat-meta:#4b85f6;--plat-meta-fg:#2960ce;--plat-meta-bg:#edf3fe;
---plat-google_ads:#379b55;--plat-google_ads-fg:#027634;--plat-google_ads-bg:#ebf5ee;
---vp-desktop:#1e9895;--vp-desktop-fg:#08726f;--vp-desktop-bg:#e9f5f4;
---vp-mobile:#7a922c;--vp-mobile-fg:#596e01;--vp-mobile-bg:#f2f4ea;
---consent-denied:#a8162c;--consent-denied-fg:#a8162c;--consent-denied-bg:#f6e8ea;
-/* Aliases: a semantic family that means the same as a status or a ground wears its colours, defined once so dark mode follows. */
+--page:var(--color-bg);--card:var(--color-surface);--card-2:var(--color-surface-2);--well:var(--color-well);
+--fg:var(--color-text);--fg-strong:var(--color-text-strong);--muted:var(--color-muted);--border:var(--color-border);--border-strong:var(--color-border-strong);
+--accent:var(--color-accent);--accent-fg:var(--color-accent);--accent-bg:var(--color-accent-soft);--selection:var(--color-selection);
+--brand-point:var(--color-brand-point);
+--sev-broken:var(--color-bad);--sev-broken-fg:var(--color-bad);--sev-broken-bg:var(--color-bad-soft);
+--sev-risk:var(--color-bad);--sev-risk-fg:var(--color-bad);--sev-risk-bg:var(--color-bad-soft);
+--sev-warning:var(--color-warn);--sev-warning-fg:var(--color-warn);--sev-warning-bg:var(--color-warn-soft);
+--sev-info:var(--color-info);--sev-info-fg:var(--color-info);--sev-info-bg:color-mix(in oklab,var(--color-info) 12%,var(--color-surface));
+--sev-ok:var(--color-ok);--sev-ok-fg:var(--color-ok);--sev-ok-bg:var(--color-ok-soft);
+--owner-developer:var(--color-data-cat-2);--owner-developer-fg:color-mix(in oklab,var(--color-data-cat-2) 75%,var(--color-text-strong));--owner-developer-bg:color-mix(in oklab,var(--color-data-cat-2) 10%,var(--color-surface));
+--owner-gtm:var(--color-data-cat-4);--owner-gtm-fg:color-mix(in oklab,var(--color-data-cat-4) 75%,var(--color-text-strong));--owner-gtm-bg:color-mix(in oklab,var(--color-data-cat-4) 10%,var(--color-surface));
+--owner-marketing:var(--color-data-cat-6);--owner-marketing-fg:color-mix(in oklab,var(--color-data-cat-6) 75%,var(--color-text-strong));--owner-marketing-bg:color-mix(in oklab,var(--color-data-cat-6) 10%,var(--color-surface));
+--plat-ga4:var(--border-strong);--plat-ga4-fg:var(--fg);--plat-ga4-bg:var(--card-2);
+--plat-meta:var(--border-strong);--plat-meta-fg:var(--fg);--plat-meta-bg:var(--card-2);
+--plat-google_ads:var(--border-strong);--plat-google_ads-fg:var(--fg);--plat-google_ads-bg:var(--card-2);
 --plat-tiktok:var(--fg);--plat-tiktok-fg:var(--fg);--plat-tiktok-bg:var(--card-2);
+--vp-desktop:var(--muted);--vp-desktop-fg:var(--fg);--vp-desktop-bg:var(--card-2);
+--vp-mobile:var(--muted);--vp-mobile-fg:var(--fg);--vp-mobile-bg:var(--card-2);
+--chart-1:var(--color-data-cat-1);--chart-2:var(--color-data-cat-2);
+--consent-denied:var(--sev-broken);--consent-denied-fg:var(--sev-broken-fg);--consent-denied-bg:var(--sev-broken-bg);
 --consent-granted:var(--sev-ok);--consent-granted-fg:var(--sev-ok-fg);--consent-granted-bg:var(--sev-ok-bg);
 --consent-none:var(--border-strong);--consent-none-fg:var(--muted);--consent-none-bg:var(--card-2);
 --run-completed:var(--sev-ok);--run-completed-fg:var(--sev-ok-fg);--run-completed-bg:var(--sev-ok-bg);
@@ -53,51 +51,13 @@ color-scheme:light dark;
 --score-mid:var(--sev-warning);--score-mid-fg:var(--sev-warning-fg);--score-mid-bg:var(--sev-warning-bg);
 --score-pass:var(--sev-ok);--score-pass-fg:var(--sev-ok-fg);--score-pass-bg:var(--sev-ok-bg);
 --score-track:var(--well);
-/* 4 px base. Radii: cells 1, chips, badges and code 2, buttons and inputs 4, cards and panels 6; no pills. */
---s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
---r-cell:1px;--r-sm:2px;--r-ctl:4px;--r-md:6px;
-/* The report is one file and ships no fonts: the families are named first and the system stands in where they are not installed. */
---font-sans:"Google Sans","Segoe UI Variable Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
---font-display:"Google Sans Flex","Google Sans","Segoe UI Variable Display",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
---font-mono:"Google Sans Code",ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
---t-fast:160ms;--t-base:220ms;--ease:cubic-bezier(.2,0,0,1);
---rail:200px;--top:48px}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
---page:#071529;--card:#0e1e34;--card-2:#15263f;--well:#040e1f;--fg:#e1e8f3;--fg-strong:#f9fbff;--muted:#a2b1c6;--border:#22354e;--border-strong:#607695;
---accent:#69b1ff;--accent-fg:#69b1ff;--accent-bg:#0c325b;--selection:#123f6f;
---shadow-overlay:0 16px 48px rgb(2 8 18 / 55%);
---brand-point:#fa6b6d;--sev-broken:#fa6b6d;--sev-broken-fg:#fa6b6d;--sev-broken-bg:#342a3d;
---sev-risk:#dc86de;--sev-risk-fg:#dc86de;--sev-risk-bg:#2f2f4f;
---sev-warning:#f4cf5a;--sev-warning-fg:#f4cf5a;--sev-warning-bg:#333a3a;
---sev-info:#69b1ff;--sev-info-fg:#69b1ff;--sev-info-bg:#1d3654;
---sev-ok:#5ad093;--sev-ok-fg:#5ad093;--sev-ok-bg:#1a3a43;
---owner-developer:#7679de;--owner-developer-fg:#a5abff;--owner-developer-bg:#1f2d4f;
---owner-gtm:#148eb2;--owner-gtm-fg:#54bde3;--owner-gtm-bg:#0f3048;
---owner-marketing:#d1598d;--owner-marketing-fg:#ff88b7;--owner-marketing-bg:#2d2742;
---plat-ga4:#fa8c31;--plat-ga4-fg:#fa8c31;--plat-ga4-bg:#343034;
---plat-meta:#457fef;--plat-meta-fg:#88b1fe;--plat-meta-bg:#172e52;
---plat-google_ads:#2f954f;--plat-google_ads-fg:#63c47b;--plat-google_ads-bg:#133138;
---vp-desktop:#0f928f;--vp-desktop-fg:#53c1bd;--vp-desktop-bg:#0e3143;
---vp-mobile:#748d25;--vp-mobile-fg:#9fba56;--vp-mobile-bg:#1e3032;
---consent-denied:#ff5c69;--consent-denied-fg:#ff5c69;--consent-denied-bg:#35283c;}}
-:root[data-theme="dark"]{
---page:#071529;--card:#0e1e34;--card-2:#15263f;--well:#040e1f;--fg:#e1e8f3;--fg-strong:#f9fbff;--muted:#a2b1c6;--border:#22354e;--border-strong:#607695;
---accent:#69b1ff;--accent-fg:#69b1ff;--accent-bg:#0c325b;--selection:#123f6f;
---shadow-overlay:0 16px 48px rgb(2 8 18 / 55%);
---brand-point:#fa6b6d;--sev-broken:#fa6b6d;--sev-broken-fg:#fa6b6d;--sev-broken-bg:#342a3d;
---sev-risk:#dc86de;--sev-risk-fg:#dc86de;--sev-risk-bg:#2f2f4f;
---sev-warning:#f4cf5a;--sev-warning-fg:#f4cf5a;--sev-warning-bg:#333a3a;
---sev-info:#69b1ff;--sev-info-fg:#69b1ff;--sev-info-bg:#1d3654;
---sev-ok:#5ad093;--sev-ok-fg:#5ad093;--sev-ok-bg:#1a3a43;
---owner-developer:#7679de;--owner-developer-fg:#a5abff;--owner-developer-bg:#1f2d4f;
---owner-gtm:#148eb2;--owner-gtm-fg:#54bde3;--owner-gtm-bg:#0f3048;
---owner-marketing:#d1598d;--owner-marketing-fg:#ff88b7;--owner-marketing-bg:#2d2742;
---plat-ga4:#fa8c31;--plat-ga4-fg:#fa8c31;--plat-ga4-bg:#343034;
---plat-meta:#457fef;--plat-meta-fg:#88b1fe;--plat-meta-bg:#172e52;
---plat-google_ads:#2f954f;--plat-google_ads-fg:#63c47b;--plat-google_ads-bg:#133138;
---vp-desktop:#0f928f;--vp-desktop-fg:#53c1bd;--vp-desktop-bg:#0e3143;
---vp-mobile:#748d25;--vp-mobile-fg:#9fba56;--vp-mobile-bg:#1e3032;
---consent-denied:#ff5c69;--consent-denied-fg:#ff5c69;--consent-denied-bg:#35283c;}`;
+/* The kit's 4 px steps and radii under the builders' names: cells 1, chips, badges and code 2, buttons and inputs 4, cards and panels 6. */
+--s1:var(--space-1);--s2:var(--space-2);--s3:var(--space-3);--s4:var(--space-4);--s5:var(--space-6);--s6:var(--space-7);--s7:var(--space-9);
+--r-cell:var(--radius-cell);--r-sm:var(--radius-sm);--r-ctl:var(--radius-md);--r-md:var(--radius-lg);
+/* Gabarito for text, Azeret Mono for code and figures (--font-display and --font-mono are the kit's own). */
+--font-sans:var(--font-body);
+--t-fast:var(--motion-fast);--t-base:var(--motion-base);--ease:var(--motion-ease-out);
+--rail:200px;--top:48px}`;
 // ---------- end of tokens ----------
 
 // ---------- components: chips, badges, cards, tabs, filter bar, tables, scorecard ----------
@@ -111,16 +71,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--page);color:var(--fg);font:400 14px/1.5 var(--font-sans);-webkit-font-smoothing:antialiased}
 h1,h2,h3,h4,h5,h6,p,ul,ol,figure{margin:0}
 ul,ol{padding:0}
-h1{font:570 24px/1.2 var(--font-display);letter-spacing:-.012em;color:var(--fg-strong);overflow-wrap:anywhere}
-h2{font-size:17px;line-height:1.3;font-weight:600;color:var(--fg-strong)}
+h1{font:var(--font-weight-display) 24px/1.2 var(--font-display);letter-spacing:-.012em;color:var(--fg-strong);overflow-wrap:anywhere}
+h2{font-size:17px;line-height:1.3;font-weight:var(--font-weight-display);color:var(--fg-strong)}
 h3,h4{font-size:14px;line-height:1.4;font-weight:600;color:var(--fg-strong)}
 h5,h6{font-size:12px;line-height:1.4;font-weight:500;color:var(--muted)}
-b,strong{font-weight:600}
+b,strong{font-weight:600;color:inherit}
 a{color:var(--accent-fg);text-decoration:none}
 a:hover{text-decoration:underline}
 code,kbd,pre,.mono{font-family:var(--font-mono)}
 code{font-size:12.5px;background:var(--well);padding:1px 5px;border-radius:var(--r-sm);overflow-wrap:anywhere}
-pre{font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--well);padding:var(--s2) var(--s3);border-radius:var(--r-sm)}
+pre{margin:0;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--well);padding:var(--s2) var(--s3);border-radius:var(--r-sm)}
 svg{flex:none}
 .ic{width:16px;height:16px;flex:none;vertical-align:-3px}
 .muted{color:var(--muted)}
@@ -128,7 +88,7 @@ svg{flex:none}
 .num,.tnum{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 ::selection{background:var(--selection);color:var(--fg)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px}
 .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:var(--r-sm);background:var(--well);color:var(--muted);font:500 11px/17px var(--font-mono);text-align:center;font-variant-numeric:tabular-nums}
 .btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:500 12.5px var(--font-sans);cursor:pointer}
 .btn:hover{background:var(--card-2)}
@@ -196,25 +156,25 @@ a.chip:hover{text-decoration:none;border-color:var(--k)}
 .badge[class*=sev-]>svg{color:var(--sev)}
 
 /* ---------- cards ----------
-   <details class="card [sev-x]"><summary>…</summary><div class="body">…</div></details>, collapsed unless [open].
-   A plain <div class="card"> is the Summary's static card. */
-.card{display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);min-width:0}
-.card+.card{margin-top:var(--s2)}
-.card[class*=sev-]{border-left:3px solid var(--sev)}
-.card>.body{padding:var(--s3) var(--s4) var(--s4)}
-div.card>.body{padding-top:var(--s4)}
-details.card>summary{display:flex;align-items:center;gap:var(--s2) var(--s3);flex-wrap:wrap;min-height:44px;padding:10px 40px 10px var(--s4);position:relative;cursor:pointer;list-style:none;border-radius:calc(var(--r-md) - 1px);user-select:none}
-details.card>summary::-webkit-details-marker{display:none}
-details.card>summary::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
-details.card[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
-details.card>summary:hover{background:var(--card-2)}
-details.card>summary:hover::after{border-color:var(--fg)}
-details.card>summary:focus-visible{outline-offset:-2px}
+   <details class="rcard [sev-x]"><summary>…</summary><div class="body">…</div></details>, collapsed unless [open].
+   A plain <div class="rcard"> is the Summary's static card. */
+.rcard{display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);min-width:0}
+.rcard+.rcard{margin-top:var(--s2)}
+.rcard[class*=sev-]{border-left:3px solid var(--sev)}
+.rcard>.body{padding:var(--s3) var(--s4) var(--s4)}
+div.rcard>.body{padding-top:var(--s4)}
+details.rcard>summary{display:flex;align-items:center;gap:var(--s2) var(--s3);flex-wrap:wrap;min-height:44px;padding:10px 40px 10px var(--s4);position:relative;cursor:pointer;list-style:none;border-radius:calc(var(--r-md) - 1px);user-select:none}
+details.rcard>summary::-webkit-details-marker{display:none}
+details.rcard>summary::after{content:"";position:absolute;right:18px;top:50%;width:7px;height:7px;margin-top:-5px;border-right:1.75px solid var(--muted);border-bottom:1.75px solid var(--muted);transform:rotate(-45deg);transition:transform var(--t-fast) var(--ease)}
+details.rcard[open]>summary::after{transform:rotate(45deg);margin-top:-6px}
+details.rcard>summary:hover{background:var(--card-2)}
+details.rcard>summary:hover::after{border-color:var(--fg)}
+details.rcard>summary:focus-visible{outline-offset:-2px}
 .revealed:focus,.revealed:focus-visible{outline:none}
-details.card[open]>summary{border-bottom:1px solid var(--border);border-bottom-left-radius:0;border-bottom-right-radius:0}
-details.card>summary .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
-details.card>summary .end{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
-.card .card>summary{min-height:38px;padding-top:7px;padding-bottom:7px}
+details.rcard[open]>summary{border-bottom:1px solid var(--border);border-bottom-left-radius:0;border-bottom-right-radius:0}
+details.rcard>summary .t{font-weight:600;min-width:0;overflow-wrap:anywhere}
+details.rcard>summary .end{margin-left:auto;display:inline-flex;align-items:center;gap:6px}
+.rcard .rcard>summary{min-height:38px;padding-top:7px;padding-bottom:7px}
 
 /* ---------- tabs ----------
    <div class="tabs" data-tabs><div role="tablist"><button role="tab" aria-selected aria-controls>Label <span class="n">9</span></button></div>
@@ -225,7 +185,7 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .tabs [role=tab]{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;color:var(--muted);font:500 13px/1.3 var(--font-sans);white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
 .tabs [role=tab]:hover{color:var(--fg)}
 .tabs [role=tab][aria-selected=true]{color:var(--fg-strong);border-bottom-color:var(--accent)}
-.tabs [role=tab][aria-selected=true] .n{background:var(--accent-bg);color:var(--accent-fg)}
+.tabs [role=tab][aria-selected=true] .n{background:var(--accent-bg);color:var(--fg-strong)}
 .tabs [role=tab]:focus-visible{outline-offset:-2px}
 .tabs [role=tabpanel]{padding-top:var(--s3);min-width:0}
 .tabs [role=tabpanel][hidden]{display:none}
@@ -245,12 +205,12 @@ details.card>summary .end{margin-left:auto;display:inline-flex;align-items:cente
 .filterbar .sep{width:1px;align-self:stretch;margin:2px 4px;background:var(--border)}
 .filterbar [data-filter]{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--card);color:var(--fg);font:500 12.5px/1 var(--font-sans);white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
 .filterbar [data-filter]:hover{border-color:var(--border-strong);background:var(--card-2)}
-.filterbar [data-filter][aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-fg)}
+.filterbar [data-filter][aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--fg-strong)}
 .filterbar [data-filter][aria-pressed=true]::before{content:"";width:8px;height:4px;margin:-3px 0 0 -1px;border-left:1.75px solid currentColor;border-bottom:1.75px solid currentColor;transform:rotate(-45deg)}
 .filterbar [data-filter] svg{width:14px;height:14px}
 .filterbar [data-filter-search]{flex:1 1 180px;min-width:0;max-width:320px;height:30px;margin-left:auto;padding:0 12px 0 32px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);font:400 13px var(--font-sans);}
 .filterbar [data-filter-search]::placeholder{color:var(--muted)}
-.filterbar [data-filter-search]:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
+.filterbar [data-filter-search]:focus{outline:2px solid var(--color-focus);outline-offset:2px;border-color:var(--fg-strong)}
 .filterbar [data-filter-count]{flex-basis:100%;margin:2px 0 0;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .filterbar [data-filter-count]:empty{display:none}
 html:not(.js) .filterbar{display:none}
@@ -302,11 +262,10 @@ html:not(.js) .filterbar{display:none}
 .sc-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
 .sc-ring .trk{fill:none;stroke:var(--score-track);stroke-width:10}
 .sc-ring .arc{fill:none;stroke:var(--band);stroke-width:10;stroke-linecap:butt;stroke-dasharray:var(--score) 100}
-.sc-num{position:relative;font:570 44px/1 var(--font-display);letter-spacing:-.02em;color:var(--fg-strong);font-variant-numeric:tabular-nums;margin-top:-8px}
+.sc-num{position:relative;font:var(--font-weight-display) 44px/1 var(--font-display);letter-spacing:-.02em;color:var(--fg-strong);font-variant-numeric:tabular-nums;margin-top:-8px}
 .sc-of{position:absolute;left:0;right:0;top:calc(50% + 18px);text-align:center;font:500 12px/1 var(--font-mono);color:var(--muted)}
-.sc-verdict{grid-area:verdict;align-self:end;display:flex;align-items:center;gap:8px;font:570 30px/1.1 var(--font-display);letter-spacing:-.012em;color:var(--sev,var(--band))}
-/* the verdict is large text (24–30px bold), where 3:1 is the bar; the solid band colour clears it in both modes
-   and keeps the amber of "Needs attention" from turning brown, as the 4.5:1 text step would */
+.sc-verdict{grid-area:verdict;align-self:end;display:flex;align-items:center;gap:8px;font:var(--font-weight-display) 30px/1.1 var(--font-display);letter-spacing:-.012em;color:var(--sev,var(--band))}
+/* the verdict is large text (24–30px bold), where 3:1 is the bar; the solid band colour clears it in both modes */
 .sc-verdict .ic{width:26px;height:26px}
 .sc-head{grid-area:head;margin-top:6px;font-size:17px;line-height:1.4;font-weight:500;color:var(--fg);max-width:60ch}
 .sc-costs{grid-area:costs;list-style:none;margin-top:var(--s3);display:grid;gap:6px}
@@ -331,19 +290,19 @@ html:not(.js) .filterbar{display:none}
 /* ---------- motion and print ---------- */
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 @media print{
-  body{background:#fff;font-size:12.5px}
+  body{background:var(--color-surface);font-size:12.5px}
   .chip,.badge,.n{background:none!important;border:1px solid currentColor}
   .chip.zero{border-color:var(--border)}
-  .tbl thead th{background:none;border-bottom:1px solid #000}
+  .tbl thead th{background:none;border-bottom:1px solid var(--color-text-strong)}
   .info .ic-plate{background:none}
-  details.card>summary:hover{background:none}
-  details.card>summary::after,.filterbar,.tabs [role=tablist]{display:none}
+  details.rcard>summary:hover{background:none}
+  details.rcard>summary::after,.filterbar,.tabs [role=tablist]{display:none}
   .tabs [role=tabpanel],.tabs [role=tabpanel][hidden]{display:block}
   .tabs [role=tabpanel][data-label]::before{content:attr(data-label);display:block;margin:var(--s2) 0;font:500 12px/1.4 var(--font-sans)}
   /* writePdf prints with JavaScript off, so a card marked data-print-open is opened by CSS alone */
-  details.card[data-print-open]::details-content{content-visibility:visible;display:block}
-  details.card[data-print-open]>summary{border-bottom:1px solid var(--border)}
-  .card,.grid>.info,.scorecard,.tbl tr{break-inside:avoid}
+  details.rcard[data-print-open]::details-content{content-visibility:visible;display:block}
+  details.rcard[data-print-open]>summary{border-bottom:1px solid var(--border)}
+  .rcard,.grid>.info,.scorecard,.tbl tr{break-inside:avoid}
   .scorecard{border-top-width:3px}
 }`;
 // ---------- end of components ----------
@@ -366,7 +325,6 @@ svg.logo{display:inline-block;flex:none;color:var(--fg-strong)}
 html[data-theme="dark"] .logo .l-light{display:none}
 html[data-theme="dark"] .logo .l-dark{display:inline}
 @media (prefers-color-scheme:dark){html:not([data-theme="light"]) .logo .l-light{display:none}html:not([data-theme="light"]) .logo .l-dark{display:inline}}
-.eyebrow{font:500 12px/1.4 var(--font-sans);color:var(--muted)}
 .mock-note{display:flex;gap:var(--s2);align-items:flex-start;padding:var(--s2) var(--s3);margin:var(--s3) 0 var(--s4);border:1px dashed var(--sev-info);border-radius:var(--r-sm);color:var(--sev-info-fg);font-size:12.5px}
 .mock-note .ic{margin-top:2px}
 
@@ -407,7 +365,7 @@ html.rail-anim .rail{transition:width var(--t-base) var(--ease)}
 .r-toggle .ic{transform:rotate(180deg);transition:transform var(--t-base) var(--ease)}
 .r-toggle:hover,.rail a[href]:hover{background:var(--card-2);text-decoration:none}
 .rail a[aria-disabled]{color:var(--muted);opacity:.6}
-.rail a[aria-current]{background:var(--accent-bg);color:var(--accent-fg);font-weight:600;box-shadow:inset 2px 0 var(--accent)}
+.rail a[aria-current]{background:var(--accent-bg);color:var(--fg-strong);font-weight:600;box-shadow:inset 2px 0 var(--accent)}
 .rail .ic{width:18px;height:18px}
 .r-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;transition:opacity var(--t-fast) var(--ease)}
 .r-t{display:inline-flex;align-items:center;min-width:20px;justify-content:center;padding:0 6px;border-radius:var(--r-sm);background:var(--t-bg);color:var(--t-fg);font:500 11.5px/18px var(--font-mono);font-variant-numeric:tabular-nums}
@@ -453,7 +411,11 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 @keyframes aitd-flash{from{background-color:var(--accent-bg)}}
 
 .footer{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border-top:1px solid var(--border);background:var(--card)}
+.f-band{display:block;border-top:1px solid var(--border)}
+.f-band+.footer{border-top:0}
 .footer img,.f-atd .logo{vertical-align:-3px}
+/* the kit's base lets an svg shrink to its box; a logo keeps its size */
+.logo-link{display:inline-flex;flex:none}
 
 /* ---------- under 720 px: the rail becomes a strip under the top bar ---------- */
 @media (max-width:719.98px){
@@ -480,7 +442,7 @@ html:not(.js) main>.sec[id^="failed-"]{display:none}
 /* ---------- print: the no-JS layout, sections stacked one per page ---------- */
 @media print{
   :root{--top:0px}
-  .top,.rail,.skip,.sec-tools,.mock-note,.fb-clear,html.js .js-only,html.js .sec-tools.js-only{display:none!important}
+  .top,.rail,.skip,.sec-tools,.mock-note,.fb-clear,.f-band,html.js .js-only,html.js .sec-tools.js-only{display:none!important}
   .shell{display:block}
   main{padding:0}
   main>.sec[hidden],[data-select-pane][hidden],[data-inspector][hidden],[data-filter-group][hidden],[data-text][hidden]{display:block!important}
@@ -516,6 +478,8 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-num{font-size:48px;margin-top:-10px}
 .sm .sc-of{top:calc(50% + 20px)}
 .sm .sc-num.sm-none{margin-top:0;color:var(--muted);font-weight:500}
+.sm .sc-ring:has(.sm-none) svg{mask:var(--pattern-missing) 0 0/8px 8px}
+.sm .sc-ring:has(.sm-none) .trk{stroke:var(--color-data-missing);stroke-width:14}
 .sm .sc-verdict{margin-top:2px}
 .sm .sc-head{margin-top:var(--s1)}
 /* the model's summary (one line, under the headline) and the baseline's accepted line (p.meta, under the chips) get
@@ -551,7 +515,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sm-about>.info{grid-template-rows:auto 1fr auto;align-items:start;row-gap:var(--s2);padding:var(--s4)}
 .sm .info .lbl{align-self:center;display:inline-flex;align-items:center;gap:2px;justify-self:start;color:var(--muted)}
 .sm .info .lbl svg{opacity:.55}
-.sm .info .lbl:hover{color:var(--accent-fg);text-decoration:none}
+.sm .info .lbl:hover{color:var(--accent-fg)}
 .sm .info .lbl:hover svg{opacity:1}
 .sm .info .val{margin-top:0;align-self:center;font-size:18px}
 .sm .info .val .chip{vertical-align:2px}
@@ -593,9 +557,9 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 .sm .sc-of{top:calc(50% + 13px)}
 }
 @media (max-width:599px){.sm .sm-about{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto}}
-/* The score and "/100" as one group centred in the ring, whatever font the system lends: trimmed to the figures' cap
-   height and baseline, their boxes no longer carry the font's own ascent and descent, which left the group 2.4px below
-   the middle in Google Sans and 4.1px in SF. A browser without text-box keeps the margins above. */
+/* The score and "/100" as one group centred in the ring, whatever the font: trimmed to the figures' cap height and
+   baseline, their boxes no longer carry the font's own ascent and descent, which left the group a few pixels below the
+   middle. A browser without text-box keeps the margins above. */
 @supports (text-box:trim-both cap alphabetic){
 .sm .sc-ring:has(.sc-of){align-content:center;row-gap:10px}
 .sm .sc-ring .sc-num:not(.sm-none),.sm .sc-ring .sc-of{text-box:trim-both cap alphabetic;margin-top:0}
@@ -612,7 +576,7 @@ const SUMMARY = `/* Summary (SPEC §2): scorecard with status chips, then six "a
 
 // ---------- findings: #findings ----------
 const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so no rule leaks into another section.
-   Generic pieces (.card, .tabs, .chip, .filterbar, .badge, .n) come from components.css; this file only tunes them. */
+   Generic pieces (.rcard, .tabs, .chip, .filterbar, .badge, .n) come from components.css; this file only tunes them. */
 
 /* ---------- filter bar: one line at 1280, a "Filters (n)" fold under 720 ---------- */
 .fnd .filterbar{position:relative;margin-top:var(--s2);gap:8px 10px;padding:8px 12px;counter-reset:fc}
@@ -627,7 +591,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd .filterbar .fl{margin:0 4px 0 0;font-size:12px}
 .fnd .filterbar [data-filter]{height:26px;padding:0 8px;gap:5px;font-size:12px}
 .fnd .filterbar [data-filter] .n{min-width:0;padding:0;background:none;font-size:11px;line-height:1;color:var(--muted)}
-.fnd .filterbar [data-filter][aria-pressed=true] .n{color:var(--accent-fg)}
+.fnd .filterbar [data-filter][aria-pressed=true] .n{color:var(--fg-strong)}
 .fnd .filterbar [data-filter]:disabled,.fnd .filterbar [data-filter].zero{color:var(--muted);cursor:default;background:transparent;border-style:dashed}
 .fnd .filterbar [data-filter]:disabled .dot{background:var(--border-strong)}
 .fnd .filterbar [data-filter].chip-vp svg{color:var(--k)}
@@ -648,9 +612,9 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
   .fnd .fb-search{order:1;flex:1 1 100px;min-width:100px;max-width:none;margin-left:0}
   .fnd .fb-fold{order:2;display:inline-block;appearance:none;-webkit-appearance:none;margin:0;height:28px;padding:0 12px;border:1px solid var(--border-strong);border-radius:var(--r-ctl);background:var(--card);color:var(--fg);cursor:pointer;font:500 12.5px/26px var(--font-sans);white-space:nowrap}
   .fnd .fb-fold::after{content:attr(data-label)}
-  .fnd .filterbar:has([aria-pressed=true]) .fb-fold{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-fg)}
+  .fnd .filterbar:has([aria-pressed=true]) .fb-fold{border-color:var(--accent);background:var(--accent-bg);color:var(--fg-strong)}
   .fnd .filterbar:has([aria-pressed=true]) .fb-fold::after{content:attr(data-label) " (" counter(fc) ")"}
-  .fnd .filterbar:has(.fb-fold:focus-visible) .fb-fold{outline:2px solid var(--accent);outline-offset:2px}
+  .fnd .filterbar:has(.fb-fold:focus-visible) .fb-fold{outline:2px solid var(--color-focus);outline-offset:2px}
   .fnd .filterbar::after{display:none}
   .fnd .fb-clear{order:3;margin-left:0}
   .fnd .filterbar [data-filter-count]{order:4;margin:0}
@@ -679,48 +643,48 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
 .fnd details.group>summary:hover::after{border-color:var(--fg)}
 .fnd details.group>summary:focus-visible{outline-offset:2px;border-radius:var(--r-sm)}
 .fnd .chip.lg b{font-weight:600}
-.fnd .g-rows>.card+.card{margin-top:6px}
+.fnd .g-rows>.rcard+.rcard{margin-top:6px}
 .fnd [hidden]{display:none!important}
 
 /* ---------- the collapsed row: badge · title · owner · platform · where, in aligned columns ---------- */
-.fnd details.card>summary,.fnd .card.line{display:grid;grid-template-columns:92px minmax(0,1fr) 112px 150px 132px;align-items:center;column-gap:var(--s3);row-gap:6px;flex-wrap:nowrap;min-height:44px;padding:8px 40px 8px var(--s3)}
-.fnd .card.line{min-height:38px;padding-top:6px;padding-bottom:6px;position:relative}
-.fnd .card>summary>.badge,.fnd .card.line>.badge{justify-self:start}
-.fnd .card .f-t{font-weight:500;min-width:0;overflow-wrap:anywhere;line-height:1.4}
-.fnd .card.line .f-t{font-weight:400}
-.fnd .card .f-t .muted{font-weight:400}
+.fnd details.rcard>summary,.fnd .rcard.line{display:grid;grid-template-columns:92px minmax(0,1fr) 112px 150px 132px;align-items:center;column-gap:var(--s3);row-gap:6px;flex-wrap:nowrap;min-height:44px;padding:8px 40px 8px var(--s3)}
+.fnd .rcard.line{min-height:38px;padding-top:6px;padding-bottom:6px;position:relative}
+.fnd .rcard>summary>.badge,.fnd .rcard.line>.badge{justify-self:start}
+.fnd .rcard .f-t{font-weight:500;min-width:0;overflow-wrap:anywhere;line-height:1.4}
+.fnd .rcard.line .f-t{font-weight:400}
+.fnd .rcard .f-t .muted{font-weight:400}
 .fnd .f-t{grid-column:2}
 .fnd .c-owner{grid-column:3}
 .fnd .c-plat{grid-column:4}
 .fnd .c-where{grid-column:5}
-.fnd .card.line .f-t{grid-column:2 / 4}
-.fnd .card.line .c-owner{display:none}
+.fnd .rcard.line .f-t{grid-column:2 / 4}
+.fnd .rcard.line .c-owner{display:none}
 .fnd .c-owner,.fnd .c-plat,.fnd .c-where{display:flex;gap:4px;align-items:center;min-width:0}
-.fnd .card.line .c-owner{display:none}
+.fnd .rcard.line .c-owner{display:none}
 .fnd .run-multi svg:first-child{margin-left:0}
 .fnd .run-multi .vp-desktop{color:var(--vp-desktop-fg)}
 .fnd .run-multi .vp-mobile{color:var(--vp-mobile-fg)}
 .fnd .run-multi{gap:3px}
-.fnd .card .f-t code{font-size:12px}
-.fnd .card.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-ctl)}
-.fnd .card.line .go:hover{color:var(--fg);background:var(--card-2);text-decoration:none}
-.fnd .card.line .go svg{width:14px;height:14px}
-.fnd .card.line.flash,.fnd .card.flash{animation:aitd-flash 1.5s ease-out}
+.fnd .rcard .f-t code{font-size:12px}
+.fnd .rcard.line .go{position:absolute;right:12px;top:50%;margin-top:-10px;display:grid;place-items:center;width:20px;height:20px;color:var(--muted);border-radius:var(--r-ctl)}
+.fnd .rcard.line .go:hover{color:var(--fg);background:var(--card-2);text-decoration:none}
+.fnd .rcard.line .go svg{width:14px;height:14px}
+.fnd .rcard.line.flash,.fnd .rcard.flash{animation:aitd-flash 1.5s ease-out}
 @media (max-width:719px){
-  .fnd details.card>summary,.fnd .card.line{display:flex;flex-wrap:wrap;column-gap:8px;padding:8px 36px 8px 12px}
-  .fnd .card>summary>.badge,.fnd .card.line>.badge{order:1}
-  .fnd .card .c-where{order:2;margin-left:auto}
-  .fnd .card .f-t,.fnd .card.line .f-t{order:3;flex:1 0 100%}
-  .fnd .card .c-owner{order:4}
-  .fnd .card .c-plat{order:5}
+  .fnd details.rcard>summary,.fnd .rcard.line{display:flex;flex-wrap:wrap;column-gap:8px;padding:8px 36px 8px 12px}
+  .fnd .rcard>summary>.badge,.fnd .rcard.line>.badge{order:1}
+  .fnd .rcard .c-where{order:2;margin-left:auto}
+  .fnd .rcard .f-t,.fnd .rcard.line .f-t{order:3;flex:1 0 100%}
+  .fnd .rcard .c-owner{order:4}
+  .fnd .rcard .c-plat{order:5}
   .fnd .c-owner:empty,.fnd .c-plat:empty,.fnd .c-where:empty{display:none}
-  .fnd .card.line .go{right:8px;top:12px;margin-top:0}
+  .fnd .rcard.line .go{right:8px;top:12px;margin-top:0}
 }
 
 /* ---------- the open row ---------- */
-.fnd .card>.body{padding:0 var(--s4) var(--s3)}
-.fnd .card .tabs [role=tab]{padding:8px 12px 7px}
-.fnd .card .tabs [role=tabpanel]{padding-top:var(--s3)}
+.fnd .rcard>.body{padding:0 var(--s4) var(--s3)}
+.fnd .rcard .tabs [role=tab]{padding:8px 12px 7px}
+.fnd .rcard .tabs [role=tabpanel]{padding-top:var(--s3)}
 .fnd-impact{display:flex;gap:8px;align-items:center;padding:6px 10px;margin-bottom:var(--s3);border-radius:var(--r-sm);background:var(--sev-bg);color:var(--sev-fg);font-size:13px;line-height:1.4}
 .fnd-impact .ic{width:14px;height:14px}
 .fnd-kv{width:100%;border-collapse:collapse;font-size:13px}
@@ -757,7 +721,7 @@ const FINDINGS = `/* Findings (Direction D). Everything is scoped under .fnd so 
   .fnd .filterbar{display:none}
   .fnd details.group[data-filter-group]::details-content{content-visibility:visible;display:block}
   .fnd details.group>summary::after{display:none}
-  .fnd .card{break-inside:avoid}
+  .fnd .rcard{break-inside:avoid}
   .fnd-impact{background:none!important;border:1px solid currentColor}
   .fnd-recipe{background:none;border:1px solid var(--border)}
 }
@@ -792,7 +756,7 @@ a.chip.chip-sev:hover{text-decoration:none}
 
 // ---------- journeys: #journeys ----------
 const JOURNEYS = `/* Journeys (Direction D): journey tabs + viewport switch, step timeline, step pane with Hits / Data Layer / Requests tabs.
-   Section-scoped; generic .tabs/.card/.chip come from components.css. No max-width anywhere: the pane takes what is left. */
+   Section-scoped; generic .tabs/.rcard/.chip come from components.css. No max-width anywhere: the pane takes what is left. */
 #journeys{min-width:0}
 
 /* ---------- picker: journey tabs, viewport switch on the same line (right) ---------- */
@@ -874,11 +838,11 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-pane>.tabs:not(.js)>[role=tabpanel].jr-none{display:none}
 #journeys .jr-pane>p.jr-empty{padding:var(--s2) var(--s4) var(--s4) 52px}
 #journeys .jr-empty{margin:0}
-#journeys .jr-list>.card+.card{margin-top:6px}
+#journeys .jr-list>.rcard+.rcard{margin-top:6px}
 
 /* hit, push rows: fixed columns so platform, event, consent, severity and time line up from row to row */
-#journeys .jr-list>details.card>summary{display:grid;align-items:center;column-gap:10px;row-gap:4px;min-height:40px;padding:7px 36px 7px 12px}
-#journeys .jr-list>details.card>summary::after{right:15px}
+#journeys .jr-list>details.rcard>summary{display:grid;align-items:center;column-gap:10px;row-gap:4px;min-height:40px;padding:7px 36px 7px 12px}
+#journeys .jr-list>details.rcard>summary::after{right:15px}
 #journeys .jr-hit>summary{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"p e s" "k k k" "c c t"}
 #journeys .jr-c-p{grid-area:p;display:flex}
 #journeys .jr-hit .jr-ev{grid-area:e}
@@ -909,7 +873,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .jr-push .jr-tm{grid-area:t}
 
 /* open hit: flag line, parameters | items, raw request */
-#journeys .jr-list>.card>.body{padding:var(--s3)}
+#journeys .jr-list>.rcard>.body{padding:var(--s3)}
 #journeys .jr-flag{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;margin:0 0 var(--s3);padding:6px 10px;border-radius:var(--r-sm);background:var(--sev-bg);color:var(--sev-fg);font-size:12.5px}
 #journeys .jr-flag .ic{margin-top:2px}
 #journeys .jr-flag>span{flex:1 1 200px;min-width:0}
@@ -968,7 +932,7 @@ html:not(.js) #journeys .jr-steps{display:none}
 #journeys .chip .plat{display:inline-flex;align-items:center;gap:5px}
 #journeys .chip .plat>svg{width:13px;height:13px}
 #journeys .q{position:relative;display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border:1px solid var(--muted);border-radius:var(--r-sm);font:500 10px var(--font-sans);color:var(--muted);cursor:help;vertical-align:1px}
-#journeys .q:hover{border-color:var(--accent);color:var(--accent-fg)}
+#journeys .q:hover{border-color:var(--fg-strong);color:var(--fg-strong)}
 #journeys .q:hover::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:5;width:260px;padding:8px 10px;background:var(--fg);color:var(--page);font:400 12px/1.45 var(--font-sans);border-radius:var(--r-ctl);box-shadow:var(--shadow-overlay);white-space:normal;text-align:left}
 #journeys .jr-kvt .pk{font-family:var(--font-mono)}
 #journeys .jr-kvt tr.pr td{font-family:var(--font-sans)}
@@ -1036,15 +1000,15 @@ html:not(.js) #journeys .jr-steps{display:none}
 
 // ---------- consent: #consent ----------
 const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Scenarios cards. Colours only through tokens;
-   denied/granted/none come from .chip-consent in components.css (denied is the crimson red token, never amber). */
+   denied/granted/none come from .chip-consent in components.css (denied is wine, granted teal, none neutral). */
 #consent .cs-list{list-style:none;margin:var(--s3) 0 var(--s2);padding:0;display:grid;gap:var(--s2)}
 #consent .cs-row{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);min-height:48px;padding:8px var(--s4);margin:0}
 #consent .cs-cells{display:flex;flex-wrap:wrap;align-items:center;gap:6px var(--s4);min-width:0}
 #consent .cs-p{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 #consent .cs-k{font-size:12px;color:var(--muted)}
 #consent .cs-go{margin-left:auto;display:inline-flex;align-items:center;gap:2px;font-size:12.5px;font-weight:500}
-#consent .card+.card{margin-top:var(--s2)}
-#consent details.card>summary .chip.plain{color:var(--muted)}
+#consent .rcard+.rcard{margin-top:var(--s2)}
+#consent details.rcard>summary .chip.plain{color:var(--muted)}
 /* Consent Mode body */
 #consent .cm-list{list-style:none;margin:0;padding:0;display:grid;gap:var(--s2)}
 #consent .cm-list li{display:grid;grid-template-columns:64px minmax(0,220px) minmax(0,1fr);align-items:center;gap:var(--s2) var(--s3);padding:8px var(--s3);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--page)}
@@ -1074,7 +1038,7 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 #consent .cs-row{break-inside:avoid}
 }
 /* journeys.css still has a bare .t (mono time); keep the card title independent of it */
-#consent details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
+#consent details.rcard>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
 #consent .cs-tbl{min-width:560px}
 #consent .cs-tbl td,#consent .cs-tbl th{white-space:nowrap}`;
 // ---------- end of consent ----------
@@ -1082,14 +1046,16 @@ const CONSENT = `/* Consent: platform status lines, then the Consent Mode and Sc
 // ---------- scope: #coverage, #inventory and #run ----------
 const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by section id; colours only through tokens. */
 /* journeys.css still has a bare .t (mono time); keep the card titles independent of it */
-#coverage details.card>summary>.t,#inventory details.card>summary>.t,#run details.card>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
-#coverage .card+.card,#run .card{margin-top:var(--s2)}
+#coverage details.rcard>summary>.t,#inventory details.rcard>summary>.t,#run details.rcard>summary>.t{font:600 14px/1.4 var(--font-sans);color:var(--fg);margin-left:0;white-space:normal}
+#coverage .rcard+.rcard,#run .rcard{margin-top:var(--s2)}
 
 /* ----- Coverage ----- */
 #coverage .cv-bar{display:inline-flex;gap:2px;align-items:center;height:14px;padding:0 2px}
-#coverage .cv-bar i{width:7px;height:14px;border-radius:var(--r-cell);background:var(--sev-ok)}
-#coverage .cv-bar i.params{background:var(--sev-broken)}
-#coverage .cv-bar i.missing{background:var(--sev-warning)}
+#coverage .cv-bar i{width:7px;height:14px;border-radius:var(--r-cell);background:var(--color-data-measured)}
+#coverage .cv-bar i.params{background:var(--color-data-broken)}
+/* not sent is missing data, drawn with the kit's ring hatch on an outline, never a grey or a red bar */
+#coverage .cv-bar i.missing{position:relative;width:8px;background:none;box-shadow:inset 0 0 0 1px var(--color-data-missing)}
+#coverage .cv-bar i.missing::after{content:"";position:absolute;inset:0;background:var(--color-data-missing);mask:var(--pattern-missing) 0 3px/8px 8px}
 #coverage .cv-pcs{gap:6px}
 #coverage .cv-pc .chip{gap:4px}
 #coverage .cv-pc .chip b{font-family:var(--font-mono);font-size:11px}
@@ -1111,7 +1077,7 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 
 /* ----- Inventory ----- */
 #inventory .inv-rows{list-style:none;display:grid;gap:var(--s2);margin-top:var(--s3)}
-#inventory .inv-rows>li>.card{margin:0}
+#inventory .inv-rows>li>.rcard{margin:0}
 #inventory .inv-note{margin-top:var(--s3)}
 #inventory .inv-note+.inv-note{margin-top:var(--s1)}
 #inventory .inv-line{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);min-height:44px;padding:10px var(--s4)}
@@ -1138,8 +1104,8 @@ const SCOPE = `/* Scope (Coverage, Inventory, Run). Selectors are scoped by sect
 #run .run-facts code.file{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
 #run .tm-tbl .tm-d{display:inline-block;width:80px;height:6px;margin-right:var(--s2);vertical-align:middle;border-radius:var(--r-cell);background:var(--well);overflow:hidden;text-align:left}
 #run .tm-tbl .tm-bar{display:block;height:100%;border-radius:var(--r-cell);background:var(--muted)}
-#run .tm-tbl .tm-bar.desktop{background:var(--vp-desktop)}
-#run .tm-tbl .tm-bar.mobile{background:var(--vp-mobile)}
+#run .tm-tbl .tm-bar.desktop{background:var(--chart-1)}
+#run .tm-tbl .tm-bar.mobile{background:var(--chart-2)}
 #run .tm-s{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 @media (max-width:900px){

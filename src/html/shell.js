@@ -5,6 +5,8 @@ import { messages } from "../i18n.js";
 import { summarize } from "../checks.js";
 import { computeMetrics } from "../metrics.js";
 import { LOGOS } from "../brand.js";
+import { KIT_CSS } from "../cini.js";
+import { field } from "../../cini/pano.js";
 import { VERSION, attachExplanations, escapeHtml, verdictHeadline } from "../report-shared.js";
 import { cardIds, logo, passedRows, sprite, use } from "./lib.js";
 import { CSS, brandCss } from "./css.js";
@@ -14,6 +16,12 @@ import * as findingsSection from "./findings.js";
 import * as journeys from "./journeys.js";
 import * as consent from "./consent.js";
 import * as scope from "./scope.js";
+
+/**
+ * The page's Content-Security-Policy, the same as the MCP server's header (src/mcp.js): nothing loads from outside, the one inline script runs by its
+ * hash, and the only fonts are the kit's two, carried in the page as data URIs.
+ */
+const REPORT_CSP = `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src ${scriptCspSource()}`;
 
 /** The rail's entries in order (1–7 on the keyboard) and their sprite icons. */
 export const SECTIONS = ["summary", "findings", "journeys", "consent", "coverage", "inventory", "run"];
@@ -129,7 +137,7 @@ function topBar(ctx) {
   const atdByline = whiteLabel ? `<a href="${ATD_REPO}" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("atd-lockup", "ai tag debugger", 16, "logo-atd")}</a>` : "";
   const aiByline = branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>${m.ui.by}</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : "";
   const word = m.verdict.status[metrics.verdict.status];
-  // 0–49 red, 50–89 amber, 90–100 green, as Lighthouse bands its scores; no score reads as a fail.
+  // 0–49 fail (wine), 50–89 mid (olive), 90–100 pass (teal), as Lighthouse bands its scores; no score reads as a fail.
   const band = tally.score === null || tally.score < 50 ? "fail" : tally.score < 90 ? "mid" : "pass";
   const label = tally.score === null ? t.noScore(word) : t.scoreLabel(tally.score, word);
   const verdict = `<a class="top-verdict v-${band}" href="#summary" aria-label="${escapeHtml(label)}"><span class="sc-l">${escapeHtml(t.score)}</span><b>${tally.score ?? "–"}</b><span class="sc">${escapeHtml(t.outOf)}</span></a>`;
@@ -141,17 +149,19 @@ function footer(ctx) {
   const { m, site, title, generatedAt, brand, branding, whiteLabel } = ctx;
   const atd = `<a class="f-atd" href="${ATD_REPO}" rel="noopener noreferrer">${logo("favicon", "", 16, "f-mark")} ai tag debugger</a>`;
   const meta = `<span class="muted">${escapeHtml(site ?? title)} · ${escapeHtml(generatedAt)} · v${VERSION}</span>`;
-  if (branding) return `<footer class="footer"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("master", "Analitik İşler", 24, "logo-s")}</a><p class="xs">${m.ui.credit(atd)} ${meta}</p></footer>`;
+  // The Pano band sits above the footer of an Analitik İşler report, seeded with the site so one site always draws the same band.
+  const band = `<div class="pano tool-footer__band f-band" aria-hidden="true">${field({ cols: 60, rows: 3, seed: site ?? title, startRow: 1, endRow: 1, align: "xMaxYMid" })}</div>\n`;
+  if (branding) return `${band}<footer class="footer"><a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("master", "Analitik İşler", 24, "logo-s")}</a><p class="xs">${m.ui.credit(atd)} ${meta}</p></footer>`;
   const brandName = brand?.name ? escapeHtml(brand.name) : "";
   return `<footer class="footer"><p class="xs">${whiteLabel ? `${brandName}${brandName ? " · " : ""}${m.ui.credit(atd)}` : "ai tag debugger"} ${meta}</p></footer>`;
 }
 
-/** The expand / collapse pair under a section's h2, for every section but Summary that holds a details.card. */
+/** The expand / collapse pair under a section's h2, for every section but Summary that holds a details.rcard. */
 function withTools(m, html) {
   const tools = `<div class="sec-tools js-only"><button type="button" class="btn" data-expand-all>${escapeHtml(m.html.shell.expandAll)}</button><button type="button" class="btn" data-collapse-all>${escapeHtml(m.html.shell.collapseAll)}</button></div>`;
   return html.split(/(?=<section\b[^>]*\bclass="sec(?=[ "]))/).map((chunk) => {
     const id = chunk.match(/^<section\b[^>]*\bid="([^"]+)"/)?.[1];
-    if (!id || id === "summary" || !/<details\b[^>]*\bclass="[^"]*\bcard\b/.test(chunk)) return chunk;
+    if (!id || id === "summary" || !/<details\b[^>]*\bclass="[^"]*\brcard\b/.test(chunk)) return chunk;
     return chunk.replace(/<\/h2>/, `</h2>${tools}`);
   }).join("");
 }
@@ -170,10 +180,10 @@ export function renderHtml(report) {
   const foot = footer(ctx);
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}">
+<meta http-equiv="Content-Security-Policy" content="${REPORT_CSP}">
 <meta name="color-scheme" content="light dark">
-<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/svg+xml"'} href="${brand?.logo ?? LOGOS["favicon-light"]}">
-<style>${CSS}${brandCss(brand?.color)}</style></head><body>
+<title>${escapeHtml(title)}</title><link rel="icon"${brand?.logo ? "" : ' type="image/svg+xml"'} href="${brand?.logo ?? LOGOS["favicon-light"]}">${brand?.logo ? "" : `<link rel="icon" type="image/svg+xml" media="(prefers-color-scheme: dark)" href="${LOGOS["favicon-dark"]}">`}
+<style>${KIT_CSS}\n${CSS}${brandCss(brand?.color)}</style></head><body>
 <a class="skip" href="#main">${escapeHtml(t.skip)}</a>
 ${sprite(`${top}${nav}${sections}${foot}`)}
 ${top}

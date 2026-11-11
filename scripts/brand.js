@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Writes src/brand.js from the brand assets, so a report stays one file that needs nothing next to it.
-// Run it after brand/ai/ changes: node scripts/brand.js
+// Writes src/brand.js from the Çini kit's logos (cini/logos/), so a report stays one file that needs nothing next to it.
+// Run it after cini/ is copied again from the kit: node scripts/brand.js
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// brand/ai/BRAND.md §4: the light files draw the ink and the point in these two colours, and nothing else.
+// BRAND.md §4 (v1.1, brand/README.md points to it): the light files draw the ink and the point in these two colours, and
+// nothing else. They are only read here to tell the two apart; the page draws them in its own --fg-strong and --brand-point.
 const INK = "#17140F";
 const POINT = "#C12D30";
 
@@ -35,7 +36,7 @@ function read(assets, file, key) {
   try {
     return readFileSync(path.join(assets, file), "utf8");
   } catch {
-    throw new Error(`No ${path.join(assets, file)} for "${key}". Copy design/13-ai-brand from the analitikisler repo to brand/ai/ (see brand/README.md), or change scripts/brand.js if the asset was renamed.`);
+    throw new Error(`No ${path.join(assets, file)} for "${key}". Copy the Çini kit's dist/ to cini/ (see brand/README.md), or change scripts/brand.js if the asset was renamed.`);
   }
 }
 
@@ -62,12 +63,12 @@ export function render(assets) {
   const art = Object.fromEntries(Object.entries(ART).map(([key, base]) => [key, symbolOf(read(assets, `${base}-light.svg`, key), read(assets, `${base}-dark.svg`, key), key)]));
   const images = Object.fromEntries(Object.entries(IMAGES).map(([key, file]) => [key, `data:image/svg+xml;base64,${Buffer.from(read(assets, file, key)).toString("base64")}`]));
   const from = [
-    ...Object.entries(ART).map(([key, base]) => `//   ${key.padEnd(14)} brand/ai/assets/${base}-light.svg (and -dark.svg, checked to match)`),
-    ...Object.entries(IMAGES).map(([key, file]) => `//   ${key.padEnd(14)} brand/ai/assets/${file}`),
+    ...Object.entries(ART).map(([key, base]) => `//   ${key.padEnd(14)} cini/logos/${base}-light.svg (and -dark.svg, checked to match)`),
+    ...Object.entries(IMAGES).map(([key, file]) => `//   ${key.padEnd(14)} cini/logos/${file}`),
   ].join("\n");
   const entries = (obj) => Object.entries(obj).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n");
   return `// The brand's logos for the HTML report, so a report is one file and needs nothing next to it.
-// Written by node scripts/brand.js from brand/ai/assets/ (the brand guide is brand/ai/BRAND.md); edit the assets, not this file.
+// Written by node scripts/brand.js from cini/logos/ (the Çini kit; brand/README.md points to the brand guide); edit the kit, not this file.
 ${from}
 
 /** Sprite symbols: the ink is currentColor and the point is var(--brand-point), so a logo follows the page's colours. */
@@ -85,7 +86,7 @@ ${entries(images)}
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = path.resolve(fileURLToPath(import.meta.url), "../..");
   const out = path.join(root, "src", "brand.js");
-  const text = render(path.join(root, "brand", "ai", "assets"));
+  const text = render(path.join(root, "cini", "logos"));
   writeFileSync(out, text);
   console.log(`Wrote src/brand.js (${Math.round(text.length / 1024)} KB) from:\n${text.split("\n").filter((l) => l.startsWith("//   ")).join("\n")}`);
 }

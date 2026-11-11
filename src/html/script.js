@@ -212,7 +212,7 @@ const SHELL = `/* Direction D shell: routing, rail, tabs, filters, single select
     else if ((x = t.closest("[data-tabs] [role=tab]")) && enabled(x)) selectTab(x);
     else if ((x = t.closest("[data-select-target]")) && x.closest("[data-inspector]")) select(x);
     else if ((x = t.closest("[data-vp-target]"))) pressVp(x, true);
-    else if ((x = t.closest("[data-expand-all],[data-collapse-all]"))) $$("details.card", x.closest(".sec")).forEach(function (d) { d.open = x.hasAttribute("data-expand-all"); });
+    else if ((x = t.closest("[data-expand-all],[data-collapse-all]"))) $$("details.rcard", x.closest(".sec")).forEach(function (d) { d.open = x.hasAttribute("data-expand-all"); });
     else if (t.closest("[data-rail-toggle]")) setRail(html.getAttribute("data-rail") !== "collapsed", true);
     else if (t.closest(".mock-switch")) go(body.getAttribute("data-state") === "failed" ? "#summary" : "#failed-summary");
   });

@@ -87,7 +87,7 @@ const hostPath = (url) => {
 const badge = (sev, text) => (UI_SYMBOLS[`sev-${sev}`] ? `<span class="badge sev-${sev}">${use(`sev-${sev}`, 14)}${escapeHtml(text)}</span>` : `<span class="badge">${escapeHtml(text)}</span>`);
 /**
  * A logo at a given height. The brand's own logos (LOGO_ART) are drawn from the sprite, so their ink is the text colour and
- * only the point is red, as brand/ai/BRAND.md §4 asks of a product's UI. Anything else in LOGOS (the favicon tiles, which
+ * only the point is red, as BRAND.md §4 asks of a product's UI. Anything else in LOGOS (the favicon tiles, which
  * carry their own ground) comes as its light and dark images, and the CSS shows the one that fits the colour scheme.
  */
 export const logo = (key, alt, height, cls) => {

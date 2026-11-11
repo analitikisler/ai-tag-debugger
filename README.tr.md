@@ -1,6 +1,6 @@
 [English](README.md) | Türkçe
 
-<h1><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/analitikisler/ai-tag-debugger/main/brand/ai/assets/lockups/ai-tag-debugger-dark.svg"><img src="https://raw.githubusercontent.com/analitikisler/ai-tag-debugger/main/brand/ai/assets/lockups/ai-tag-debugger-light.svg" alt="ai tag debugger" height="40"></picture></h1>
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/analitikisler/ai-tag-debugger/main/cini/logos/lockups/ai-tag-debugger-dark.svg"><img src="https://raw.githubusercontent.com/analitikisler/ai-tag-debugger/main/cini/logos/lockups/ai-tag-debugger-light.svg" alt="ai tag debugger" height="40"></picture></h1>
 
 **Web sitenizin analitik ve reklam takibini test eden, açık kaynaklı bir yapay zekâ ajanı.**
 

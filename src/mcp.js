@@ -968,8 +968,9 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
     return m ? { ok: timingSafeEqual(digest(m[1]), secretDigest), rest: m[2] ?? "" } : { ok: false, rest: "" };
   };
   const securityHeaders = {
-    // The report's only script is the fixed inline one (tabs, deep links, theme), allowed by its hash; nothing else may load or run.
-    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${scriptCspSource()}`,
+    // The report's only script is the fixed inline one (tabs, deep links, theme), allowed by its hash; nothing else may load or
+    // run. Its only fonts are the Çini kit's two, inlined as data URIs, so font-src allows data: and nothing else.
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src ${scriptCspSource()}`,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   };

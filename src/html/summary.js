@@ -161,7 +161,7 @@ function scorecard(ctx) {
   const shell = m.html.shell;
   const score = tally.score;
   const noScore = score === null;
-  // The ring is banded by score as the top-bar chip is (0–49 red, 50–89 amber, 90–100 green); the word by verdict.
+  // The ring is banded by score as the top-bar chip is (0–49 wine, 50–89 olive, 90–100 teal); the word by verdict.
   const band = noScore || score < 50 ? "fail" : score < 90 ? "mid" : "pass";
   const sev = VERDICT_SEV[verdict.status] ?? "warning";
   const ring = noScore

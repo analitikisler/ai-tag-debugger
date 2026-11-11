@@ -117,7 +117,7 @@ function coverageCard(ctx) {
   }).join("");
   const key = `<p class="cv-key xs muted">${glyph("ok", m.html.sent)}<span>${esc(t.keyOk)}</span>${sevchip("broken", esc(m.html.paramsShort))}<span>${esc(t.keyParams)}</span>${sevchip("warning", esc(m.html.notSent))}<span>${esc(t.keyMissing)}</span><span>– ${esc(t.keyNotExpected)}</span></p>`;
   const head = `<tr><th scope="col">${esc(m.ui.event)}</th><th scope="col">${esc(t.needs)}</th>${runs.map((r, ri) => `<th scope="col" class="cv-c"><a href="#j${ri}" class="cv-run">${vchip(r.viewport, r.journeyId)}</a></th>`).join("")}</tr>`;
-  return `<details class="card" id="cov-plan"><summary>${summary}</summary><div class="body">
+  return `<details class="rcard" id="cov-plan"><summary>${summary}</summary><div class="body">
 ${filterbar}
 <div class="tscroll cv-scroll"><table class="tbl cv-tbl"><caption class="sr">${esc(m.ui.planCoverage)}</caption><thead>${head}</thead><tbody id="cov-rows">${body}</tbody></table></div>
 ${key}</div></details>`;
@@ -139,7 +139,7 @@ function conversionsCard(ctx) {
   };
   const rows = c.rows.map((r) => `<tr><th scope="row">${runLink(r)}</th><td><span class="cv-ev">${pchip(r.platform)}${code(r.event)}</span></td><td class="mono xs">${r.transactionId ? esc(r.transactionId) : "–"}</td><td class="num">${r.value !== null && r.value !== undefined ? `${esc(String(r.value))}${r.currency ? ` ${esc(r.currency)}` : ""}` : sevchip("broken", esc(m.ui.missing))}</td><td class="num">${r.items ?? "–"}</td>${CONVERSION_CHECKS.map((k) => cellOf(r.checks?.[k])).join("")}</tr>`).join("");
   const summary = `<span class="t">${esc(m.html.conversions)}</span>${sevchip(nFail ? "warning" : "ok", t.purchasesPass(`<b>${c.passed}</b>`, c.total))}${nFail ? sevchip("broken", esc(t.purchasesFail(nFail))) : ""}`;
-  return `<details class="card" id="cov-conversion"><summary>${summary}</summary><div class="body">
+  return `<details class="rcard" id="cov-conversion"><summary>${summary}</summary><div class="body">
 <p class="xs muted cv-lead">${esc(m.html.conversionsLead(c.passed, c.total))}</p>
 <div class="tscroll"><table class="tbl cv-tbl cv-conv"><caption class="sr">${esc(m.html.conversions)}</caption><thead><tr><th scope="col">${esc(m.ui.journey)}</th><th scope="col">${esc(m.ui.event)}</th><th scope="col">${esc(m.html.orderId)}</th><th scope="col" class="num">${esc(m.html.value)}</th><th scope="col" class="num">${esc(m.ui.items)}</th>${CONVERSION_CHECKS.map((k) => `<th scope="col" class="cv-c">${esc(m.html.conversionChecks[k])}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></div></details>`;
 }
@@ -156,7 +156,7 @@ function planVsSiteCard(ctx) {
   const rows = pcSort(pc).map((e) => `<tr><th scope="row"><span class="cv-ev">${pchip(e.platform)}${code(e.event)}</span></th><td>${bchip(e.bucket, esc(m.ui.bucket[e.bucket]))}</td><td class="xs muted">${(e.details ?? []).map(detailHtml).join("<br>")}</td></tr>`).join("");
   const items = planChanges ? planChangeItems(planChanges) : [];
   const changes = planChanges ? `<h3 class="pv-h">${esc(m.html.planChanges)}</h3><p class="xs">${esc(m.ui.planChangesLine(planChanges))}</p>${items.length ? `<ul class="pv-changes xs">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}` : "";
-  return `<details class="card" id="plan-vs-site"><summary>${summary}</summary><div class="body">
+  return `<details class="rcard" id="plan-vs-site"><summary>${summary}</summary><div class="body">
 <p><strong>${esc(overall)}</strong></p>${perPlatform.length ? `<p class="muted xs">${perPlatform.map(esc).join("<br>")}</p>` : ""}
 <div class="tscroll pv-scroll"><table class="tbl pv-tbl"><caption class="sr">${esc(m.ui.planVsSite)}</caption><thead><tr><th scope="col">${esc(m.ui.event)}</th><th scope="col">${esc(m.ui.bucketCol)}</th><th scope="col">${esc(m.html.detailsCol)}</th></tr></thead><tbody>${rows}</tbody></table></div>${changes}</div></details>`;
 }
@@ -204,7 +204,7 @@ function containersCard(ctx) {
   const c = m.ui.containers;
   const items = rows.map((r) => `<li>${code(r.id)}${plain(esc(c.script[r.script]))}<span>${esc(c.kinds[r.kind](r.by))}</span>${r.ran === false ? badge("broken", c.neverRan) : ""}${r.layer ? plain(`${esc(m.ui.layerCol)} ${code(r.layer)}`) : ""}${r.served ? plain(esc(r.served === "google" ? c.served.google : `${c.served.site} (${r.host})`)) : ""}${r.version ? plain(esc(c.version(r.version)), "mono") : ""}${r.bytes ? plain(esc(c.size(r.bytes)), "mono") : ""}${r.ms != null ? plain(esc(c.loadTime(r.ms))) : ""}${r.failed ? badge("broken", c.failed(r.failed)) : ""}${r.frame ? plain(esc(c.iframe(r.frame.origin, r.frame.party))) : ""}${r.environment ? badge("warning", c.environment(r.environment)) : ""}<span class="inv-n">${m.html.scope.pages(r.pages.length, bold(r.pages.length))}</span></li>`).join("");
   const ids = uniq(rows.map((r) => r.id));
-  return `<li><details class="card inv" id="inv-containers"><summary><span class="t">${esc(m.ui.containersTitle)}</span>${plain(n(ids.length))}<span class="inv-m">${esc(ids.slice(0, 3).join(", "))}${ids.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.containersIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
+  return `<li><details class="rcard inv" id="inv-containers"><summary><span class="t">${esc(m.ui.containersTitle)}</span>${plain(n(ids.length))}<span class="inv-m">${esc(ids.slice(0, 3).join(", "))}${ids.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.containersIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
 }
 
 /** The embedded widgets card: per third-party iframe, where it was embedded, its containers, its tracking and its dataLayer. Null when none. */
@@ -217,7 +217,7 @@ function widgetsCard(ctx) {
   const hits = (list) => (list.length ? list.map((e) => code(w.hits(e.platform, e.id, e.events))).join(" ") : `<span class="muted xs">${esc(w.none)}</span>`);
   const items = widgets.map((x) => {
     const events = x.pushes.events.map((e) => code(w.event(e.name, e.count))).join(" ");
-    return `<li><details class="card inv"><summary><code>${esc(x.origin)}</code>${plain(esc(w.pushes(x.pushes.total, x.pushes.consent)))}${x.unshared.length ? badge("info", `${m.ui.widgets.unshared}: ${x.unshared.length}`) : ""}</summary><div class="body"><ul class="inv-list">
+    return `<li><details class="rcard inv"><summary><code>${esc(x.origin)}</code>${plain(esc(w.pushes(x.pushes.total, x.pushes.consent)))}${x.unshared.length ? badge("info", `${m.ui.widgets.unshared}: ${x.unshared.length}`) : ""}</summary><div class="body"><ul class="inv-list">
 ${line(m.ui.embeddedCol, x.parents.map((p) => `${use("ui-page", 13)}<code>${esc(p)}</code>`).join(" ") || `<span class="muted xs">${esc(w.none)}</span>`)}
 ${line(w.containers, x.containers.length ? x.containers.map((c) => code(c.id)).join(" ") : `<span class="muted xs">${esc(w.none)}</span>`)}
 ${line(m.ui.ownCol, hits(x.own))}
@@ -225,7 +225,7 @@ ${line(m.ui.sharedCol, hits(x.shared))}
 ${line(m.ui.pushesCol, events || `<span class="muted xs">${esc(w.none)}</span>`)}
 ${x.unshared.length ? line(w.unshared, x.unshared.map(code).join(" ")) : ""}</ul></div></details></li>`;
   }).join("");
-  return `<li><details class="card inv" id="inv-widgets"><summary><span class="t">${esc(m.ui.widgetsTitle)}</span>${plain(n(widgets.length))}<span class="inv-m">${esc(widgets.slice(0, 3).map((x) => x.origin.replace(/^https?:\/\//, "")).join(", "))}${widgets.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.widgetsIntro)}</p><ul class="inv-rows">${items}</ul></div></details></li>`;
+  return `<li><details class="rcard inv" id="inv-widgets"><summary><span class="t">${esc(m.ui.widgetsTitle)}</span>${plain(n(widgets.length))}<span class="inv-m">${esc(widgets.slice(0, 3).map((x) => x.origin.replace(/^https?:\/\//, "")).join(", "))}${widgets.length > 3 ? " …" : ""}</span></summary><div class="body"><p class="xs muted">${esc(m.ui.widgetsIntro)}</p><ul class="inv-rows">${items}</ul></div></details></li>`;
 }
 
 /** The events iframes posted to the page and what the page did next, one line each. Null when there were none. */
@@ -238,7 +238,7 @@ function messagesCard(ctx) {
   const word = (x) => (x.outcome === "nothing" ? t.nothing : t[x.outcome](x.relay.kind, x.relay.name, x.relay.ms));
   const items = list.map((x) => `<li>${code(x.name)}<span class="inv-n">${esc(x.origin)}</span>${plain(esc(m.ui.party[x.party === "site" ? "first" : "third"]))}${x.outcome === "nothing" ? badge("info", word(x)) : plain(esc(word(x)))}<span class="inv-n">${esc(`${x.run.journeyId} · ${x.run.steps?.[x.step]?.label ?? x.step}`)}</span></li>`).join("");
   const silent = list.filter((x) => x.outcome === "nothing").length;
-  return `<li><details class="card inv" id="inv-messages"><summary><span class="t">${esc(m.ui.messagesTitle)}</span>${plain(n(list.length))}${silent ? badge("info", `${t.nothing.split(":")[0]}: ${silent}`) : ""}</summary><div class="body"><p class="xs muted">${esc(m.ui.messagesIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
+  return `<li><details class="rcard inv" id="inv-messages"><summary><span class="t">${esc(m.ui.messagesTitle)}</span>${plain(n(list.length))}${silent ? badge("info", `${t.nothing.split(":")[0]}: ${silent}`) : ""}</summary><div class="body"><p class="xs muted">${esc(m.ui.messagesIntro)}</p><ul class="inv-list">${items}</ul></div></details></li>`;
 }
 
 function inventorySection(ctx) {
@@ -253,13 +253,13 @@ function inventorySection(ctx) {
   const counts = (x) => `<span class="inv-m">${t.requests(x.requests, bold(x.requests))}</span><span class="inv-m">${t.pages(x.pages.size, bold(x.pages.size))}</span><span class="inv-m${x.cookies.length ? "" : " zero"}">${t.cookies(x.cookies.length, bold(x.cookies.length))}</span>`;
   const out = lines.map((x) => {
     const id = `inv-${safeKey(x.p)}`;
-    if (!x.seen) return `<li><div class="card inv-line" id="${id}" data-seen="no">${pchip(x.p)}${badge("info", m.html.checkedNotSeen)}</div></li>`;
+    if (!x.seen) return `<li><div class="rcard inv-line" id="${id}" data-seen="no">${pchip(x.p)}${badge("info", m.html.checkedNotSeen)}</div></li>`;
     const tid = (k) => `${id}-${k}`;
     const tab = (k, label, c, sel) => `<button type="button" role="tab" id="${tid(`${k}-tab`)}" aria-controls="${tid(k)}" aria-selected="${sel}">${esc(label)} ${n(c)}</button>`;
     const hosts = [...x.hosts].map(([h, v]) => `<li><code>${esc(h)}</code><span class="inv-n">${t.requests(v.n, bold(v.n))}</span>${v.first || v.third ? plain(esc(m.ui.party[v.first && v.third ? "both" : v.first ? "first" : "third"])) : ""}${[...v.types].map((ty) => plain(esc(ty), "mono")).join("")}</li>`).join("");
     const pages = [...x.pages].map(([pg, k]) => `<li>${use("ui-page", 13)}<code>${esc(pg)}</code><span class="inv-n">${t.requests(k, bold(k))}</span></li>`).join("");
     const none = `<p class="muted xs">${esc(t.noneSeen)}</p>`;
-    return `<li><details class="card inv" id="${id}" data-seen="yes"><summary>${pchip(x.p)}${sevchip("ok", esc(t.seen))}${counts(x)}</summary><div class="body">
+    return `<li><details class="rcard inv" id="${id}" data-seen="yes"><summary>${pchip(x.p)}${sevchip("ok", esc(t.seen))}${counts(x)}</summary><div class="body">
 <div class="tabs" data-tabs><div role="tablist">${tab("hosts", t.hosts, x.hosts.size, "true")}${tab("pages", m.ui.pagesCol, x.pages.size, "false")}${tab("cookies", m.ui.cookiesCol, x.cookies.length, "false")}</div>
 <div role="tabpanel" id="${tid("hosts")}" data-label="${esc(t.hosts)}">${hosts ? `<ul class="inv-list">${hosts}</ul>` : none}</div>
 <div role="tabpanel" id="${tid("pages")}" data-label="${esc(m.ui.pagesCol)}">${pages ? `<ul class="inv-list">${pages}</ul>` : none}</div>
@@ -270,7 +270,7 @@ function inventorySection(ctx) {
   if (containers) out.unshift(containers);
   const skippedN = skipped.reduce((a, [, k]) => a + k, 0);
   if (skipped.length) {
-    out.push(`<li><details class="card inv" id="inv-out-of-scope"><summary><span class="t">${esc(m.ui.outOfScopeStatus)}</span>${plain(t.requests(skippedN, bold(skippedN)))}<span class="inv-m">${esc(skipped.slice(0, 3).map(([v]) => v).join(", "))}${skipped.length > 3 ? " …" : ""}</span></summary><div class="body"><ul class="inv-list">${skipped.map(([v, k]) => `<li><span>${esc(v)}</span>${badge("muted", m.ui.outOfScopeStatus)}<span class="inv-n">${t.requests(k, bold(k))}</span></li>`).join("")}</ul></div></details></li>`);
+    out.push(`<li><details class="rcard inv" id="inv-out-of-scope"><summary><span class="t">${esc(m.ui.outOfScopeStatus)}</span>${plain(t.requests(skippedN, bold(skippedN)))}<span class="inv-m">${esc(skipped.slice(0, 3).map(([v]) => v).join(", "))}${skipped.length > 3 ? " …" : ""}</span></summary><div class="body"><ul class="inv-list">${skipped.map(([v, k]) => `<li><span>${esc(v)}</span>${badge("muted", m.ui.outOfScopeStatus)}<span class="inv-n">${t.requests(k, bold(k))}</span></li>`).join("")}</ul></div></details></li>`);
   }
   const silent = lines.filter((x) => !x.seen).map((x) => platformLabel(x.p));
   const notes = [
@@ -342,7 +342,7 @@ function timingCard(ctx) {
   const range = meds.length ? (Math.min(...meds) === Math.max(...meds) ? `${Math.min(...meds)}` : `${Math.min(...meds)}–${Math.max(...meds)}`) : "";
   const rows = t.map((r) => `<tr><th scope="row">${vchip(r.viewport, r.journey)}</th><td class="num"><span class="tm-d"><span class="tm-bar ${safeKey(r.viewport)}" style="width:${Math.max(4, Math.round((r.durationMs / maxD) * 100))}%"></span></span>${secs(r.durationMs)}</td><td class="num">${ms(r.medianFirstHitMs)}</td><td>${r.slowest?.[0] ? `<span class="tm-s">${pchip(r.slowest[0].platform)}${code(r.slowest[0].event)}<span class="muted xs">${esc(m.ui.step)} ${esc(r.slowest[0].step)} · ${ms(r.slowest[0].ms)}</span></span>` : "–"}</td></tr>`).join("");
   const summary = `<span class="t">${esc(m.html.timing)}</span>${plain(`${use("ui-clock", 13)}<b>${(total / 1000).toFixed(1)}</b> s`, "mono")}${range ? plain(m.html.scope.firstHit(`<b>${range}</b>`)) : ""}`;
-  return `<details class="card" id="run-timing"><summary>${summary}</summary><div class="body">
+  return `<details class="rcard" id="run-timing"><summary>${summary}</summary><div class="body">
 <div class="tscroll"><table class="tbl tm-tbl"><caption class="sr">${esc(m.html.timing)}</caption><thead><tr><th scope="col">${esc(m.ui.journey)}</th><th scope="col" class="num">${esc(m.html.duration)}</th><th scope="col" class="num">${esc(m.html.medianFirstHit)}</th><th scope="col">${esc(m.html.slowestHit)}</th></tr></thead><tbody>${rows}</tbody></table></div></div></details>`;
 }
 
@@ -385,7 +385,7 @@ function trendCard(ctx) {
   const list = (items, meta) => `<ul class="tr-list">${items.map((e) => `<li>${badge(e.severity, m.severity[e.severity])} <span>${historyLine(ctx, e)} <span class="muted">· ${esc(meta(e))}</span></span></li>`).join("")}</ul>`;
   const flapping = t.flapping?.length ? `<h3 class="tr-h">${esc(m.html.flapping)}</h3>${list(t.flapping, (e) => m.html.seenIn(e.seenIn, t.runs))}` : "";
   const open = t.openLongest?.length ? `<h3 class="tr-h">${esc(m.html.openLongest)}</h3>${list(t.openLongest, (e) => m.html.openSince(dateOnly(e.openSince), e.runsOpen, e.places.length))}` : "";
-  return `<details class="card" id="trend"><summary>${summary}</summary><div class="body tr-body">
+  return `<details class="rcard" id="trend"><summary>${summary}</summary><div class="body tr-body">
 <div class="tr-chart">${sparklineSvg(m, t)}${legend}${direction}${diff}</div>
 ${runsTable}${flapping}${open}</div></details>`;
 }
