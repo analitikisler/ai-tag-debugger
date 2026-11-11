@@ -81,8 +81,9 @@ function costText(ctx, g) {
     case "before_consent": return t.beforeConsent(ev);
     case "after_reject": return t.afterReject(ev);
     case "duplicate": {
-      // The count is only in the finding's sentence ("sent 2 times"); the quoted event name may hold digits of its own.
-      const n = Number(String(g.row?.detail ?? "").replace(/"[^"]*"/g, "").match(/\d+/)?.[0]) || null;
+      // A capture from before the finding carried its count has it only in the sentence ("sent 2 times"); the quoted
+      // event name may hold digits of its own.
+      const n = g.row?.sends ?? (Number(String(g.row?.detail ?? "").replace(/"[^"]*"/g, "").match(/\d+/)?.[0]) || null);
       return t.duplicate(ev, n);
     }
     case "missing_event": return t.missingEvent(ev);

@@ -52,10 +52,10 @@ export function savedSteps({ site, runs }) {
  * the journey on it, the newest completed run on another viewport is used, since most sites take the
  * same path on both. Runs that did not complete the journey are skipped, since their steps led nowhere.
  */
-export async function lastSteps(dataDir, site, { journeyId, viewport }) {
+export async function lastSteps(dataDir, site, { journeyId, viewport }, read = stepsReader(dataDir, site)) {
   let other = null;
-  for (const runId of (await listRunIds(dataDir, site)).reverse()) {
-    const saved = await readFile(path.join(runsDir(dataDir, site), runId, STEPS_FILE), "utf8").then(JSON.parse).catch(() => null);
+  for (const runId of (await read.ids()).reverse()) {
+    const saved = await read.steps(runId);
     const done = (saved?.journeys ?? []).filter((j) => j.id === journeyId && !j.incomplete && (j.steps?.length || j.start));
     const pick = (j) => ({ runId, viewport: j.viewport, start: j.start, steps: j.steps ?? [] });
     const same = done.find((j) => j.viewport === viewport);
@@ -63,6 +63,22 @@ export async function lastSteps(dataDir, site, { journeyId, viewport }) {
     if (done.length && !other) other = pick(done[0]);
   }
   return other;
+}
+
+/**
+ * Reads a site's run IDs and each run's steps.json at most once. An audit asks lastSteps for every journey and
+ * viewport; with one reader between them the runs folder is listed once and no file is parsed twice.
+ */
+export function stepsReader(dataDir, site) {
+  let ids = null;
+  const files = new Map();
+  return {
+    ids: async () => [...(ids ??= await listRunIds(dataDir, site))],
+    steps(runId) {
+      if (!files.has(runId)) files.set(runId, readFile(path.join(runsDir(dataDir, site), runId, STEPS_FILE), "utf8").then(JSON.parse).catch(() => null));
+      return files.get(runId);
+    },
+  };
 }
 
 /**

@@ -6,14 +6,14 @@ import { validatePlan } from "./schema.js";
 
 /**
  * Saves a plan (measurement-plan.json and plan.html) in a new aitd/<domain>/plans/<id>/ folder and returns where.
- * The plan is checked first, so nothing a later run would refuse gets saved.
+ * The plan is checked first, so nothing a later run would refuse gets saved. lang: the language of plan.html.
  */
-export async function savePlan(plan, { dataDir, site, now, branding = true } = {}) {
+export async function savePlan(plan, { dataDir, site, now, branding = true, lang = "en" } = {}) {
   validatePlan(plan);
   const { id, dir } = await newPlanDir(dataDir, site, now);
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, PLAN_FILE);
   await writeFile(file, `${JSON.stringify(plan, null, 2)}\n`);
-  await writeFile(path.join(dir, PLAN_HTML_FILE), renderPlanHtml(plan, { id, generatedAt: (now ?? new Date()).toISOString().slice(0, 16).replace("T", " "), branding }));
+  await writeFile(path.join(dir, PLAN_HTML_FILE), renderPlanHtml(plan, { id, generatedAt: (now ?? new Date()).toISOString().slice(0, 16).replace("T", " "), branding, lang }));
   return { id, dir, file };
 }

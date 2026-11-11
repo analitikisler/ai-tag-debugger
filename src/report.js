@@ -343,7 +343,9 @@ function mdPassed(m, runs, findings, metrics, planCheck) {
     const purchase = p.shared.find((s) => s.event === "purchase" && !s.mismatch.length && Object.values(s.platforms).every((x) => x.value !== null));
     if (purchase) items.push(m.ui.md.parityOk(Object.keys(purchase.platforms).map((k) => mdText(platformLabel(k))).join(" & "), mdPlace({ journey: p.journey, viewport: p.viewport })));
   }
-  if (runs.some((r) => r.hits?.length) && !findings.some((f) => String(f.check).startsWith("pii"))) items.push(m.ui.md.noPii);
+  // The findings can be a filtered list (--events), so the hits themselves are asked too.
+  const plainUserData = runs.some((r) => (r.hits ?? []).some((h) => h.userData?.plain?.length));
+  if (runs.some((r) => r.hits?.length) && !plainUserData && !findings.some((f) => String(f.check).startsWith("pii"))) items.push(m.ui.md.noPii);
   return [`## ${m.ui.md.whatPassed}`, "", ...(items.length ? items.slice(0, 10).map((i) => `- ${i}`) : [m.ui.nothing]), ""];
 }
 

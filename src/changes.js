@@ -59,12 +59,14 @@ const HINT_SCAN = 10;
  */
 export async function routeHints(dataDir, site) {
   const hints = new Map();
-  let before = null;
-  for (let i = 0; i < HINT_SCAN; i++) {
-    const prev = await previousRun(dataDir, site, before);
-    if (!prev) break;
-    for (const [k, r] of routes(prev.capture?.runs, true)) if (!hints.has(k)) hints.set(k, { goal: r.goal, pages: r.pages });
-    before = prev.id;
+  let read = 0;
+  // The folder is listed once and only each run's capture is read, newest first, up to HINT_SCAN runs that have one.
+  for (const id of (await listRunIds(dataDir, site)).reverse()) {
+    if (read >= HINT_SCAN) break;
+    const capture = await readJson(path.join(runsDir(dataDir, site), id, "capture.json"));
+    if (!capture) continue;
+    read += 1;
+    for (const [k, r] of routes(capture.runs, true)) if (!hints.has(k)) hints.set(k, { goal: r.goal, pages: r.pages });
   }
   return hints;
 }

@@ -294,6 +294,8 @@ export function checkRun(plan, run, { lang = "en" } = {}) {
       platform: hits[0].platform,
       event: hits[0].name,
       step: stepLabel(hits[0].step),
+      // The count the sentence names, so the reports show the same number without counting again.
+      sends,
       detail: d.duplicate(hits[0].name, sends),
     });
   }

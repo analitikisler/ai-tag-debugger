@@ -80,10 +80,14 @@ function looksHashed(value) {
 const marker = (value) => `[redacted: ${String(value).length} chars, ${looksHashed(value) ? "looks hashed" : "plain"}]`;
 const emptyFound = () => ({ fields: [], plain: [] });
 
+// A GA4 event parameter with one of these names is nearly always the page's own data (the shop's country, a store's
+// city). It is still redacted, since it could be a visitor's, but it is not reported as user data sent in plain text.
+const PAGE_GEO = /^epn?\.(country|city|region|zip|postal_code|st|ct|zp)$/i;
+
 /** Collects what was redacted: { fields: keys, plain: keys whose value was not hashed }. */
 function note(found, key, value) {
   found.fields.push(key);
-  if (!looksHashed(value)) found.plain.push(key);
+  if (!looksHashed(value) && !PAGE_GEO.test(key)) found.plain.push(key);
   return marker(value);
 }
 
@@ -147,6 +151,41 @@ function redactJson(value, path, found, isKey, site = null) {
 
 // "key": "value" and "key": 123 pairs, for JSON cut at the size limit.
 const PAIR = /"([^"\\]{1,64})"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)/g;
+// An email address as a string anywhere in the text, such as an item of an array.
+const EMAIL_LITERAL = /"([^"\\\s@]+@[^"\\\s@]+\.[^"\\\s@]+)"/g;
+// The start of an object that holds only user data, whatever its keys are called.
+const USER_OBJECT_START = /"(user_data|user_provided_data|enhanced_conversion_data)"\s*:\s*\{/g;
+
+/** Where the object that opens at `from` (the index of its brace) ends, or the text's end when the cut took its close. */
+function objectEnd(text, from) {
+  let depth = 0;
+  let inString = false;
+  for (let i = from; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}" && --depth === 0) return i + 1;
+  }
+  return text.length;
+}
+
+/** JSON that no longer parses because it was cut at the size limit: every value under a user data object is redacted, as in whole JSON. */
+function redactUserObjects(text, found) {
+  let out = "";
+  let at = 0;
+  for (const m of text.matchAll(USER_OBJECT_START)) {
+    if (m.index < at) continue; // inside an object already handled
+    const open = m.index + m[0].length - 1;
+    const end = objectEnd(text, open);
+    out += text.slice(at, open) + text.slice(open, end).replace(PAIR, (all, k, sep, raw) => `"${k}"${sep}"${note(found, `${m[1]}.${k}`, raw.startsWith('"') ? raw.slice(1, -1) : raw)}"`);
+    at = end;
+  }
+  return out + text.slice(at);
+}
+
 // A string value the cut left open at the very end.
 const OPEN_VALUE = /("(?:[^"\\]{1,64})"\s*:\s*)"(?:[^"\\]|\\.)*$/;
 
@@ -178,11 +217,13 @@ export function redactBody(body, found = emptyFound()) {
       return { text: JSON.stringify(redactJson(JSON.parse(trimmed), "", found, isUserDataKey)), ...found };
     } catch {
       // Cut at the size limit: redact pairs by name or email-like value, and drop a value left open at the end.
-      const redacted = text
+      const redacted = redactUserObjects(text, found)
         .replace(PAIR, (all, k, sep, raw) => {
           const v = raw.startsWith('"') ? raw.slice(1, -1) : raw;
+          if (v.startsWith("[redacted: ")) return all; // already done, under a user data object
           return isUserDataKey(k) || isEmail(v) ? `"${k}"${sep}"${note(found, k, v)}"` : all;
         })
+        .replace(EMAIL_LITERAL, (all, v) => (isEmail(v) ? `"${note(found, "(value)", v)}"` : all))
         .replace(OPEN_VALUE, '$1"[cut]');
       return { text: redacted, ...found };
     }

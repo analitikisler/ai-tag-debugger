@@ -25,7 +25,7 @@ test("the demo's scorecard shows the score, the verdict, the shared headline and
   assert.deepEqual(costs(html), [
     { sev: "broken", href: "f-ga4-purchase-missing_params", points: 60, what: "<code>purchase</code> sent without <code>value</code>, <code>currency</code>" },
     { sev: "risk", href: "f-meta-pageview-before_consent", points: 10, what: "<code>PageView</code> sent before consent" },
-    { sev: "warning", href: "f-ga4-add_to_cart-duplicate", points: 5, what: "<code>add_to_cart</code> sent 2 times per click" },
+    { sev: "warning", href: "f-ga4-add_to_cart-duplicate", points: 5, what: "<code>add_to_cart</code> sent 2 times per action" },
   ]);
   const lines = strip(html);
   assert.match(lines, /<span class="pl"><span class="chip chip-plat ga4">GA4<\/span><span class="chip chip-plat meta">Meta<\/span><\/span><span class="sr"> · <\/span><span class="wh"><span class="chip chip-vp mobile">checkout · mobile<\/span><\/span>/);
@@ -76,7 +76,7 @@ test("the Summary reads in Turkish", () => {
   assert.match(html, /aria-label="Puan 100 üzerinden 25, sonuç: Kaldı"/);
   assert.match(html, /<\/svg>Kaldı<\/p>\n<p class="sc-head">Purchase izlemesi bozuk \(mobile\)\.<\/p>/);
   assert.equal(costs(html)[0].what, "<code>purchase</code> içinde <code>value</code>, <code>currency</code> yok");
-  assert.equal(costs(html)[2].what, "<code>add_to_cart</code> tıklama başına 2 kez gönderildi");
+  assert.equal(costs(html)[2].what, "<code>add_to_cart</code> tek işlemde 2 kez gönderildi");
   assert.deepEqual(Object.values(chips(html)).map((c) => `${c.count} ${c.word}`), ["2 Bozuk", "1 Risk", "1 Uyarı", "0 Bilgi", "5 Sorunsuz"]);
   assert.match(html, /aria-label="Bu çalıştırma hakkında"/);
   assert.match(html, /<span class="sub">Görülen: 2 \/ 4<\/span>/);

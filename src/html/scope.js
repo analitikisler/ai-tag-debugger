@@ -323,7 +323,7 @@ function runFacts(ctx) {
     fact(m.ui.runPlan, planBits),
     fact(m.ui.consent, consent),
     fact(m.html.campaignCheck, runs.some((r) => r.landing) ? CAMPAIGN_PARAMS.map(code).join("") : dash),
-    fact(m.ui.runLanguage, plain(esc(m.name))),
+    fact(m.ui.runLanguage, plain(esc(m.nativeName))),
     fact(t.runs, runs.length ? `${runs.map(runChip).join("")}<span class="xs muted">${esc(completed === runs.length ? m.html.runsAllCompleted(runs.length) : m.html.runsCompleted(completed, runs.length))}</span>` : dash, "wide"),
     skippedN ? fact(m.ui.outOfScopeStatus, `<span class="xs">${esc(m.ui.skippedLine(skipped.map(([v]) => v).join(", "), skippedN))}</span>`, "wide") : "",
     fact(t.files, files.map((f) => `<code class="file">${use("ui-page", 12)}${esc(f)}</code>`).join(""), "wide"),

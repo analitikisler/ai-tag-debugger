@@ -106,3 +106,11 @@ test("other Google tag pings are answered locally, never sent to the real accoun
 test("custom item parameters past the ninth, and values that start with a digit, decode whole", () => {
   assert.deepEqual(decodeGa4Item("nmShoe~k0size~v042~k10fit~v10XL").custom, [["size", "42"], ["fit", "XL"]]);
 });
+
+test("a parameter tip is the one the hit's own platform means", () => {
+  assert.match(paramTip("v", "en", "ga4"), /GA4/);
+  assert.equal(paramTip("v", "en", "meta"), null);
+  assert.equal(paramTip("tid", "en", "pinterest"), null);
+  assert.match(paramTip("gcs", "en", "google_ads"), /Consent Mode/);
+  assert.equal(paramTip("id", "en", "meta"), "Meta Pixel ID.");
+});

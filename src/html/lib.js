@@ -207,8 +207,25 @@ function stepTitle(run, step) {
 
 /** A run's step: j<run index>-s<step index>. The step index is step.index, not its position in the list. */
 const stepAnchor = (ri, si) => `j${ri}-s${si}`;
+// Per run: step index -> its hits in firing order, built once. Every section asks for a step's hits many times.
+const stepHitsCache = new WeakMap();
 /** A step's hits in firing order: the order that numbers them in hit ids. */
-const hitsOf = (run, si) => (run.hits ?? []).filter((h) => h.step === si).sort((a, b) => a.t - b.t);
+function hitsOf(run, si) {
+  const hits = run.hits ?? [];
+  let index = stepHitsCache.get(run);
+  if (!index || index.hits !== hits || index.size !== hits.length) {
+    const byStep = new Map();
+    for (const h of hits) {
+      if (!byStep.has(h.step)) byStep.set(h.step, []);
+      byStep.get(h.step).push(h);
+    }
+    for (const list of byStep.values()) list.sort((a, b) => a.t - b.t);
+    index = { hits, size: hits.length, byStep };
+    stepHitsCache.set(run, index);
+  }
+  // A copy, so a caller that sorts or filters in place cannot change what the next one gets.
+  return [...(index.byStep.get(si) ?? [])];
+}
 /** A step's dataLayer pushes in time order: the order that numbers them in push ids. */
 const pushesOf = (run, si) => (run.dataLayerLog ?? []).filter((e) => e.step === si).sort((a, b) => a.t - b.t);
 /** A step's network requests in capture order: the order that numbers them in request ids. */

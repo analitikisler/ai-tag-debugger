@@ -76,6 +76,7 @@ Options:
   --topic <name>       Only plan one kind of event: custom-events, ecommerce, forms or consent
   --headed             Show the browser window
   --connect <url>      Explore in your own Chrome, started with a debugging port
+  --lang <code>        Language of plan.html: ${Object.keys(LANGUAGES).join(" or ")} (default en)
 
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 

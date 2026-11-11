@@ -19,7 +19,7 @@ import { createProvider, alsoSet } from "./providers.js";
 import { filterFindings, JOURNEY_PRESETS, planRun } from "./journeys.js";
 import { resolveProviders } from "./parsers.js";
 import { annotateFindings } from "./gtm.js";
-import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, writeSavedSite } from "./replay.js";
+import { lastSteps, SAVED_SITE_FILE, savedSteps, STEPS_FILE, stepsReader, writeSavedSite } from "./replay.js";
 import { runConsentScenarios } from "./consent.js";
 import { validateConfig, validatePlan } from "./schema.js";
 import { applyBaseline } from "./baseline.js";
@@ -162,10 +162,11 @@ export async function runAudit(opts) {
   const replayed = new Map();
   if (opts.scripted) {
     const unscripted = [];
+    const read = stepsReader(opts.dataDir, config.site);
     for (const j of journeys.filter((j) => !j.steps?.length && !j.incomplete)) {
       for (const viewport of viewports) {
         // A saved-site replay stays offline: it never borrows steps from the runs folder.
-        const last = opts.replaySite ? null : await lastSteps(opts.dataDir, config.site, { journeyId: j.id, viewport }).catch(() => null);
+        const last = opts.replaySite ? null : await lastSteps(opts.dataDir, config.site, { journeyId: j.id, viewport }, read).catch(() => null);
         if (last) replayed.set(`${j.id}|${viewport}`, last);
         else if (!unscripted.includes(j.id)) unscripted.push(j.id);
       }

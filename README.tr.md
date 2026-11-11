@@ -612,7 +612,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--concurrency <n>` | run | Aynı anda kaç yolculuğun çalışacağı, her biri kendi tarayıcısında: `1` (varsayılan) ile `8` arası. Yan yana çalışırken her yolculuğun günlük satırları `[yolculuk/görünüm]` ile başlar ve `--headed` o kadar tarayıcı penceresi açar. Ayar dosyasındaki `concurrency` ile aynıdır. |
 | `--platforms <liste>` | run | Kontrol edilecek platformlar, örneğin `ga4,meta`. Eski adı `--providers` da çalışmaya devam eder. |
 | `--max-steps <n>` | plan, run | Yolculuk başına en fazla yapay zekâ adımı (`plan` için varsayılan 25). |
-| `--lang <kod>` | run, history | Rapor dili: `en` ya da `tr`. `history` için eğilim satırlarının dili. |
+| `--lang <kod>` | plan, run, history | Rapor dili: `en` ya da `tr`. `plan` (ve `plan import`) için `plan.html` dosyasının dili; `history` için eğilim satırlarının dili. |
 | `--fail-on <düzey>` | run | Bu düzeyde çıkış kodu 1 olur: `broken` (varsayılan), `risk`, `warning` ya da `never`. |
 | `--baseline <dosya>` | run | Kabul edilen bulguların dosyası. Yine raporlanırlar, ama `--fail-on` için sayılmazlar. Bkz. [Bilinen bulguları kabul edin](#bilinen-bulguları-kabul-edin). |
 | `--update-baseline` | run | Bu çalıştırmanın her bulgusunu çalıştırmadan sonra temel dosyaya yaz; dosya yoksa oluştur. |

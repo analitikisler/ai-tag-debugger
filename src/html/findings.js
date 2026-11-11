@@ -115,7 +115,8 @@ function titleOf(ctx, f) {
     const params = paramsOf(ctx, f);
     if (params?.length) return T.missing_params(f.event, params);
   } else if (f.check === "duplicate" && f.event) {
-    const sends = sendsOf(ctx.runs, f);
+    // The check's own count; an older capture's finding has none, so its hits are counted.
+    const sends = f.sends ?? sendsOf(ctx.runs, f);
     if (sends > 1) return T.duplicate(f.event, sends);
   } else if (["before_consent", "after_reject", "missing_event"].includes(f.check) && f.event) return T[f.check](f.event);
   else if (f.check === "consent_default_missing") return T.consent_default_missing();

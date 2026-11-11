@@ -2,6 +2,7 @@ import { VERSION } from "./report-shared.js";
 import { TOKENS, COMPONENTS, PRODUCT } from "./html/css.js";
 import { chip, escapeHtml, logo, plat, platformLabel, sprite } from "./html/lib.js";
 import { LOGOS } from "./brand.js";
+import { messages } from "./i18n.js";
 
 const e = escapeHtml;
 const text = (v) => (v === undefined || v === null || v === "" ? `<span class="muted">–</span>` : e(v));
@@ -64,56 +65,57 @@ html[data-theme="dark"] .logo .l-dark{display:inline}
 
 const flag = (label, cls = "") => `<span class="chip ${cls}">${e(label)}</span>`;
 
-function paramsTable(event) {
+function paramsTable(t, event) {
   const params = Object.entries(event.parameters ?? {});
-  if (!params.length) return `<p class="muted xs">No parameters.</p>`;
+  if (!params.length) return `<p class="muted xs">${e(t.noParameters)}</p>`;
   const required = new Set(event.required_params ?? []);
   const rows = params
-    .map(([name, p]) => `<tr><td><code>${e(name)}</code>${p?.custom ? ` ${flag("custom")}` : ""}</td><td>${required.has(name) ? flag("required", "req") : `<span class="muted">optional</span>`}</td><td class="mono">${text(p?.example)}</td><td>${text(p?.description)}</td></tr>`)
+    .map(([name, p]) => `<tr><td><code>${e(name)}</code>${p?.custom ? ` ${flag(t.custom)}` : ""}</td><td>${required.has(name) ? flag(t.required, "req") : `<span class="muted">${e(t.optional)}</span>`}</td><td class="mono">${text(p?.example)}</td><td>${text(p?.description)}</td></tr>`)
     .join("");
-  return `<div class="tscroll"><table class="tbl"><thead><tr><th>Parameter</th><th>Required</th><th>Example</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="tscroll"><table class="tbl"><thead><tr><th>${e(t.cols.parameter)}</th><th>${e(t.cols.required)}</th><th>${e(t.cols.example)}</th><th>${e(t.cols.description)}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function eventCard(event) {
+function eventCard(t, event) {
   const trigger = event.trigger ?? {};
   const platform = event.platform ?? "ga4";
   return `<div class="pl-event">
-<div class="pl-head">${chip("plat", platform, plat(platform, 13, platformLabel(platform)))}<code>${e(event.name)}</code>${flag(event.custom ? "custom event" : "standard event", event.custom ? "on" : "")}</div>
+<div class="pl-head">${chip("plat", platform, plat(platform, 13, platformLabel(platform)))}<code>${e(event.name)}</code>${flag(event.custom ? t.customEvent : t.standardEvent, event.custom ? "on" : "")}</div>
 <p class="pl-desc">${text(event.description)}</p>
-<p class="pl-trigger"><b>Trigger</b> · page: ${text(trigger.page)} · element: ${text(trigger.element)}</p>
-${paramsTable(event)}
+<p class="pl-trigger"><b>${e(t.trigger)}</b> · ${e(t.page)}: ${text(trigger.page)} · ${e(t.element)}: ${text(trigger.element)}</p>
+${paramsTable(t, event)}
 </div>`;
 }
 
-function userPropertiesCard(props) {
+function userPropertiesCard(t, props) {
   const body = props.length
-    ? `<div class="pl-card-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Name</th><th>Example</th><th>Description</th></tr></thead><tbody>${props
+    ? `<div class="pl-card-body"><div class="tscroll"><table class="tbl"><thead><tr><th>${e(t.cols.name)}</th><th>${e(t.cols.example)}</th><th>${e(t.cols.description)}</th></tr></thead><tbody>${props
         .map((p) => (typeof p === "string" ? { name: p } : p))
         .map((p) => `<tr><td><code>${e(p.name)}</code></td><td class="mono">${text(p.example)}</td><td>${text(p.description)}</td></tr>`)
         .join("")}</tbody></table></div></div>`
-    : `<p class="pl-empty muted xs">No user properties.</p>`;
-  return `<section class="card"><div class="pl-card-h"><h2>User properties</h2></div>${body}</section>`;
+    : `<p class="pl-empty muted xs">${e(t.noUserProperties)}</p>`;
+  return `<section class="card"><div class="pl-card-h"><h2>${e(t.userProperties)}</h2></div>${body}</section>`;
 }
 
-/** A single self-contained, readable page for a measurement plan. Respects branding false like the report. */
-export function renderPlanHtml(plan, { id = "", generatedAt = "", branding = true } = {}) {
+/** A single self-contained, readable page for a measurement plan, in the language asked for. Respects branding false like the report. */
+export function renderPlanHtml(plan, { id = "", generatedAt = "", branding = true, lang = "en" } = {}) {
+  const t = messages(lang).ui.planPage;
   const events = plan.events ?? [];
   const custom = events.filter((ev) => ev.custom).length;
-  const title = `Measurement plan${plan.site ? `: ${plan.site}` : ""}`;
-  const meta = [id && `Plan ${id}`, generatedAt, `${events.length} events (${custom} custom)`, `ai tag debugger ${VERSION}`].filter(Boolean).join(" · ");
-  const consent = plan.consent_mode ? flag("Consent mode on", "on") : flag("Consent mode off");
+  const title = t.title(plan.site);
+  const meta = [id && t.planId(id), generatedAt, t.eventCount(events.length, custom), `ai tag debugger ${VERSION}`].filter(Boolean).join(" · ");
+  const consent = plan.consent_mode ? flag(t.consentOn, "on") : flag(t.consentOff);
   const footer = branding
     ? `<a href="https://analitikisler.com" class="logo-link" aria-label="analitikisler.com" rel="noopener noreferrer">${logo("master", "Analitik İşler", 24, "logo-s")}</a><div class="f-links xs"><a href="https://analitikisler.com" rel="noopener noreferrer">analitikisler.com</a><a href="https://github.com/analitikisler/ai-tag-debugger" rel="noopener noreferrer">GitHub</a></div><p class="f-meta xs muted">v${VERSION}</p>`
     : `<p class="xs">ai tag debugger</p><p class="f-meta xs muted">v${VERSION}</p>`;
-  const body = `<header class="top"><span class="brand">${logo("atd-lockup", "ai tag debugger", 22, "l-lockup")}${logo("mark", "ai tag debugger", 24, "l-mark")}</span><span class="top-site"><span class="eyebrow">Measurement plan</span>${plan.site ? `<b>${e(plan.site)}</b>` : ""}</span><div class="top-end">${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>by</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : ""}</div></header>
+  const body = `<header class="top"><span class="brand">${logo("atd-lockup", "ai tag debugger", 22, "l-lockup")}${logo("mark", "ai tag debugger", 24, "l-mark")}</span><span class="top-site"><span class="eyebrow">${e(t.eyebrow)}</span>${plan.site ? `<b>${e(plan.site)}</b>` : ""}</span><div class="top-end">${branding ? `<a href="https://analitikisler.com" class="byline" rel="noopener noreferrer"><span>by</span>${logo("master", "Analitik İşler", 16, "logo-h")}</a>` : ""}</div></header>
 <main class="plan">
-<div class="plan-title"><div class="eyebrow">Measurement plan</div><h1>${e(title)}</h1><div class="muted xs">${e(meta)}</div><div class="chips">${consent}</div></div>
-<section class="card"><div class="pl-card-h"><h2>Events</h2><p class="pl-card-d">What should be tracked, where it fires and which parameters it carries.</p></div>${events.length ? events.map(eventCard).join("") : `<p class="pl-empty muted xs">No events.</p>`}</section>
-${userPropertiesCard(plan.user_properties ?? [])}
+<div class="plan-title"><div class="eyebrow">${e(t.eyebrow)}</div><h1>${e(title)}</h1><div class="muted xs">${e(meta)}</div><div class="chips">${consent}</div></div>
+<section class="card"><div class="pl-card-h"><h2>${e(t.events)}</h2><p class="pl-card-d">${e(t.eventsLead)}</p></div>${events.length ? events.map((ev) => eventCard(t, ev)).join("") : `<p class="pl-empty muted xs">${e(t.noEvents)}</p>`}</section>
+${userPropertiesCard(t, plan.user_properties ?? [])}
 </main>
 <footer class="footer">${footer}</footer>`;
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="${e(lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${e(title)}</title><link rel="icon" type="image/svg+xml" href="${LOGOS["favicon-light"]}">
 <style>${TOKENS}\n${COMPONENTS}\n${PRODUCT}\n${PLAN_CSS}</style></head><body>

@@ -156,3 +156,18 @@ test("user data in a multipart form body is redacted field by field", () => {
   assert.ok(!body.text.includes("a".repeat(64)) && !body.text.includes("jane@"));
   assert.match(body.text, /name="ev"\r\n\r\nPurchase\r\n/);
 });
+
+test("JSON cut at the size limit still loses emails in arrays and everything under a user data object", () => {
+  const cut = '{"event":"x","emails":["me@x.com","other@y.co"],"user_data":{"sha256_first_name":"abc","zip":"34000"},"properties":{"value":10,"note":"unfinished';
+  const body = redactBody(cut);
+  assert.deepEqual(body.fields, ["user_data.sha256_first_name", "user_data.zip", "(value)", "(value)"]);
+  for (const kept of ["me@x.com", "other@y.co", '"abc"', "34000"]) assert.ok(!body.text.includes(kept), kept);
+  assert.match(body.text, /"value":10/);
+});
+
+test("a GA4 event parameter named like page data is redacted but not reported as plain user data", () => {
+  const found = { fields: [], plain: [] };
+  const out = redactParams({ "ep.country": "TR", "ep.email": "jane@gmail.com" }, found);
+  assert.match(out["ep.country"], /^\[redacted/);
+  assert.deepEqual(found, { fields: ["ep.country", "ep.email"], plain: ["ep.email"] });
+});

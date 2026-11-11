@@ -612,7 +612,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--concurrency <n>` | run | How many journeys to run at once, each in its own browser: `1` (default) to `8`. Side by side, each journey's log lines start with `[journey/viewport]`, and `--headed` opens that many browser windows. Same as `concurrency` in the config. |
 | `--platforms <list>` | run | Platforms to check, e.g. `ga4,meta`. `--providers` is its old name and still works. |
 | `--max-steps <n>` | plan, run | The most AI steps per journey (default 25 for `plan`). |
-| `--lang <code>` | run, history | Report language: `en` or `tr`. For `history`, the language of the trend lines. |
+| `--lang <code>` | plan, run, history | Report language: `en` or `tr`. For `plan` (and `plan import`), the language of `plan.html`; for `history`, the language of the trend lines. |
 | `--fail-on <level>` | run | Exit with 1 at this level: `broken` (default), `risk`, `warning` or `never`. |
 | `--baseline <file>` | run | A file of accepted findings. They are still reported, but don't count toward `--fail-on`. See [Accept known findings](#accept-known-findings). |
 | `--update-baseline` | run | Write every finding of this run into the baseline file after the run, creating it if needed. |

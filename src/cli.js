@@ -4,7 +4,7 @@ import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig, readJson, runAudit } from "./audit.js";
-import { messages } from "./i18n.js";
+import { LANGUAGES, messages } from "./i18n.js";
 import { helpText } from "./help.js";
 import { validatePlan } from "./schema.js";
 import { replaySavedSite, writeSavedSteps } from "./replay.js";
@@ -156,6 +156,8 @@ async function main(args = process.argv.slice(2)) {
     if (changed && !values.update) process.exitCode = 1;
     return;
   }
+  // plan.html is written in the language asked for; checked here so a typo stops before the site is explored.
+  if (command === "plan" && values.lang !== undefined && !LANGUAGES[values.lang]) throw new Error(`--lang must be one of ${Object.keys(LANGUAGES).join(", ")}.`);
   if (command === "plan" && positionals[1] === "list" && !values.help) {
     if (!values.site) throw new Error("plan list needs --site <url>: aitd plan list --site https://www.example.com");
     const ids = await listPlanIds(values["data-dir"] ?? DEFAULT_DATA_DIR, values.site);
@@ -182,7 +184,7 @@ async function main(args = process.argv.slice(2)) {
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
     const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], connect: values.connect, log: console.log });
-    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"], lang: values.lang });
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);
     console.log(`✓ Saved plan ${id}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties in ${rel.startsWith("..") ? dir : rel}`);
@@ -376,7 +378,7 @@ async function offerLearnedPlan(result, site, values) {
     if (!process.stdin.isTTY && !values.yes) console.log("Add --yes to save them as the plan, or draft a fuller one with: aitd plan --site " + site);
     return;
   }
-  const { id, dir } = await savePlan(plan, { dataDir, site, branding: !values["no-branding"] });
+  const { id, dir } = await savePlan(plan, { dataDir, site, branding: !values["no-branding"], lang: result.lang });
   const rel = path.relative(process.cwd(), dir);
   console.log(`✓ Saved plan ${id} in ${rel.startsWith("..") ? dir : rel}. Next runs can check against it with --against latest.`);
 }
@@ -458,7 +460,7 @@ async function planSheet(action, arg, values) {
     // A sheet has no place for the plan's own settings, so a site that turned Consent Mode checks off keeps them off.
     const previous = await resolvePlan("latest", { dataDir, site: values.site }).then((found) => readJson(found.file)).catch(() => null);
     if (previous?.consent_mode === false) plan.consent_mode = false;
-    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
+    const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"], lang: values.lang });
     console.log(`✓ Imported plan ${id}: ${plan.events.length} events and ${plan.user_properties.length} user properties in ${shown(dir)}`);
     return;
   }

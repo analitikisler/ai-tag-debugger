@@ -60,16 +60,16 @@ function pushIndex(run) {
 function pushesForHit(run, hit) {
   const pushes = pushIndex(run).get(hit.step)?.get(eventKey(hit.name)) ?? [];
   const key = eventKey(hit.name);
-  const twins = run.hits.filter((h) => h.step === hit.step && h.platform === hit.platform && eventKey(h.name) === key);
+  const twins = hitsOf(run, hit.step).filter((h) => h.platform === hit.platform && eventKey(h.name) === key);
   return twins.length > 1 && pushes.length === twins.length ? [pushes[twins.indexOf(hit)]] : pushes;
 }
 
 /* ---------- request parameters ---------- */
 
 /** Parameter rows with a glossary tip: the "?" shows the tip on hover and takes no focus; screen readers read the hidden span. */
-function paramRows(lang, entries) {
+function paramRows(lang, entries, platform) {
   return entries.map(([k, v]) => {
-    const tip = paramTip(k, lang);
+    const tip = paramTip(k, lang, platform);
     const isItem = /^pr\d+$/.test(k);
     return `<tr${isItem ? ' class="pr"' : ""}><th scope="row"><span class="pk">${esc(k)}</span>${tip ? `<span class="q" aria-hidden="true" data-tip="${esc(tip)}">?</span><span class="sr">${esc(tip)}</span>` : ""}</th><td>${isItem ? `<span class="muted">${esc(tip ?? "")}</span>` : esc(v)}</td></tr>`;
   }).join("");
@@ -189,9 +189,9 @@ function hitCard(ctx, t, rows, run, ri, step, hit, k) {
   const items = hit.items?.length ? hit.items.map(decodeGa4Item) : event.filter(([key]) => /^pr\d+$/.test(key)).map(([, v]) => decodeGa4Item(v));
   const missRows = missing.map((key) => `<tr class="jr-mr"><th scope="row"><span class="pk">${esc(key)}</span></th><td>${chip("sev", "broken", esc(m.ui.missing))}</td></tr>`).join("");
   const paramTable = event.length || missing.length
-    ? `<table class="tbl jr-kvt" aria-label="${esc(m.ui.eventParams)}"><tbody>${paramRows(lang, event)}${missRows}</tbody></table>`
+    ? `<table class="tbl jr-kvt" aria-label="${esc(m.ui.eventParams)}"><tbody>${paramRows(lang, event, hit.platform)}${missRows}</tbody></table>`
     : `<p class="muted xs">${esc(m.ui.noParameters)}</p>`;
-  const ctxTable = context.length ? `<details class="card jr-ctx"><summary><span class="t">${esc(m.ui.contextParams)} ${n(context.length)}</span></summary><div class="body"><table class="tbl jr-kvt" aria-label="${esc(m.ui.contextParams)}"><tbody>${paramRows(lang, context)}</tbody></table></div></details>` : "";
+  const ctxTable = context.length ? `<details class="card jr-ctx"><summary><span class="t">${esc(m.ui.contextParams)} ${n(context.length)}</span></summary><div class="body"><table class="tbl jr-kvt" aria-label="${esc(m.ui.contextParams)}"><tbody>${paramRows(lang, context, hit.platform)}</tbody></table></div></details>` : "";
   const pushes = pushesForHit(run, hit);
   const stepPushes = pushesOf(run, step.index);
   const stepCalls = requestsOf(run, step.index);

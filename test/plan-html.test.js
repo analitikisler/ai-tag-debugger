@@ -51,3 +51,11 @@ test("savePlan writes plan.html next to measurement-plan.json", async () => {
   assert.ok(html.includes("add_to_cart"));
   assert.ok(!html.includes("analitikisler.com"));
 });
+
+test("plan.html is written in the language asked for", () => {
+  const tr = renderPlanHtml(plan, { id: "2026-10-16_0905", lang: "tr" });
+  assert.match(tr, /<html lang="tr">/);
+  for (const s of ["Ölçümleme planı: https://shop.test", "Consent Mode açık", "özel olay", "zorunlu", "Kullanıcı özellikleri", "2 olay (1 özel)"]) assert.ok(tr.includes(s), `missing ${s}`);
+  for (const s of ["Measurement plan", "User properties", "standard event", "No parameters."]) assert.ok(!tr.includes(s), `still English: ${s}`);
+  assert.match(renderPlanHtml(plan), /<html lang="en">/);
+});
