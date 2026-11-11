@@ -136,6 +136,8 @@
   --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --color-risk: #965000;
+  --color-risk-soft: #f6eadb;
   --pattern-missing: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%228%22%20height%3D%228%22%3E%3Ccircle%20cx%3D%224%22%20cy%3D%224%22%20r%3D%222.2%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.3%22%2F%3E%3C%2Fsvg%3E");
 }
 @media (prefers-color-scheme: dark) {
@@ -212,6 +214,8 @@
     --font-grade: -25;
     --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.55);
     --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --color-risk: #f0a04b;
+    --color-risk-soft: #33230f;
   }
 }
 :root[data-theme="dark"], :root.dark {
@@ -287,4 +291,6 @@
   --font-grade: -25;
   --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.55);
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --color-risk: #f0a04b;
+  --color-risk-soft: #33230f;
 }

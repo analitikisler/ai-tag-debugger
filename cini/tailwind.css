@@ -112,6 +112,8 @@
   --color-warn-soft: var(--color-warn-soft);
   --color-bad: var(--color-bad);
   --color-bad-soft: var(--color-bad-soft);
+  --color-risk: var(--color-risk);
+  --color-risk-soft: var(--color-risk-soft);
   --color-info: var(--color-info);
   --color-measured: var(--color-data-measured);
   --color-missing: var(--color-data-missing);

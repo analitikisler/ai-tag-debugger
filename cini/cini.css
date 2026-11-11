@@ -105,8 +105,9 @@ a.card:hover::before, a.card:focus-visible::before { transform: scaleX(1); }
 .status[data-tone="bad"] { color: var(--color-bad); }
 .status[data-tone="info"] { color: var(--color-info); }
 .status[data-tone="neutral"] { color: var(--color-muted); }
+.status[data-tone="risk"] { color: var(--color-risk); }
 .status[data-tone="ok"]::before { content: "✓"; } .status[data-tone="warn"]::before { content: "!"; }
-.status[data-tone="bad"]::before { content: "×"; } .status[data-tone="info"]::before { content: "i"; } .status[data-tone="neutral"]::before { content: "–"; }
+.status[data-tone="bad"]::before { content: "×"; } .status[data-tone="info"]::before { content: "i"; } .status[data-tone="neutral"]::before { content: "–"; } .status[data-tone="risk"]::before { content: "◆"; }
 .status[data-glyph="none"]::before { content: none; }
 
 /* ---- Tag: outline, sentence case, mono ---- */
@@ -117,6 +118,7 @@ a.card:hover::before, a.card:focus-visible::before { transform: scaleX(1); }
 .tag[data-tone="warn"] { border-color: color-mix(in oklab, var(--color-warn) 60%, transparent); color: var(--color-warn); background: var(--color-warn-soft); }
 .tag[data-tone="info"] { border-color: color-mix(in oklab, var(--color-info) 60%, transparent); color: var(--color-info); }
 .tag[data-tone="neutral"] { color: var(--color-muted); }
+.tag[data-tone="risk"] { border-color: color-mix(in oklab, var(--color-risk) 60%, transparent); color: var(--color-risk); background: var(--color-risk-soft); }
 .tag[data-tone][data-glyph]::before { content: attr(data-glyph); }
 .tag[data-tone="bad"] { border-color: color-mix(in oklab, var(--color-bad) 60%, transparent); color: var(--color-bad); background: var(--color-bad-soft); }
 

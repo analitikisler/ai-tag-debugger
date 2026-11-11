@@ -148,7 +148,7 @@ test("the theme has both dark selectors, logos follow the text colour, and brand
   // The kit's tokens switch for dark mode by the OS or by <html data-theme>; the report's names point at them.
   assert.match(KIT_CSS, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\], \.light\) \{/);
   assert.match(KIT_CSS, /:root\[data-theme="dark"\], :root\.dark \{/);
-  assert.match(CSS, /--sev-risk:var\(--color-bad\);/);
+  assert.match(CSS, /--sev-risk:var\(--color-risk\);--sev-risk-fg:var\(--color-risk\);--sev-risk-bg:var\(--color-risk-soft\);/);
   // A brand logo is drawn from the sprite so its ink takes the text colour (BRAND.md §4); its width keeps the viewBox's proportions.
   assert.match(logo("atd-lockup", "ai tag debugger", 26, "logo-atd"), /^<svg class="logo logo-atd" width="189\.9" height="26" role="img" aria-label="ai tag debugger"><use href="#logo-atd-lockup"\/><\/svg>$/);
   assert.match(logo("mark", "", 24, "l-mark"), /^<svg class="logo l-mark" width="23\.9" height="24" aria-hidden="true"><use href="#logo-mark"\/><\/svg>$/);

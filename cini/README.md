@@ -69,6 +69,7 @@ shadcn's `.dark` class also works.
 | `--color-focus` | #B84A2C | #F0926D | the focus ring | |
 | `--color-ok` / `--color-data-measured` (teal) | #087671 | #3B9E98 | measured, sent, passes | |
 | `--color-bad` / `--color-data-broken` (wine) | #72051A | #FEC6D6 | errors, broken, fails | the brand |
+| `--color-risk` | #965000 | #F0A04B | risk: the severity between broken and warning (glyph ◆) | brand use. Kit-only, outside the site palette |
 | `--color-warn` | #6C5904 | #A18C0B | warnings | |
 | `--color-info` | #3B5876 | #729CC8 | the one quiet blue: notes | |
 | `--color-bg`, `--color-surface`, `--color-surface-2`, `--color-well` | glaze white family | warm near-black family | grounds, from the page to the nested box | |

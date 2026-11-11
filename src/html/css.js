@@ -12,8 +12,9 @@ const TOKENS = `/* The report's names for the Çini · Mercan roles (cini/tokens
    unless <html data-theme> forces one), so nothing below repeats per theme.
    Grounds: --page bg, --card surface, --card-2 surface-2, --well well. Text: --fg text, --fg-strong text-strong, --muted
    muted. --accent is the kit's red (links, the selected rule) and what a white label recolours (brandCss).
-   Statuses keep the kit's one job per colour, and always show their glyph and word: broken and risk are wine (bad), the
-   diamond and the word telling risk apart; warning is olive (warn); info is the one quiet blue (info); ok is teal (ok).
+   Statuses keep the kit's one job per colour, and always show their glyph and word: broken is wine (bad); risk is the
+   kit's amber (risk), between wine and olive, with its diamond; warning is olive (warn); info is the one quiet blue
+   (info); ok is teal (ok).
    A status's -bg is its kit soft tint, or for info the colour laid 12% on the surface.
    Categories are not statuses: owners take chart colours 2, 4 and 6 (their text mixed a quarter towards text-strong so it
    reads in both themes); platforms and viewports show their own logo or icon on a plain chip; the timing bars, a chart,
@@ -25,7 +26,7 @@ const TOKENS = `/* The report's names for the Çini · Mercan roles (cini/tokens
 --accent:var(--color-accent);--accent-fg:var(--color-accent);--accent-bg:var(--color-accent-soft);--selection:var(--color-selection);
 --brand-point:var(--color-brand-point);
 --sev-broken:var(--color-bad);--sev-broken-fg:var(--color-bad);--sev-broken-bg:var(--color-bad-soft);
---sev-risk:var(--color-bad);--sev-risk-fg:var(--color-bad);--sev-risk-bg:var(--color-bad-soft);
+--sev-risk:var(--color-risk);--sev-risk-fg:var(--color-risk);--sev-risk-bg:var(--color-risk-soft);
 --sev-warning:var(--color-warn);--sev-warning-fg:var(--color-warn);--sev-warning-bg:var(--color-warn-soft);
 --sev-info:var(--color-info);--sev-info-fg:var(--color-info);--sev-info-bg:color-mix(in oklab,var(--color-info) 12%,var(--color-surface));
 --sev-ok:var(--color-ok);--sev-ok-fg:var(--color-ok);--sev-ok-bg:var(--color-ok-soft);

@@ -4,7 +4,7 @@ The HTML report is one self-contained file: inline CSS, inline SVG, images and f
 
 ## 1. Tokens
 
-The look is **Çini · Mercan**, the Analitik İşler design system, taken from the kit in `cini/` (see `brand/README.md`). The page carries the kit's `tokens.css`, `fonts.css` and `cini.css` first (`KIT_CSS` in `src/cini.js`, written by `node scripts/cini.js`), then the report's own sheet (`CSS` in `src/html/css.js`). The report keeps its own token names, but every one is a `var()` of a kit role: the report's sheet writes no colour value (`test/cini.test.js` checks it). Colour has one job each, as the kit's README sets out: red for links and the selected rule, ink for text, teal for measured and passing, olive for warnings, wine for errors, the quiet blue for notes.
+The look is **Çini · Mercan**, the Analitik İşler design system, taken from the kit in `cini/` (see `brand/README.md`). The page carries the kit's `tokens.css`, `fonts.css` and `cini.css` first (`KIT_CSS` in `src/cini.js`, written by `node scripts/cini.js`), then the report's own sheet (`CSS` in `src/html/css.js`). The report keeps its own token names, but every one is a `var()` of a kit role: the report's sheet writes no colour value (`test/cini.test.js` checks it). Colour has one job each, as the kit's README sets out: red for links and the selected rule, ink for text, teal for measured and passing, olive for warnings, amber for risks, wine for errors, the quiet blue for notes.
 
 Dark mode is the kit's: its roles switch under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`, and under `:root[data-theme="dark"]`, so a theme toggle (`<html data-theme="light|dark">`) wins over the OS and the absence of the attribute means "follow the OS". The report's names follow without a dark block of their own. `brandCss()` in `src/whitelabel.js` still emits its dark set under the same two selectors (see §9).
 
@@ -35,7 +35,7 @@ Five severities, three tokens each: `--sev-<name>` (solid: left rule, dot, ring,
 | Severity | Kit role | Tint |
 |---|---|---|
 | broken | `--color-bad` (wine) | `--color-bad-soft` |
-| risk | `--color-bad` (wine), told apart by the diamond and the word | `--color-bad-soft` |
+| risk | `--color-risk` (amber, between wine and olive), with the diamond | `--color-risk-soft` |
 | warning | `--color-warn` (olive) | `--color-warn-soft` |
 | info | `--color-info` (the one quiet blue) | the blue laid 12% on the surface |
 | ok | `--color-ok` (teal) | `--color-ok-soft` |
