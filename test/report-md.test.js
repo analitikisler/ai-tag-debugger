@@ -108,7 +108,7 @@ test("journeys are one table row each, flagged steps are grouped, and the not-ch
   assert.match(journeys, /\*\*Flagged steps\*\*\n- checkout · mobile · step 11 "Place the order" · \/thanks\.html · \+6\.7s: GA4 `purchase`, Meta `Purchase`\n- all 4 journeys · step 1 [^\n]*: Meta `PageView`\n- all 4 journeys · step 4 "Add to cart" · \/product\.html · \+2\.6s: GA4 `add_to_cart`/);
   const notChecked = section(md, "Not checked");
   assert.match(notChecked, /^- GTM tag names: no container export given \(`gtm_container` in the config\)\.$/m);
-  assert.match(notChecked, /^- Analytics-only consent: the banner has no such choice\.$/m);
+  assert.match(notChecked, /^- Analytics-only consent: not checked \(the banner has no such choice the tool can make, or that scenario did not run\)\.$/m);
   assert.match(notChecked, /^- Google Ads & TikTok were in scope but the site sent nothing to them\.$/m);
   assert.doesNotMatch(notChecked, /no measurement plan/);
   // Without a plan the first line says so, and the inventory is omitted when nothing was recorded.

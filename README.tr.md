@@ -641,7 +641,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 
 0.10.0 sürümünde kaldırıldı: `plan --from`, `plan --out` ve `plan --force`. Plan taslağı her zaman yeni bir klasör kaydeder; kaldırılmış bir bayrak ne çalıştırılacağını yazdırır.
 
-Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında `1` olur; böylece bir dağıtımı durdurabilir. Bir [temel dosyada](#bilinen-bulguları-kabul-edin) kabul edilen bulgular sayılmaz. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
+Çıkış kodu, bulgular `--fail-on` düzeyine (varsayılan `broken`) ulaştığında ya da bir yolculuk tamamlanmadığında `1` olur; böylece bir dağıtımı durdurabilir. Bir [temel dosyada](#bilinen-bulguları-kabul-edin) kabul edilen bulgular sayılmaz. Her dağıtımdan sonra çalıştırmak için [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) dosyasına bakın.
 
 **CI'da test sonuçları.** Her çalıştırma ayrıca `junit.xml` yazar: her yolculuk bir test paketi, her bulgu bir test vakasıdır ve `--fail-on` düzeyine ulaşan bulgu başarısız sayılır; böylece GitHub Actions, GitLab ve Jenkins bulguları test hataları olarak gösterir. GitHub Actions'ta dosyayı yükleyin ve bir JUnit raporlayıcı action'a verin:
 

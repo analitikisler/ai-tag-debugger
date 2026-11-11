@@ -641,7 +641,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 
 Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a plan always saves a new folder, and a removed flag prints what to run instead.
 
-The exit code is `1` when findings reach `--fail-on` (default `broken`), so it can gate a deploy. Findings accepted in a [baseline](#accept-known-findings) don't count. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
+The exit code is `1` when findings reach `--fail-on` (default `broken`) or a journey did not finish, so it can gate a deploy. Findings accepted in a [baseline](#accept-known-findings) don't count. See [`examples/github-actions/ai-tag-debugger.yml`](examples/github-actions/ai-tag-debugger.yml) for running it after every deployment.
 
 **Test results in CI.** Every run also writes `junit.xml`, where each journey is a test suite and each finding a test case, failed when it reaches `--fail-on`, so GitHub Actions, GitLab and Jenkins show the findings as test failures. In GitHub Actions, upload it and hand it to a JUnit reporter action:
 

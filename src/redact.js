@@ -150,10 +150,29 @@ const PAIR = /"([^"\\]{1,64})"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*)/g;
 // A string value the cut left open at the very end.
 const OPEN_VALUE = /("(?:[^"\\]{1,64})"\s*:\s*)"(?:[^"\\]|\\.)*$/;
 
-/** Redacts user data in a POST body: JSON (TikTok) or form-encoded lines (GA4 batches). */
+// One field of a multipart/form-data body: its header up to the blank line, its name, its value, and the next boundary's start.
+const MULTIPART_FIELD = /(Content-Disposition: form-data; name="([^"]*)"\r?\n\r?\n)([\s\S]*?)(\r?\n--)/gi;
+const isMultipart = (text) => /^--[^\r\n]+\r?\n/.test(text) && /Content-Disposition: form-data/i.test(text);
+
+/**
+ * The fields of a form body as [name, value] pairs: multipart/form-data (what a FormData beacon sends, as the Meta
+ * pixel does when its event is too long for a URL) or form-encoded text. [] for anything else.
+ */
+export function formFields(body) {
+  const text = String(body ?? "");
+  if (isMultipart(text)) return [...text.matchAll(MULTIPART_FIELD)].map((m) => [m[2], m[3]]);
+  const trimmed = text.trim();
+  return /^[^\s{]*=/.test(trimmed) && !/\n/.test(trimmed) ? [...new URLSearchParams(trimmed)] : [];
+}
+
+/** Redacts user data in a POST body: JSON (TikTok), form-encoded lines (GA4 batches) or multipart form fields (Meta). */
 export function redactBody(body, found = emptyFound()) {
   const text = String(body ?? "");
   const trimmed = text.trim();
+  if (isMultipart(text)) {
+    const redacted = text.replace(MULTIPART_FIELD, (all, head, name, value, tail) => (isUserDataKey(name) || isEmail(value, null, name) ? `${head}${note(found, name, value)}${tail}` : all));
+    return { text: redacted, ...found };
+  }
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       return { text: JSON.stringify(redactJson(JSON.parse(trimmed), "", found, isUserDataKey)), ...found };

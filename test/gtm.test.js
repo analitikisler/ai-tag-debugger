@@ -157,3 +157,20 @@ test("explains each tag: paused, blocked, consent denied, trigger failed, or fir
   const html = renderHtml({ title: "t", generatedAt: "now", findings, explained: null, runs: [] });
   assert.match(html, /class="xs gtm-why">Tag &quot;TikTok purchase&quot;: did not fire — blocked by exception trigger &quot;Test orders&quot;/);
 });
+
+test("a tag gets a chance on every push its trigger fires on, built-in initialization triggers are known, and a variable's default counts", () => {
+  const pushes = [
+    { value: ["consent", "default", { ad_storage: "denied" }] }, { value: { event: "gtm.init_consent" } }, { value: { event: "gtm.init" } }, { value: { event: "gtm.js" } },
+    { value: ["consent", "update", { ad_storage: "granted" }] }, { value: { event: "gtm.js" } },
+  ];
+  const allPages = { name: "All Pages", type: "PAGEVIEW" };
+  assert.deepEqual(evaluateTrigger(allPages, pushes).matches, [3, 5]);
+  const tag = (triggers, extra = {}) => ({ name: "t", paused: false, consent: [], triggers, blocking: [], ...extra });
+  const finding = { gtm: [tag([{ id: "2147479553", name: "All Pages" }], { consent: ["ad_storage"] }), tag([{ id: "2147479573", name: "Initialization - All Pages" }]), tag([{ id: "2147479572", name: "Consent Initialization - All Pages" }])] };
+  explainTags(finding, { dataLayerLog: pushes }, { containerVersion: { trigger: [], variable: [] } });
+  // Denied on the first page, granted before the second: the tag fires there.
+  assert.deepEqual(finding.gtm.map((t) => t.evaluation.fired), [true, true, true]);
+  const withDefault = { name: "kind is b2c", type: "CUSTOM_EVENT", customEventFilter: [{ type: "EQUALS", parameter: [{ key: "arg0", value: "{{_event}}" }, { key: "arg1", value: "lead" }] }], filter: [{ type: "EQUALS", parameter: [{ key: "arg0", value: "{{Kind}}" }, { key: "arg1", value: "b2c" }] }] };
+  const variables = [{ name: "Kind", type: "v", parameter: [{ key: "name", value: "kind" }, { key: "setDefaultValue", value: "true" }, { key: "defaultValue", value: "b2c" }] }];
+  assert.equal(evaluateTrigger(withDefault, [{ value: { event: "lead" } }], variables).fired, true);
+});

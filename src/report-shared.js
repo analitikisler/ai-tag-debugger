@@ -118,8 +118,14 @@ const planChangeItems = (pc, m) => [
   ...pc.changed.map((c) => `~ ${changeLabel(c)}: ${c.what.map((w) => m.ui.planChangeWhat[w] ?? w).join(", ")}`),
 ];
 
+/**
+ * Text from the audited page or the model as Markdown text: one line, no raw HTML, and none of the characters that
+ * would end a table cell or start a link. Shared by report.md and the consent matrix the MCP server returns.
+ */
+const mdText = (v) => String(v ?? "").replace(/\s*\r?\n\s*/g, " ").replace(/\\/g, "\\\\").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[|[\]]/g, "\\$&");
+
 export {
-  SEVERITIES, summaryParts, fixSteps, attachExplanations, SEVERITY_RANK, SEVERITY_ORDER_MD, seconds, isConsentEntry, routeList,
+  mdText, SEVERITIES, summaryParts, fixSteps, attachExplanations, SEVERITY_RANK, SEVERITY_ORDER_MD, seconds, isConsentEntry, routeList,
   isProblem, placeKey, uniqPlaces, mdHeadline, PLATFORM_ORDER, platformRank, safeKey, sortPlatforms, changeLabel,
   coverageLines, pcSort, BUCKET_ORDER, planChangeItems,
 };

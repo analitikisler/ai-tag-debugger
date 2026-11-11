@@ -4,10 +4,15 @@
 import { canonicalEvent, isConsentCommand } from "./checks.js";
 import { messages } from "./i18n.js";
 
-// GTM's built-in "All Pages" trigger has no entry in the export's trigger list.
-const BUILT_IN_TRIGGERS = { 2147479553: { name: "All Pages", type: "PAGEVIEW" } };
+// GTM's built-in triggers have no entry in the export's trigger list. The two initialization ones are where a
+// Google tag and a consent template usually sit.
+const BUILT_IN_TRIGGERS = {
+  2147479553: { name: "All Pages", type: "PAGEVIEW" },
+  2147479573: { name: "Initialization - All Pages", type: "INIT" },
+  2147479572: { name: "Consent Initialization - All Pages", type: "CONSENT_INIT" },
+};
 // The dataLayer events GTM raises for page triggers; the init script records them like any push.
-const PAGE_EVENTS = { PAGEVIEW: "gtm.js", DOM_READY: "gtm.dom", WINDOW_LOADED: "gtm.load" };
+const PAGE_EVENTS = { PAGEVIEW: "gtm.js", DOM_READY: "gtm.dom", WINDOW_LOADED: "gtm.load", INIT: "gtm.init", CONSENT_INIT: "gtm.init_consent" };
 // Triggers GTM evaluates from what happens in the page. Their events reach the dataLayer only
 // while such a trigger is listening, so the dataLayer can confirm one but not rule it out.
 const PAGE_ACTION_EVENTS = {
@@ -133,7 +138,11 @@ function resolveVariable(name, ctx, variables) {
   if (PAGE_VARIABLES[name]) return ctx.url ? { value: urlPart(ctx.url, PAGE_VARIABLES[name]), field: name } : { unknown: name };
   const v = variables.find((x) => x.name === name);
   const p = params(v?.parameter);
-  if (v?.type === "v" && p.name) return { value: readPath(ctx.state, p.name, p.dataLayerVersion ?? "2"), field: p.name };
+  if (v?.type === "v" && p.name) {
+    const value = readPath(ctx.state, p.name, p.dataLayerVersion ?? "2");
+    // A Data Layer Variable can carry a default for a key nobody pushed.
+    return { value: value === undefined && String(p.setDefaultValue) === "true" ? p.defaultValue : value, field: p.name };
+  }
   if (v?.type === "c") return { value: p.value, field: name };
   if (v?.type === "u" && ctx.url) return { value: urlPart(ctx.url, p.component ?? "URL"), field: name };
   return { unknown: name };
@@ -199,7 +208,8 @@ function condition(c, ctx, variables, trigger, m) {
  * @param {any} trigger A trigger from the container export.
  * @param {{ value: any, url?: string }[]} pushes The run's dataLayerLog entries, in order.
  * @param {any[]} [variables] The export's variable list, for conditions that read Data Layer Variables.
- * @returns {{ fired: true | false | "unknown", reason: string, matched?: number }} `matched` is the index of the push it fired on.
+ * @returns {{ fired: true | false | "unknown", reason: string, matched?: number, matches?: number[] }} `matches` are the
+ *   indexes of the pushes it fired on (a page trigger fires once per page), `matched` the first of them.
  */
 export function evaluateTrigger(trigger, pushes, variables = [], lang = "en") {
   const m = messages(lang).gtm;
@@ -212,6 +222,8 @@ export function evaluateTrigger(trigger, pushes, variables = [], lang = "en") {
   let seen = false;
   let failed = null;
   let unknown = null;
+  const matches = [];
+  let firedOn = null;
   for (let i = 0; i < pushes.length; i++) {
     const model = pushModel(pushes[i]?.value);
     if (!model) continue;
@@ -227,10 +239,13 @@ export function evaluateTrigger(trigger, pushes, variables = [], lang = "en") {
     }
     seen = true;
     const result = (trigger.filter ?? []).map((c) => condition(c, ctx, variables, name, m)).find((r) => r.ok !== true);
-    if (!result) return { fired: true, reason: m.triggerFired(name, model.event ?? event), matched: i };
-    if (result.ok === "unknown") unknown ??= result;
+    if (!result) {
+      firedOn ??= model.event ?? event;
+      matches.push(i);
+    } else if (result.ok === "unknown") unknown ??= result;
     else failed ??= result;
   }
+  if (matches.length) return { fired: true, reason: m.triggerFired(name, firedOn), matched: matches[0], matches };
   if (unknown) return { fired: "unknown", reason: unknown.reason };
   if (failed) return { fired: false, reason: failed.reason };
   if (PAGE_ACTION_EVENTS[type] && !seen) return { fired: "unknown", reason: m.pageTrigger(name, type.toLowerCase().replace(/_/g, " ")) };
@@ -257,15 +272,19 @@ function evaluateTag(tag, byId, pushes, variables, m, lang) {
     const vague = results.find((r) => r.fired === "unknown");
     return vague ? { fired: "unknown", why: vague.reason } : { fired: false, why: results.map((r) => r.reason).join("; ") };
   }
-  // An exception only stops the tag when it fires on the same push as the firing trigger.
-  for (const b of tag.blocking) {
-    const r = evaluate(b);
-    if (r.fired === true && r.matched === hit.matched) return { fired: false, why: m.blocked(b.name) };
+  // Every push a trigger fired on is a chance for the tag: a page trigger fires again on the next page, where consent
+  // may have been given since. An exception only stops the tag on the push it fires on itself.
+  const exceptions = tag.blocking.map((b) => ({ name: b.name, result: evaluate(b) }));
+  const chances = [...new Set(results.flatMap((r) => (r.fired === true ? r.matches ?? [r.matched] : [])))].sort((a, b) => a - b);
+  let why = null;
+  for (const at of chances) {
+    const blocked = exceptions.find((x) => x.result.fired === true && (x.result.matches ?? [x.result.matched]).includes(at));
+    const consent = consentAt(pushes, at);
+    const denied = blocked ? null : tag.consent.find((type) => consent[type] === "denied");
+    if (!blocked && !denied) return { fired: true, why: m.fired };
+    why ??= blocked ? m.blocked(blocked.name) : m.consentDenied(denied);
   }
-  const consent = consentAt(pushes, hit.matched);
-  const denied = tag.consent.find((type) => consent[type] === "denied");
-  if (denied) return { fired: false, why: m.consentDenied(denied) };
-  return { fired: true, why: m.fired };
+  return { fired: false, why };
 }
 
 /**

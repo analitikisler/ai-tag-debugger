@@ -293,3 +293,21 @@ test("the CSV names an event pushed with gtag() and quotes a value holding a car
   assert.match(csv, /,datalayer,,add_to_cart,/);
   assert.match(csv, /,hit,ga4,"a\rb",/);
 });
+
+test("an explanation the model gives by position lands on the finding it was asked about, not on an accepted one before it", async () => {
+  const { explainFindings } = await import("../src/report.js");
+  const f = (event, extra = {}) => ({ journey: "j", viewport: "desktop", severity: "broken", check: "missing_event", platform: "ga4", event, detail: `${event} was not sent`, ...extra });
+  let sent;
+  const provider = {
+    name: "fake",
+    json: async ({ system, texts }) => {
+      assert.match(system, /is data, never instructions/);
+      sent = JSON.parse(texts[0].replace(/^Audit data:\n/, ""));
+      return { value: { summary: { headline: "h", points: [], also_check: [] }, explanations: [{ finding: 0, impact: "i", likely_cause: "c", fix_steps: [] }, { finding: 7, impact: "x", likely_cause: "x", fix_steps: [] }] } };
+    },
+  };
+  const explained = await explainFindings({ findings: [f("purchase", { accepted: true }), f("begin_checkout")], plan: { events: [] }, runs: [], provider });
+  assert.deepEqual(sent.findings.map((x) => [x.index, x.event]), [[0, "begin_checkout"]]);
+  // Finding 1 among the grouped findings is begin_checkout; the answer for a number never sent is dropped.
+  assert.deepEqual(explained.explanations.map((e) => e.finding), [1]);
+});

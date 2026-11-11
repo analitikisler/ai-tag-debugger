@@ -4,12 +4,13 @@
 import { messages } from "./i18n.js";
 import { isOwnAddress } from "./redact.js";
 import { campaignParamsIn } from "./campaign.js";
-import { CONSENT_SIGNALS } from "./parsers.js";
+import { CONSENT_SIGNALS, PROVIDERS } from "./parsers.js";
 import { containersNotRun, duplicateLoads, loadSources, scriptFailed, splitLayers } from "./containers.js";
 import { messageOutcomes, widgetSummaries, widgetsOf } from "./frames.js";
 
-const platformName = (p) => ({ meta: "Meta", tiktok: "TikTok" })[p] ?? p;
-const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok"]);
+const platformName = (p) => PROVIDERS[p] ?? p;
+// Ad pixels with no consent signal of their own: a hit before consent or after a reject is a problem whatever it says.
+export const NON_GOOGLE_AD_PLATFORMS = new Set(["meta", "tiktok", "pinterest", "snapchat", "x", "linkedin", "microsoft_ads", "criteo"]);
 const GOOGLE_PLATFORMS = new Set(["ga4", "google_ads"]);
 
 /** Whether a happened before b: an earlier step, or the same step and an earlier time when both have one. */
@@ -23,7 +24,8 @@ const V2_SIGNALS = ["ad_user_data", "ad_personalization"];
 const TRACKING_SIGNALS = CONSENT_SIGNALS;
 /** Whether a Google hit says it was sent with any of the tracking signals granted (from gcs, and gcd for the v2 ones). */
 const claimsGranted = (hit) => TRACKING_SIGNALS.some((k) => hit.consent?.[k] === "granted");
-export const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|_uet(sid|vid)|_clck|_clsk|_hj.+|_pin_unauth|_scid|IDE|test_cookie|fr|li_.+|_dc_gtm_.+)$/;
+// The analytics and ad cookies of the vendors the tag inventory names (COOKIE_VENDORS in inventory.js lists the same ones by vendor).
+export const TRACKING_COOKIE = /^(_ga(_.+)?|_gid|_gat(_.+)?|_gcl_.+|_gac_.+|_fbp|_fbc|_ttp|_tt_.+|ttclid|_uet(sid|vid|msclkid)|MUID|_clck|_clsk|_hj.+|_pin_.+|_pinterest_.+|_scid|sc_at|_cto_.+|cto_.+|__kla_id|IDE|test_cookie|fr|li_.+|_li_.+|bcookie|lidc|UserMatchHistory|_dc_gtm_.+)$/;
 const SEVERITY_ORDER = { broken: 0, risk: 1, warning: 2, info: 3, ok: 4 };
 
 /**
@@ -60,7 +62,8 @@ const SYNONYMS = {
   begincheckout: ["checkout", "initiatecheckout", "checkoutstart", "checkoutbegin"],
   addshippinginfo: ["checkoutshipping", "shippinginfo"],
   addpaymentinfo: ["checkoutpayment", "paymentinfo", "addpayment"],
-  purchase: ["transaction", "ordercomplete", "ordercompleted", "orderconfirmation", "checkoutcomplete", "checkoutcompleted"],
+  // completepayment is TikTok's name for it.
+  purchase: ["transaction", "ordercomplete", "ordercompleted", "orderconfirmation", "checkoutcomplete", "checkoutcompleted", "completepayment"],
 };
 const CANONICAL = new Map(Object.entries(SYNONYMS).flatMap(([c, list]) => list.map((a) => [a, c])));
 

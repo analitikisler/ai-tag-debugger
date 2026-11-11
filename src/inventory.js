@@ -3,9 +3,9 @@ import { siteOf } from "./redact.js";
 
 // Cookies the vendors' own scripts set on the site's domain.
 const COOKIE_VENDORS = [
-  [/^(_ga|_gid|_gat)(_|$)/, "ga4"],
+  [/^((_ga|_gid|_gat)(_|$)|_dc_gtm_)/, "ga4"],
   [/^(_gcl_|_gac_|IDE$|test_cookie$)/, "google_ads"],
-  [/^_fb[pc]$/, "meta"],
+  [/^(_fb[pc]|fr)$/, "meta"],
   [/^(_ttp|ttclid|_tt_enable_cookie)$/, "tiktok"],
   [/^(_li_|li_|bcookie|lidc|UserMatchHistory)/, "linkedin"],
   [/^(_uet|MUID)/, "microsoft_ads"],

@@ -2,6 +2,7 @@
 // consent ones. Shared by the HTML report's hit cards and the MCP server's get_hit, so both show the same table.
 import { parseTrackingRequest } from "./parsers.js";
 import { isEventParam } from "./glossary.js";
+import { formFields } from "./redact.js";
 
 const cell = (v) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
@@ -40,6 +41,11 @@ export function paramSets(call) {
     try {
       return [[...query, ...flatten(JSON.parse(trimmed))]];
     } catch { /* not JSON, or cut at the size limit */ }
+  }
+  // A multipart form body (the Meta pixel's, for an event too long for a URL).
+  if (trimmed.startsWith("--")) {
+    const fields = formFields(body);
+    if (fields.length) return [[...query, ...fields]];
   }
   if (/^[^\s{]*=/.test(trimmed)) {
     return trimmed.split(/\r?\n/).filter(Boolean).map((line) => {

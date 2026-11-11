@@ -5,7 +5,7 @@
 // report decides how to show it. The rules are documented in docs/design/metrics.md.
 
 import { canonicalEvent, carriesAutoEvent, groupFindings, hasParam, hitMatchesEvent, isConsentCommand, PLAN_BUCKETS, planCheck, summarize, tagConsentStates } from "./checks.js";
-import { AD_PLATFORMS, CONSENT_STATES, consentTable } from "./consent.js";
+import { AD_PLATFORMS, CONSENT_STATES, IGNORE, consentTable } from "./consent.js";
 import { presetFor } from "./journeys.js";
 import { OWNERS, ownerOf } from "./verify.js";
 
@@ -246,8 +246,11 @@ function consentDefaultIn(run) {
   const log = run.dataLayerLog ?? [];
   const entry = log.find((e) => isConsentCommand(e, "default")) ?? null;
   // Without a dataLayer command, the Google tag's own state can still show a default (a consent platform's GTM template).
-  const tagStates = entry ? [] : tagConsentStates({ steps: run.steps ?? [] });
+  const allTagStates = tagConsentStates({ steps: run.steps ?? [] });
+  const tagStates = entry ? [] : allTagStates;
   const tagDefault = tagStates.find((st) => st.usedDefault) ?? null;
+  // The tag itself says when a default reached it late, whoever pushed it: the consent_default_late check reads the same flag.
+  const lateByTag = allTagStates.some((st) => st.wasSetLate);
   const set = Boolean(entry || tagDefault);
   const firstGoogleHit = (run.hits ?? []).filter((h) => GOOGLE_PLATFORMS.has(h.platform)).sort(byTime)[0] ?? null;
   const step = entry ? stepOf(run, entry.step) : null;
@@ -258,7 +261,7 @@ function consentDefaultIn(run) {
   return {
     journey: run.journeyId, viewport: run.viewport, present: set, source: entry ? "dataLayer" : tagDefault ? "tag" : null,
     step: entry?.step ?? tagDefault?.step ?? null, stepLabel: step?.label ?? null, ms: entry && step && entry.t != null && step.t != null ? entry.t - step.t : null,
-    beforeFirstGoogleHit: entry && firstGoogleHit ? !sentBefore(firstGoogleHit, entry) : tagDefault ? !tagStates.some((st) => st.wasSetLate) : null,
+    beforeFirstGoogleHit: entry && firstGoogleHit ? !sentBefore(firstGoogleHit, entry) && !lateByTag : tagDefault ? !lateByTag : null,
     v2Signals: { present: set && !missing.length, missing: set ? missing : V2_SIGNALS },
   };
 }
@@ -285,7 +288,8 @@ export function consentCompliance({ plan = null, runs = [], findings = [], conse
     }, 0);
   };
   const rows = platforms.map((platform) => {
-    const beforeConsent = distinct("before_consent", platform);
+    // A tag that sends on the next page without a choice is the same problem the before_consent finding names.
+    const beforeConsent = distinct("before_consent", platform) + (scenarioCount(platform, IGNORE, true) ?? 0);
     const afterReject = distinct("after_reject", platform) + (scenarioCount(platform, "reject", true) ?? 0);
     const afterAnalyticsOnly = AD_PLATFORMS.has(platform) ? scenarioCount(platform, "analytics", true) : null;
     const status = afterReject ? "fail" : beforeConsent || afterAnalyticsOnly ? "attention" : "pass";

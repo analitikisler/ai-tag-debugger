@@ -1,5 +1,5 @@
 // Turns raw network requests into normalized tracking hits.
-import { isUserDataKey } from "./redact.js";
+import { formFields, isUserDataKey } from "./redact.js";
 // Each parser returns an array of hits (one request can carry several events,
 // e.g. a batched GA4 POST) or null when the request is not for that vendor.
 
@@ -134,20 +134,26 @@ export function parseGa4(url, postData) {
   });
 }
 
-/** @returns {Hit[] | null} */
-export function parseMeta(url) {
+/**
+ * The Meta pixel puts an event in the URL of an image request, and in the body of a POST (a beacon or a form) when
+ * the event is too long for a URL, as a purchase with its contents and advanced matching often is.
+ * @returns {Hit[] | null}
+ */
+export function parseMeta(url, postData) {
   const u = new URL(url);
   if (!/(^|\.)facebook\.com$/.test(u.hostname) || u.pathname !== "/tr" && u.pathname !== "/tr/") return null;
+  const fields = new URLSearchParams(u.search);
+  if (!fields.has("ev")) for (const [k, v] of formFields(postData)) if (!fields.has(k)) fields.append(k, v);
   const params = {};
-  for (const [k, v] of u.searchParams) {
+  for (const [k, v] of fields) {
     const m = k.match(/^cd\[(.+)\]$/);
     if (m) params[m[1]] = v;
   }
   // eid is the event ID a server-side (Conversions API) copy of the event must repeat for Meta to count it once.
-  const eventId = u.searchParams.get("eid") || undefined;
+  const eventId = fields.get("eid") || undefined;
   if (eventId) params.event_id = eventId;
-  const user = [...u.searchParams].filter(([k]) => isUserDataKey(k));
-  return [{ platform: "meta", delivery: "browser", name: u.searchParams.get("ev") || "(unnamed)", id: u.searchParams.get("id") || undefined, ...(eventId ? { eventId } : {}), params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
+  const user = [...fields].filter(([k]) => isUserDataKey(k));
+  return [{ platform: "meta", delivery: "browser", name: fields.get("ev") || "(unnamed)", id: fields.get("id") || undefined, ...(eventId ? { eventId } : {}), params, ...(user.length ? { userFields: Object.fromEntries(user) } : {}), url }];
 }
 
 /** @returns {Hit[] | null} */

@@ -305,11 +305,14 @@ async function main(args = process.argv.slice(2)) {
     console.log(`Baseline ${baselineFile} now holds ${n} ${n === 1 ? "finding" : "findings"}. Later runs with --baseline fail only on new ones.`);
   }
 
-  if (!against && !values.out) await offerLearnedPlan(result, loaded.config.site, values);
+  // A site whose config already carries a plan has one; the offer is for a site with none.
+  if (!against && !values.out && !loaded.plan) await offerLearnedPlan(result, loaded.config.site, values);
 
   if (failOn !== "never") {
     const threshold = levels.indexOf(failOn);
     if (levels.slice(0, threshold + 1).some((l) => result.counts[l] > 0)) process.exitCode = 1;
+    // junit.xml fails a journey that did not finish and the verdict says Fail, so the exit code does too.
+    if (result.runs.some((r) => r.completed === false)) process.exitCode = 1;
   }
   if (result.saveError) process.exitCode = 1;
   if (values["save-steps"]) {

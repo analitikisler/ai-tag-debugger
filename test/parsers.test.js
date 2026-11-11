@@ -164,3 +164,13 @@ test("a tag's own script is read as a hit but is not a collection endpoint, so i
   }
   assert.equal(isCollectionEndpoint("https://a.clarity.ms/collect"), true);
 });
+
+test("a Meta event sent in a POST body, form-encoded or as multipart form data, is read like one in the URL", () => {
+  const [form] = parseTrackingRequest("https://www.facebook.com/tr/", "id=1&ev=Purchase&cd[value]=10&cd[currency]=EUR&eid=ord-9&ud[em]=abc");
+  assert.deepEqual([form.name, form.id, form.params.value, form.eventId, Object.keys(form.userFields)], ["Purchase", "1", "10", "ord-9", ["ud[em]"]]);
+  const part = (name, value) => `------b\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  const [multi] = parseTrackingRequest("https://www.facebook.com/tr/", `${part("id", "1")}${part("ev", "Purchase")}${part("cd[value]", "10")}------b--\r\n`);
+  assert.deepEqual([multi.name, multi.id, multi.params.value], ["Purchase", "1", "10"]);
+  // Still a hit without its body, so the request is answered locally either way.
+  assert.equal(parseTrackingRequest("https://www.facebook.com/tr/", null)[0].name, "(unnamed)");
+});

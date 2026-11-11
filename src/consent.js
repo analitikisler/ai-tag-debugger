@@ -5,8 +5,9 @@
 import { AuditSession, CMP_BANNER_SELECTORS } from "./browser.js";
 import { runPool } from "./pool.js";
 import { CONSENT_SIGNALS, providerLabel } from "./parsers.js";
-import { TRACKING_COOKIE } from "./checks.js";
+import { NON_GOOGLE_AD_PLATFORMS, TRACKING_COOKIE } from "./checks.js";
 import { campaignParamsIn, withCampaignParams } from "./campaign.js";
+import { mdText } from "./report-shared.js";
 
 export const CONSENT_STATES = ["accept", "reject", "analytics"];
 // The visitor who leaves the banner unanswered and opens the next page. Browsing on is no consent under the GDPR or
@@ -15,7 +16,7 @@ export const IGNORE = "ignore";
 /** The scenario columns, in the order the reports show them. */
 export const SCENARIO_COLUMNS = ["before", IGNORE, ...CONSENT_STATES];
 // Tags that are advertising, so an "analytics only" choice should keep them quiet.
-export const AD_PLATFORMS = new Set(["google_ads", "meta", "tiktok", "pinterest", "snapchat", "x"]);
+export const AD_PLATFORMS = new Set(["google_ads", ...NON_GOOGLE_AD_PLATFORMS]);
 
 // Runs in the page: makes the choice through the consent platform's own API when it has one,
 // otherwise by clicking the banner's accept or reject button. Returns how, or null when it could not.
@@ -322,12 +323,11 @@ export function consentMatrix(m, scenarios) {
 export function consentMatrixMarkdown(m, scenarios) {
   const matrix = consentMatrix(m, scenarios);
   if (!matrix) return [];
-  const esc = (x) => String(x).replace(/\|/g, "\\|");
   return [
     ...(matrix.landing ? [m.ui.matrix.intro(matrix.landing), ""] : []),
     `| | ${matrix.cols.map((c) => m.ui.scenarioCols[c]).join(" | ")} |`,
     `|${" --- |".repeat(matrix.cols.length + 1)}`,
-    ...matrix.rows.map((r) => `| ${r.label} | ${r.cells.map((c) => `${esc(c.text)}${c.problem ? " ⚠" : ""}`).join(" | ")} |`),
+    ...matrix.rows.map((r) => `| ${r.label} | ${r.cells.map((c) => `${mdText(c.text)}${c.problem ? " ⚠" : ""}`).join(" | ")} |`),
     "",
     m.ui.matrix.legend,
   ];

@@ -148,3 +148,11 @@ test("user data inside a JSON parameter and in CRLF-joined body lines is redacte
   assert.ok(!body.text.includes("jane"));
   assert.match(body.text, /&cu=EUR\r\nen=scroll$/);
 });
+
+test("user data in a multipart form body is redacted field by field", () => {
+  const part = (name, value) => `------b\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  const body = redactBody(`${part("ev", "Purchase")}${part("ud[em]", "a".repeat(64))}${part("cd[contact]", "jane@gmail.com")}------b--\r\n`);
+  assert.deepEqual(body.fields, ["ud[em]", "cd[contact]"]);
+  assert.ok(!body.text.includes("a".repeat(64)) && !body.text.includes("jane@"));
+  assert.match(body.text, /name="ev"\r\n\r\nPurchase\r\n/);
+});
