@@ -4,6 +4,7 @@ import { splitRun } from "./frames.js";
 import { withCampaignParams } from "./campaign.js";
 import { messages } from "./i18n.js";
 import { createProvider, PROVIDERS } from "./providers.js";
+import { untrusted } from "./untrusted.js";
 
 export const DEFAULT_MODEL = PROVIDERS.anthropic.defaultModel;
 
@@ -61,8 +62,6 @@ export const TOOLS = [
   },
 ];
 
-// Page content can't close the delimiter early.
-const untrusted = (value) => String(value ?? "").replace(/<\/?\s*page_content\s*>/gi, "[page_content tag removed]");
 
 /** The page as the model sees it, with everything the site controls inside <page_content>. */
 export function pageView(snapshot, error) {

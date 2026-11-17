@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { TOPICS, checkTopic, discoverPlan, pageTypeCoverage, pagesSeen, toPlan } from "../src/discover.js";
+import { captured } from "./helpers/captured.js";
 
 const PORT = await freePort();
 let server;
@@ -23,7 +24,7 @@ const answer = {
 };
 
 function fakeProvider(steps) {
-  const seen = { firstMessage: null, texts: null };
+  const seen = { firstMessage: null, texts: null, system: null };
   let i = 0;
   return {
     seen,
@@ -35,7 +36,8 @@ function fakeProvider(steps) {
         addUserText() {},
       };
     },
-    async json({ texts }) {
+    async json({ system, texts }) {
+      seen.system = system;
       seen.texts = texts;
       return { value: answer };
     },
@@ -50,7 +52,10 @@ test("plan --site explores pages, then turns the model's answer into a plan the 
   const { plan, outcome } = await discoverPlan({ site: `http://localhost:${PORT}/`, provider, maxSteps: 5 });
   assert.equal(outcome.completed, true);
   assert.match(provider.seen.firstMessage, /ONE example of each kind of page/);
-  const pages = JSON.parse(provider.seen.texts[1].replace(/^Pages visited:\n/, ""));
+  // The pages and hits go to the model as data, and its instructions say so.
+  assert.match(provider.seen.texts[1], /^Pages visited:\n<captured_data>\n/);
+  assert.match(provider.seen.system, /between <captured_data> and <\/captured_data> was recorded from the audited website/);
+  const pages = JSON.parse(captured(provider.seen.texts[1]));
   assert.ok(pages.some((p) => p.url.endsWith("/product.html")), "the product page is sent to the model");
   assert.match(provider.seen.texts[2], /ga4:page_view/, "the demo shop's own hits are listed");
   assert.deepEqual(plan.events[0], {

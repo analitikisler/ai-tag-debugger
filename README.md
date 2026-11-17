@@ -161,7 +161,7 @@ Requires Node 22+.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger
-npx -y playwright@1.56.1 install chromium   # the browser version this release uses
+npx -y playwright@1.65.1 install chromium   # the browser version this release uses
 export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_KEY
 
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
@@ -731,7 +731,7 @@ Add the server to the app's MCP config. For Claude Desktop that is Settings → 
 }
 ```
 
-The browser (Chromium) downloads itself the first time you run an audit, about a minute, one time. To get it ahead of time: `npx -y playwright@1.56.1 install chromium`.
+The browser (Chromium) downloads itself the first time you run an audit, about a minute, one time. To get it ahead of time: `npx -y playwright@1.65.1 install chromium`.
 
 One-click and one-line setup:
 

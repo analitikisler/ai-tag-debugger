@@ -14,6 +14,7 @@ import { widgetSummaries } from "../src/frames.js";
 import { render as renderScope } from "../src/html/scope.js";
 import { context } from "../src/html/shell.js";
 import { renderMarkdown } from "../src/report.js";
+import { captured } from "./helpers/captured.js";
 
 const hit = (tid, en, gcs) => `fetch("https://region1.google-analytics.com/g/collect?v=2&tid=${tid}&cid=1.2&_p=${Math.floor(Math.random() * 1e9)}&gcs=${gcs}&en=${en}&dl=" + encodeURIComponent(location.href), { method: "POST", keepalive: true });`;
 const snippet = (id) => `<script>(function(){var j=document.createElement('script');j.async=true;j.src='/gtm.js?id=${id}';document.head.appendChild(j);})();</script>`;
@@ -149,13 +150,13 @@ test("over MCP: get_widgets during the audit, then finish_audit and get_report",
     assert.match(listed, new RegExp(`^ {2}${widget.replace(/[.:/]/g, "\\$&")}, embedded in ${url.replace(/[.:/]/g, "\\$&")}; containers GTM-WIDGET$`, "m"));
     assert.match(listed, /^ {4}own tracking: GA4 G-WIDGET: purchase$/m);
     assert.match(listed, /^ {4}not sent to the site's accounts: widget_ready, booking_complete$/m);
-    assert.equal(JSON.parse(listed.split("As JSON: ")[1])[0].origin, widget);
+    assert.equal(JSON.parse(captured(listed).split("As JSON: ")[1])[0].origin, widget);
 
     const [result] = await call("finish_audit", { audit_id: id, completed: true, note: "Loaded.", measurement_plan: JSON.stringify({ events: [] }) });
     assert.match(result.text, /^Embedded widgets \(third-party iframes; their own dataLayer is invisible to the page's tags\):$/m);
     assert.match(result.text, /pushed "widget_ready", "booking_complete" to its own dataLayer/);
     const name = result.text.match(/get_report with report "([^"]+)"/)[1];
-    const [w] = JSON.parse((await call("get_report", { report: name, part: "widgets" }))[0].text);
+    const [w] = JSON.parse(captured((await call("get_report", { report: name, part: "widgets" }))[0].text));
     assert.deepEqual(w.unshared, ["widget_ready", "booking_complete"]);
   } finally {
     await client.close();

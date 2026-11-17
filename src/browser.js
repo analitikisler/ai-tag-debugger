@@ -13,7 +13,7 @@ import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
 import { callersOf, containerOf, containerVersion, isContainerId } from "./containers.js";
 import { frameInfo } from "./frames.js";
-import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginScrubber, scrubDeep } from "./login.js";
+import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginRefusal, loginScope, loginScrubber, scrubDeep } from "./login.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -25,10 +25,33 @@ export function installBrowser() {
     console.error("ai-tag-debugger: installing the Chromium browser (one time, about a minute)...");
     const child = spawn(process.execPath, [cli, "install", "chromium"], { stdio: ["ignore", 2, 2] });
     child.on("error", reject);
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.56.1 install chromium`))));
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.65.1 install chromium`))));
   }).finally(() => { browserInstall = null; });
   return browserInstall;
 }
+
+// Chromium's own sandbox keeps a page that breaks out of the renderer away from the computer and from the keys this
+// process holds. Playwright starts Chromium without it unless asked. It is asked for here, and left out only where
+// Chromium cannot use it: as root, or where the system forbids user namespaces (some containers and CI runners).
+let sandboxUsable = null;
+const SANDBOX_FAILURE = /sandboxing failed|no usable sandbox|running as root without --no-sandbox/i;
+
+/** Launches the tool's Chromium with its sandbox on where the computer allows it. AITD_NO_SANDBOX=1 never asks for it. */
+export async function launchChromium(options, { launch = (o) => chromium.launch(o), env = process.env, warn = console.error } = {}) {
+  sandboxUsable ??= env.AITD_NO_SANDBOX !== "1";
+  if (sandboxUsable) {
+    try {
+      return await launch({ ...options, chromiumSandbox: true });
+    } catch (err) {
+      if (!SANDBOX_FAILURE.test(String(err?.message))) throw err;
+      sandboxUsable = false;
+      warn("ai-tag-debugger: Chromium's sandbox can't be used here (it doesn't run as root, and it needs user namespaces), so the browser runs without it. Run the tool as a normal user to keep the pages it opens contained; AITD_NO_SANDBOX=1 skips this check.");
+    }
+  }
+  return launch({ ...options, chromiumSandbox: false });
+}
+/** For tests: forget what an earlier launch learned about the sandbox. */
+export const resetSandboxCheck = () => { sandboxUsable = null; };
 
 export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
 #truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
@@ -608,7 +631,12 @@ export class AuditSession {
     this.log = this.opts.log ?? (() => {});
     this.scope = this.opts.site ? hostScope(this.opts.site, this.opts.allowedHosts) : null;
     // The test account (see src/login.js): typed only where a placeholder asks for it, and scrubbed from everything kept.
-    this.login = this.opts.login !== undefined ? this.opts.login : loginFromEnv();
+    // The environment's account is for one site (AITD_LOGIN_SITE): an audit of any other site gets none, and it is
+    // typed only on that site's hosts. An account passed in (tests, embedding) is typed on the audited site's.
+    const fromEnv = this.opts.login === undefined;
+    this.login = fromEnv ? loginFromEnv(process.env, this.opts.site) : this.opts.login;
+    this.loginRefused = fromEnv ? loginRefusal(process.env, this.opts.site) : null;
+    this.loginScope = fromEnv && this.login ? loginScope() : this.scope;
     this.scrub = loginScrubber(this.login);
     this.loginStep = null; // the first step that typed the test account's password
     this.isBlockedAddress = typeof this.opts.blockPrivate === "function" ? this.opts.blockPrivate : isPrivateAddress;
@@ -679,11 +707,11 @@ export class AuditSession {
       launch.proxy = { server: "http://127.0.0.1:9", bypass: "<-loopback>" };
     }
     try {
-      this.browser = await chromium.launch(launch);
+      this.browser = await launchChromium(launch);
     } catch (err) {
       if (!/Executable doesn't exist|playwright install/i.test(String(err?.message))) throw err;
       await installBrowser();
-      this.browser = await chromium.launch(launch);
+      this.browser = await launchChromium(launch);
     }
   }
 
@@ -692,7 +720,9 @@ export class AuditSession {
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     // A session saved with `aitd login`: the browser starts logged in, for sites whose login needs a person.
     const session = this.opts.storageState ? { storageState: this.opts.storageState } : {};
-    this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record, ...session });
+    // Service workers are off: the routes below never see a request a service worker makes, so its tracking hits
+    // would reach the real accounts unrecorded. Downloads are refused: an audit has no use for a page's files.
+    this.context = await this.browser.newContext({ ...device, locale: "en-US", serviceWorkers: "block", acceptDownloads: false, ...record, ...session });
     await this.context.exposeBinding("__atdRecord", (source, entry) => {
       const frame = frameInfo(source?.frame);
       if (frame) entry = { ...entry, frame };
@@ -1261,7 +1291,8 @@ export class AuditSession {
           }
           if (free) break;
         }
-        const describe = (n) => `${n.tagName.toLowerCase()}${n.id ? `#${n.id}` : ""}${n.getAttribute("role") ? ` role=${n.getAttribute("role")}` : ""} "${(n.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60)}"`;
+        // Cut short: this text reaches the model outside the page view, in the action's error or note.
+        const describe = (n) => `${n.tagName.toLowerCase()}${n.id ? `#${String(n.id).slice(0, 40)}` : ""}${n.getAttribute("role") ? ` role=${n.getAttribute("role").slice(0, 20)}` : ""} "${(n.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60)}"`;
         const screen = window.innerWidth * window.innerHeight;
         for (let n = hit; n && n !== document.body && n !== document.documentElement && !n.contains(el); n = n.parentElement) {
           const b = n.getBoundingClientRect();
@@ -1386,12 +1417,12 @@ export class AuditSession {
           step.replay = { action: a.action, ...(await replayTarget(a, target)), ...(a.value !== undefined ? { value: a.value } : {}) };
           if (a.action === "click") await this.click(target);
           else if (a.action === "fill" && hasLoginPlaceholder(a.value)) {
-            // The test account is typed only into the audited site's own pages, never a frame from elsewhere.
+            // The test account is typed only into pages of the site it belongs to, never a frame from elsewhere.
             const host = await target.evaluate(() => location.hostname).catch(() => "");
-            if (this.scope && !this.scope.allows(host)) return `The test account is only filled in on ${this.scope.hosts.join(", ")}, not on ${host || "this frame"}.`;
+            if (this.login && this.loginScope && !this.loginScope.allows(host)) return `The test account is only filled in on ${this.loginScope.hosts.join(", ")}, not on ${host || "this frame"}.`;
             let value;
             try {
-              value = fillLoginValue(a.value, this.login);
+              value = fillLoginValue(a.value, this.login, this.loginRefused);
             } catch (err) {
               if (err.code === "NO_LOGIN") return err.message;
               throw err;

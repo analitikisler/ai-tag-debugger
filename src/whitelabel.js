@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium } from "playwright";
-import { browserEnv, installBrowser } from "./browser.js";
+import { browserEnv, installBrowser, launchChromium } from "./browser.js";
 
 const LOGO_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml" };
 const MAX_LOGO_BYTES = 512 * 1024;
@@ -119,11 +118,11 @@ export async function writePdf(htmlPath, pdfPath) {
   const launch = { headless: true, env: browserEnv() };
   let browser;
   try {
-    browser = await chromium.launch(launch);
+    browser = await launchChromium(launch);
   } catch (err) {
     if (!/Executable doesn't exist|playwright install/i.test(String(err?.message))) throw err;
     await installBrowser();
-    browser = await chromium.launch(launch);
+    browser = await launchChromium(launch);
   }
   try {
     // JavaScript is off: the report needs none, and the page is only ever our own file.

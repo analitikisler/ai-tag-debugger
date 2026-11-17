@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { AuditSession, browserEnv } from "../src/browser.js";
+import { AuditSession, browserEnv, launchChromium, resetSandboxCheck } from "../src/browser.js";
 import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
 import { pageView } from "../src/agent.js";
 import { buildServer, closeIdleAudits, startMcp } from "../src/mcp.js";
@@ -242,5 +242,69 @@ test("with private addresses blocked, a GA4 request to a private server-side end
   } finally {
     await session.close();
     page.close();
+  }
+});
+
+test("Chromium is launched with its sandbox, and without it only where the computer can't use one", async () => {
+  const calls = [];
+  const notes = [];
+  const run = (launch, env = {}) => launchChromium({ headless: true }, { launch: async (o) => (calls.push(o.chromiumSandbox), launch(o)), env, warn: (m) => notes.push(m) });
+  try {
+    // Where the sandbox works, it is on, and nothing is said.
+    resetSandboxCheck();
+    assert.equal(await run(async () => "browser"), "browser");
+    assert.deepEqual([calls.splice(0), notes.length], [[true], 0]);
+    // As root or without user namespaces Chromium refuses to start sandboxed: one note, then without it, and later
+    // launches don't try again.
+    resetSandboxCheck();
+    const refuses = async (o) => {
+      if (o.chromiumSandbox) throw new Error("browserType.launch: Target page, context or browser has been closed\nChromium sandboxing failed!\n[pid][FATAL] No usable sandbox!");
+      return "browser";
+    };
+    assert.equal(await run(refuses), "browser");
+    assert.equal(await run(refuses), "browser");
+    assert.deepEqual(calls.splice(0), [true, false, false]);
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /sandbox can't be used here/);
+    // Any other failure is the caller's to handle (a missing browser is installed, for example), not a reason to drop the sandbox.
+    resetSandboxCheck();
+    await assert.rejects(run(async () => { throw new Error("Executable doesn't exist at /x/chrome"); }), /Executable doesn't exist/);
+    assert.deepEqual(calls.splice(0), [true]);
+    // AITD_NO_SANDBOX=1 never asks for it.
+    resetSandboxCheck();
+    await run(async () => "browser", { AITD_NO_SANDBOX: "1" });
+    assert.deepEqual(calls.splice(0), [false]);
+  } finally {
+    resetSandboxCheck();
+  }
+});
+
+test("a tracking hit sent from a service worker can't slip past the local answer, and downloads are refused", async () => {
+  const reached = [];
+  const tracked = createServer((req, res) => {
+    reached.push(req.url);
+    if (req.url === "/sw.js") return res.writeHead(200, { "content-type": "text/javascript" }).end('self.addEventListener("install", () => self.skipWaiting()); self.addEventListener("message", () => fetch("/matomo.php?idsite=1&rec=1&action_name=from_worker"));');
+    if (req.url === "/file.bin") return res.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": "attachment; filename=file.bin" }).end("data");
+    if (req.url.startsWith("/matomo.php")) return res.writeHead(204).end();
+    res.writeHead(200, { "content-type": "text/html" }).end(`<title>sw</title><a id="dl" href="/file.bin">Download</a><script>
+      fetch("/matomo.php?idsite=1&rec=1&action_name=from_page");
+      navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready).then((r) => r.active.postMessage("go"));
+    </script>`);
+  });
+  await new Promise((r) => tracked.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${tracked.address().port}/`;
+  const session = new AuditSession({ viewport: "desktop", site: url, login: null });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url, reason: "open" });
+    await session.act({ action: "wait", value: "1500", reason: "wait" });
+    assert.deepEqual(session.hits.map((h) => h.params?.page_title), ["from_page"]);
+    assert.deepEqual(reached.filter((u) => u.startsWith("/matomo.php")), [], "no tracking request left the browser");
+    assert.ok(!reached.includes("/sw.js"), "the service worker was never registered");
+    const [download] = await Promise.all([session.page.waitForEvent("download", { timeout: 10000 }), session.act({ action: "click", selector: "#dl", reason: "download" })]);
+    assert.ok(await download.failure(), "the download was refused");
+  } finally {
+    await session.close();
+    tracked.close();
   }
 });

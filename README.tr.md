@@ -161,7 +161,7 @@ Node 22+ gerekir.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger
-npx -y playwright@1.56.1 install chromium   # bu sürümün kullandığı tarayıcı sürümü
+npx -y playwright@1.65.1 install chromium   # bu sürümün kullandığı tarayıcı sürümü
 export ANTHROPIC_API_KEY=...                # ya da OPENAI_API_KEY, ya da GEMINI_API_KEY
 
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
@@ -731,7 +731,7 @@ Sunucuyu uygulamanın MCP yapılandırmasına ekleyin. Claude Desktop için bu, 
 }
 ```
 
-Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini indirir; bu yaklaşık bir dakika sürer ve yalnızca bir kez olur. Önceden indirmek için: `npx -y playwright@1.56.1 install chromium`.
+Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini indirir; bu yaklaşık bir dakika sürer ve yalnızca bir kez olur. Önceden indirmek için: `npx -y playwright@1.65.1 install chromium`.
 
 Tek tıkla ya da tek satırla kurulum:
 
