@@ -7,7 +7,7 @@ import path from "node:path";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders, PROVIDERS } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl, siteOf } from "./redact.js";
-import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
+import { autoBlockPrivate, hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
@@ -682,7 +682,9 @@ export class AuditSession {
    *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
    *     closeTimeoutMs: how long close() waits for the recording to be written (default 30 s) before skipping it.
    *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
-   *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
+   *   blockPrivate: refuse loopback, private and link-local addresses: true (an MCP server reachable over HTTP), false
+   *     (never), or left out, which refuses them when the audited site and its allowed hosts are all public (see
+   *     autoBlockPrivate in guard.js). autoBlock replaces that decision (for tests).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
    *   log: gets one line when a dropped navigation is tried again. navigationRetryMs: the wait before that (default 2 s).
    */
@@ -700,7 +702,9 @@ export class AuditSession {
     this.scrub = loginScrubber(this.login);
     this.loginStep = null; // the first step that typed the test account's password
     this.isBlockedAddress = typeof this.opts.blockPrivate === "function" ? this.opts.blockPrivate : isPrivateAddress;
-    this.isPrivate = this.opts.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
+    // Whether private addresses are refused. Null until start() decides for an audit that was not told either way.
+    this.blockPrivate = this.opts.blockPrivate === undefined ? null : Boolean(this.opts.blockPrivate);
+    this.isPrivate = this.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
     this.blocked = null;
     this.hits = [];
     this.steps = [];
@@ -742,10 +746,17 @@ export class AuditSession {
     if (this.opts.storageState && !existsSync(this.opts.storageState)) throw new Error(`No saved login session at ${this.opts.storageState}. Save one with: aitd login --site <url>`);
     const device = VIEWPORTS[this.opts.viewport];
     if (!device) throw new Error(`Unknown viewport "${this.opts.viewport}". Use: ${Object.keys(VIEWPORTS).join(", ")}`);
+    if (this.blockPrivate === null) {
+      // A public site is audited with the network the tool runs in closed to it; a local or private one is not. The
+      // user's own Chrome and a replay have no proxy of the tool's to go through.
+      const decide = this.opts.autoBlock ?? ((hosts) => autoBlockPrivate(hosts, { isPrivate: privateHostChecker(this.isBlockedAddress) }));
+      this.blockPrivate = Boolean(this.scope && !this.opts.connect && !this.opts.replayHar && (await decide(this.scope.hosts)));
+      if (this.blockPrivate) this.isPrivate = privateHostChecker(this.isBlockedAddress);
+    }
     if (this.opts.connect) {
       // The user's own Chrome: only the browser is theirs. The audit gets a fresh private window (a new context) in
       // it, exactly as clean as a launched browser, and close() closes that window and disconnects, leaving Chrome.
-      if (this.opts.blockPrivate) throw new Error("Connecting to your own Chrome works only from the CLI or a local MCP server, not over HTTP.");
+      if (this.blockPrivate) throw new Error("Connecting to your own Chrome works only from the CLI or a local MCP server, not over HTTP.");
       if (this.opts.replayHar) throw new Error("A saved site replays in the tool's own browser; leave --connect out.");
       this.browser = await connectToChrome(this.opts.connect);
     } else await this.launchBrowser();
@@ -755,7 +766,7 @@ export class AuditSession {
   /** Launches the tool's own Chromium, through the egress proxy when private addresses are blocked. */
   async launchBrowser() {
     const launch = { headless: this.opts.headless, env: browserEnv() };
-    if (this.opts.blockPrivate) {
+    if (this.blockPrivate) {
       // Every connection, WebSockets included, goes to an address the proxy checked.
       // "<-loopback>" stops Chromium from sending localhost around the proxy.
       this.egress = await startEgressProxy({ isBlocked: this.isBlockedAddress });

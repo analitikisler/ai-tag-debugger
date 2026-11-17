@@ -44,6 +44,7 @@ Options:
   --headed             Show the browser window
   --session <file>     Start logged in: saved (the session aitd login saved) or a session file
   --connect <url>      Run in your own Chrome, started with a debugging port (http://127.0.0.1:9222)
+  --allow-private-network   Let a public site's pages reach localhost and private addresses
   --fail-on <level>    Exit 1 at this level: broken (default), risk, warning, never
   --baseline <file>    Known findings to accept; they don't count toward --fail-on
   --update-baseline    Write the baseline file after the run (creates it)
@@ -76,6 +77,7 @@ Options:
   --topic <name>       Only plan one kind of event: custom-events, ecommerce, forms or consent
   --headed             Show the browser window
   --connect <url>      Explore in your own Chrome, started with a debugging port
+  --allow-private-network   Let a public site's pages reach localhost and private addresses
 
 AI:  --provider <name>   --model <id|cheap>   (default: whichever API key is set)
 
@@ -104,8 +106,9 @@ Options:
 
 Advanced:
   --host <addr>        HTTP host (default 127.0.0.1)
-  --token <secret>     Secret URL path segment, at least 16 characters (default: random)
-  --allow-private-network   Over HTTP, let audits open localhost and private addresses
+  --token <secret>     Secret URL path segment, at least 16 characters (default: AITD_MCP_TOKEN, else random)
+  --allow-private-network   Let audits open localhost and private addresses (a local server already
+                            does for a site that is itself local or private)
   --allow-live              Over HTTP, let start_audit send live (tracking requests reach the real accounts)
   --allow-plan              Over HTTP, offer make_plan (it spends the AI provider key set on this computer)
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
@@ -127,6 +130,7 @@ Options:
   --site <url>         The site to log in to (required)
   --save <file>        Where to save the session (default: aitd/<domain>/session.json)
   --allow-host <host>  Another host the login passes through, such as a single sign-on page (repeatable)
+  --allow-private-network   Let a public site's pages reach localhost and private addresses
   --data-dir <dir>     The folder plans and runs are saved in (default: aitd)`;
 
 const DOCTOR = `Usage: aitd doctor [--site <url>] [--data-dir <dir>]

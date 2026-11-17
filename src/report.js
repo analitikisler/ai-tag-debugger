@@ -155,7 +155,9 @@ function hitSeverity(findings, run, step, hit) {
 }
 
 // Values from the audited page go into Markdown as text: no raw HTML, and no way out of a code span.
-const mdText = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Brackets are escaped too: an event name that reads [text](address) or ![](address) would otherwise become a link or
+// an image wherever the report is shown (a pull request comment, a chat).
+const mdText = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[[\]]/g, "\\$&");
 const mdCode = (v) => String(v ?? "").replace(/`/g, "'").replace(/\n/g, " ");
 
 // ---------- The Markdown report (docs/design/md-report-spec.md) ----------
@@ -169,7 +171,7 @@ const MD_FLAGGED = 5;
 const MD_PLACES = 3;
 
 /** A finding's detail with quoted names as code spans, as the HTML shows it. */
-const mdDetail = (s) => mdText(s).replace(/"([^"]+?)"/g, (_, x) => `\`${x.replace(/`/g, "'")}\``);
+const mdDetail = (s) => mdText(s).replace(/"([^"]+?)"/g, (_, x) => `\`${x.replace(/`/g, "'").replace(/\\([[\]])/g, "$1")}\``);
 const mdClip = (t, n) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
 /** The path of a page address; the host is the site's and would repeat on every line. */
 const mdPath = (url) => {

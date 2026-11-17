@@ -30,7 +30,7 @@ async function saveLoginSession(values) {
   }
   const file = path.resolve(values.save ?? sessionFileFor(values.site, values["data-dir"] ?? DEFAULT_DATA_DIR));
   const { AuditSession } = await import("./browser.js");
-  const session = new AuditSession({ viewport: "desktop", site: values.site, allowedHosts: values["allow-host"], headless: false, login: null });
+  const session = new AuditSession({ viewport: "desktop", site: values.site, allowedHosts: values["allow-host"], headless: false, login: null, ...(values["allow-private-network"] ? { blockPrivate: false } : {}) });
   await session.start();
   try {
     await session.act({ action: "goto", url: values.site });
@@ -123,7 +123,7 @@ async function main(args = process.argv.slice(2)) {
   }
   if (command === "mcp" && !values.help) {
     const { startMcp } = await import("./mcp.js");
-    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token, reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"], allowPlan: values["allow-plan"] });
+    await startMcp({ http: values.http, port: values.port ? Number(values.port) : undefined, host: values.host, token: values.token ?? (process.env.AITD_MCP_TOKEN || undefined), reportsDir: values.reports, publicUrl: values["public-url"], allowPrivateNetwork: values["allow-private-network"], allowLive: values["allow-live"], allowPlan: values["allow-plan"] });
     return;
   }
   if (command === "login" && !values.help) {
@@ -179,7 +179,7 @@ async function main(args = process.argv.slice(2)) {
     const { discoverPlan } = await import("./discover.js");
     const provider = await createProvider({ name: values.provider, model: values.model, baseUrl: values["base-url"] });
     console.log(`Exploring ${values.site} to draft its measurement plan…`);
-    const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], connect: values.connect, log: console.log });
+    const { plan } = await discoverPlan({ site: values.site, topic: values.topic, provider, maxSteps, headed: values.headed, allowedHosts: values["allow-host"], connect: values.connect, log: console.log, ...(values["allow-private-network"] ? { blockPrivate: false } : {}) });
     const { id, dir } = await savePlan(plan, { dataDir, site: values.site, branding: !values["no-branding"] });
     const custom = plan.events.filter((e) => e.custom).length;
     const rel = path.relative(process.cwd(), dir);
@@ -238,6 +238,8 @@ async function main(args = process.argv.slice(2)) {
   }
   if (values["keep-bodies"]) loaded.config = { ...loaded.config, keep_bodies: true };
   if (values["allow-host"]?.length) loaded.config = { ...loaded.config, allowed_hosts: [...(loaded.config.allowed_hosts ?? []), ...values["allow-host"]] };
+  // A public site is audited with private network addresses closed to its pages; this keeps them open.
+  if (values["allow-private-network"]) loaded.config = { ...loaded.config, allow_private_network: true };
   // Your own Chrome, started with a debugging port: every journey runs in a fresh window of it.
   if (values.connect) loaded.config = { ...loaded.config, connect: values.connect };
   // A session saved with `aitd login` ("saved") or a file: every journey starts logged in.

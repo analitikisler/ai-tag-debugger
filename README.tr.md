@@ -532,6 +532,7 @@ Dosyada her bulgu için bir kayıt bulunur: çalıştırmanın eşleştirme yapt
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. Bunlar yoksa `--scripted`, sitenin o yolculuğu son tamamlayan çalıştırmasının adımlarını tekrarlar. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
+| `allow_private_network` | Varsayılan `false`. Site ve `allowed_hosts` içindekilerin tümü genel internetteyse tarayıcı `localhost` ile özel ağ adreslerini reddeder; böylece bir sayfa, aracın çalıştığı ağın içine ulaşamaz. Genel sitenin sayfalarının böyle bir adrese ulaşması gerekiyorsa (örneğin yerel bir ödeme ya da etiket sunucusu taklidi) `true` yapın. Kendisi yerel ya da özel olan bir site eskisi gibi denetlenir. `--allow-private-network` ile aynıdır. |
 | `session_file` | `aitd login` ile kaydedilmiş bir oturum; her yolculuk giriş yapılmış olarak başlar: sitenin kendi oturumu için `"saved"` ya da bir dosya yolu. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `connect` | Kendi Chrome'unuzun hata ayıklama adresi, örneğin `http://127.0.0.1:9222`: her yolculuk onun yeni bir penceresinde çalışır. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
@@ -561,7 +562,7 @@ Kayıtlı her çalıştırmadan sonra `notify`, "Son çalıştırmadan bu yana d
 ```
 
 - **Slack** webhook adresini alır. `"slack": true` ise adresi bunun yerine `SLACK_WEBHOOK_URL` ortam değişkeninden okur; böylece adres dosyada durmaz.
-- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. Düz `smtp://` adresi giriş bilgisini ve postayı şifresiz gönderir, STARTTLS desteklenmez.
+- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. STARTTLS desteklenmez, bu yüzden düz bir `smtp://` adresi her şeyi şifresiz gönderirdi: içinde kullanıcı ve parola varsa, sunucu bu bilgisayarda değilse reddedilir. Ayar dosyasındaki bir webhook adresi gizli bir bilgidir: `SLACK_WEBHOOK_URL` ile birlikte `"slack": true` kullanmayı tercih edin. Her iki durumda da `notify`, `capture.json` dosyasına ve kaydedilmiş sitelere yazılmaz.
 
 Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Konu satırı önce sonucu, sonra sayıları ve başlığı taşır: `shop.example: Kaldı · 2 yeni sorun · purchase izlemesi bozuk (mobile)`. Gövde sonuç satırını yineler, sonra neyin düzeldiğini (*önceki durumuyla* birlikte) ve neyin yeni olduğunu listeler (her yeni kayıt önem düzeyi ve sorumlusuyla), ardından mini grafikli eğilim satırı, gelip giden sorunlar ve bir sorun 5, 10, 20 çalıştırmadır açık kaldığında (sonra her 10 çalıştırmada bir) "N çalıştırmadır hâlâ açık" satırı gelir; böylece aynı açık liste her mesajda tekrarlanmaz:
 
@@ -581,6 +582,7 @@ Eğilim tek başına hiçbir zaman uyarı tetiklemez. Bir kanal başarısız olu
 ```
 aitd "<cümle>" [-y]
 aitd plan --site <url> [--topic <ad>] [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+         [--allow-private-network]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <dosya> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -589,10 +591,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <dosya>] [--update-baseline]
          [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>] [--session saved|<dosya>] [--connect <url>]
+         [--allow-private-network]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live] [--allow-plan]
-aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--allow-private-network] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -631,6 +634,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
 | `--base-url <url>` | run | OpenAI uyumlu bir sağlayıcının API adresi. |
 | `--allow-host <ana makine>` | run | Yolculukların ziyaret edebileceği başka bir ana makine (tekrarlanabilir). `allowed_hosts` ile aynıdır. |
+| `--allow-private-network` | run, plan, login, mcp | Genel bir sitenin sayfalarının `localhost` ve özel ağ adreslerine ulaşmasına izin verir. `allow_private_network` ile aynıdır; `mcp --http` üzerinde sunucunun engelini kaldırır. |
 | `--session saved\|<dosya>` | run | Her yolculuğu, `aitd login`'in kaydettiği oturumdan (`saved`) ya da bir oturum dosyasından giriş yapılmış olarak başlatır. `session_file` ile aynı. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `--save <dosya>` | login | `aitd login`'in oturumu nereye kaydedeceği (varsayılan `aitd/<alan-adı>/session.json`). |
 | `--connect <url>` | run, plan | Bir hata ayıklama bağlantı noktasıyla başlatılmış kendi Chrome'unuzda çalıştırır, örneğin `http://127.0.0.1:9222`. `connect` ile aynı. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
@@ -757,7 +761,7 @@ cloudflared tunnel --url http://localhost:8787     # ya da: ngrok http 8787; yaz
 npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<tünel-adresiniz>
 ```
 
-Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol içeren bir URL yazdırır. Bu URL'yi uygulamada bir bağlayıcı olarak ekleyin. URL'yi bilen herkes bilgisayarınızdaki tarayıcıyı kullanabilir; bu yüzden gizli tutun ve işiniz bitince sunucuyu durdurun. Kendi gizli değeriniz (`--token`) en az 16 karakter olmalıdır.
+Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol içeren bir URL yazdırır. Bu URL'yi uygulamada bir bağlayıcı olarak ekleyin. URL'yi bilen herkes bilgisayarınızdaki tarayıcıyı kullanabilir; bu yüzden gizli tutun ve işiniz bitince sunucuyu durdurun. Kendi gizli değeriniz (`--token` ya da onu süreç listesinin dışında tutan `AITD_MCP_TOKEN` ortam değişkeni) en az 16 karakter olmalıdır.
 
 Rapor bağlantıları başkalarına iletilmek içindir, bu yüzden o gizli değeri taşımaz: `--public-url` ile, biten bir denetim `https://<tünel-adresiniz>/reports/<rapor anahtarı>/<denetim>/report.html` adresine bağlantı verir. Rapor anahtarı gizli değerden türetilir, yalnızca raporları açar ve aynı `--token` değerini kullandığınız sürece aynı kalır.
 
@@ -778,6 +782,8 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 - Ajana kolay test verisi kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir yolculuk gerçek bir ödeme ya da hesap gerektiriyorsa durur ve bunu bildirir.
 - [Nasıl çalışır](#nasıl-çalışır) bölümünde listelenen platformlara giden takip istekleri varsayılan olarak yerelde yanıtlanır; bu yüzden o analitik ve reklam hesaplarına test dönüşümleri ulaşmaz.
 - Tarayıcı, denetlenen sitede ve alt alan adlarında kalır; ayrıca varsa `allowed_hosts` içinde. Yalnızca `http` ve `https` sayfalarını açar.
+- Denetlenen site ve `allowed_hosts` içindekiler genel internetteyse tarayıcı, bir HTTP sunucusunun kullandığı aynı yerleşik proxy üzerinden `localhost` ile özel ağ adreslerini (`192.168.x.x` ya da bulut meta veri adresi `169.254.169.254` gibi) reddeder; böylece sitedeki bir sayfa bir geliştirme sunucusuna, bir yönlendiriciye ya da bir CI çalıştırıcısının kimlik bilgilerine ulaşamaz. Kendisi yerel ya da özel olan bir site eskisi gibi denetlenir; ortamda bir proxy tanımlıysa (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`) her site de öyle, çünkü tarayıcının siteye ulaşmak için o proxy'ye ihtiyacı vardır. `--allow-private-network` ya da `"allow_private_network": true` bunu kapatır. Kendi Chrome'unuz (`--connect`) için geçerli değildir.
+- Bir çalıştırmanın dosyaları, bilgisayarınızda kalması gerekenleri içermez: ayar dosyasındaki `notify` hedefleri, `base_url`, `session_file` ve `connect`, `capture.json` dosyasına ya da kaydedilmiş bir siteye yazılmaz.
 - Modele, sayfa içeriğinin veri olduğu ve talimat olmadığı söylenir. Sitenin denetlenirken gönderdiği her şey için de aynısı geçerlidir: hit'ler, dataLayer push'ları ve bunlardan üretilen bulgular ile raporlar, sohbet uygulamanızın modeline ve bulguları açıklayan modele `<captured_data>` etiketleri arasında ulaşır; talimatları bunun veri olduğunu söyler. Bir istem kuralı, bir modelin asla yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini sınırlar.
 - Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgileriniz olmadan ve Chromium'un kendi korumalı alanı (sandbox) açık olarak çalışır. Chromium korumalı alanını kullanamadığında (root olarak çalışmaz ve bazı konteynerlerin ve CI çalıştırıcılarının kapattığı kullanıcı ad alanlarına ihtiyaç duyar) araç bunu stderr'e bir kez yazar ve tarayıcıyı onsuz başlatır; `AITD_NO_SANDBOX=1` bu denemeyi atlar. Korumalı alanı korumak için aracı normal bir kullanıcı olarak çalıştırın.
 - Denetim tarayıcısında service worker'lar ve indirmeler kapalıdır: bir service worker'dan gönderilen takip isteği, aksi halde yerel yanıtın çevresinden dolaşıp gerçek hesaba ulaşırdı.

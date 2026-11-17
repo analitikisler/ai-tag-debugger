@@ -206,6 +206,8 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   const session = new AuditSession({
     viewport, site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
     blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
+    // Left out, private addresses are refused when the site is public; "allow_private_network" keeps them open.
+    ...(config.allow_private_network ? { blockPrivate: false } : {}),
   });
   try {
     await session.start();

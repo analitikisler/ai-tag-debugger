@@ -72,6 +72,11 @@ export async function sendAlerts({ notify, site, changes, lang = "en", reportPat
 export function sendSmtp(url, { from, to, subject, text }) {
   const u = new URL(url);
   const secure = u.protocol === "smtps:";
+  // This client has no STARTTLS, so over smtp:// a login would cross the network in clear. Only a server on this
+  // computer gets one that way.
+  if (!secure && u.username && !["127.0.0.1", "localhost", "[::1]"].includes(u.hostname)) {
+    return Promise.reject(new Error("SMTP_URL has a user and password but is not smtps://, so they would be sent unencrypted. Use smtps://user:pass@host:465."));
+  }
   const port = Number(u.port || (secure ? 465 : 25));
   const socket = secure ? tlsConnect({ host: u.hostname, port, servername: u.hostname }) : netConnect({ host: u.hostname, port });
   const b64 = (s) => Buffer.from(s).toString("base64");

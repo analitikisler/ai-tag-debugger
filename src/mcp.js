@@ -4,7 +4,7 @@
 //   stdio (default): for apps that start local servers, e.g. Claude Desktop, Gemini CLI, Cursor.
 //   --http:          Streamable HTTP, for apps that connect to a URL, e.g. ChatGPT and Gemini
 //                    (expose it over HTTPS with a tunnel or host it).
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -452,7 +452,8 @@ async function loadAgainst(ref, site, opts) {
 /**
  * @param {{ allowFiles: boolean, blockPrivate?: boolean, reportsDir: string, reportsUrl?: string, dataDir?: string }} opts
  *   allowFiles: local (stdio) servers may read config and plan files; HTTP servers may not.
- *   blockPrivate: the browser refuses loopback, private and link-local addresses (HTTP servers, by default).
+ *   blockPrivate: true: the browser refuses loopback, private and link-local addresses (HTTP servers, by default).
+ *     false: it never does (--allow-private-network). Left out (a local server): it does when the site is public.
  *   dataDir: where saved plans live (default ./aitd), used by `against`.
  *   reportsUrl: where an HTTP server serves finished reports, if it knows its public URL.
  *   provider: an AI provider for make_plan (default: the one configured on this computer; tests pass a fake).
@@ -537,7 +538,8 @@ export function buildServer(opts) {
         await session.close().catch(() => {});
         return fail(connect ? `Could not connect to Chrome: ${err.message}` : `Could not start the browser: ${err.message}. If Chromium is missing, run: npx playwright install chromium`);
       }
-      const id = randomUUID().slice(0, 8);
+      // Long enough that an id can't be guessed by whoever else holds the server's URL.
+      const id = randomBytes(8).toString("hex");
       const preset = presetFor(journey);
       const name = preset?.id ?? ((journey || "journey").toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 40) || "journey");
       const audit = { id, session, site: url.href, journey: name, preset, viewport: viewport ?? "desktop", lastUsed: Date.now() };
@@ -747,7 +749,7 @@ export function buildServer(opts) {
       // Each choice has its own browser, so the comparison takes as many slots as it runs side by side.
       const browsers = Math.min(concurrency, freeSlots());
       if (browsers < 1) return fail(busy());
-      const sc = await holding(browsers, () => runConsentScenarios(config, { campaign, concurrency: browsers, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) }));
+      const sc = await holding(browsers, () => runConsentScenarios(config, { campaign, concurrency: browsers, ...(opts.blockPrivate !== undefined ? { blockPrivate: opts.blockPrivate } : {}) }));
       if (!sc) return text(`No consent banner the tool can answer was found on ${url.href}, so the choices could not be compared. Walk the journey with start_audit and browser_action instead.`);
       const m = messages(language);
       const table = consentTable(sc);
@@ -939,6 +941,7 @@ export function buildServer(opts) {
       },
       async ({ config: configFile, against, scripted, language, branding, concurrency, providers, baseline: baselineFile }) => {
         const loaded = await loadConfig(configFile);
+        if (opts.blockPrivate === false) loaded.config = { ...loaded.config, allow_private_network: true };
         let baseline = null;
         if (baselineFile ?? loaded.baselineFile) {
           try {
@@ -1015,7 +1018,7 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
 
   if (!http) {
     // On your own computer live runs are yours to start; a server others reach needs --allow-live.
-    const server = buildServer({ allowFiles: true, reportsDir: dir, allowLive: true });
+    const server = buildServer({ allowFiles: true, reportsDir: dir, allowLive: true, ...(allowPrivateNetwork ? { blockPrivate: false } : {}) });
     await server.connect(new StdioServerTransport());
     // stdout carries the protocol, so status goes to stderr.
     console.error(`ai-tag-debugger MCP server ready on stdio. Reports go to ${dir}`);

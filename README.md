@@ -532,6 +532,7 @@ The file holds one entry per finding, with a `key` the run matches on (the check
 | `journeys[].start` | Optional start path (default `/`). |
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
+| `allow_private_network` | Default `false`. When the site and its `allowed_hosts` are all on the public internet, the browser refuses `localhost` and private network addresses, so a page can't reach into the network the tool runs in. Set to `true` if the public site's pages must reach one (a local mock of a payment or tag server, for example). A site that is itself local or private is audited as before. Same as `--allow-private-network`. |
 | `session_file` | A session saved with `aitd login`, so every journey starts logged in: `"saved"` for the site's own, or a file path. See [Logging in](#logging-in). |
 | `connect` | Your own Chrome's debugging address, e.g. `http://127.0.0.1:9222`: each journey runs in a fresh window of it. See [Using your own Chrome](#using-your-own-chrome). |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
@@ -561,7 +562,7 @@ After each saved run, `notify` sends the "Changed since last run" diff to your t
 ```
 
 - **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
-- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
+- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. STARTTLS isn't supported, so a plain `smtp://` URL would send everything unencrypted: with a user and password in it, it is refused, unless the server is on this computer. A webhook address in the config is a secret: prefer `"slack": true` with `SLACK_WEBHOOK_URL`. Either way, `notify` is left out of `capture.json` and of saved sites.
 
 An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The subject carries the verdict first, then the counts and the headline: `shop.example: Fail · 2 new problems · purchase tracking is broken on mobile`. The body repeats the verdict line, then lists what was fixed (with what it *was*) and what is new, each new item with its severity and owner, then the trend line with its sparkline, the flapping problems, and "Still open after N runs" when a problem reaches 5, 10, 20 runs open (then every 10), so the same open list does not repeat in every message:
 
@@ -581,6 +582,7 @@ The trend never triggers an alert on its own. If a channel fails, the run prints
 ```
 aitd "<sentence>" [-y]
 aitd plan --site <url> [--topic <name>] [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+         [--allow-private-network]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -589,10 +591,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--c
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
          [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>] [--connect <url>]
+         [--allow-private-network]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
          [--allow-private-network] [--allow-live] [--allow-plan]
-aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--allow-private-network] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -631,6 +634,7 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
 | `--base-url <url>` | run | The API address for an OpenAI-compatible provider. |
 | `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
+| `--allow-private-network` | run, plan, login, mcp | Let a public site's pages reach `localhost` and private network addresses. Same as `allow_private_network`; on `mcp --http` it lifts the server's block. |
 | `--session saved\|<file>` | run | Start every journey logged in, from the session `aitd login` saved (`saved`) or a session file. Same as `session_file`. See [Logging in](#logging-in). |
 | `--save <file>` | login | Where `aitd login` saves the session (default `aitd/<domain>/session.json`). |
 | `--connect <url>` | run, plan | Run in your own Chrome, started with a debugging port, e.g. `http://127.0.0.1:9222`. Same as `connect`. See [Using your own Chrome](#using-your-own-chrome). |
@@ -757,7 +761,7 @@ cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787; note t
 npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<your-tunnel-address>
 ```
 
-The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`) must be at least 16 characters.
+The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`, or the `AITD_MCP_TOKEN` environment variable, which keeps it out of the process list) must be at least 16 characters.
 
 Report links are made to be passed on, so they don't carry that secret: with `--public-url`, a finished audit links to `https://<your-tunnel-address>/reports/<report key>/<audit>/report.html`. The report key is derived from the secret, opens reports and nothing else, and stays the same for as long as you keep the same `--token`.
 
@@ -778,6 +782,8 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 - The agent is told to use obvious test data and **never to enter real payment details**. If a journey needs a real payment or account, it stops and reports that instead.
 - Tracking requests to the platforms listed in [How it works](#how-it-works) are answered locally by default, so those analytics and ad accounts don't receive test conversions.
 - The browser stays on the audited site and its subdomains, plus any `allowed_hosts`. It opens only `http` and `https` pages.
+- When the audited site and its `allowed_hosts` are public, the browser refuses `localhost` and private network addresses (such as `192.168.x.x` or the cloud metadata address `169.254.169.254`), through the same built-in proxy an HTTP server uses, so a page on the site can't reach a development server, a router or a CI runner's credentials. A site that is itself local or private is audited as before, and so is any site when the environment names a proxy (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`), which the browser needs to reach the site at all. `--allow-private-network` or `"allow_private_network": true` turns it off. It doesn't apply to your own Chrome (`--connect`).
+- A run's files leave out what should stay on your computer: the config's `notify` targets, `base_url`, `session_file` and `connect` are not written to `capture.json` or a saved site.
 - The model is told that page content is data, never instructions. So is everything the site sends while it is audited: hits, dataLayer pushes, and the findings and reports built from them reach your chat app's model, and the model that explains findings, between `<captured_data>` tags that their instructions call data. A prompt rule can't guarantee a model is never misled, so the navigation limits above contain what a misled model can do.
 - The browser runs without your API keys and other secrets in its environment, and with Chromium's own sandbox on. Where Chromium can't use its sandbox (it doesn't run as root, and it needs user namespaces, which some containers and CI runners turn off), the tool says so once on stderr and starts the browser without it; `AITD_NO_SANDBOX=1` skips the check. Run the tool as a normal user to keep the sandbox.
 - Service workers and downloads are off in the audit browser: a tracking request sent from a service worker would otherwise go around the local answer and reach the real account.

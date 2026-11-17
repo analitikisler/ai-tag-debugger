@@ -103,3 +103,17 @@ test("plan list prints the site's plan IDs, oldest first", () => {
   for (const id of ["2026-10-16_0900", "2026-10-15_1200"]) mkdirSync(path.join(dir, "example.com", "plans", id), { recursive: true });
   assert.equal(cli("plan", "list", "--site", "https://www.example.com", "--data-dir", dir), "2026-10-15_1200\n2026-10-16_0900\n");
 });
+
+test("the HTTP server's secret can come from AITD_MCP_TOKEN, and --token goes before it", () => {
+  // Both are refused for being too short, before anything listens: which one was read shows in which one is refused.
+  const refused = (args, env) => {
+    try {
+      execFileSync(process.execPath, ["src/cli.js", "mcp", "--http", ...args], { encoding: "utf8", env: { ...process.env, ...env }, stdio: "pipe" });
+      return "";
+    } catch (err) {
+      return err.stderr;
+    }
+  };
+  assert.match(refused([], { AITD_MCP_TOKEN: "short" }), /--token must be at least 16 characters/);
+  assert.match(refused(["--token", "also-short"], { AITD_MCP_TOKEN: "a-long-enough-secret-from-the-environment" }), /--token must be at least 16 characters/);
+});

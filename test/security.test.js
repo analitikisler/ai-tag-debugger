@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request as httpRequest } from "node:http";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -10,7 +10,13 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
 import { AuditSession, browserEnv, capHit, DISABLED_FEATURES, ENTRY_LIMITS, launchChromium, resetSandboxCheck } from "../src/browser.js";
-import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
+import { autoBlockPrivate, hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
+import { shareableConfig, writeReports } from "../src/audit.js";
+import { sendSmtp } from "../src/notify.js";
+import { renderPlanHtml } from "../src/plan-html.js";
+import { readPlanSheet, toCsv, writePlanSheet } from "../src/sheet.js";
+import { validateConfig } from "../src/schema.js";
+import { domainOf } from "../src/workspace.js";
 import { pageView } from "../src/agent.js";
 import { buildServer, closeIdleAudits, reportKey, startMcp } from "../src/mcp.js";
 import { checkRun } from "../src/checks.js";
@@ -49,6 +55,9 @@ test("private, loopback, link-local and mapped addresses are recognized", async 
     "::ffff:7f00:1", "::127.0.0.1", "64:ff9b::a9fe:a9fe", "64:ff9b::10.0.0.1", "2002:c0a8:0101::1", "2001:0::1"]) {
     assert.ok(isPrivateAddress(ip), ip);
   }
+  // An IPv4 address inside an IPv4-translated one, and the old site-local range.
+  for (const ip of ["::ffff:0:7f00:1", "::ffff:0:169.254.169.254", "fec0::1", "feff::1"]) assert.ok(isPrivateAddress(ip), ip);
+  assert.ok(!isPrivateAddress("::ffff:0:808:808"));
   for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::1"]) assert.ok(!isPrivateAddress(ip), ip);
   assert.match(await navigationError("file:///etc/passwd"), /Only http and https/);
   assert.match(await navigationError("http://localhost/", { isPrivate: async () => true }), /private network address/);
@@ -345,6 +354,8 @@ test("over HTTP, a report link opens reports and nothing else, and get_report re
   };
   try {
     const [started] = await call("start_audit", { site, campaign: false });
+    // An audit's id is 64 random bits: not something another holder of the URL can guess.
+    assert.match(started, /^audit_id: [0-9a-f]{16}$/m);
     const [result] = await call("finish_audit", { audit_id: started.match(/audit_id: (\w+)/)[1], completed: true, note: "Done." });
     // The link to pass on carries the report key, never the secret that drives the browser.
     const link = result.match(/^Full report with the event timeline: (\S+)$/m)[1];
@@ -459,4 +470,103 @@ test("the explain call sends the hits whole only while they fit, then their name
   const counts = explainInput({ findings: [], plan: { events: [] }, runs: Array.from({ length: 400 }, () => ({ ...run(60, 4096), steps: Array.from({ length: 30 }, (_, i) => ({ index: i, label: `step ${i}` })) })) });
   assert.equal(counts.detail, "counts");
   assert.deepEqual(JSON.parse(counts.text).journeys[0].steps[0], { step: "step 0", hit_count: 60 });
+});
+
+test("an audit of a public site closes the tool's own network to its pages, and one of a local site does not", async () => {
+  const lookups = { "shop.example": false, "pay.example": false, "staging.internal": true };
+  const isPrivate = async (host) => lookups[host];
+  // Public site, public allowed host: closed. One private host among them, or a proxy in the environment: left open.
+  assert.equal(await autoBlockPrivate(["shop.example", "pay.example"], { env: {}, isPrivate }), true);
+  assert.equal(await autoBlockPrivate(["shop.example", "staging.internal"], { env: {}, isPrivate }), false);
+  assert.equal(await autoBlockPrivate(["staging.internal"], { env: {}, isPrivate }), false);
+  for (const env of [{ HTTPS_PROXY: "http://proxy:3128" }, { http_proxy: "http://proxy:3128" }, { ALL_PROXY: "socks5://proxy:1080" }]) assert.equal(await autoBlockPrivate(["shop.example"], { env, isPrivate }), false);
+  assert.equal(await autoBlockPrivate([], { env: {}, isPrivate }), false);
+  assert.deepEqual(validateConfig({ site: "https://shop.example", allow_private_network: true }).warnings, []);
+
+  // The test shop is local, so an audit of it reaches local addresses as before, with no proxy in between.
+  const local = new AuditSession({ viewport: "desktop", site, login: null });
+  await local.start();
+  try {
+    assert.equal(local.blockPrivate, false);
+    assert.equal(local.egress, undefined);
+    assert.equal(await local.act({ action: "goto", url: site }), null);
+  } finally {
+    await local.close();
+  }
+  // Decided public (the decision is injected: no public site answers in a test), the same address is refused, by the
+  // navigation check and by the proxy every request goes through.
+  const closed = new AuditSession({ viewport: "desktop", site, login: null, autoBlock: async (hosts) => (assert.deepEqual(hosts, ["localhost"]), true) });
+  await closed.start();
+  try {
+    assert.equal(closed.blockPrivate, true);
+    assert.ok(closed.egress);
+    assert.match(await closed.act({ action: "goto", url: site }), /localhost is a private network address, which this audit doesn't open\./);
+  } finally {
+    await closed.close();
+  }
+  // Asked to keep them open (--allow-private-network, "allow_private_network"), nothing is decided at all.
+  const open = new AuditSession({ viewport: "desktop", site, login: null, blockPrivate: false, autoBlock: async () => assert.fail("not asked") });
+  await open.start();
+  try {
+    assert.equal(open.blockPrivate, false);
+  } finally {
+    await open.close();
+  }
+});
+
+test("a run's files don't keep the config's alert targets, AI endpoint, session file or Chrome address", async () => {
+  const config = {
+    site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"],
+    notify: { slack: "https://hooks.slack.example/services/T0/B0/secret-webhook", email: "team@example.com" },
+    base_url: "http://llm.internal:11434/v1", session_file: "/home/me/aitd/shop/session.json", connect: "http://127.0.0.1:9222",
+  };
+  assert.deepEqual(shareableConfig(config), { site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"] });
+  const outDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  await writeReports({ outDir, config, plan: { events: [] }, runs: [], findings: [], explained: null, lang: "en" });
+  const capture = await readFile(path.join(outDir, "capture.json"), "utf8");
+  for (const secret of ["secret-webhook", "team@example.com", "llm.internal", "session.json", "9222"]) assert.ok(!capture.includes(secret), secret);
+  assert.deepEqual(JSON.parse(capture).config, { site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"], plan: { events: [] } });
+});
+
+test("an SMTP login is never sent over a connection that is not encrypted, except to this computer", async () => {
+  for (const url of ["smtp://user:pass@mail.example.com:587", "smtp://user:pass@10.0.0.5", "smtp://user@mail.example.com"]) {
+    await assert.rejects(sendSmtp(url, { from: "a@x", to: ["b@x"], subject: "s", text: "t" }), /SMTP_URL has a user and password but is not smtps:\/\//, url);
+  }
+});
+
+test("a page can't write a link or an image into report.md through an event name", () => {
+  const name = 'x" [Open the corrected report](https://evil.example/login) ![](https://evil.example/beacon.png) "y';
+  const run = {
+    journeyId: "j", viewport: "desktop", completed: true, note: "ok", startedAt: 0, network: [], consentStep: null, dataLayerLog: [], cookies: [],
+    steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Click [here](https://evil.example/)", t: 1 }],
+    hits: [1, 2].map((t) => ({ platform: "ga4", name, params: {}, step: 1, t, url: "https://www.google-analytics.com/g/collect?v=2&en=x" })),
+  };
+  const findings = checkRun({ events: [] }, run);
+  assert.ok(findings.some((f) => f.check === "duplicate" || /sent 2 times/.test(f.detail)), "the finding that quotes the event name");
+  const md = renderMarkdown({ title: "T", site: "localhost", generatedAt: "now", findings, explained: null, runs: [run], plan: { events: [] }, lang: "en" });
+  assert.match(md, /evil\.example/, "the name is in the report");
+  // Outside code spans the page's brackets are escaped, so nothing of its reads as [text](address) or ![](address).
+  const lines = md.split("\n").map((line) => line.replace(/`[^`]*`/g, "")).filter((line) => /evil\.example/.test(line));
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    assert.doesNotMatch(line, /(^|[^\\])\]\(https:\/\/evil\.example/, line);
+    if (/corrected report/.test(line)) assert.match(line, /\\\[Open the corrected report\\\]\(https:\/\/evil\.example\/login\) !\\\[\\\]\(/, line);
+  }
+  // A step's label is escaped the same way where the report quotes it.
+  assert.ok(lines.some((line) => /Click \\\[here\\\]\(https:\/\/evil\.example\/\)/.test(line)));
+});
+
+test("a host of dots is not a folder name, the plan page has a content security policy, and a plan's CSV can't carry a formula", async () => {
+  for (const url of ["http://../", "http://./", "http://%2e%2e/"]) assert.throws(() => domainOf(url), /has no host name/, url);
+  assert.equal(domainOf("https://www.Shop.example/x"), "shop.example");
+  assert.match(renderPlanHtml({ site: "https://shop.example", events: [] }), /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">/);
+  assert.equal(toCsv([["=HYPERLINK(\"http://evil.example\")", "+1", "-1", "@x", "plain", "it's"]]), `"'=HYPERLINK(""http://evil.example"")",'+1,'-1,'@x,plain,it's\r\n`);
+  // The guard comes off again on import, so a plan with such a value survives the round trip.
+  const dir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  const plan = { site: "https://shop.example", events: [{ platform: "ga4", name: "purchase", description: "=cmd|x", required_params: ["value"], parameters: { value: { description: "-5 or more", example: "+90 555 0100" } } }], user_properties: [] };
+  const [eventsFile] = await writePlanSheet(plan, dir, { format: "csv" });
+  assert.match(await readFile(eventsFile, "utf8"), /'=cmd\|x/);
+  const back = (await readPlanSheet(eventsFile, { site: plan.site })).plan.events[0];
+  assert.equal(back.description, "=cmd|x");
+  assert.deepEqual(back.parameters.value, { description: "-5 or more", example: "+90 555 0100" });
 });
