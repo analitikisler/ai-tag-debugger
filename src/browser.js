@@ -36,8 +36,25 @@ export function installBrowser() {
 let sandboxUsable = null;
 const SANDBOX_FAILURE = /sandboxing failed|no usable sandbox|running as root without --no-sandbox/i;
 
-/** Launches the tool's Chromium with its sandbox on where the computer allows it. AITD_NO_SANDBOX=1 never asks for it. */
+// The Chromium features this tool's browser runs without: the ones Playwright itself turns off (chromiumSwitches.ts in
+// playwright-core 1.65.1), and RenderDocument. With RenderDocument on, which is Chromium's default and which
+// Playwright stopped turning off in 1.62, a request a page sends while it unloads (a page_view or a beacon on the way
+// out) is neither reported nor routed: it would go unrecorded, and to the real account. Chromium reads only the last
+// --disable-features it is given, so adding one feature means repeating the list. A test compares it with what the
+// installed Playwright passes, so an update of Playwright can't leave it behind.
+export const DISABLED_FEATURES = [
+  "AvoidUnnecessaryBeforeUnloadCheckSync", "DestroyProfileOnBrowserClose", "HttpsUpgrades", "HttpsFirstBalancedModeAutoEnable", "LensOverlay", "MediaRouter", "PaintHolding",
+  "ThirdPartyStoragePartitioning", "AvoidCorsURLLoaderRestartOnRedirect", "TcpPortRandomizationWin", "OptimizationHints", "NetworkTimeServiceQuerying", "AimEnabled",
+  "PreconnectToSearch", "msForceBrowserSignIn", "msEdgeUpdateLaunchServicesPreferredVersion",
+  "RenderDocument",
+];
+
+/**
+ * Launches the tool's Chromium with its sandbox on where the computer allows it (AITD_NO_SANDBOX=1 never asks for
+ * it), and without the features in DISABLED_FEATURES.
+ */
 export async function launchChromium(options, { launch = (o) => chromium.launch(o), env = process.env, warn = console.error } = {}) {
+  options = { ...options, args: [...(options.args ?? []), `--disable-features=${DISABLED_FEATURES.join(",")}`] };
   sandboxUsable ??= env.AITD_NO_SANDBOX !== "1";
   if (sandboxUsable) {
     try {
@@ -61,7 +78,50 @@ export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk
 // Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
-const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500, frameMessages: 1000 };
+const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500, frameMessages: 1000, errors: 200 };
+
+// Caps on one entry, so a page can't fill the capture, the reports or a model's context with a few huge ones either.
+// Real tags stay far below them: a GA4 request is a few KB, an ecommerce push with its items a few more.
+export const ENTRY_LIMITS = {
+  push: 16 * 1024, // one dataLayer push, as JSON
+  pushes: 4 * 1024 * 1024, // all the pushes of one audit; past it, a push keeps only its event name
+  param: 4096, // one hit parameter
+  params: 300, // the parameters of one hit
+  url: 16 * 1024, // the address of a hit or a network call
+  error: 500, // one page error's message
+};
+
+/** The start of a text that is longer than n characters, with how long it was. */
+const cutText = (text, n) => (typeof text === "string" && text.length > n ? `${text.slice(0, n)}… [cut: ${text.length} characters]` : text);
+/** An address cut to n characters, with no note added, so what is left still parses as an address. */
+const cutUrl = (url, n = ENTRY_LIMITS.url) => (typeof url === "string" && url.length > n ? url.slice(0, n) : url);
+const jsonSize = (value) => {
+  try {
+    return (JSON.stringify(value) ?? "").length;
+  } catch {
+    return Infinity; // nested too deep to serialize: as good as too big
+  }
+};
+
+/** A hit with its address and each parameter within the limits. */
+export function capHit(hit) {
+  const entries = Object.entries(hit.params ?? {});
+  const params = Object.fromEntries(entries.slice(0, ENTRY_LIMITS.params).map(([k, v]) => {
+    if (typeof v === "string") return [cutText(k, 200), cutText(v, ENTRY_LIMITS.param)];
+    const size = v && typeof v === "object" ? jsonSize(v) : 0;
+    return [cutText(k, 200), size > ENTRY_LIMITS.push ? `[cut: ${size} characters]` : v];
+  }));
+  return { ...hit, url: cutUrl(hit.url), ...(hit.params ? { params } : {}) };
+}
+
+/** What is kept of a dataLayer push that is over the limit: its event name (or a gtag command's first two words) and its size. */
+function cutPush(value, size) {
+  const note = { atd_cut: `${Number.isFinite(size) ? size : "too many"} characters` };
+  const word = (v) => (typeof v === "string" ? v.slice(0, 120) : undefined);
+  if (Array.isArray(value)) return [word(value[0]), word(value[1]), note].filter((v) => v !== undefined);
+  const event = value && typeof value === "object" ? word(value.event) : undefined;
+  return { ...(event ? { event } : {}), ...note };
+}
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
@@ -671,6 +731,7 @@ export class AuditSession {
     this.failedLoad = null; // the error text of the main frame's last failed document request in navigate()
     this.errorPageShown = false; // whether Chromium's error page committed in the main frame since navigate() began
     this.bodyBytes = 0;
+    this.pushChars = 0; // the size of the dataLayer pushes kept so far, against ENTRY_LIMITS.pushes
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
     this.lastTrackingAt = 0; // when a tag, consent or tracking request or a dataLayer push last happened, for settle()
     this.startedAt = Date.now();
@@ -723,7 +784,12 @@ export class AuditSession {
     // Service workers are off: the routes below never see a request a service worker makes, so its tracking hits
     // would reach the real accounts unrecorded. Downloads are refused: an audit has no use for a page's files.
     this.context = await this.browser.newContext({ ...device, locale: "en-US", serviceWorkers: "block", acceptDownloads: false, ...record, ...session });
-    await this.context.exposeBinding("__atdRecord", (source, entry) => {
+    await this.context.exposeBinding("__atdRecord", (source, raw) => {
+      // The page can call this itself, so only the three fields the hook sends are read, each within its limit.
+      let entry = { url: cutUrl(String(raw?.url ?? ""), 2048), value: raw?.value, ...(typeof raw?.layer === "string" && /^[A-Za-z_$][\w$]{0,63}$/.test(raw.layer) ? { layer: raw.layer } : {}) };
+      const size = jsonSize(entry.value);
+      if (size > ENTRY_LIMITS.push || this.pushChars + size > ENTRY_LIMITS.pushes) entry.value = cutPush(entry.value, size);
+      else this.pushChars += size;
       const frame = frameInfo(source?.frame);
       if (frame) entry = { ...entry, frame };
       this.lastTrackingAt = Date.now();
@@ -733,7 +799,7 @@ export class AuditSession {
     await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
-    this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: this.scrub(err.message) }));
+    this.page.on("pageerror", (err) => this.record("errors", { step: this.currentStep, message: this.scrub(cutText(String(err?.message ?? err), ENTRY_LIMITS.error)) }));
     // A script that comes back as an HTML page (a bot check, or files a new deployment no longer has) is refused.
     this.page.on("console", (msg) => {
       if (msg.type() === "error" && /^Refused to execute script from .*MIME type \('text\/html'\)/.test(msg.text())) this.refusedScripts.set(this.currentStep, (this.refusedScripts.get(this.currentStep) ?? 0) + 1);
@@ -761,7 +827,7 @@ export class AuditSession {
       const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.scrub(this.page.url()), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
+        const entry = { ...capHit(this.redactHit(hit)), step: this.stepForHit(hit), pageUrl: cutUrl(this.scrub(this.page.url())), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -790,10 +856,10 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
-        pageUrl: this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url),
+        pageUrl: cutUrl(this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url)),
         t: Date.now(),
         method: request.method(),
-        url: this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url),
+        url: cutUrl(this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url)),
         type: request.resourceType(),
         vendor,
         provider: provider.key,
@@ -1058,7 +1124,8 @@ export class AuditSession {
   /** Adds an entry to one of the logs, up to its limit. Returns false once the limit is reached. */
   record(log, entry) {
     if (this[log].length >= LOG_LIMITS[log]) {
-      if (!this.logFull) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log} entries); later entries were dropped.` });
+      // The note is added past the errors log's own limit, so it is there whichever log filled up.
+      if (!this.logFull) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log === "errors" ? "page errors" : `${log} entries`}); later entries were dropped.` });
       this.logFull = true;
       return false;
     }

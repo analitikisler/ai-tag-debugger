@@ -82,13 +82,34 @@ const EXPLAIN_SCHEMA = {
   additionalProperties: false,
 };
 
-function hitsByStep(run) {
-  return run.steps.map((step) => ({
-    step: step.label,
-    hits: run.hits
-      .filter((h) => h.step === step.index)
-      .map((h) => ({ platform: h.platform, event: h.name, params: h.params, ...(h.consent ? { consent: h.consent } : {}) })),
-  }));
+// What one explain call may send, so a site that floods the capture can't run up the bill or overflow the model:
+// about 100,000 tokens of audit data, and a few page errors per journey.
+const EXPLAIN_MAX_CHARS = 400_000;
+const PAGE_ERRORS_SENT = 20;
+const HIT_NAMES_SENT = 50;
+
+/** The hits of each step, at one of three levels of detail: full (with parameters), names (the first 50 per step, no parameters) or counts. */
+function hitsByStep(run, detail = "full") {
+  return run.steps.map((step) => {
+    const hits = run.hits.filter((h) => h.step === step.index);
+    if (detail === "counts") return { step: step.label, hit_count: hits.length };
+    if (detail === "names") return { step: step.label, hits: hits.slice(0, HIT_NAMES_SENT).map((h) => ({ platform: h.platform, event: h.name })), ...(hits.length > HIT_NAMES_SENT ? { more_hits: hits.length - HIT_NAMES_SENT } : {}) };
+    return { step: step.label, hits: hits.map((h) => ({ platform: h.platform, event: h.name, params: h.params, ...(h.consent ? { consent: h.consent } : {}) })) };
+  });
+}
+
+/** The audit data for the explain call as JSON text, with the hits in as much detail as fits EXPLAIN_MAX_CHARS, and that level. */
+export function explainInput({ findings, plan, runs }) {
+  let text;
+  for (const detail of ["full", "names", "counts"]) {
+    text = JSON.stringify({
+      findings,
+      measurement_plan: plan,
+      journeys: runs.map((r) => ({ journey: r.journeyId, viewport: r.viewport, completed: r.completed, note: r.note, steps: hitsByStep(r, detail), page_errors: r.pageErrors?.slice(0, PAGE_ERRORS_SENT) })),
+    }, null, 1);
+    if (text.length <= EXPLAIN_MAX_CHARS || detail === "counts") return { text, detail };
+  }
+  return { text, detail: "counts" };
 }
 
 /**
@@ -99,12 +120,9 @@ export async function explainFindings({ findings, plan, runs, gtmContainer, prov
   const actionable = groupFindings(findings).map((f, i) => ({ index: i, ...f })).filter((f) => ["broken", "risk", "warning"].includes(f.severity) && !f.accepted);
   if (actionable.length === 0) return { summary: { headline: messages(lang).ui.allGood, points: [], also_check: [] }, explanations: [] };
   try {
-    const input = {
-      findings: actionable,
-      measurement_plan: plan,
-      journeys: runs.map((r) => ({ journey: r.journeyId, viewport: r.viewport, completed: r.completed, note: r.note, steps: hitsByStep(r), page_errors: r.pageErrors })),
-    };
-    const texts = [`Audit data:\n${capturedData(JSON.stringify(input, null, 1))}`];
+    const input = explainInput({ findings: actionable, plan, runs });
+    if (input.detail !== "full") log(`The captured hits are too many to send to the model whole, so it gets ${input.detail === "names" ? "their names without parameters" : "how many each step sent"}.`);
+    const texts = [`Audit data:\n${capturedData(input.text)}`];
     if (gtmContainer) texts.push(`GTM container export:\n${JSON.stringify(gtmContainer)}`);
 
     const ai = provider ?? (await createProvider({ name: providerName, model, client }));

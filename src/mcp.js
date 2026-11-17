@@ -4,7 +4,7 @@
 //   stdio (default): for apps that start local servers, e.g. Claude Desktop, Gemini CLI, Cursor.
 //   --http:          Streamable HTTP, for apps that connect to a URL, e.g. ChatGPT and Gemini
 //                    (expose it over HTTPS with a tunnel or host it).
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -46,9 +46,10 @@ const IDLE_MS = 15 * 60 * 1000; // an audit untouched this long is closed
 const MAX_BODY_BYTES = 1024 * 1024;
 const MIN_TOKEN_LENGTH = 16;
 
-const INSTRUCTIONS = `ai-tag-debugger checks a website's analytics and ad tracking (GA4, Google Ads, Meta Pixel, TikTok Pixel, Consent Mode).
+/** What the chat app's model is told. plans: whether this server offers make_plan (a server reached over HTTP does only with --allow-plan). */
+const instructions = ({ plans = true } = {}) => `ai-tag-debugger checks a website's analytics and ad tracking (GA4, Google Ads, Meta Pixel, TikTok Pixel, Consent Mode).
 
-Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")}). If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
+Two kinds of request: a PLAN is what should be tracked, an AUDIT is what the site actually sends. If the user wants to know what to track, which events a site needs, or asks for a tracking or measurement plan, ${plans ? `call make_plan (with topic when they only care about one kind of event: ${Object.keys(TOPICS).join(", ")})` : "say that this server does not draft plans (it was started without --allow-plan), and offer to audit the site and write the plan with them from what the audit shows, passed to finish_audit as measurement_plan"}. If they want to know whether tracking works, what a site sends, or what changed, run an audit. To audit against the plan afterwards, pass against to finish_audit.
 
 Before starting, ask the user which platforms to check and suggest the default (${DEFAULT_PROVIDERS.map((k) => TRACKING_PROVIDERS[k]).join(", ")}, plus any other platform the site turns out to use); pass their choice as providers, or leave it out for the default.
 
@@ -70,6 +71,20 @@ function skippedLine(run) {
 
 /** Open audits, by id. One browser each. */
 const audits = new Map();
+/** Browsers running outside an open audit: one being started for an audit, a consent comparison's, a plan's. */
+let jobs = 0;
+/** How many more browsers may start: open audits and running jobs share MAX_OPEN_AUDITS, whoever asks. */
+const freeSlots = () => MAX_OPEN_AUDITS - audits.size - jobs;
+const busy = () => `The server is busy: ${audits.size} ${audits.size === 1 ? "audit is" : "audits are"} open and ${jobs} other browser ${jobs === 1 ? "job is" : "jobs are"} running, and it runs ${MAX_OPEN_AUDITS} browsers at most. Finish an audit with finish_audit, or try again in a minute.`;
+/** Runs fn while it holds n of the browser slots. */
+async function holding(n, fn) {
+  jobs += n;
+  try {
+    return await fn();
+  } finally {
+    jobs -= n;
+  }
+}
 
 const text = (t) => ({ content: [{ type: "text", text: t }] });
 const fail = (t) => ({ content: [{ type: "text", text: t }], isError: true });
@@ -441,11 +456,16 @@ async function loadAgainst(ref, site, opts) {
  *   dataDir: where saved plans live (default ./aitd), used by `against`.
  *   reportsUrl: where an HTTP server serves finished reports, if it knows its public URL.
  *   provider: an AI provider for make_plan (default: the one configured on this computer; tests pass a fake).
+ *   allowPlan: offer make_plan on a server that may not read files (the HTTP one); a local server always does.
+ *   written: the reports written so far, by folder name, when several servers share one list (the HTTP server's).
  */
 export function buildServer(opts) {
-  const server = new McpServer({ name: "ai-tag-debugger", version: VERSION }, { instructions: INSTRUCTIONS });
-  // The reports this server wrote, by folder name: get_report reads these and nothing else, over HTTP too.
-  const written = new Map();
+  // Drafting a plan spends the AI key of whoever runs the server, so a server others reach offers it only when asked to.
+  const plans = Boolean(opts.allowFiles || opts.allowPlan);
+  const server = new McpServer({ name: "ai-tag-debugger", version: VERSION }, { instructions: instructions({ plans }) });
+  // The reports this server wrote, by folder name: get_report reads these and nothing else, over HTTP too. The HTTP
+  // server builds a new one of these for every request, so it passes the one list they all share.
+  const written = opts.written ?? new Map();
 
   server.registerTool(
     "start_audit",
@@ -493,7 +513,7 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       await closeIdleAudits();
-      if (audits.size >= MAX_OPEN_AUDITS) return fail(`${audits.size} audits are already open. Finish one with finish_audit first.`);
+      if (freeSlots() < 1) return fail(jobs ? busy() : `${audits.size} audits are already open. Finish one with finish_audit first.`);
       let session;
       try {
         if (live && !opts.allowLive) return fail("Live audits are off on this server: it was started without --allow-live. Leave live out to audit with tracking requests answered locally.");
@@ -507,9 +527,13 @@ export function buildServer(opts) {
       } catch (err) {
         return fail(err.message);
       }
+      // The browser takes its slot from here, not from when the audit is listed: starts asked for at once would all
+      // fit otherwise. The slot passes to the audit in one step below, with nothing awaited in between.
+      jobs += 1;
       try {
         await session.start();
       } catch (err) {
+        jobs -= 1;
         await session.close().catch(() => {});
         return fail(connect ? `Could not connect to Chrome: ${err.message}` : `Could not start the browser: ${err.message}. If Chromium is missing, run: npx playwright install chromium`);
       }
@@ -518,6 +542,7 @@ export function buildServer(opts) {
       const name = preset?.id ?? ((journey || "journey").toLowerCase().replace(/[^\w-]+/g, "-").slice(0, 40) || "journey");
       const audit = { id, session, site: url.href, journey: name, preset, viewport: viewport ?? "desktop", lastUsed: Date.now() };
       audits.set(id, audit);
+      jobs -= 1;
       const start = campaign === false ? url.href : withCampaignParams(url.href, typeof campaign === "object" ? campaign : null);
       const error = await session.act({ action: "goto", url: start, reason: `Open ${start}` });
       const page = await viewFor(audit, error);
@@ -719,7 +744,10 @@ export function buildServer(opts) {
         if (refused) return fail(`${refused} Over HTTP, audits are limited to public websites.`);
       }
       const config = { site: url.href, providers, allowed_hosts };
-      const sc = await runConsentScenarios(config, { campaign, concurrency, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) });
+      // Each choice has its own browser, so the comparison takes as many slots as it runs side by side.
+      const browsers = Math.min(concurrency, freeSlots());
+      if (browsers < 1) return fail(busy());
+      const sc = await holding(browsers, () => runConsentScenarios(config, { campaign, concurrency: browsers, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}) }));
       if (!sc) return text(`No consent banner the tool can answer was found on ${url.href}, so the choices could not be compared. Walk the journey with start_audit and browser_action instead.`);
       const m = messages(language);
       const table = consentTable(sc);
@@ -815,7 +843,7 @@ export function buildServer(opts) {
     },
   );
 
-  server.registerTool(
+  if (plans) server.registerTool(
     "make_plan",
     {
       title: "Draft a tracking plan",
@@ -838,28 +866,31 @@ export function buildServer(opts) {
         const refused = await navigationError(url.href, { isPrivate: privateHostChecker() });
         if (refused) return fail(`${refused} Over HTTP, plans are limited to public websites.`);
       }
-      try {
-        checkTopic(topic);
-        const provider = opts.provider ?? (await createProvider());
-        const { plan } = await discoverPlan({ site: url.href, topic, provider, blockPrivate: opts.blockPrivate });
-        const { id, dir } = await savePlan(plan, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site: url.href });
-        const custom = plan.events.filter((e) => e.custom).length;
-        return text(
-          [
-            `Saved plan ${id}${topic ? ` (${topic} only)` : ""}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties${opts.allowFiles ? ` in ${dir}` : ""}.`,
-            // The plan was drafted from the site's pages, so its wording is the site's as much as the model's.
-            capturedData([
-              ...plan.events.map((e) => `- ${e.platform} ${e.name}${e.custom ? " (custom)" : ""}${e.trigger?.page ? `, on ${e.trigger.page}` : ""}${e.required_params?.length ? `, params: ${e.required_params.join(", ")}` : ""}${e.description ? `: ${e.description}` : ""}`),
-              ...(plan.user_properties.length ? ["", `User properties: ${plan.user_properties.map((p) => p.name).join(", ")}`] : []),
-            ].join("\n")),
-            `Check a site against it with an audit: finish_audit with against "${id}".`,
-          ].join("\n"),
-        );
-      } catch (err) {
-        // The CLI wording (--no-ai) means nothing to a chat app, so say it in this tool's terms.
-        if (err.code === "NO_API_KEY") return fail("No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so it can't draft a plan. Set one and restart the server, or write the plan yourself from what an audit shows and pass it to finish_audit as measurement_plan.");
-        return fail(`Could not draft the plan: ${err.message}`);
-      }
+      if (freeSlots() < 1) return fail(busy());
+      return holding(1, async () => {
+        try {
+          checkTopic(topic);
+          const provider = opts.provider ?? (await createProvider());
+          const { plan } = await discoverPlan({ site: url.href, topic, provider, blockPrivate: opts.blockPrivate });
+          const { id, dir } = await savePlan(plan, { dataDir: opts.dataDir ?? DEFAULT_DATA_DIR, site: url.href });
+          const custom = plan.events.filter((e) => e.custom).length;
+          return text(
+            [
+              `Saved plan ${id}${topic ? ` (${topic} only)` : ""}: ${plan.events.length} events (${custom} custom) and ${plan.user_properties.length} user properties${opts.allowFiles ? ` in ${dir}` : ""}.`,
+              // The plan was drafted from the site's pages, so its wording is the site's as much as the model's.
+              capturedData([
+                ...plan.events.map((e) => `- ${e.platform} ${e.name}${e.custom ? " (custom)" : ""}${e.trigger?.page ? `, on ${e.trigger.page}` : ""}${e.required_params?.length ? `, params: ${e.required_params.join(", ")}` : ""}${e.description ? `: ${e.description}` : ""}`),
+                ...(plan.user_properties.length ? ["", `User properties: ${plan.user_properties.map((p) => p.name).join(", ")}`] : []),
+              ].join("\n")),
+              `Check a site against it with an audit: finish_audit with against "${id}".`,
+            ].join("\n"),
+          );
+        } catch (err) {
+          // The CLI wording (--no-ai) means nothing to a chat app, so say it in this tool's terms.
+          if (err.code === "NO_API_KEY") return fail("No AI provider key (ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY) is set on the computer running this server, so it can't draft a plan. Set one and restart the server, or write the plan yourself from what an audit shows and pass it to finish_audit as measurement_plan.");
+          return fail(`Could not draft the plan: ${err.message}`);
+        }
+      });
     },
   );
 
@@ -967,7 +998,13 @@ export function buildServer(opts) {
 }
 
 /** Starts the MCP server on stdio, or on HTTP with --http. */
-export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", token, reportsDir, publicUrl, allowPrivateNetwork = false, allowLive = false } = {}) {
+/**
+ * The path segment finished reports are served under, derived from the server's secret so that a report link stays
+ * the same across restarts with one --token, and so that nobody can work the secret out from a report link.
+ */
+export const reportKey = (secret) => createHmac("sha256", secret).update("ai-tag-debugger report links").digest("base64url").slice(0, 32);
+
+export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", token, reportsDir, publicUrl, allowPrivateNetwork = false, allowLive = false, allowPlan = false } = {}) {
   const dir = path.resolve(reportsDir ?? path.join(homedir(), "ai-tag-debugger-reports"));
   const shutdown = async () => {
     await Promise.all([...audits.keys()].map(closeAudit));
@@ -998,6 +1035,9 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
   if (allowLive) {
     console.error("Warning: --allow-live lets start_audit send tracking requests to the real analytics and ad accounts of the sites it audits.");
   }
+  if (allowPlan) {
+    console.error("Warning: --allow-plan lets anyone with the URL draft plans with make_plan, which spends the AI provider key set on this computer.");
+  }
   const secret = token ?? randomBytes(18).toString("base64url");
   const endpoint = `/mcp/${secret}`;
   const digest = (s) => createHash("sha256").update(s).digest();
@@ -1013,16 +1053,26 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   };
-  const reportsUrl = publicUrl ? `${publicUrl.replace(/\/+$/, "")}${endpoint}/reports` : undefined;
+  // A report link is made to be passed on, so it must not carry the secret that drives the browser: reports are served
+  // under a key of their own, /reports/<key>/<audit folder>/<file>, which opens reports and nothing else.
+  const reportsKeyDigest = digest(reportKey(secret));
+  const reportsUrl = publicUrl ? `${publicUrl.replace(/\/+$/, "")}/reports/${reportKey(secret)}` : undefined;
+  const REPORT_FILE = /^(\w[\w.-]*)\/(report\.html|report\.md|timeline\.csv)$/;
+  const written = new Map();
   const httpServer = createServer(async (req, res) => {
     const pathname = new URL(req.url, "http://x").pathname;
-    const { ok, rest } = authorized(pathname);
+    const keyed = pathname.match(/^\/reports\/([^/]+)\/(.+)$/);
+    const { ok, rest } = keyed ? { ok: timingSafeEqual(digest(keyed[1]), reportsKeyDigest), rest: `/reports/${keyed[2]}` } : authorized(pathname);
     if (!ok) {
       res.writeHead(404).end();
       return;
     }
-    // Finished reports, behind the same secret path: /mcp/<secret>/reports/<audit folder>/<file>
-    const report = rest.startsWith("/reports/") && rest.slice(9).match(/^(\w[\w.-]*)\/(report\.html|report\.md|timeline\.csv)$/);
+    // Links from before reports had their own key were /mcp/<secret>/reports/<audit folder>/<file>; they still open.
+    const report = rest.startsWith("/reports/") && rest.slice(9).match(REPORT_FILE);
+    if (keyed && !(report && req.method === "GET")) {
+      res.writeHead(404).end();
+      return;
+    }
     if (report && req.method === "GET") {
       try {
         const body = await readFile(path.join(dir, report[1], report[2]));
@@ -1065,7 +1115,7 @@ export async function startMcp({ http = false, port = 8787, host = "127.0.0.1", 
       return;
     }
     // Stateless: a new server and transport per request. Open audits live in the module, keyed by audit_id.
-    const server = buildServer({ allowFiles: false, blockPrivate: !allowPrivateNetwork, reportsDir: dir, reportsUrl, allowLive });
+    const server = buildServer({ allowFiles: false, blockPrivate: !allowPrivateNetwork, reportsDir: dir, reportsUrl, allowLive, allowPlan, written });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       transport.close();

@@ -7,12 +7,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { AuditSession, browserEnv, launchChromium, resetSandboxCheck } from "../src/browser.js";
+import { execFileSync } from "node:child_process";
+import { chromium } from "playwright";
+import { AuditSession, browserEnv, capHit, DISABLED_FEATURES, ENTRY_LIMITS, launchChromium, resetSandboxCheck } from "../src/browser.js";
 import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
 import { pageView } from "../src/agent.js";
-import { buildServer, closeIdleAudits, startMcp } from "../src/mcp.js";
+import { buildServer, closeIdleAudits, reportKey, startMcp } from "../src/mcp.js";
 import { checkRun } from "../src/checks.js";
-import { renderCsv, renderMarkdown, scriptCspSource } from "../src/report.js";
+import { explainInput, renderCsv, renderMarkdown, scriptCspSource } from "../src/report.js";
+import { captured } from "./helpers/captured.js";
 import { isCollectionEndpoint } from "../src/parsers.js";
 import { startEgressProxy } from "../src/egress.js";
 
@@ -279,6 +282,26 @@ test("Chromium is launched with its sandbox, and without it only where the compu
   }
 });
 
+test("the browser's list of Chromium features to turn off is Playwright's own plus RenderDocument, and every launch passes it", { skip: process.platform === "win32" }, async () => {
+  // What the installed Playwright passes by itself, read from the command line of a browser it starts.
+  const server = await chromium.launchServer();
+  let theirs;
+  try {
+    const args = execFileSync("ps", ["-o", "args=", "-p", String(server.process().pid)], { encoding: "utf8" });
+    theirs = args.match(/--disable-features=(\S+)/)[1].split(",");
+  } finally {
+    await server.close();
+  }
+  // Chromium reads only the last --disable-features, so the tool's list has to hold all of Playwright's. After an
+  // update of Playwright, copy its list (chromiumSwitches.ts) into DISABLED_FEATURES and keep RenderDocument.
+  assert.deepEqual(DISABLED_FEATURES.filter((f) => f !== "RenderDocument"), theirs.filter((f) => f !== "RenderDocument"));
+  assert.ok(DISABLED_FEATURES.includes("RenderDocument"));
+  let passed;
+  await launchChromium({ args: ["--some-flag"] }, { launch: async (o) => (passed = o.args), env: { AITD_NO_SANDBOX: "1" } });
+  assert.deepEqual(passed, ["--some-flag", `--disable-features=${DISABLED_FEATURES.join(",")}`]);
+  resetSandboxCheck();
+});
+
 test("a tracking hit sent from a service worker can't slip past the local answer, and downloads are refused", async () => {
   const reached = [];
   const tracked = createServer((req, res) => {
@@ -307,4 +330,133 @@ test("a tracking hit sent from a service worker can't slip past the local answer
     await session.close();
     tracked.close();
   }
+});
+
+test("over HTTP, a report link opens reports and nothing else, and get_report reads a report an earlier request wrote", async () => {
+  const token = "another-long-test-token";
+  const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  // --allow-private-network only so the local test shop can stand in for a public site.
+  const server = await startMcp({ http: true, port: 0, token, reportsDir, publicUrl: "https://audits.example/", allowPrivateNetwork: true });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  let n = 0;
+  const call = async (name, args) => {
+    const res = await fetch(`${base}/mcp/${token}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+    return (await res.json()).result.content.map((c) => c.text);
+  };
+  try {
+    const [started] = await call("start_audit", { site, campaign: false });
+    const [result] = await call("finish_audit", { audit_id: started.match(/audit_id: (\w+)/)[1], completed: true, note: "Done." });
+    // The link to pass on carries the report key, never the secret that drives the browser.
+    const link = result.match(/^Full report with the event timeline: (\S+)$/m)[1];
+    const key = reportKey(token);
+    assert.ok(link.startsWith(`https://audits.example/reports/${key}/`), link);
+    assert.ok(!link.includes(token) && !key.includes(token));
+    const local = link.replace("https://audits.example", base);
+    const report = await fetch(local);
+    assert.equal(report.status, 200);
+    assert.match(report.headers.get("content-security-policy"), /^default-src 'none'/);
+    assert.match(await report.text(), /<html/);
+    // A wrong key, a file that is not a report, or any other method: nothing. And the key is no way into the tools.
+    assert.equal((await fetch(local.replace(key, "x".repeat(key.length)))).status, 404);
+    assert.equal((await fetch(local.replace("report.html", "capture.json"))).status, 404);
+    assert.equal((await fetch(local, { method: "POST", body: "{}" })).status, 404);
+    assert.equal((await fetch(`${base}/mcp/${key}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 404);
+    // Each request gets a new server; the reports written so far are known to all of them.
+    const name = result.match(/get_report with report "([^"]+)"/)[1];
+    assert.match(captured((await call("get_report", { report: name }))[0]), /^# /);
+  } finally {
+    server.close();
+  }
+});
+
+test("open audits, browsers still starting, consent comparisons and plans share four browser slots", async () => {
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await buildServer({ allowFiles: false, reportsDir: tmpdir() }).connect(a);
+  const client = new Client({ name: "test", version: "1" });
+  await client.connect(b);
+  const call = async (name, args) => (await client.callTool({ name, arguments: args })).content[0].text;
+  const ids = [];
+  try {
+    // Six audits asked for at once: four start, two are refused, although none was open when they were asked for.
+    const started = await Promise.all(Array.from({ length: 6 }, () => call("start_audit", { site, campaign: false })));
+    ids.push(...started.map((t) => t.match(/audit_id: (\w+)/)?.[1]).filter(Boolean));
+    assert.equal(ids.length, 4);
+    assert.equal(started.filter((t) => /^The server is busy: /.test(t) || /audits are already open/.test(t)).length, 2);
+    // With every slot taken, a consent comparison would need browsers of its own: refused, without opening one.
+    assert.match(await call("consent_matrix", { site, campaign: false }), /^4 audits are already open|^The server is busy: 4 audits are open/);
+    // Two audits finished: a comparison asking for four browsers gets the two that are free.
+    for (const id of ids.splice(0, 2)) await call("finish_audit", { audit_id: id, completed: false, note: "Stopped." });
+    const [matrix, refused] = await Promise.all([call("consent_matrix", { site, campaign: false, concurrency: 4 }), call("consent_matrix", { site, campaign: false })]);
+    assert.match(matrix, /No consent banner the tool can answer/);
+    assert.match(refused, /^The server is busy: 2 audits are open and 2 other browser jobs are running/);
+    // The slots come back when the comparison ends.
+    assert.match(await call("consent_matrix", { site, campaign: false }), /No consent banner the tool can answer/);
+  } finally {
+    for (const id of ids) await call("finish_audit", { audit_id: id, completed: false, note: "Stopped." });
+    await client.close();
+  }
+});
+
+test("one page can't fill the capture: huge pushes, hit parameters and page errors are cut or dropped", async () => {
+  const flood = createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" }).end(`<title>flood</title><script>
+      window.dataLayer = window.dataLayer || [];
+      const big = "A".repeat(200000);
+      dataLayer.push({ event: "ok_push", value: 1 });
+      dataLayer.push({ event: "huge_push", blob: big });
+      // The page can call the recorder itself, with fields the hook never sends.
+      window.__atdRecord({ url: location.href, value: ["event", "direct_call", { blob: big }], layer: "x".repeat(500), frame: { origin: "https://forged.example", party: "site" }, userData: { fields: ["forged"] } });
+      fetch("https://www.google-analytics.com/g/collect?v=2&tid=G-FLOOD&cid=1.2&_p=1&en=big_param&dl=" + encodeURIComponent(location.href) + "&ep.note=" + "B".repeat(20000), { method: "POST", keepalive: true });
+      for (let i = 0; i < 400; i++) setTimeout(() => { throw new Error("E" + i + " " + "C".repeat(5000)); });
+    </script>`);
+  });
+  await new Promise((r) => flood.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${flood.address().port}/`;
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], login: null });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url, reason: "open" });
+    await session.act({ action: "wait", value: "1000", reason: "wait" });
+    const pushes = session.dataLayerLog.map((e) => e.value);
+    assert.deepEqual(pushes.find((v) => v.event === "ok_push"), { event: "ok_push", value: 1 }, "an ordinary push is kept whole");
+    // A push over the limit keeps its event name and its size, nothing else.
+    const size = JSON.stringify({ event: "huge_push", blob: "A".repeat(200000) }).length;
+    assert.deepEqual(pushes.find((v) => v.event === "huge_push"), { event: "huge_push", atd_cut: `${size} characters` });
+    const direct = session.dataLayerLog.find((e) => Array.isArray(e.value) && e.value[1] === "direct_call");
+    assert.deepEqual(direct.value, ["event", "direct_call", { atd_cut: `${JSON.stringify(["event", "direct_call", { blob: "A".repeat(200000) }]).length} characters` }]);
+    assert.deepEqual([direct.frame, direct.userData, direct.layer], [undefined, undefined, undefined], "fields the hook never sends are not taken from the page");
+    const hit = session.hits.find((h) => h.name === "big_param");
+    assert.match(hit.params.note, /^B{4096}… \[cut: 20000 characters\]$/);
+    assert.ok(hit.url.length <= ENTRY_LIMITS.url && session.network.every((c) => c.url.length <= ENTRY_LIMITS.url));
+    // 400 errors of 5,000 characters: 200 kept, 500 characters each, and a note that the rest were dropped.
+    assert.equal(session.errors.length, 201);
+    assert.ok(session.errors.slice(0, 200).every((e) => e.message.length < 560));
+    assert.match(session.errors.at(-1).message, /^Recording limit reached \(200 page errors\)/);
+    assert.ok(JSON.stringify([session.dataLayerLog, session.hits, session.errors, session.network]).length < 300000);
+  } finally {
+    await session.close();
+    flood.close();
+  }
+  // A hit with more parameters than any tag sends keeps the first 300; an object parameter over the limit keeps its size.
+  const capped = capHit({ url: "https://x/", params: { ...Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`p${i}`, "v"])), } });
+  assert.equal(Object.keys(capped.params).length, 300);
+  assert.equal(capHit({ url: "https://x/", params: { items: [{ name: "D".repeat(20000) }] } }).params.items, "[cut: 20013 characters]");
+});
+
+test("the explain call sends the hits whole only while they fit, then their names, then their counts", () => {
+  const run = (hits, size) => ({
+    journeyId: "j", viewport: "desktop", completed: true, note: "ok", steps: [{ index: 0, label: "start" }],
+    hits: Array.from({ length: hits }, (_, i) => ({ platform: "ga4", name: `event_${i}`, step: 0, params: { note: "x".repeat(size) } })),
+    pageErrors: Array.from({ length: 200 }, (_, i) => ({ step: 0, message: `error ${i}` })),
+  });
+  const small = explainInput({ findings: [], plan: { events: [] }, runs: [run(10, 100)] });
+  assert.equal(small.detail, "full");
+  assert.equal(JSON.parse(small.text).journeys[0].steps[0].hits[0].params.note.length, 100);
+  assert.equal(JSON.parse(small.text).journeys[0].page_errors.length, 20, "a few page errors, not all of them");
+  const names = explainInput({ findings: [], plan: { events: [] }, runs: [run(200, 4096)] });
+  assert.equal(names.detail, "names");
+  assert.deepEqual(JSON.parse(names.text).journeys[0].steps[0], { step: "start", hits: Array.from({ length: 50 }, (_, i) => ({ platform: "ga4", event: `event_${i}` })), more_hits: 150 });
+  const counts = explainInput({ findings: [], plan: { events: [] }, runs: Array.from({ length: 400 }, () => ({ ...run(60, 4096), steps: Array.from({ length: 30 }, (_, i) => ({ index: i, label: `step ${i}` })) })) });
+  assert.equal(counts.detail, "counts");
+  assert.deepEqual(JSON.parse(counts.text).journeys[0].steps[0], { step: "step 0", hit_count: 60 });
 });

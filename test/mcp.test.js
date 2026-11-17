@@ -208,7 +208,13 @@ test("what_changed returns only the since-last-run diff, and says so when there 
 });
 
 test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {
-  const { client } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  // A server reached over HTTP drafts plans only when started with --allow-plan: it is its owner's AI key that pays.
+  const closed = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  assert.ok(!(await closed.client.listTools()).tools.some((t) => t.name === "make_plan"));
+  assert.match(closed.client.getInstructions(), /this server does not draft plans \(it was started without --allow-plan\)/);
+  assert.doesNotMatch(closed.client.getInstructions(), /call make_plan/);
+  const { client } = await connect({ allowFiles: false, allowPlan: true, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  assert.match(client.getInstructions(), /call make_plan/);
   const refused = await client.callTool({ name: "make_plan", arguments: { site: "http://127.0.0.1:1/" } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /limited to public websites/);

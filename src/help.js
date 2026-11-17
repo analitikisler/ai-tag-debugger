@@ -107,6 +107,7 @@ Advanced:
   --token <secret>     Secret URL path segment, at least 16 characters (default: random)
   --allow-private-network   Over HTTP, let audits open localhost and private addresses
   --allow-live              Over HTTP, let start_audit send live (tracking requests reach the real accounts)
+  --allow-plan              Over HTTP, offer make_plan (it spends the AI provider key set on this computer)
   --reports <dir>      Where finished audits write reports (default: ~/ai-tag-debugger-reports)
   --public-url <url>   The HTTPS address of your tunnel or host, so audits can link to reports`;
 
@@ -118,8 +119,9 @@ storage) is saved to aitd/<domain>/session.json. Runs start from it with --sessi
 The file holds a live login: keep it private, and save it again when the login expires.
 
 For journeys that can log in by themselves, set a test account instead:
-AITD_LOGIN_EMAIL (or AITD_LOGIN_USERNAME) and AITD_LOGIN_PASSWORD. The model sees only
-the placeholders {{login.email}} and {{login.password}}; the browser types the real values.
+AITD_LOGIN_EMAIL (or AITD_LOGIN_USERNAME), AITD_LOGIN_PASSWORD and AITD_LOGIN_SITE, the
+site the account belongs to. The model sees only the placeholders {{login.email}} and
+{{login.password}}; the browser types the real values, on that site only.
 
 Options:
   --site <url>         The site to log in to (required)
