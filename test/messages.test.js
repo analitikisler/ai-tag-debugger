@@ -65,8 +65,9 @@ test("events iframes post to the page are matched with what the page did next", 
     await session.close();
   }
   const site = url.replace(/\/$/, "");
-  // Only names and field names are kept, never values.
-  assert.doesNotMatch(JSON.stringify(run.frameMessages), /visitor@example\.com|120/);
+  // Only names and field names are kept, never values. The time, the order and the origin's port are numbers of the
+  // tool's own, and can hold "120" by chance, so they are left out of what is searched.
+  assert.doesNotMatch(JSON.stringify(run.frameMessages.map(({ t: _t, seq: _seq, origin: _origin, ...kept }) => kept)), /visitor@example\.com|120/);
   assert.deepEqual(run.frameMessages.find((m) => m.name === "form_submitted").keys, ["type", "email"]);
   assert.deepEqual(run.frameMessages.map((m) => `${m.name} ${m.party}`).sort(), ["booking_complete third", "booking_complete third", "form_submitted site", "resize site", "sign_up site"]);
 
