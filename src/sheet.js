@@ -152,8 +152,12 @@ const toCells = (objs, columns) => [columns, ...objs.map((o) => columns.map((c) 
 
 // ---------- CSV ----------
 
+// A plan's texts come from a site's pages by way of a model, and could run as a formula in Excel or Sheets: a leading
+// ' keeps them text, as in the report's timeline.csv. An import takes it off again, so a plan survives the round trip.
+const FORMULA_START = /^[=+\-@\t\r]/;
 const csvCell = (v) => {
-  const s = String(v ?? "");
+  let s = String(v ?? "");
+  if (FORMULA_START.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 export const toCsv = (rows) => `${rows.map((r) => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
@@ -302,7 +306,8 @@ export async function readPlanSheet(file, { site } = {}) {
     const prefix = base.match(/^(.*?)events\.csv$/i)?.[1] ?? "";
     upFile = path.join(path.dirname(file), `${prefix}user_properties.csv`);
     if (/user_properties\.csv$/i.test(base)) throw new Error(`Import the events file (${base.replace(/user_properties\.csv$/i, "events.csv")}); ${base} beside it is read too.`);
-    tabs = { events: parseCsv(await readFile(file, "utf8")), user_properties: (await exists(upFile)) ? parseCsv(await readFile(upFile, "utf8")) : null };
+    const read = async (f) => parseCsv(await readFile(f, "utf8")).map((row) => row.map((cell) => (cell.startsWith("'") && FORMULA_START.test(cell.slice(1)) ? cell.slice(1) : cell)));
+    tabs = { events: await read(file), user_properties: (await exists(upFile)) ? await read(upFile) : null };
   } else {
     throw new Error(`Import a .xlsx or .csv file (got ${path.basename(file)}).`);
   }

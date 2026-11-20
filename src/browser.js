@@ -7,13 +7,13 @@ import path from "node:path";
 import { chromium, devices } from "playwright";
 import { parseTrackingRequest, isCollectionEndpoint, providerOf, vendorOf, resolveProviders, PROVIDERS } from "./parsers.js";
 import { redactBody, redactParams, redactPush, redactUrl, siteOf } from "./redact.js";
-import { hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
+import { autoBlockPrivate, hostScope, isPrivateAddress, navigationError, privateHostChecker } from "./guard.js";
 import { startEgressProxy } from "./egress.js";
 import { campaignParamsIn } from "./campaign.js";
 import { detectCmpInPage } from "./cmp.js";
 import { callersOf, containerOf, containerVersion, isContainerId } from "./containers.js";
 import { frameInfo } from "./frames.js";
-import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginScrubber, scrubDeep } from "./login.js";
+import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginRefusal, loginScope, loginScrubber, scrubDeep } from "./login.js";
 
 // Consent banners of the common consent platforms (CMPs), by their container. A cover that matches
 // one of these always blocks the journey, and a reject click is checked against them afterwards.
@@ -25,10 +25,50 @@ export function installBrowser() {
     console.error("ai-tag-debugger: installing the Chromium browser (one time, about a minute)...");
     const child = spawn(process.execPath, [cli, "install", "chromium"], { stdio: ["ignore", 2, 2] });
     child.on("error", reject);
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.56.1 install chromium`))));
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Installing the browser failed (exit code ${code}). Run: npx -y playwright@1.65.1 install chromium`))));
   }).finally(() => { browserInstall = null; });
   return browserInstall;
 }
+
+// Chromium's own sandbox keeps a page that breaks out of the renderer away from the computer and from the keys this
+// process holds. Playwright starts Chromium without it unless asked. It is asked for here, and left out only where
+// Chromium cannot use it: as root, or where the system forbids user namespaces (some containers and CI runners).
+let sandboxUsable = null;
+const SANDBOX_FAILURE = /sandboxing failed|no usable sandbox|running as root without --no-sandbox/i;
+
+// The Chromium features this tool's browser runs without: the ones Playwright itself turns off (chromiumSwitches.ts in
+// playwright-core 1.65.1), and RenderDocument. With RenderDocument on, which is Chromium's default and which
+// Playwright stopped turning off in 1.62, a request a page sends while it unloads (a page_view or a beacon on the way
+// out) is neither reported nor routed: it would go unrecorded, and to the real account. Chromium reads only the last
+// --disable-features it is given, so adding one feature means repeating the list. A test compares it with what the
+// installed Playwright passes, so an update of Playwright can't leave it behind.
+export const DISABLED_FEATURES = [
+  "AvoidUnnecessaryBeforeUnloadCheckSync", "DestroyProfileOnBrowserClose", "HttpsUpgrades", "HttpsFirstBalancedModeAutoEnable", "LensOverlay", "MediaRouter", "PaintHolding",
+  "ThirdPartyStoragePartitioning", "AvoidCorsURLLoaderRestartOnRedirect", "TcpPortRandomizationWin", "OptimizationHints", "NetworkTimeServiceQuerying", "AimEnabled",
+  "PreconnectToSearch", "msForceBrowserSignIn", "msEdgeUpdateLaunchServicesPreferredVersion",
+  "RenderDocument",
+];
+
+/**
+ * Launches the tool's Chromium with its sandbox on where the computer allows it (AITD_NO_SANDBOX=1 never asks for
+ * it), and without the features in DISABLED_FEATURES.
+ */
+export async function launchChromium(options, { launch = (o) => chromium.launch(o), env = process.env, warn = console.error } = {}) {
+  options = { ...options, args: [...(options.args ?? []), `--disable-features=${DISABLED_FEATURES.join(",")}`] };
+  sandboxUsable ??= env.AITD_NO_SANDBOX !== "1";
+  if (sandboxUsable) {
+    try {
+      return await launch({ ...options, chromiumSandbox: true });
+    } catch (err) {
+      if (!SANDBOX_FAILURE.test(String(err?.message))) throw err;
+      sandboxUsable = false;
+      warn("ai-tag-debugger: Chromium's sandbox can't be used here (it doesn't run as root, and it needs user namespaces), so the browser runs without it. Run the tool as a normal user to keep the pages it opens contained; AITD_NO_SANDBOX=1 skips this check.");
+    }
+  }
+  return launch({ ...options, chromiumSandbox: false });
+}
+/** For tests: forget what an earlier launch learned about the sandbox. */
+export const resetSandboxCheck = () => { sandboxUsable = null; };
 
 export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk, #CybotCookiebotDialog, #usercentrics-root, #didomi-host, #cookiescript_injected, .cky-consent-container, .cc-window, #cmpbox, .qc-cmp2-container, \
 #truste-consent-track, #consent_blackbar, .osano-cm-window, #iubenda-cs-banner, .iubenda-cs-container, #cmplz-cookiebanner-container, .cmplz-cookiebanner, #cookiefirst-root, .cookiefirst-root, #axeptio_overlay, \
@@ -38,7 +78,50 @@ export const CMP_BANNER_SELECTORS = `#onetrust-banner-sdk, #onetrust-consent-sdk
 // Efilli draws its banner inside the open shadow root of <efilli-layout-dynamic>, so the checks below also look inside open shadow roots.
 
 // Caps on what one audit records, so a looping page can't grow memory without limit.
-const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500, frameMessages: 1000 };
+const LOG_LIMITS = { hits: 5000, dataLayerLog: 5000, network: 10000, containerLoads: 500, containerScripts: 500, frameMessages: 1000, errors: 200 };
+
+// Caps on one entry, so a page can't fill the capture, the reports or a model's context with a few huge ones either.
+// Real tags stay far below them: a GA4 request is a few KB, an ecommerce push with its items a few more.
+export const ENTRY_LIMITS = {
+  push: 16 * 1024, // one dataLayer push, as JSON
+  pushes: 4 * 1024 * 1024, // all the pushes of one audit; past it, a push keeps only its event name
+  param: 4096, // one hit parameter
+  params: 300, // the parameters of one hit
+  url: 16 * 1024, // the address of a hit or a network call
+  error: 500, // one page error's message
+};
+
+/** The start of a text that is longer than n characters, with how long it was. */
+const cutText = (text, n) => (typeof text === "string" && text.length > n ? `${text.slice(0, n)}… [cut: ${text.length} characters]` : text);
+/** An address cut to n characters, with no note added, so what is left still parses as an address. */
+const cutUrl = (url, n = ENTRY_LIMITS.url) => (typeof url === "string" && url.length > n ? url.slice(0, n) : url);
+const jsonSize = (value) => {
+  try {
+    return (JSON.stringify(value) ?? "").length;
+  } catch {
+    return Infinity; // nested too deep to serialize: as good as too big
+  }
+};
+
+/** A hit with its address and each parameter within the limits. */
+export function capHit(hit) {
+  const entries = Object.entries(hit.params ?? {});
+  const params = Object.fromEntries(entries.slice(0, ENTRY_LIMITS.params).map(([k, v]) => {
+    if (typeof v === "string") return [cutText(k, 200), cutText(v, ENTRY_LIMITS.param)];
+    const size = v && typeof v === "object" ? jsonSize(v) : 0;
+    return [cutText(k, 200), size > ENTRY_LIMITS.push ? `[cut: ${size} characters]` : v];
+  }));
+  return { ...hit, url: cutUrl(hit.url), ...(hit.params ? { params } : {}) };
+}
+
+/** What is kept of a dataLayer push that is over the limit: its event name (or a gtag command's first two words) and its size. */
+function cutPush(value, size) {
+  const note = { atd_cut: `${Number.isFinite(size) ? size : "too many"} characters` };
+  const word = (v) => (typeof v === "string" ? v.slice(0, 120) : undefined);
+  if (Array.isArray(value)) return [word(value[0]), word(value[1]), note].filter((v) => v !== undefined);
+  const event = value && typeof value === "object" ? word(value.event) : undefined;
+  return { ...(event ? { event } : {}), ...note };
+}
 
 // Secrets the browser process has no use for. It gets the rest of the environment
 // (PATH, HOME, DISPLAY...) so Chromium still starts normally.
@@ -599,7 +682,9 @@ export class AuditSession {
    *   recordHar: save every response the site sends into this .har file, so the journey can be replayed offline later.
    *     closeTimeoutMs: how long close() waits for the recording to be written (default 30 s) before skipping it.
    *   replayHar: answer requests from a .har file saved with recordHar instead of the network; requests it lacks fail.
-   *   blockPrivate: refuse loopback, private and link-local addresses (used when the MCP server is reachable over HTTP).
+   *   blockPrivate: refuse loopback, private and link-local addresses: true (an MCP server reachable over HTTP), false
+   *     (never), or left out, which refuses them when the audited site and its allowed hosts are all public (see
+   *     autoBlockPrivate in guard.js). autoBlock replaces that decision (for tests).
    *     All browser traffic then goes through the egress proxy. A function decides which addresses count as private (for tests).
    *   log: gets one line when a dropped navigation is tried again. navigationRetryMs: the wait before that (default 2 s).
    */
@@ -608,11 +693,18 @@ export class AuditSession {
     this.log = this.opts.log ?? (() => {});
     this.scope = this.opts.site ? hostScope(this.opts.site, this.opts.allowedHosts) : null;
     // The test account (see src/login.js): typed only where a placeholder asks for it, and scrubbed from everything kept.
-    this.login = this.opts.login !== undefined ? this.opts.login : loginFromEnv();
+    // The environment's account is for one site (AITD_LOGIN_SITE): an audit of any other site gets none, and it is
+    // typed only on that site's hosts. An account passed in (tests, embedding) is typed on the audited site's.
+    const fromEnv = this.opts.login === undefined;
+    this.login = fromEnv ? loginFromEnv(process.env, this.opts.site) : this.opts.login;
+    this.loginRefused = fromEnv ? loginRefusal(process.env, this.opts.site) : null;
+    this.loginScope = fromEnv && this.login ? loginScope() : this.scope;
     this.scrub = loginScrubber(this.login);
     this.loginStep = null; // the first step that typed the test account's password
     this.isBlockedAddress = typeof this.opts.blockPrivate === "function" ? this.opts.blockPrivate : isPrivateAddress;
-    this.isPrivate = this.opts.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
+    // Whether private addresses are refused. Null until start() decides for an audit that was not told either way.
+    this.blockPrivate = this.opts.blockPrivate === undefined ? null : Boolean(this.opts.blockPrivate);
+    this.isPrivate = this.blockPrivate ? privateHostChecker(this.isBlockedAddress) : null;
     this.blocked = null;
     this.hits = [];
     this.steps = [];
@@ -643,6 +735,7 @@ export class AuditSession {
     this.failedLoad = null; // the error text of the main frame's last failed document request in navigate()
     this.errorPageShown = false; // whether Chromium's error page committed in the main frame since navigate() began
     this.bodyBytes = 0;
+    this.pushChars = 0; // the size of the dataLayer pushes kept so far, against ENTRY_LIMITS.pushes
     this.bodyBudgetStep = null; // the step at which POST bodies stopped being stored
     this.lastTrackingAt = 0; // when a tag, consent or tracking request or a dataLayer push last happened, for settle()
     this.startedAt = Date.now();
@@ -653,10 +746,17 @@ export class AuditSession {
     if (this.opts.storageState && !existsSync(this.opts.storageState)) throw new Error(`No saved login session at ${this.opts.storageState}. Save one with: aitd login --site <url>`);
     const device = VIEWPORTS[this.opts.viewport];
     if (!device) throw new Error(`Unknown viewport "${this.opts.viewport}". Use: ${Object.keys(VIEWPORTS).join(", ")}`);
+    if (this.blockPrivate === null) {
+      // A public site is audited with the network the tool runs in closed to it; a local or private one is not. The
+      // user's own Chrome and a replay have no proxy of the tool's to go through.
+      const decide = this.opts.autoBlock ?? ((hosts) => autoBlockPrivate(hosts, { isPrivate: privateHostChecker(this.isBlockedAddress) }));
+      this.blockPrivate = Boolean(this.scope && !this.opts.connect && !this.opts.replayHar && (await decide(this.scope.hosts)));
+      if (this.blockPrivate) this.isPrivate = privateHostChecker(this.isBlockedAddress);
+    }
     if (this.opts.connect) {
       // The user's own Chrome: only the browser is theirs. The audit gets a fresh private window (a new context) in
       // it, exactly as clean as a launched browser, and close() closes that window and disconnects, leaving Chrome.
-      if (this.opts.blockPrivate) throw new Error("Connecting to your own Chrome works only from the CLI or a local MCP server, not over HTTP.");
+      if (this.blockPrivate) throw new Error("Connecting to your own Chrome works only from the CLI or a local MCP server, not over HTTP.");
       if (this.opts.replayHar) throw new Error("A saved site replays in the tool's own browser; leave --connect out.");
       this.browser = await connectToChrome(this.opts.connect);
     } else await this.launchBrowser();
@@ -666,7 +766,7 @@ export class AuditSession {
   /** Launches the tool's own Chromium, through the egress proxy when private addresses are blocked. */
   async launchBrowser() {
     const launch = { headless: this.opts.headless, env: browserEnv() };
-    if (this.opts.blockPrivate) {
+    if (this.blockPrivate) {
       // Every connection, WebSockets included, goes to an address the proxy checked.
       // "<-loopback>" stops Chromium from sending localhost around the proxy.
       this.egress = await startEgressProxy({ isBlocked: this.isBlockedAddress });
@@ -679,11 +779,11 @@ export class AuditSession {
       launch.proxy = { server: "http://127.0.0.1:9", bypass: "<-loopback>" };
     }
     try {
-      this.browser = await chromium.launch(launch);
+      this.browser = await launchChromium(launch);
     } catch (err) {
       if (!/Executable doesn't exist|playwright install/i.test(String(err?.message))) throw err;
       await installBrowser();
-      this.browser = await chromium.launch(launch);
+      this.browser = await launchChromium(launch);
     }
   }
 
@@ -692,8 +792,15 @@ export class AuditSession {
     const record = this.opts.recordHar ? { recordHar: { path: this.opts.recordHar, mode: "minimal" } } : {};
     // A session saved with `aitd login`: the browser starts logged in, for sites whose login needs a person.
     const session = this.opts.storageState ? { storageState: this.opts.storageState } : {};
-    this.context = await this.browser.newContext({ ...device, locale: "en-US", ...record, ...session });
-    await this.context.exposeBinding("__atdRecord", (source, entry) => {
+    // Service workers are off: the routes below never see a request a service worker makes, so its tracking hits
+    // would reach the real accounts unrecorded. Downloads are refused: an audit has no use for a page's files.
+    this.context = await this.browser.newContext({ ...device, locale: "en-US", serviceWorkers: "block", acceptDownloads: false, ...record, ...session });
+    await this.context.exposeBinding("__atdRecord", (source, raw) => {
+      // The page can call this itself, so only the three fields the hook sends are read, each within its limit.
+      let entry = { url: cutUrl(String(raw?.url ?? ""), 2048), value: raw?.value, ...(typeof raw?.layer === "string" && /^[A-Za-z_$][\w$]{0,63}$/.test(raw.layer) ? { layer: raw.layer } : {}) };
+      const size = jsonSize(entry.value);
+      if (size > ENTRY_LIMITS.push || this.pushChars + size > ENTRY_LIMITS.pushes) entry.value = cutPush(entry.value, size);
+      else this.pushChars += size;
       const frame = frameInfo(source?.frame);
       if (frame) entry = { ...entry, frame };
       this.lastTrackingAt = Date.now();
@@ -703,7 +810,7 @@ export class AuditSession {
     await this.context.exposeBinding("__atdLoad", (source, entry) => this.recordLoad(entry, frameInfo(source?.frame)));
     await this.context.addInitScript(INIT_SCRIPT);
     this.page = await this.context.newPage();
-    this.page.on("pageerror", (err) => this.errors.push({ step: this.currentStep, message: this.scrub(err.message) }));
+    this.page.on("pageerror", (err) => this.record("errors", { step: this.currentStep, message: this.scrub(cutText(String(err?.message ?? err), ENTRY_LIMITS.error)) }));
     // A script that comes back as an HTML page (a bot check, or files a new deployment no longer has) is refused.
     this.page.on("console", (msg) => {
       if (msg.type() === "error" && /^Refused to execute script from .*MIME type \('text\/html'\)/.test(msg.text())) this.refusedScripts.set(this.currentStep, (this.refusedScripts.get(this.currentStep) ?? 0) + 1);
@@ -731,7 +838,7 @@ export class AuditSession {
       const frame = this.frameOf(request);
       for (const hit of hits) {
         if (!this.checks(hit.platform)) continue;
-        const entry = { ...this.redactHit(hit), step: this.stepForHit(hit), pageUrl: this.scrub(this.page.url()), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
+        const entry = { ...capHit(this.redactHit(hit)), step: this.stepForHit(hit), pageUrl: cutUrl(this.scrub(this.page.url())), t: Date.now(), seq: ++this.seq, ...(frame ? { frame } : {}) };
         const late = this.lateFor(hit, entry);
         if (late) Object.assign(entry, late);
         if (this.record("hits", entry)) recorded.push(entry);
@@ -760,10 +867,10 @@ export class AuditSession {
       const vendor = vendorOf(request.url());
       const call = {
         step: this.currentStep,
-        pageUrl: this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url),
+        pageUrl: cutUrl(this.scrub(this.opts.keepBodies ? this.page.url() : redactUrl(this.page.url()).url)),
         t: Date.now(),
         method: request.method(),
-        url: this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url),
+        url: cutUrl(this.scrub(this.opts.keepBodies ? request.url() : redactUrl(request.url()).url)),
         type: request.resourceType(),
         vendor,
         provider: provider.key,
@@ -1028,7 +1135,8 @@ export class AuditSession {
   /** Adds an entry to one of the logs, up to its limit. Returns false once the limit is reached. */
   record(log, entry) {
     if (this[log].length >= LOG_LIMITS[log]) {
-      if (!this.logFull) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log} entries); later entries were dropped.` });
+      // The note is added past the errors log's own limit, so it is there whichever log filled up.
+      if (!this.logFull) this.errors.push({ step: this.currentStep, message: `Recording limit reached (${LOG_LIMITS[log]} ${log === "errors" ? "page errors" : `${log} entries`}); later entries were dropped.` });
       this.logFull = true;
       return false;
     }
@@ -1261,7 +1369,8 @@ export class AuditSession {
           }
           if (free) break;
         }
-        const describe = (n) => `${n.tagName.toLowerCase()}${n.id ? `#${n.id}` : ""}${n.getAttribute("role") ? ` role=${n.getAttribute("role")}` : ""} "${(n.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60)}"`;
+        // Cut short: this text reaches the model outside the page view, in the action's error or note.
+        const describe = (n) => `${n.tagName.toLowerCase()}${n.id ? `#${String(n.id).slice(0, 40)}` : ""}${n.getAttribute("role") ? ` role=${n.getAttribute("role").slice(0, 20)}` : ""} "${(n.innerText || "").replace(/\s+/g, " ").trim().slice(0, 60)}"`;
         const screen = window.innerWidth * window.innerHeight;
         for (let n = hit; n && n !== document.body && n !== document.documentElement && !n.contains(el); n = n.parentElement) {
           const b = n.getBoundingClientRect();
@@ -1386,12 +1495,12 @@ export class AuditSession {
           step.replay = { action: a.action, ...(await replayTarget(a, target)), ...(a.value !== undefined ? { value: a.value } : {}) };
           if (a.action === "click") await this.click(target);
           else if (a.action === "fill" && hasLoginPlaceholder(a.value)) {
-            // The test account is typed only into the audited site's own pages, never a frame from elsewhere.
+            // The test account is typed only into pages of the site it belongs to, never a frame from elsewhere.
             const host = await target.evaluate(() => location.hostname).catch(() => "");
-            if (this.scope && !this.scope.allows(host)) return `The test account is only filled in on ${this.scope.hosts.join(", ")}, not on ${host || "this frame"}.`;
+            if (this.login && this.loginScope && !this.loginScope.allows(host)) return `The test account is only filled in on ${this.loginScope.hosts.join(", ")}, not on ${host || "this frame"}.`;
             let value;
             try {
-              value = fillLoginValue(a.value, this.login);
+              value = fillLoginValue(a.value, this.login, this.loginRefused);
             } catch (err) {
               if (err.code === "NO_LOGIN") return err.message;
               throw err;

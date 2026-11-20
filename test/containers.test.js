@@ -15,6 +15,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer } from "../src/mcp.js";
+import { captured } from "./helpers/captured.js";
 
 // Stand-ins for gtm.js and gtag/js, served from the test server: each does what the real script does to load
 // another container (sets a script's src from its own code, or injects a Custom HTML tag that does).
@@ -231,7 +232,7 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   assert.match(listed, /GTM-MAIN \(GTM container\): Inline code in the page \(the snippet\); version 153, [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1/);
   assert.match(listed, /GTM-CHTML \(GTM container\): A Custom HTML tag in GTM-MAIN; [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1, GTM environment env-3/);
   assert.match(listed, /G-HTML \(Google tag\): A script tag in the page's HTML; [\d.]+ KB, loaded in \d+ ms, dataLayer myDataLayer, served from 127\.0\.0\.1/);
-  const json = JSON.parse(listed.split("As JSON: ")[1]);
+  const json = JSON.parse(captured(listed).split("As JSON: ")[1]);
   assert.ok(json.some((l) => l.id === "AW-222" && l.source === "send_to" && l.by === "G-HTML"));
   assert.doesNotMatch(listed, /SECRET/);
   assert.match((await call("get_step", { audit_id: id, step: 1 }))[0].text, /Google containers loaded:/);
@@ -241,10 +242,10 @@ test("over MCP: get_containers during the audit, then finish_audit, its timeline
   assert.match(result.text, /^ {2}GTM-MAIN \(GTM container\): Another script on the page: http:\/\/127\.0\.0\.1:\d+\/cmp\.js; version 153, [\d.]+ KB, loaded in \d+ ms, served from 127\.0\.0\.1, 1 page$/m);
   assert.match(result.text, /loaded 2 times into one page/);
   assert.match(result.text, /GTM environment \(gtm_preview=env-3\)/);
-  const steps = JSON.parse(timeline.text.replace(/^Timeline \(JSON, one entry per step\):\n/, ""));
+  const steps = JSON.parse(captured(timeline.text));
   assert.ok(steps.flatMap((s) => s.containers ?? []).some((c) => c.id === "G-HTML" && c.source === "html" && c.data_layer === "myDataLayer"));
   const name = result.text.match(/get_report with report "([^"]+)"/)[1];
-  const rows = JSON.parse((await call("get_report", { report: name, part: "containers" }))[0].text);
+  const rows = JSON.parse(captured((await call("get_report", { report: name, part: "containers" }))[0].text));
   // An empty stand-in script still has a load time, and a few bytes on the wire from chunked encoding.
   const { load_ms: chtmlMs, transfer_bytes: _wire, size_bytes: _size, ...chtml } = rows.find((r) => r.id === "GTM-CHTML");
   assert.ok(Number.isInteger(chtmlMs));

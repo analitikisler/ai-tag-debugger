@@ -161,7 +161,7 @@ Requires Node 22+.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger
-npx -y playwright@1.56.1 install chromium   # the browser version this release uses
+npx -y playwright@1.65.1 install chromium   # the browser version this release uses
 export ANTHROPIC_API_KEY=...                # or OPENAI_API_KEY, or GEMINI_API_KEY
 
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
@@ -410,14 +410,17 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 
 Journeys that need an account can log in two ways.
 
-**A test account.** Set its email (or `AITD_LOGIN_USERNAME` where the site asks for a username) and password on the computer running the tool:
+**A test account.** Set its email (or `AITD_LOGIN_USERNAME` where the site asks for a username), its password and the site it belongs to on the computer running the tool:
 
 ```bash
 export AITD_LOGIN_EMAIL=qa-test@yourshop.com
 export AITD_LOGIN_PASSWORD='…'
+export AITD_LOGIN_SITE=https://www.yourshop.com
 ```
 
-The model never sees them. It fills login forms with the placeholders `{{login.email}}`, `{{login.username}}` and `{{login.password}}`, and the browser types the real values, only into pages on the audited site (its subdomains and `allowed_hosts`), never into a frame from another site. Everything the tool keeps or shows has them turned back into their placeholders: the page views the model reads, the steps, hits, dataLayer pushes, network calls, saved steps and reports. The browser itself doesn't get them in its environment. The `login` journey uses the account, and any journey or MCP audit can. After a login, `user_id_missing` (info) reports GA4 hits that carry no user ID. Use an account made for testing, never a real customer's.
+`AITD_LOGIN_SITE` is required: without it the account is not used at all. An audit of any other site gets no account, so a page elsewhere can't ask for the password. For a login that passes through another host (a single sign-on page), list both, separated by a comma: `AITD_LOGIN_SITE=https://www.yourshop.com,login.yourshop-sso.com`.
+
+The model never sees them. It fills login forms with the placeholders `{{login.email}}`, `{{login.username}}` and `{{login.password}}`, and the browser types the real values, only into pages on the sites `AITD_LOGIN_SITE` names and their subdomains, never into a frame or a page from another site, `allowed_hosts` included. An MCP server reached over HTTP offers no test account: the account lives on the server's computer, and its callers are elsewhere. Everything the tool keeps or shows has them turned back into their placeholders: the page views the model reads, the steps, hits, dataLayer pushes, network calls, saved steps and reports. The browser itself doesn't get them in its environment. The `login` journey uses the account, and any journey or MCP audit can. After a login, `user_id_missing` (info) reports GA4 hits that carry no user ID. Use an account made for testing, never a real customer's.
 
 **A saved session**, for a login that needs a person: a CAPTCHA, a code sent to a phone, or single sign-on. `aitd login --site https://yourshop.com` opens the site in a browser window; log in by hand, press Enter in the terminal, and the session (cookies and storage) is saved to `aitd/<domain>/session.json`, readable only by you. `aitd run … --session saved`, the config's `session_file`, or `session: "saved"` on a local MCP server's `start_audit` start every journey logged in. The file holds a live login: keep it private, and save it again when the login expires.
 
@@ -529,6 +532,7 @@ The file holds one entry per finding, with a `key` the run matches on (the check
 | `journeys[].start` | Optional start path (default `/`). |
 | `journeys[].steps` | Optional fixed steps for `--scripted` runs: `{ "action": "click", "selector": "#add-to-cart" }`. Without them, `--scripted` repeats the steps of the site's last completed run of the journey. |
 | `allowed_hosts` | Other hosts journeys may visit, e.g. `["checkout.payments-provider.com"]` for a hosted checkout. The browser otherwise stays on the `site` host and its subdomains. Same as `--allow-host`. |
+| `allow_private_network` | Default `false`. When the site and its `allowed_hosts` are all on the public internet, the browser refuses `localhost` and private network addresses, so a page can't reach into the network the tool runs in. Set to `true` if the public site's pages must reach one (a local mock of a payment or tag server, for example). A site that is itself local or private is audited as before. Same as `--allow-private-network`. |
 | `session_file` | A session saved with `aitd login`, so every journey starts logged in: `"saved"` for the site's own, or a file path. See [Logging in](#logging-in). |
 | `connect` | Your own Chrome's debugging address, e.g. `http://127.0.0.1:9222`: each journey runs in a fresh window of it. See [Using your own Chrome](#using-your-own-chrome). |
 | `providers` | Tracking platforms to check, e.g. `["ga4", "meta"]`. Default `["ga4", "google_ads", "meta", "tiktok"]`, plus any other platform the site sends to while this is unset. Same as `--platforms`. |
@@ -558,7 +562,7 @@ After each saved run, `notify` sends the "Changed since last run" diff to your t
 ```
 
 - **Slack** takes the webhook URL. `"slack": true` reads it from the `SLACK_WEBHOOK_URL` environment variable instead, so the URL stays out of the file.
-- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. A plain `smtp://` URL sends the login and the mail unencrypted, and STARTTLS isn't supported.
+- **Email** takes one address or a list. Mail goes through the server in `SMTP_URL`, for example `smtps://user:password@mail.example.com:465`. `SMTP_FROM` sets the sender (default: the first recipient). Use `smtps://`, which encrypts the connection from the start. STARTTLS isn't supported, so a plain `smtp://` URL would send everything unencrypted: with a user and password in it, it is refused, unless the server is on this computer. A webhook address in the config is a secret: prefer `"slack": true` with `SLACK_WEBHOOK_URL`. Either way, `notify` is left out of `capture.json` and of saved sites.
 
 An alert goes out only for a saved run (not one sent to `--out`) that has an earlier run to compare with, and only when something changed since. The subject carries the verdict first, then the counts and the headline: `shop.example: Fail · 2 new problems · purchase tracking is broken on mobile`. The body repeats the verdict line, then lists what was fixed (with what it *was*) and what is new, each new item with its severity and owner, then the trend line with its sparkline, the flapping problems, and "Still open after N runs" when a problem reaches 5, 10, 20 runs open (then every 10), so the same open list does not repeat in every message:
 
@@ -578,6 +582,7 @@ The trend never triggers an alert on its own. If a channel fails, the run prints
 ```
 aitd "<sentence>" [-y]
 aitd plan --site <url> [--topic <name>] [--headed] [--provider <name>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+         [--allow-private-network]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <file> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -586,10 +591,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<text>") [--c
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <file>] [--update-baseline]
          [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <file>] [--session saved|<file>] [--connect <url>]
+         [--allow-private-network]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <addr>] [--token <secret>] [--public-url <https url>] [--reports <dir>]
-         [--allow-private-network] [--allow-live]
-aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
+         [--allow-private-network] [--allow-live] [--allow-plan]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--allow-private-network] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -628,12 +634,13 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Where to write the replay reports. For `run`, `--out` still works as a hidden alias for one minor version and prints a note; use `--data-dir`. |
 | `--base-url <url>` | run | The API address for an OpenAI-compatible provider. |
 | `--allow-host <host>` | run | Another host journeys may visit (repeatable). Same as `allowed_hosts`. |
+| `--allow-private-network` | run, plan, login, mcp | Let a public site's pages reach `localhost` and private network addresses. Same as `allow_private_network`; on `mcp --http` it lifts the server's block. |
 | `--session saved\|<file>` | run | Start every journey logged in, from the session `aitd login` saved (`saved`) or a session file. Same as `session_file`. See [Logging in](#logging-in). |
 | `--save <file>` | login | Where `aitd login` saves the session (default `aitd/<domain>/session.json`). |
 | `--connect <url>` | run, plan | Run in your own Chrome, started with a debugging port, e.g. `http://127.0.0.1:9222`. Same as `connect`. See [Using your own Chrome](#using-your-own-chrome). |
 | `--keep-bodies` | run | Store tracking requests as sent, without redacting user data. |
 | `--no-branding` | plan, run | Leave the logo and credit line out of the reports and `plan.html`. |
-| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | See the MCP section below. |
+| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live`, `--allow-plan` | mcp | See the MCP section below. |
 
 Removed in 0.10.0: `plan --from`, `plan --out` and `plan --force`. Drafting a plan always saves a new folder, and a removed flag prints what to run instead.
 
@@ -698,7 +705,7 @@ Tools the server offers:
 
 | Tool | What it does |
 |---|---|
-| `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. |
+| `make_plan` | Drafts a tracking plan for a site (what should be tracked), the same as `aitd plan --site`. Pass `topic` (`custom-events`, `ecommerce`, `forms`, `consent`) to limit it to one kind of event. The plan is saved and its ID can be given as `against` to `finish_audit`. It uses the AI provider configured on the computer that runs the server and takes a few minutes. A server reached over HTTP offers it only when started with `--allow-plan`. |
 | `what_changed` | Returns only the "since last run" diff for a site: the problems fixed and the new ones in its newest saved run (`aitd run`) compared with the run before. No browser and no AI. Pass `language` for a Turkish answer. |
 | `start_audit` | Opens a fresh browser on a URL and starts recording all tracking. Pass a ready-made journey (`purchase`, `sign_up`, …) to get its goal and expected events, and `providers` to choose the platforms to check. The assistant asks you which platforms to check first. `live: true` lets the tracking requests through to the site's real accounts, to check them in GA4 Realtime or DebugView, Meta Events Manager or Tag Assistant; the test traffic then shows in the site's reports, and the results and the report say the run was live. Over HTTP the server needs `--allow-live` for it. The first page opens the way an ad click does, with test campaign parameters (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …), so `finish_audit` checks that they survive redirects and reach the hits; `campaign: false` opens the URL as given, and `campaign: {"utm_source": "newsletter", "gclid": "test123"}` uses your own values. A test account set on the server's computer is used through its placeholders, and `session: "saved"` starts from the session `aitd login` saved (local servers only); see [Logging in](#logging-in). `connect` runs it in a fresh window of your own Chrome (local servers only; see [Using your own Chrome](#using-your-own-chrome)). |
 | `browser_action` | One click, fill, select, goto, scroll or wait. Returns the step number, the page and the tracking hits that step sent, each with an `[h]` number, its consent (from `gcs`, and `gcd` for `ad_user_data` and `ad_personalization`) and the ids and flags GA4 sends with it (`cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), its dataLayer pushes (Consent Mode commands in full as `key=value`, page addresses never cut) and the calls it read no event from, such as Consent Mode pings with their `gcs`, `gcd` and click ids (`gclid`, `gclid=0 (redacted)` when ads data redaction blanks it, `gclaw` from `_gcl_aw`), and the cookies the step added, changed or removed, by name, with the GA4 client id and whether `_gcl_aw` and `_fbc` hold the landing click ids when that changes. A page_view that arrives during a later wait or scroll is listed on the step that loaded its page, marked late. The page view is compact by default, since long sessions lose their oldest results: up to 40 elements above or below the screen, and the page text or element list replaced by a note when they haven't changed since the last view. Pass `detail: "full"` for everything. |
@@ -731,7 +738,7 @@ Add the server to the app's MCP config. For Claude Desktop that is Settings → 
 }
 ```
 
-The browser (Chromium) downloads itself the first time you run an audit, about a minute, one time. To get it ahead of time: `npx -y playwright@1.56.1 install chromium`.
+The browser (Chromium) downloads itself the first time you run an audit, about a minute, one time. To get it ahead of time: `npx -y playwright@1.65.1 install chromium`.
 
 One-click and one-line setup:
 
@@ -754,11 +761,16 @@ cloudflared tunnel --url http://localhost:8787     # or: ngrok http 8787; note t
 npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<your-tunnel-address>
 ```
 
-The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`) must be at least 16 characters.
+The server prints a URL with a random secret path, like `https://<your-tunnel-address>/mcp/<secret>`. Add that URL as a connector in the app. Anyone with the URL can use the browser on your machine, so keep it private and stop the server when you're done. A secret of your own (`--token`, or the `AITD_MCP_TOKEN` environment variable, which keeps it out of the process list) must be at least 16 characters.
+
+Report links are made to be passed on, so they don't carry that secret: with `--public-url`, a finished audit links to `https://<your-tunnel-address>/reports/<report key>/<audit>/report.html`. The report key is derived from the secret, opens reports and nothing else, and stays the same for as long as you keep the same `--token`.
 
 In HTTP mode, the server is more locked down than locally:
 
 - It doesn't read measurement plans or configs from your disk (pass the plan as JSON text in the chat, or name a saved plan with `against: latest`, `first` or its ID), and `run_audit` isn't offered. It only serves the reports it wrote itself.
+- `make_plan` isn't offered either, unless you start the server with `--allow-plan`: drafting a plan spends the AI provider key set on your computer, and anyone with the URL could ask for one.
+- It offers no [test account](#logging-in), whatever `AITD_LOGIN_*` is set to, and never uses a saved login session.
+- It runs four browsers at most, counting open audits, audits still starting, consent comparisons and plans. A request past that is refused until one ends.
 - The browser opens only `http` and `https` pages, and refuses `localhost` and private network addresses (such as `192.168.x.x` or `169.254.169.254`), so the URL can't be used to look into your network. All browser traffic, WebSockets included, goes through a small built-in proxy that resolves each host once and connects only to the address it checked, so a DNS answer that changes mid-audit can't get around the check. To audit a local staging site this way anyway, start the server with `--allow-private-network`.
 - Tracking requests are answered inside the browser, so audits never reach the audited site's accounts. `start_audit` with `live: true` lets them through only when the server was started with `--allow-live`.
 - Audits left open for 15 minutes are closed, and request bodies are limited to 1 MB.
@@ -770,10 +782,14 @@ A hosted server, so you don't need a tunnel, is part of the [Analitik İşler](h
 - The agent is told to use obvious test data and **never to enter real payment details**. If a journey needs a real payment or account, it stops and reports that instead.
 - Tracking requests to the platforms listed in [How it works](#how-it-works) are answered locally by default, so those analytics and ad accounts don't receive test conversions.
 - The browser stays on the audited site and its subdomains, plus any `allowed_hosts`. It opens only `http` and `https` pages.
-- The model is told that page content is data, never instructions. A prompt rule can't guarantee a model is never misled, so the navigation limits above contain what a misled model can do.
-- The browser runs without your API keys and other secrets in its environment.
+- When the audited site and its `allowed_hosts` are public, the browser refuses `localhost` and private network addresses (such as `192.168.x.x` or the cloud metadata address `169.254.169.254`), through the same built-in proxy an HTTP server uses, so a page on the site can't reach a development server, a router or a CI runner's credentials. A site that is itself local or private is audited as before, and so is any site when the environment names a proxy (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`), which the browser needs to reach the site at all. `--allow-private-network` or `"allow_private_network": true` turns it off. It doesn't apply to your own Chrome (`--connect`).
+- A run's files leave out what should stay on your computer: the config's `notify` targets, `base_url`, `session_file` and `connect` are not written to `capture.json` or a saved site.
+- The model is told that page content is data, never instructions. So is everything the site sends while it is audited: hits, dataLayer pushes, and the findings and reports built from them reach your chat app's model, and the model that explains findings, between `<captured_data>` tags that their instructions call data. A prompt rule can't guarantee a model is never misled, so the navigation limits above contain what a misled model can do.
+- The browser runs without your API keys and other secrets in its environment, and with Chromium's own sandbox on. Where Chromium can't use its sandbox (it doesn't run as root, and it needs user namespaces, which some containers and CI runners turn off), the tool says so once on stderr and starts the browser without it; `AITD_NO_SANDBOX=1` skips the check. Run the tool as a normal user to keep the sandbox.
+- Service workers and downloads are off in the audit browser: a tracking request sent from a service worker would otherwise go around the local answer and reach the real account.
+- What one page can add to a capture is capped: a dataLayer push over 16 KB keeps only its event name and its size, a hit parameter is cut at 4,096 characters, and 200 page errors of 500 characters each are kept per journey. The model that explains the findings gets the hits whole only while they fit about 100,000 tokens, then their names, then their counts.
 - Every install from npm (`npx`, `npm install -g`, the Claude plugin) gets the exact dependency versions each release was tested with: the package ships an `npm-shrinkwrap.json` with each package's checksum, so npm doesn't pick up newer versions of the dependencies, or anything they ship, on its own.
-- A [test account](#logging-in) is typed only into the audited site's pages, never shown to the model, and turned back into its placeholders in everything the tool keeps. A saved login session is readable only by you and is never used by an HTTP server.
+- A [test account](#logging-in) is typed only into pages of the site it belongs to (`AITD_LOGIN_SITE`), never shown to the model, and turned back into its placeholders in everything the tool keeps. A saved login session is readable only by you and is never used by an HTTP server.
 - **User data sent for ad matching is redacted** before it is stored in `capture.json` or shown in the report: emails, phone numbers, names, addresses and user ids in GA4 and Google Ads enhanced conversions (`em`, `ph`, `uid`, …), Meta advanced matching (`ud[*]`, `udff[*]`), TikTok `context.user`, and the `user_data` the site pushes to the dataLayer for enhanced conversions. Any value that looks like an email address is redacted whatever its field is called, except the audited site's own address in a `mailto:` link or a link field (`link_url`, `link_text`, `gtm.elementUrl`, …), such as a contact link in a GTM click event, which is not visitor data. Each value becomes a marker such as `[redacted: 64 chars, looks hashed]`, and a value that wasn't hashed is reported as a personal data risk. `--keep-bodies` (`"keep_bodies": true`) stores requests as sent, for debugging.
 - Stored request bodies are capped at 32 KB per request and 2 MB per journey. Past that, the report says the body wasn't stored.
 - Only run it against sites you own or are authorized to test.

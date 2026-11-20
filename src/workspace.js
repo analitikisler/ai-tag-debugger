@@ -16,6 +16,8 @@ export function domainOf(url) {
   } catch {
     throw new Error(`"${url}" is not a full URL. Use e.g. https://www.example.com`);
   }
+  // "." and ".." are valid hosts to the URL parser, and folders above the data folder to the file system.
+  if (!/[a-z0-9]/i.test(host)) throw new Error(`"${url}" has no host name. Use e.g. https://www.example.com`);
   return host.toLowerCase().replace(/^www\./, "");
 }
 

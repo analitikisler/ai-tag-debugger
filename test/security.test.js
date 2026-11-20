@@ -2,17 +2,26 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request as httpRequest } from "node:http";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { AuditSession, browserEnv } from "../src/browser.js";
-import { hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
+import { execFileSync } from "node:child_process";
+import { chromium } from "playwright";
+import { AuditSession, browserEnv, capHit, DISABLED_FEATURES, ENTRY_LIMITS, launchChromium, resetSandboxCheck } from "../src/browser.js";
+import { autoBlockPrivate, hostScope, isPrivateAddress, navigationError } from "../src/guard.js";
+import { shareableConfig, writeReports } from "../src/audit.js";
+import { sendSmtp } from "../src/notify.js";
+import { renderPlanHtml } from "../src/plan-html.js";
+import { readPlanSheet, toCsv, writePlanSheet } from "../src/sheet.js";
+import { validateConfig } from "../src/schema.js";
+import { domainOf } from "../src/workspace.js";
 import { pageView } from "../src/agent.js";
-import { buildServer, closeIdleAudits, startMcp } from "../src/mcp.js";
+import { buildServer, closeIdleAudits, reportKey, startMcp } from "../src/mcp.js";
 import { checkRun } from "../src/checks.js";
-import { renderCsv, renderMarkdown, scriptCspSource } from "../src/report.js";
+import { explainInput, renderCsv, renderMarkdown, scriptCspSource } from "../src/report.js";
+import { captured } from "./helpers/captured.js";
 import { isCollectionEndpoint } from "../src/parsers.js";
 import { startEgressProxy } from "../src/egress.js";
 
@@ -46,6 +55,9 @@ test("private, loopback, link-local and mapped addresses are recognized", async 
     "::ffff:7f00:1", "::127.0.0.1", "64:ff9b::a9fe:a9fe", "64:ff9b::10.0.0.1", "2002:c0a8:0101::1", "2001:0::1"]) {
     assert.ok(isPrivateAddress(ip), ip);
   }
+  // An IPv4 address inside an IPv4-translated one, and the old site-local range.
+  for (const ip of ["::ffff:0:7f00:1", "::ffff:0:169.254.169.254", "fec0::1", "feff::1"]) assert.ok(isPrivateAddress(ip), ip);
+  assert.ok(!isPrivateAddress("::ffff:0:808:808"));
   for (const ip of ["8.8.8.8", "172.32.0.1", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::1"]) assert.ok(!isPrivateAddress(ip), ip);
   assert.match(await navigationError("file:///etc/passwd"), /Only http and https/);
   assert.match(await navigationError("http://localhost/", { isPrivate: async () => true }), /private network address/);
@@ -243,4 +255,318 @@ test("with private addresses blocked, a GA4 request to a private server-side end
     await session.close();
     page.close();
   }
+});
+
+test("Chromium is launched with its sandbox, and without it only where the computer can't use one", async () => {
+  const calls = [];
+  const notes = [];
+  const run = (launch, env = {}) => launchChromium({ headless: true }, { launch: async (o) => (calls.push(o.chromiumSandbox), launch(o)), env, warn: (m) => notes.push(m) });
+  try {
+    // Where the sandbox works, it is on, and nothing is said.
+    resetSandboxCheck();
+    assert.equal(await run(async () => "browser"), "browser");
+    assert.deepEqual([calls.splice(0), notes.length], [[true], 0]);
+    // As root or without user namespaces Chromium refuses to start sandboxed: one note, then without it, and later
+    // launches don't try again.
+    resetSandboxCheck();
+    const refuses = async (o) => {
+      if (o.chromiumSandbox) throw new Error("browserType.launch: Target page, context or browser has been closed\nChromium sandboxing failed!\n[pid][FATAL] No usable sandbox!");
+      return "browser";
+    };
+    assert.equal(await run(refuses), "browser");
+    assert.equal(await run(refuses), "browser");
+    assert.deepEqual(calls.splice(0), [true, false, false]);
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /sandbox can't be used here/);
+    // Any other failure is the caller's to handle (a missing browser is installed, for example), not a reason to drop the sandbox.
+    resetSandboxCheck();
+    await assert.rejects(run(async () => { throw new Error("Executable doesn't exist at /x/chrome"); }), /Executable doesn't exist/);
+    assert.deepEqual(calls.splice(0), [true]);
+    // AITD_NO_SANDBOX=1 never asks for it.
+    resetSandboxCheck();
+    await run(async () => "browser", { AITD_NO_SANDBOX: "1" });
+    assert.deepEqual(calls.splice(0), [false]);
+  } finally {
+    resetSandboxCheck();
+  }
+});
+
+test("the browser's list of Chromium features to turn off is Playwright's own plus RenderDocument, and every launch passes it", { skip: process.platform === "win32" }, async () => {
+  // What the installed Playwright passes by itself, read from the command line of a browser it starts.
+  const server = await chromium.launchServer();
+  let theirs;
+  try {
+    const args = execFileSync("ps", ["-o", "args=", "-p", String(server.process().pid)], { encoding: "utf8" });
+    theirs = args.match(/--disable-features=(\S+)/)[1].split(",");
+  } finally {
+    await server.close();
+  }
+  // Chromium reads only the last --disable-features, so the tool's list has to hold all of Playwright's. After an
+  // update of Playwright, copy its list (chromiumSwitches.ts) into DISABLED_FEATURES and keep RenderDocument.
+  assert.deepEqual(DISABLED_FEATURES.filter((f) => f !== "RenderDocument"), theirs.filter((f) => f !== "RenderDocument"));
+  assert.ok(DISABLED_FEATURES.includes("RenderDocument"));
+  let passed;
+  await launchChromium({ args: ["--some-flag"] }, { launch: async (o) => (passed = o.args), env: { AITD_NO_SANDBOX: "1" } });
+  assert.deepEqual(passed, ["--some-flag", `--disable-features=${DISABLED_FEATURES.join(",")}`]);
+  resetSandboxCheck();
+});
+
+test("a tracking hit sent from a service worker can't slip past the local answer, and downloads are refused", async () => {
+  const reached = [];
+  const tracked = createServer((req, res) => {
+    reached.push(req.url);
+    if (req.url === "/sw.js") return res.writeHead(200, { "content-type": "text/javascript" }).end('self.addEventListener("install", () => self.skipWaiting()); self.addEventListener("message", () => fetch("/matomo.php?idsite=1&rec=1&action_name=from_worker"));');
+    if (req.url === "/file.bin") return res.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": "attachment; filename=file.bin" }).end("data");
+    if (req.url.startsWith("/matomo.php")) return res.writeHead(204).end();
+    res.writeHead(200, { "content-type": "text/html" }).end(`<title>sw</title><a id="dl" href="/file.bin">Download</a><script>
+      fetch("/matomo.php?idsite=1&rec=1&action_name=from_page");
+      navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready).then((r) => r.active.postMessage("go"));
+    </script>`);
+  });
+  await new Promise((r) => tracked.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${tracked.address().port}/`;
+  const session = new AuditSession({ viewport: "desktop", site: url, login: null });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url, reason: "open" });
+    await session.act({ action: "wait", value: "1500", reason: "wait" });
+    assert.deepEqual(session.hits.map((h) => h.params?.page_title), ["from_page"]);
+    assert.deepEqual(reached.filter((u) => u.startsWith("/matomo.php")), [], "no tracking request left the browser");
+    assert.ok(!reached.includes("/sw.js"), "the service worker was never registered");
+    const [download] = await Promise.all([session.page.waitForEvent("download", { timeout: 10000 }), session.act({ action: "click", selector: "#dl", reason: "download" })]);
+    assert.ok(await download.failure(), "the download was refused");
+  } finally {
+    await session.close();
+    tracked.close();
+  }
+});
+
+test("over HTTP, a report link opens reports and nothing else, and get_report reads a report an earlier request wrote", async () => {
+  const token = "another-long-test-token";
+  const reportsDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  // --allow-private-network only so the local test shop can stand in for a public site.
+  const server = await startMcp({ http: true, port: 0, token, reportsDir, publicUrl: "https://audits.example/", allowPrivateNetwork: true });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  let n = 0;
+  const call = async (name, args) => {
+    const res = await fetch(`${base}/mcp/${token}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+    return (await res.json()).result.content.map((c) => c.text);
+  };
+  try {
+    const [started] = await call("start_audit", { site, campaign: false });
+    // An audit's id is 64 random bits: not something another holder of the URL can guess.
+    assert.match(started, /^audit_id: [0-9a-f]{16}$/m);
+    const [result] = await call("finish_audit", { audit_id: started.match(/audit_id: (\w+)/)[1], completed: true, note: "Done." });
+    // The link to pass on carries the report key, never the secret that drives the browser.
+    const link = result.match(/^Full report with the event timeline: (\S+)$/m)[1];
+    const key = reportKey(token);
+    assert.ok(link.startsWith(`https://audits.example/reports/${key}/`), link);
+    assert.ok(!link.includes(token) && !key.includes(token));
+    const local = link.replace("https://audits.example", base);
+    const report = await fetch(local);
+    assert.equal(report.status, 200);
+    assert.match(report.headers.get("content-security-policy"), /^default-src 'none'/);
+    assert.match(await report.text(), /<html/);
+    // A wrong key, a file that is not a report, or any other method: nothing. And the key is no way into the tools.
+    assert.equal((await fetch(local.replace(key, "x".repeat(key.length)))).status, 404);
+    assert.equal((await fetch(local.replace("report.html", "capture.json"))).status, 404);
+    assert.equal((await fetch(local, { method: "POST", body: "{}" })).status, 404);
+    assert.equal((await fetch(`${base}/mcp/${key}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 404);
+    // Each request gets a new server; the reports written so far are known to all of them.
+    const name = result.match(/get_report with report "([^"]+)"/)[1];
+    assert.match(captured((await call("get_report", { report: name }))[0]), /^# /);
+  } finally {
+    server.close();
+  }
+});
+
+test("open audits, browsers still starting, consent comparisons and plans share four browser slots", async () => {
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await buildServer({ allowFiles: false, reportsDir: tmpdir() }).connect(a);
+  const client = new Client({ name: "test", version: "1" });
+  await client.connect(b);
+  const call = async (name, args) => (await client.callTool({ name, arguments: args })).content[0].text;
+  const ids = [];
+  try {
+    // Six audits asked for at once: four start, two are refused, although none was open when they were asked for.
+    const started = await Promise.all(Array.from({ length: 6 }, () => call("start_audit", { site, campaign: false })));
+    ids.push(...started.map((t) => t.match(/audit_id: (\w+)/)?.[1]).filter(Boolean));
+    assert.equal(ids.length, 4);
+    assert.equal(started.filter((t) => /^The server is busy: /.test(t) || /audits are already open/.test(t)).length, 2);
+    // With every slot taken, a consent comparison would need browsers of its own: refused, without opening one.
+    assert.match(await call("consent_matrix", { site, campaign: false }), /^4 audits are already open|^The server is busy: 4 audits are open/);
+    // Two audits finished: a comparison asking for four browsers gets the two that are free.
+    for (const id of ids.splice(0, 2)) await call("finish_audit", { audit_id: id, completed: false, note: "Stopped." });
+    const [matrix, refused] = await Promise.all([call("consent_matrix", { site, campaign: false, concurrency: 4 }), call("consent_matrix", { site, campaign: false })]);
+    assert.match(matrix, /No consent banner the tool can answer/);
+    assert.match(refused, /^The server is busy: 2 audits are open and 2 other browser jobs are running/);
+    // The slots come back when the comparison ends.
+    assert.match(await call("consent_matrix", { site, campaign: false }), /No consent banner the tool can answer/);
+  } finally {
+    for (const id of ids) await call("finish_audit", { audit_id: id, completed: false, note: "Stopped." });
+    await client.close();
+  }
+});
+
+test("one page can't fill the capture: huge pushes, hit parameters and page errors are cut or dropped", async () => {
+  const flood = createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" }).end(`<title>flood</title><script>
+      window.dataLayer = window.dataLayer || [];
+      const big = "A".repeat(200000);
+      dataLayer.push({ event: "ok_push", value: 1 });
+      dataLayer.push({ event: "huge_push", blob: big });
+      // The page can call the recorder itself, with fields the hook never sends.
+      window.__atdRecord({ url: location.href, value: ["event", "direct_call", { blob: big }], layer: "x".repeat(500), frame: { origin: "https://forged.example", party: "site" }, userData: { fields: ["forged"] } });
+      fetch("https://www.google-analytics.com/g/collect?v=2&tid=G-FLOOD&cid=1.2&_p=1&en=big_param&dl=" + encodeURIComponent(location.href) + "&ep.note=" + "B".repeat(20000), { method: "POST", keepalive: true });
+      for (let i = 0; i < 400; i++) setTimeout(() => { throw new Error("E" + i + " " + "C".repeat(5000)); });
+    </script>`);
+  });
+  await new Promise((r) => flood.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${flood.address().port}/`;
+  const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], login: null });
+  await session.start();
+  try {
+    await session.act({ action: "goto", url, reason: "open" });
+    await session.act({ action: "wait", value: "1000", reason: "wait" });
+    const pushes = session.dataLayerLog.map((e) => e.value);
+    assert.deepEqual(pushes.find((v) => v.event === "ok_push"), { event: "ok_push", value: 1 }, "an ordinary push is kept whole");
+    // A push over the limit keeps its event name and its size, nothing else.
+    const size = JSON.stringify({ event: "huge_push", blob: "A".repeat(200000) }).length;
+    assert.deepEqual(pushes.find((v) => v.event === "huge_push"), { event: "huge_push", atd_cut: `${size} characters` });
+    const direct = session.dataLayerLog.find((e) => Array.isArray(e.value) && e.value[1] === "direct_call");
+    assert.deepEqual(direct.value, ["event", "direct_call", { atd_cut: `${JSON.stringify(["event", "direct_call", { blob: "A".repeat(200000) }]).length} characters` }]);
+    assert.deepEqual([direct.frame, direct.userData, direct.layer], [undefined, undefined, undefined], "fields the hook never sends are not taken from the page");
+    const hit = session.hits.find((h) => h.name === "big_param");
+    assert.match(hit.params.note, /^B{4096}… \[cut: 20000 characters\]$/);
+    assert.ok(hit.url.length <= ENTRY_LIMITS.url && session.network.every((c) => c.url.length <= ENTRY_LIMITS.url));
+    // 400 errors of 5,000 characters: 200 kept, 500 characters each, and a note that the rest were dropped.
+    assert.equal(session.errors.length, 201);
+    assert.ok(session.errors.slice(0, 200).every((e) => e.message.length < 560));
+    assert.match(session.errors.at(-1).message, /^Recording limit reached \(200 page errors\)/);
+    assert.ok(JSON.stringify([session.dataLayerLog, session.hits, session.errors, session.network]).length < 300000);
+  } finally {
+    await session.close();
+    flood.close();
+  }
+  // A hit with more parameters than any tag sends keeps the first 300; an object parameter over the limit keeps its size.
+  const capped = capHit({ url: "https://x/", params: { ...Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`p${i}`, "v"])), } });
+  assert.equal(Object.keys(capped.params).length, 300);
+  assert.equal(capHit({ url: "https://x/", params: { items: [{ name: "D".repeat(20000) }] } }).params.items, "[cut: 20013 characters]");
+});
+
+test("the explain call sends the hits whole only while they fit, then their names, then their counts", () => {
+  const run = (hits, size) => ({
+    journeyId: "j", viewport: "desktop", completed: true, note: "ok", steps: [{ index: 0, label: "start" }],
+    hits: Array.from({ length: hits }, (_, i) => ({ platform: "ga4", name: `event_${i}`, step: 0, params: { note: "x".repeat(size) } })),
+    pageErrors: Array.from({ length: 200 }, (_, i) => ({ step: 0, message: `error ${i}` })),
+  });
+  const small = explainInput({ findings: [], plan: { events: [] }, runs: [run(10, 100)] });
+  assert.equal(small.detail, "full");
+  assert.equal(JSON.parse(small.text).journeys[0].steps[0].hits[0].params.note.length, 100);
+  assert.equal(JSON.parse(small.text).journeys[0].page_errors.length, 20, "a few page errors, not all of them");
+  const names = explainInput({ findings: [], plan: { events: [] }, runs: [run(200, 4096)] });
+  assert.equal(names.detail, "names");
+  assert.deepEqual(JSON.parse(names.text).journeys[0].steps[0], { step: "start", hits: Array.from({ length: 50 }, (_, i) => ({ platform: "ga4", event: `event_${i}` })), more_hits: 150 });
+  const counts = explainInput({ findings: [], plan: { events: [] }, runs: Array.from({ length: 400 }, () => ({ ...run(60, 4096), steps: Array.from({ length: 30 }, (_, i) => ({ index: i, label: `step ${i}` })) })) });
+  assert.equal(counts.detail, "counts");
+  assert.deepEqual(JSON.parse(counts.text).journeys[0].steps[0], { step: "step 0", hit_count: 60 });
+});
+
+test("an audit of a public site closes the tool's own network to its pages, and one of a local site does not", async () => {
+  const lookups = { "shop.example": false, "pay.example": false, "staging.internal": true };
+  const isPrivate = async (host) => lookups[host];
+  // Public site, public allowed host: closed. One private host among them, or a proxy in the environment: left open.
+  assert.equal(await autoBlockPrivate(["shop.example", "pay.example"], { env: {}, isPrivate }), true);
+  assert.equal(await autoBlockPrivate(["shop.example", "staging.internal"], { env: {}, isPrivate }), false);
+  assert.equal(await autoBlockPrivate(["staging.internal"], { env: {}, isPrivate }), false);
+  for (const env of [{ HTTPS_PROXY: "http://proxy:3128" }, { http_proxy: "http://proxy:3128" }, { ALL_PROXY: "socks5://proxy:1080" }]) assert.equal(await autoBlockPrivate(["shop.example"], { env, isPrivate }), false);
+  assert.equal(await autoBlockPrivate([], { env: {}, isPrivate }), false);
+  assert.deepEqual(validateConfig({ site: "https://shop.example", allow_private_network: true }).warnings, []);
+
+  // The test shop is local, so an audit of it reaches local addresses as before, with no proxy in between.
+  const local = new AuditSession({ viewport: "desktop", site, login: null });
+  await local.start();
+  try {
+    assert.equal(local.blockPrivate, false);
+    assert.equal(local.egress, undefined);
+    assert.equal(await local.act({ action: "goto", url: site }), null);
+  } finally {
+    await local.close();
+  }
+  // Decided public (the decision is injected: no public site answers in a test), the same address is refused, by the
+  // navigation check and by the proxy every request goes through.
+  const closed = new AuditSession({ viewport: "desktop", site, login: null, autoBlock: async (hosts) => (assert.deepEqual(hosts, ["localhost"]), true) });
+  await closed.start();
+  try {
+    assert.equal(closed.blockPrivate, true);
+    assert.ok(closed.egress);
+    assert.match(await closed.act({ action: "goto", url: site }), /localhost is a private network address, which this audit doesn't open\./);
+  } finally {
+    await closed.close();
+  }
+  // Asked to keep them open (--allow-private-network, "allow_private_network"), nothing is decided at all.
+  const open = new AuditSession({ viewport: "desktop", site, login: null, blockPrivate: false, autoBlock: async () => assert.fail("not asked") });
+  await open.start();
+  try {
+    assert.equal(open.blockPrivate, false);
+  } finally {
+    await open.close();
+  }
+});
+
+test("a run's files don't keep the config's alert targets, AI endpoint, session file or Chrome address", async () => {
+  const config = {
+    site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"],
+    notify: { slack: "https://hooks.slack.example/services/T0/B0/secret-webhook", email: "team@example.com" },
+    base_url: "http://llm.internal:11434/v1", session_file: "/home/me/aitd/shop/session.json", connect: "http://127.0.0.1:9222",
+  };
+  assert.deepEqual(shareableConfig(config), { site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"] });
+  const outDir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  await writeReports({ outDir, config, plan: { events: [] }, runs: [], findings: [], explained: null, lang: "en" });
+  const capture = await readFile(path.join(outDir, "capture.json"), "utf8");
+  for (const secret of ["secret-webhook", "team@example.com", "llm.internal", "session.json", "9222"]) assert.ok(!capture.includes(secret), secret);
+  assert.deepEqual(JSON.parse(capture).config, { site: "http://localhost/", allowed_hosts: ["pay.example"], viewports: ["desktop"], plan: { events: [] } });
+});
+
+test("an SMTP login is never sent over a connection that is not encrypted, except to this computer", async () => {
+  for (const url of ["smtp://user:pass@mail.example.com:587", "smtp://user:pass@10.0.0.5", "smtp://user@mail.example.com"]) {
+    await assert.rejects(sendSmtp(url, { from: "a@x", to: ["b@x"], subject: "s", text: "t" }), /SMTP_URL has a user and password but is not smtps:\/\//, url);
+  }
+});
+
+test("a page can't write a link or an image into report.md through an event name", () => {
+  const name = 'x" [Open the corrected report](https://evil.example/login) ![](https://evil.example/beacon.png) "y';
+  const run = {
+    journeyId: "j", viewport: "desktop", completed: true, note: "ok", startedAt: 0, network: [], consentStep: null, dataLayerLog: [], cookies: [],
+    steps: [{ index: 0, label: "start", t: 0 }, { index: 1, label: "Click [here](https://evil.example/)", t: 1 }],
+    hits: [1, 2].map((t) => ({ platform: "ga4", name, params: {}, step: 1, t, url: "https://www.google-analytics.com/g/collect?v=2&en=x" })),
+  };
+  const findings = checkRun({ events: [] }, run);
+  assert.ok(findings.some((f) => f.check === "duplicate" || /sent 2 times/.test(f.detail)), "the finding that quotes the event name");
+  const md = renderMarkdown({ title: "T", site: "localhost", generatedAt: "now", findings, explained: null, runs: [run], plan: { events: [] }, lang: "en" });
+  assert.match(md, /evil\.example/, "the name is in the report");
+  // Outside code spans the page's brackets are escaped, so nothing of its reads as [text](address) or ![](address).
+  const lines = md.split("\n").map((line) => line.replace(/`[^`]*`/g, "")).filter((line) => /evil\.example/.test(line));
+  assert.ok(lines.length > 0);
+  for (const line of lines) {
+    assert.doesNotMatch(line, /(^|[^\\])\]\(https:\/\/evil\.example/, line);
+    if (/corrected report/.test(line)) assert.match(line, /\\\[Open the corrected report\\\]\(https:\/\/evil\.example\/login\) !\\\[\\\]\(/, line);
+  }
+  // A step's label is escaped the same way where the report quotes it.
+  assert.ok(lines.some((line) => /Click \\\[here\\\]\(https:\/\/evil\.example\/\)/.test(line)));
+});
+
+test("a host of dots is not a folder name, the plan page has a content security policy, and a plan's CSV can't carry a formula", async () => {
+  for (const url of ["http://../", "http://./", "http://%2e%2e/"]) assert.throws(() => domainOf(url), /has no host name/, url);
+  assert.equal(domainOf("https://www.Shop.example/x"), "shop.example");
+  assert.match(renderPlanHtml({ site: "https://shop.example", events: [] }), /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">/);
+  assert.equal(toCsv([["=HYPERLINK(\"http://evil.example\")", "+1", "-1", "@x", "plain", "it's"]]), `"'=HYPERLINK(""http://evil.example"")",'+1,'-1,'@x,plain,it's\r\n`);
+  // The guard comes off again on import, so a plan with such a value survives the round trip.
+  const dir = await mkdtemp(path.join(tmpdir(), "atd-"));
+  const plan = { site: "https://shop.example", events: [{ platform: "ga4", name: "purchase", description: "=cmd|x", required_params: ["value"], parameters: { value: { description: "-5 or more", example: "+90 555 0100" } } }], user_properties: [] };
+  const [eventsFile] = await writePlanSheet(plan, dir, { format: "csv" });
+  assert.match(await readFile(eventsFile, "utf8"), /'=cmd\|x/);
+  const back = (await readPlanSheet(eventsFile, { site: plan.site })).plan.events[0];
+  assert.equal(back.description, "=cmd|x");
+  assert.deepEqual(back.parameters.value, { description: "-5 or more", example: "+90 555 0100" });
 });

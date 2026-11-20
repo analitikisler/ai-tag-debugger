@@ -114,6 +114,7 @@ ${userPropertiesCard(plan.user_properties ?? [])}
 <footer class="footer">${footer}</footer>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
 <meta name="color-scheme" content="light dark">
 <title>${e(title)}</title><link rel="icon" type="image/svg+xml" href="${LOGOS["favicon-light"]}">
 <style>${TOKENS}\n${COMPONENTS}\n${PRODUCT}\n${PLAN_CSS}</style></head><body>

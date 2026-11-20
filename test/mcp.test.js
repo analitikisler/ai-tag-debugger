@@ -11,6 +11,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { buildServer, hitDetail, stepCapture } from "../src/mcp.js";
+import { captured } from "./helpers/captured.js";
 
 const PORT = await freePort();
 let server;
@@ -50,7 +51,10 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   // The step's number and each hit's [h] number lead to the hit in full.
   const step = Number(page.match(/^Step (\d+): "Add to cart"/m)[1]);
   const h = Number(page.match(/\[h(\d+)\] ga4 add_to_cart/)[1]);
-  const full = await call("get_hit", { audit_id: id, step, hit: h });
+  // A hit comes whole inside <captured_data>: every value in it is the site's.
+  const wrapped = await call("get_hit", { audit_id: id, step, hit: h });
+  assert.match(wrapped, /^<captured_data>\n[\s\S]*\n<\/captured_data>$/);
+  const full = captured(wrapped);
   assert.match(full, new RegExp(`^\\[h${h}\\] ga4 add_to_cart, step ${step} "Add to cart"`));
   assert.match(full, /^Request: .*\/g\/collect/m);
   assert.match(full, /^Event parameters/m);
@@ -61,15 +65,16 @@ test("a chat app can drive an audit through the MCP tools", async () => {
   const finished = (await client.callTool({ name: "finish_audit", arguments: { audit_id: id, completed: true, note: "Added.", measurement_plan: plan } })).content;
   const result = finished[0].text;
   // A timeline comes with the result: one entry per step, with the hits and their consent.
-  const timeline = JSON.parse(finished[1].text.replace(/^Timeline \(JSON, one entry per step\):\n/, ""));
+  assert.match(finished[1].text, /^Timeline \(JSON, one entry per step\):\n<captured_data>\n/);
+  const timeline = JSON.parse(captured(finished[1].text));
   const cart = timeline.find((e) => e.action === "Add to cart");
   assert.ok(cart.hits.some((h) => h.platform === "ga4" && h.event === "add_to_cart" && h.consent.ad_storage === "granted"));
   assert.ok(timeline.find((e) => e.action === "Accept cookies").consent_commands.some((c) => c.update?.ad_storage === "granted"));
   // The report can be read over MCP by the name the result gives.
   const name = result.match(/get_report with report "([^"]+)"/)[1];
   assert.match(await call("get_report", { report: name }), /^# /m);
-  assert.equal(JSON.parse(await call("get_report", { report: name, part: "summary" })).site, "localhost");
-  const steps = JSON.parse(await call("get_report", { report: name, part: "timeline" }));
+  assert.equal(JSON.parse(captured(await call("get_report", { report: name, part: "summary" }))).site, "localhost");
+  const steps = JSON.parse(captured(await call("get_report", { report: name, part: "timeline" })));
   assert.deepEqual(steps[0].steps, timeline);
   assert.match((await client.callTool({ name: "get_report", arguments: { report: "../../etc" } })).content[0].text, /^No report "\.\.\/\.\.\/etc" from this server\. Its reports: /);
   assert.match(result, /Meta "PageView" was sent before the visitor made a consent choice/);
@@ -203,7 +208,13 @@ test("what_changed returns only the since-last-run diff, and says so when there 
 });
 
 test("make_plan refuses an unknown topic, a private address over HTTP, and says what to do without a key", async () => {
-  const { client } = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  // A server reached over HTTP drafts plans only when started with --allow-plan: it is its owner's AI key that pays.
+  const closed = await connect({ allowFiles: false, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  assert.ok(!(await closed.client.listTools()).tools.some((t) => t.name === "make_plan"));
+  assert.match(closed.client.getInstructions(), /this server does not draft plans \(it was started without --allow-plan\)/);
+  assert.doesNotMatch(closed.client.getInstructions(), /call make_plan/);
+  const { client } = await connect({ allowFiles: false, allowPlan: true, blockPrivate: true, reportsDir: tmpdir(), dataDir: tmpdir() });
+  assert.match(client.getInstructions(), /call make_plan/);
   const refused = await client.callTool({ name: "make_plan", arguments: { site: "http://127.0.0.1:1/" } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /limited to public websites/);

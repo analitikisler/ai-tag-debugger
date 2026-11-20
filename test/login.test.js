@@ -10,7 +10,7 @@ import { AuditSession, browserEnv } from "../src/browser.js";
 import { collect } from "../src/agent.js";
 import { checkRun } from "../src/checks.js";
 import { presetFor } from "../src/journeys.js";
-import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginScrubber, resolveSessionFile, scrubDeep, sessionFileFor } from "../src/login.js";
+import { fillLoginValue, hasLoginPlaceholder, loginFromEnv, loginRefusal, loginScrubber, resolveSessionFile, scrubDeep, sessionFileFor } from "../src/login.js";
 import { helpText } from "../src/help.js";
 
 const LOGIN = { email: "qa-login@shop.test", username: "qa-login@shop.test", password: "S3cret pass/42!" };
@@ -132,9 +132,11 @@ test("a saved session starts the browser logged in, and a missing one says how t
 });
 
 test("placeholders, the environment and scrubbing", () => {
-  assert.deepEqual(loginFromEnv({ AITD_LOGIN_EMAIL: " a@b.test ", AITD_LOGIN_PASSWORD: "pw123" }), { email: "a@b.test", username: "a@b.test", password: "pw123" });
-  assert.deepEqual(loginFromEnv({ AITD_LOGIN_USERNAME: "qa", AITD_LOGIN_PASSWORD: "pw123" }), { email: "qa", username: "qa", password: "pw123" });
-  assert.equal(loginFromEnv({}), null);
+  const shop = "https://www.shop.test/";
+  assert.deepEqual(loginFromEnv({ AITD_LOGIN_EMAIL: " a@b.test ", AITD_LOGIN_PASSWORD: "pw123", AITD_LOGIN_SITE: "https://shop.test" }, shop), { email: "a@b.test", username: "a@b.test", password: "pw123" });
+  assert.deepEqual(loginFromEnv({ AITD_LOGIN_USERNAME: "qa", AITD_LOGIN_PASSWORD: "pw123", AITD_LOGIN_SITE: "shop.test" }, shop), { email: "qa", username: "qa", password: "pw123" });
+  assert.equal(loginFromEnv({}, shop), null);
+  assert.equal(loginRefusal({}, shop), null);
   assert.equal(hasLoginPlaceholder("{{ login.password }}"), true);
   assert.equal(hasLoginPlaceholder("password"), false);
   assert.equal(fillLoginValue("{{login.username}}:{{login.password}}", LOGIN), `${LOGIN.email}:${LOGIN.password}`);
@@ -145,6 +147,72 @@ test("placeholders, the environment and scrubbing", () => {
   assert.equal(loginScrubber(null)("anything"), "anything");
   // The browser never gets the account in its environment.
   assert.deepEqual(Object.keys(browserEnv({ AITD_LOGIN_EMAIL: "a", AITD_LOGIN_PASSWORD: "b", AITD_LOGIN_USERNAME: "c", PATH: "/bin" })), ["PATH"]);
+});
+
+test("the environment's account is for the site AITD_LOGIN_SITE names, and no other", () => {
+  const account = { AITD_LOGIN_EMAIL: "a@b.test", AITD_LOGIN_PASSWORD: "pw123" };
+  // An account with no site would be typed into whatever site an audit is pointed at, so it is not used at all.
+  assert.equal(loginFromEnv(account, "https://shop.test/"), null);
+  assert.match(loginRefusal(account, "https://shop.test/"), /^A test account is set, but not the site it belongs to: set AITD_LOGIN_SITE/);
+  const bound = { ...account, AITD_LOGIN_SITE: "https://shop.test" };
+  // The site and its subdomains get it; a lookalike, a parent domain and any other site do not.
+  for (const site of ["https://shop.test/", "https://www.shop.test/login", "https://staging.shop.test/"]) assert.ok(loginFromEnv(bound, site), site);
+  for (const site of ["https://evil.test/", "https://shop.test.evil.test/", "https://notshop.test/", "https://test/", undefined, "not a url"]) {
+    assert.equal(loginFromEnv(bound, site), null, String(site));
+    assert.match(loginRefusal(bound, site), /^The test account belongs to shop\.test \(AITD_LOGIN_SITE\), so it is not used on /, String(site));
+  }
+  // Several sites, for a login that passes through another host.
+  const sso = { ...account, AITD_LOGIN_SITE: "https://shop.test, sso.example" };
+  assert.ok(loginFromEnv(sso, "https://sso.example/login"));
+  assert.equal(loginFromEnv(sso, "https://evil.test/"), null);
+  // Without a matching account, a fill says why instead of naming variables that are already set.
+  assert.throws(() => fillLoginValue("{{login.password}}", null, loginRefusal(bound, "https://evil.test/")), /^Error: The test account belongs to shop\.test \(AITD_LOGIN_SITE\), so it is not used on evil\.test\. Without one, stop/);
+});
+
+/** Runs fn with the test account in the environment, as a user sets it, and puts the environment back. */
+async function withEnvAccount(site, fn) {
+  const names = ["AITD_LOGIN_EMAIL", "AITD_LOGIN_PASSWORD", "AITD_LOGIN_SITE"];
+  const saved = names.map((k) => process.env[k]);
+  Object.assign(process.env, { AITD_LOGIN_EMAIL: LOGIN.email, AITD_LOGIN_PASSWORD: LOGIN.password });
+  if (site) process.env.AITD_LOGIN_SITE = site;
+  else delete process.env.AITD_LOGIN_SITE;
+  try {
+    return await fn();
+  } finally {
+    names.forEach((k, i) => (saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i])));
+  }
+}
+
+test("an audit of another site never gets the environment's account, even on a host the audit allows", async () => {
+  // The account belongs to another site: the audited page asks for the password and gets nothing.
+  await withEnvAccount("https://shop.example", async () => {
+    const session = new AuditSession({ viewport: "desktop", site: url, providers: ["ga4"], quietMs: 0 });
+    assert.equal(session.login, null);
+    await session.start();
+    try {
+      await session.act({ action: "goto", url });
+      assert.match(await session.act({ action: "fill", selector: "#password", value: "{{login.password}}" }), /^The test account belongs to shop\.example \(AITD_LOGIN_SITE\), so it is not used on 127\.0\.0\.1\. Without one, stop/);
+      assert.equal(await session.page.evaluate(() => document.getElementById("password").value), "");
+    } finally {
+      await session.close();
+    }
+  });
+  // The account belongs to this site, and the audit allows another host (as a chat could ask for): the account is
+  // typed on the site, never on a page of the allowed host.
+  await withEnvAccount(url, async () => {
+    const session = new AuditSession({ viewport: "desktop", site: url, allowedHosts: ["localhost"], providers: ["ga4"], quietMs: 0 });
+    await session.start();
+    try {
+      await session.act({ action: "goto", url });
+      assert.equal(await session.act({ action: "fill", selector: "#password", value: "{{login.password}}" }), null);
+      assert.equal(await session.page.evaluate(() => document.getElementById("password").value), LOGIN.password);
+      await session.act({ action: "goto", url: `http://localhost:${server.address().port}/widget` });
+      assert.match(await session.act({ action: "fill", selector: "#other", value: "{{login.password}}" }), /^The test account is only filled in on 127\.0\.0\.1, not on localhost\.$/);
+      assert.equal(await session.page.evaluate(() => document.getElementById("other").value), "");
+    } finally {
+      await session.close();
+    }
+  });
 });
 
 test("the login journey and the login command", () => {
@@ -167,11 +235,24 @@ test("over MCP: the account comes from the environment, the model sees placehold
     await client.connect(b);
     return { client, call: async (name, args) => (await client.callTool({ name, arguments: args })).content[0].text };
   };
-  const saved = { email: process.env.AITD_LOGIN_EMAIL, password: process.env.AITD_LOGIN_PASSWORD };
+  const saved = { email: process.env.AITD_LOGIN_EMAIL, password: process.env.AITD_LOGIN_PASSWORD, site: process.env.AITD_LOGIN_SITE };
   process.env.AITD_LOGIN_EMAIL = LOGIN.email;
   process.env.AITD_LOGIN_PASSWORD = LOGIN.password;
+  process.env.AITD_LOGIN_SITE = url;
   const { client, call } = await connect({ allowFiles: true });
   try {
+    // A server reached over HTTP offers no account, whatever its environment holds: its callers are elsewhere.
+    const remote = await connect({ allowFiles: false });
+    try {
+      const view = await remote.call("start_audit", { site: url, campaign: false });
+      assert.match(view, /^A test account is not offered over HTTP/m);
+      const rid = view.match(/audit_id: (\w+)/)[1];
+      const refused = await remote.call("browser_action", { audit_id: rid, action: "fill", text: "password", value: "{{login.password}}", reason: "Password" });
+      assert.ok(!refused.includes(LOGIN.password));
+      await remote.call("finish_audit", { audit_id: rid, completed: false, note: "No login." });
+    } finally {
+      await remote.client.close();
+    }
     const page = await call("start_audit", { site: url, journey: "login", campaign: false });
     assert.match(page, /^A test account is set up: to log in, fill \{\{login\.email\}\}/m);
     const id = page.match(/audit_id: (\w+)/)[1];
@@ -189,7 +270,7 @@ test("over MCP: the account comes from the environment, the model sees placehold
     assert.ok(!finished.includes(LOGIN.email) && !finished.includes(LOGIN.password));
   } finally {
     await client.close();
-    for (const [k, v] of [["AITD_LOGIN_EMAIL", saved.email], ["AITD_LOGIN_PASSWORD", saved.password]]) {
+    for (const [k, v] of [["AITD_LOGIN_EMAIL", saved.email], ["AITD_LOGIN_PASSWORD", saved.password], ["AITD_LOGIN_SITE", saved.site]]) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }

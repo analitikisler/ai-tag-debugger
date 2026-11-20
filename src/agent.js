@@ -4,6 +4,7 @@ import { splitRun } from "./frames.js";
 import { withCampaignParams } from "./campaign.js";
 import { messages } from "./i18n.js";
 import { createProvider, PROVIDERS } from "./providers.js";
+import { untrusted } from "./untrusted.js";
 
 export const DEFAULT_MODEL = PROVIDERS.anthropic.defaultModel;
 
@@ -61,8 +62,6 @@ export const TOOLS = [
   },
 ];
 
-// Page content can't close the delimiter early.
-const untrusted = (value) => String(value ?? "").replace(/<\/?\s*page_content\s*>/gi, "[page_content tag removed]");
 
 /** The page as the model sees it, with everything the site controls inside <page_content>. */
 export function pageView(snapshot, error) {
@@ -207,6 +206,8 @@ export async function runJourney(config, journey, viewport, opts = {}) {
   const session = new AuditSession({
     viewport, site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers, detect: config.detect_providers, keepBodies: config.keep_bodies === true,
     blockHits: config.block_hits !== false, headless: !opts.headed, recordHar: har(opts.saveSite), replayHar: har(opts.replaySite), log: opts.log,
+    // Left out, private addresses are refused when the site is public; "allow_private_network" keeps them open.
+    ...(config.allow_private_network ? { blockPrivate: false } : {}),
   });
   try {
     await session.start();

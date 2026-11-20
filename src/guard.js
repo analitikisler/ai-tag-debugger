@@ -77,11 +77,12 @@ export function isPrivateAddress(ip) {
   const zeroTo = (n) => g.slice(0, n).every((x) => x === 0);
   if (zeroTo(8) || (zeroTo(7) && g7 === 1)) return true; // :: and ::1
   if (zeroTo(5) && g5 === 0xffff) return ipv4Private(v4From(g6, g7)); // ::ffff:a.b.c.d
+  if (zeroTo(4) && g[4] === 0xffff && g5 === 0) return ipv4Private(v4From(g6, g7)); // ::ffff:0:a.b.c.d (IPv4-translated)
   if (zeroTo(6)) return ipv4Private(v4From(g6, g7)); // ::a.b.c.d (IPv4-compatible)
   if (g0 === 0x64 && g1 === 0xff9b) return ipv4Private(v4From(g6, g7)); // NAT64 64:ff9b::/96 (and the local-use /48)
   if (g0 === 0x2002) return ipv4Private(v4From(g1, g2)); // 6to4
   if (g0 === 0x2001 && g1 === 0) return true; // Teredo: the IPv4 address is obscured, so refuse
-  return (g0 & 0xfe00) === 0xfc00 || (g0 & 0xffc0) === 0xfe80 || (g0 & 0xff00) === 0xff00 || (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0); // ULA, link-local, multicast, discard
+  return (g0 & 0xfe00) === 0xfc00 || (g0 & 0xff80) === 0xfe80 || (g0 & 0xff00) === 0xff00 || (g0 === 0x100 && g1 === 0 && g2 === 0 && g3 === 0); // ULA, link-local and the old site-local (fe80::/9), multicast, discard
 }
 
 /**
@@ -107,6 +108,24 @@ export function privateHostChecker(isBlocked = isPrivateAddress) {
   };
 }
 
+const PROXY_ENV = ["HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"];
+
+/**
+ * Whether an audit that was not told either way refuses private addresses: yes when the audited site and every
+ * allowed host are on the public internet, since a page there has no business reaching into the network the tool
+ * runs in (a development server, a router, a cloud metadata address). No when one of them is itself local or private
+ * (a staging or development site), and no behind a proxy the environment names: the browser reaches the site
+ * through it, and the egress proxy that pins each address would go around it.
+ * @param {string[]} hosts the hosts of a hostScope
+ * @param {{ env?: Record<string, string | undefined>, isPrivate?: (host: string) => Promise<boolean> }} [opts]
+ */
+export async function autoBlockPrivate(hosts, { env = process.env, isPrivate = privateHostChecker() } = {}) {
+  if (!hosts?.length) return false;
+  if (PROXY_ENV.some((name) => env[name] || env[name.toLowerCase()])) return false;
+  for (const host of hosts) if (await isPrivate(host)) return false;
+  return true;
+}
+
 /**
  * Checks a navigation target. Returns an error message, or null when allowed.
  * @param {string} url
@@ -124,6 +143,6 @@ export async function navigationError(url, { scope, isPrivate } = {}) {
   if (scope && !scope.allows(u.hostname)) {
     return `${u.hostname} is outside the audited site (${scope.hosts.join(", ")}). Stay on the site. If the journey really needs this host (for example a hosted checkout), add it to allowed_hosts.`;
   }
-  if (isPrivate && (await isPrivate(u.hostname))) return `${u.hostname} is a private network address, which this server doesn't open.`;
+  if (isPrivate && (await isPrivate(u.hostname))) return `${u.hostname} is a private network address, which this audit doesn't open.`;
   return null;
 }

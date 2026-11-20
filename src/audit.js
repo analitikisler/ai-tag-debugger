@@ -63,6 +63,16 @@ export async function loadConfig(configFile, { log = console.error } = {}) {
  * so its history index is updated and the reports get the trend; null for --out and replays.
  * Returns { reportPath, summaryPath, changes, metrics, verdict, trend, stability }.
  */
+/**
+ * The config as a run's files keep it: without the alert targets (a Slack webhook address is a secret), the AI
+ * endpoint, the login session file and the Chrome address, which say where things are on this computer and are of no
+ * use to whoever the run folder, a CI artifact or a saved site is passed to.
+ */
+export function shareableConfig(config) {
+  const { notify: _notify, base_url: _baseUrl, session_file: _session, connect: _connect, ...kept } = config ?? {};
+  return kept;
+}
+
 export async function writeReports({ outDir, config, plan, runs, findings, explained, lang, ai = null, against = null, branding = config.branding !== false, previous = undefined, planChanges = null, consentScenarios = null, brand = null, failOn = "broken", history = null }) {
   await mkdir(outDir, { recursive: true });
   const site = new URL(config.site).hostname;
@@ -73,7 +83,7 @@ export async function writeReports({ outDir, config, plan, runs, findings, expla
   const metrics = computeMetrics({ plan, runs, findings, consentScenarios });
   const verdict = verdictHeadline({ findings, runs, metrics, lang });
   // The capture goes first: the history index summarises it, and the reports then show the trend including this run.
-  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...config, plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
+  await writeFile(path.join(outDir, "capture.json"), JSON.stringify({ version: VERSION, ai, config: { ...shareableConfig(config), plan }, ...(against ? { against: { plan_id: against.id, file: against.file } } : {}), runs, findings, explained, metrics, ...(changes ? { changes } : {}), ...(planChanges ? { planChanges } : {}), ...(consentScenarios ? { consentScenarios } : {}) }, null, 2));
   let trend = null;
   let stability = null;
   if (history) {

@@ -161,7 +161,7 @@ Node 22+ gerekir.
 
 ```bash
 npm install -g @analitikisler/ai-tag-debugger
-npx -y playwright@1.56.1 install chromium   # bu sürümün kullandığı tarayıcı sürümü
+npx -y playwright@1.65.1 install chromium   # bu sürümün kullandığı tarayıcı sürümü
 export ANTHROPIC_API_KEY=...                # ya da OPENAI_API_KEY, ya da GEMINI_API_KEY
 
 ai-tag-debugger run --site https://staging.yourshop.com --journey add_to_cart --headed
@@ -410,14 +410,17 @@ ai-tag-debugger run --config ai-tag-debugger.config.json --events purchase,add_t
 
 Hesap gerektiren yolculuklar iki şekilde giriş yapabilir.
 
-**Bir test hesabı.** E-postasını (site bir kullanıcı adı istiyorsa `AITD_LOGIN_USERNAME`) ve parolasını aracı çalıştıran bilgisayarda ayarlayın:
+**Bir test hesabı.** E-postasını (site bir kullanıcı adı istiyorsa `AITD_LOGIN_USERNAME`), parolasını ve hesabın ait olduğu siteyi aracı çalıştıran bilgisayarda ayarlayın:
 
 ```bash
 export AITD_LOGIN_EMAIL=qa-test@magazaniz.com
 export AITD_LOGIN_PASSWORD='…'
+export AITD_LOGIN_SITE=https://www.magazaniz.com
 ```
 
-Model bunları hiç görmez. Giriş formlarını `{{login.email}}`, `{{login.username}}` ve `{{login.password}}` yer tutucularıyla doldurur; gerçek değerleri tarayıcı yazar, yalnızca denetlenen sitenin sayfalarına (alt alan adları ve `allowed_hosts`), başka bir siteden gelen bir çerçeveye asla. Aracın sakladığı ya da gösterdiği her şeyde bu değerler yeniden yer tutuculara çevrilir: modelin okuduğu sayfa görünümleri, adımlar, istekler, dataLayer push'ları, ağ çağrıları, kaydedilen adımlar ve raporlar. Tarayıcının kendisi de bunları ortamında almaz. `login` yolculuğu hesabı kullanır; her yolculuk ve MCP denetimi de kullanabilir. Bir girişten sonra `user_id_missing` (bilgi), kullanıcı kimliği taşımayan GA4 isteklerini bildirir. Test için açılmış bir hesap kullanın, asla gerçek bir müşterinin hesabını değil.
+`AITD_LOGIN_SITE` zorunludur: o olmadan hesap hiç kullanılmaz. Başka bir sitenin denetimi hesap almaz; böylece başka bir yerdeki bir sayfa parolayı isteyemez. Başka bir ana makineden geçen bir giriş (tek oturum açma sayfası) için ikisini de virgülle ayırarak yazın: `AITD_LOGIN_SITE=https://www.magazaniz.com,login.magazaniz-sso.com`.
+
+Model bunları hiç görmez. Giriş formlarını `{{login.email}}`, `{{login.username}}` ve `{{login.password}}` yer tutucularıyla doldurur; gerçek değerleri tarayıcı yazar, yalnızca `AITD_LOGIN_SITE` içinde adı geçen sitelerin ve alt alan adlarının sayfalarına; başka bir siteden gelen bir çerçeveye ya da sayfaya asla, `allowed_hosts` içindekiler dahil. HTTP üzerinden erişilen bir MCP sunucusu test hesabı sunmaz: hesap sunucunun bilgisayarındadır, onu çağıranlar ise başka yerdedir. Aracın sakladığı ya da gösterdiği her şeyde bu değerler yeniden yer tutuculara çevrilir: modelin okuduğu sayfa görünümleri, adımlar, istekler, dataLayer push'ları, ağ çağrıları, kaydedilen adımlar ve raporlar. Tarayıcının kendisi de bunları ortamında almaz. `login` yolculuğu hesabı kullanır; her yolculuk ve MCP denetimi de kullanabilir. Bir girişten sonra `user_id_missing` (bilgi), kullanıcı kimliği taşımayan GA4 isteklerini bildirir. Test için açılmış bir hesap kullanın, asla gerçek bir müşterinin hesabını değil.
 
 **Kaydedilmiş bir oturum**, bir insan gerektiren girişler için: bir CAPTCHA, telefona gelen bir kod ya da tek oturum açma (SSO). `aitd login --site https://magazaniz.com` siteyi bir tarayıcı penceresinde açar; elle giriş yapın, terminalde Enter'a basın; oturum (çerezler ve depolama) yalnızca sizin okuyabileceğiniz `aitd/<alan-adı>/session.json` dosyasına kaydedilir. `aitd run … --session saved`, yapılandırmadaki `session_file` ya da yerel bir MCP sunucusunda `start_audit` için `session: "saved"` her yolculuğu giriş yapılmış olarak başlatır. Dosya canlı bir oturum tutar: gizli tutun ve oturum sona erdiğinde yeniden kaydedin.
 
@@ -529,6 +532,7 @@ Dosyada her bulgu için bir kayıt bulunur: çalıştırmanın eşleştirme yapt
 | `journeys[].start` | İsteğe bağlı başlangıç yolu (varsayılan `/`). |
 | `journeys[].steps` | `--scripted` çalıştırmaları için isteğe bağlı sabit adımlar: `{ "action": "click", "selector": "#add-to-cart" }`. Bunlar yoksa `--scripted`, sitenin o yolculuğu son tamamlayan çalıştırmasının adımlarını tekrarlar. |
 | `allowed_hosts` | Yolculukların ziyaret edebileceği başka ana makineler, örneğin barındırılan bir ödeme için `["checkout.payments-provider.com"]`. Tarayıcı aksi halde `site` ana makinesinde ve alt alan adlarında kalır. `--allow-host` ile aynıdır. |
+| `allow_private_network` | Varsayılan `false`. Site ve `allowed_hosts` içindekilerin tümü genel internetteyse tarayıcı `localhost` ile özel ağ adreslerini reddeder; böylece bir sayfa, aracın çalıştığı ağın içine ulaşamaz. Genel sitenin sayfalarının böyle bir adrese ulaşması gerekiyorsa (örneğin yerel bir ödeme ya da etiket sunucusu taklidi) `true` yapın. Kendisi yerel ya da özel olan bir site eskisi gibi denetlenir. `--allow-private-network` ile aynıdır. |
 | `session_file` | `aitd login` ile kaydedilmiş bir oturum; her yolculuk giriş yapılmış olarak başlar: sitenin kendi oturumu için `"saved"` ya da bir dosya yolu. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `connect` | Kendi Chrome'unuzun hata ayıklama adresi, örneğin `http://127.0.0.1:9222`: her yolculuk onun yeni bir penceresinde çalışır. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
 | `providers` | Kontrol edilecek takip platformları, örneğin `["ga4", "meta"]`. Varsayılan `["ga4", "google_ads", "meta", "tiktok"]`; bu ayar boşken sitenin gönderdiği diğer platformlar da eklenir. `--platforms` ile aynıdır. |
@@ -558,7 +562,7 @@ Kayıtlı her çalıştırmadan sonra `notify`, "Son çalıştırmadan bu yana d
 ```
 
 - **Slack** webhook adresini alır. `"slack": true` ise adresi bunun yerine `SLACK_WEBHOOK_URL` ortam değişkeninden okur; böylece adres dosyada durmaz.
-- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. Düz `smtp://` adresi giriş bilgisini ve postayı şifresiz gönderir, STARTTLS desteklenmez.
+- **E-posta** tek bir adres ya da bir liste alır. Postalar `SMTP_URL` içindeki sunucudan gönderilir, örneğin `smtps://kullanici:parola@mail.example.com:465`. Gönderen adresi `SMTP_FROM` belirler (varsayılan: ilk alıcı). `smtps://` kullanın; bağlantıyı baştan şifreler. STARTTLS desteklenmez, bu yüzden düz bir `smtp://` adresi her şeyi şifresiz gönderirdi: içinde kullanıcı ve parola varsa, sunucu bu bilgisayarda değilse reddedilir. Ayar dosyasındaki bir webhook adresi gizli bir bilgidir: `SLACK_WEBHOOK_URL` ile birlikte `"slack": true` kullanmayı tercih edin. Her iki durumda da `notify`, `capture.json` dosyasına ve kaydedilmiş sitelere yazılmaz.
 
 Uyarı yalnızca kayıtlı bir çalıştırma için gönderilir (`--out` ile gönderilen için değil), karşılaştırılacak bir önceki çalıştırma varsa ve o zamandan beri bir değişiklik olduysa. Konu satırı önce sonucu, sonra sayıları ve başlığı taşır: `shop.example: Kaldı · 2 yeni sorun · purchase izlemesi bozuk (mobile)`. Gövde sonuç satırını yineler, sonra neyin düzeldiğini (*önceki durumuyla* birlikte) ve neyin yeni olduğunu listeler (her yeni kayıt önem düzeyi ve sorumlusuyla), ardından mini grafikli eğilim satırı, gelip giden sorunlar ve bir sorun 5, 10, 20 çalıştırmadır açık kaldığında (sonra her 10 çalıştırmada bir) "N çalıştırmadır hâlâ açık" satırı gelir; böylece aynı açık liste her mesajda tekrarlanmaz:
 
@@ -578,6 +582,7 @@ Eğilim tek başına hiçbir zaman uyarı tetiklemez. Bir kanal başarısız olu
 ```
 aitd "<cümle>" [-y]
 aitd plan --site <url> [--topic <ad>] [--headed] [--provider <ad>] [--model <id>] [--max-steps <n>] [--data-dir <dir>]
+         [--allow-private-network]
 aitd plan list --site <url> [--data-dir <dir>]
 aitd plan import <dosya> --site <url> [--data-dir <dir>]
 aitd plan export <plan> --site <url> [--format xlsx|csv] [--data-dir <dir>]
@@ -586,10 +591,11 @@ aitd run --site <url> (--against <plan> | --journey <id> | --goal "<metin>") [--
          [--provider anthropic|openai|gemini|openai-compatible] [--model <id>] [--lang en|tr] [--headed]
          [--fail-on broken|risk|warning|never] [--baseline <dosya>] [--update-baseline]
          [--scripted] [--no-ai] [--save-site <dir>] [--save-steps <dosya>] [--session saved|<dosya>] [--connect <url>]
+         [--allow-private-network]
 aitd replay <dir>... [--update] [--out <dir>]
 aitd mcp [--http] [--port <n>] [--host <adres>] [--token <gizli>] [--public-url <https url>] [--reports <dir>]
-         [--allow-private-network] [--allow-live]
-aitd login --site <url> [--save <file>] [--allow-host <host>] [--data-dir <dir>]
+         [--allow-private-network] [--allow-live] [--allow-plan]
+aitd login --site <url> [--save <file>] [--allow-host <host>] [--allow-private-network] [--data-dir <dir>]
 aitd doctor [--site <url>] [--data-dir <dir>]
 aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir>]
 ```
@@ -628,12 +634,13 @@ aitd history --site <url> [--limit <n>] [--json] [--lang en|tr] [--data-dir <dir
 | `--out <dir>` | replay | Tekrar raporlarının yazılacağı yer. `run` için `--out` gizli bir takma ad olarak bir minör sürüm daha çalışır ve bir not yazdırır; `--data-dir` kullanın. |
 | `--base-url <url>` | run | OpenAI uyumlu bir sağlayıcının API adresi. |
 | `--allow-host <ana makine>` | run | Yolculukların ziyaret edebileceği başka bir ana makine (tekrarlanabilir). `allowed_hosts` ile aynıdır. |
+| `--allow-private-network` | run, plan, login, mcp | Genel bir sitenin sayfalarının `localhost` ve özel ağ adreslerine ulaşmasına izin verir. `allow_private_network` ile aynıdır; `mcp --http` üzerinde sunucunun engelini kaldırır. |
 | `--session saved\|<dosya>` | run | Her yolculuğu, `aitd login`'in kaydettiği oturumdan (`saved`) ya da bir oturum dosyasından giriş yapılmış olarak başlatır. `session_file` ile aynı. Bkz. [Giriş yapmak](#giriş-yapmak). |
 | `--save <dosya>` | login | `aitd login`'in oturumu nereye kaydedeceği (varsayılan `aitd/<alan-adı>/session.json`). |
 | `--connect <url>` | run, plan | Bir hata ayıklama bağlantı noktasıyla başlatılmış kendi Chrome'unuzda çalıştırır, örneğin `http://127.0.0.1:9222`. `connect` ile aynı. Bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak). |
 | `--keep-bodies` | run | Takip isteklerini gönderildiği gibi, kullanıcı verisi gizlenmeden sakla. |
 | `--no-branding` | plan, run | Logo ve kredi satırını raporlardan ve `plan.html` dosyasından çıkar. |
-| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live` | mcp | Aşağıdaki MCP bölümüne bakın. |
+| `--http`, `--port`, `--host`, `--token`, `--public-url`, `--reports`, `--allow-private-network`, `--allow-live`, `--allow-plan` | mcp | Aşağıdaki MCP bölümüne bakın. |
 
 0.10.0 sürümünde kaldırıldı: `plan --from`, `plan --out` ve `plan --force`. Plan taslağı her zaman yeni bir klasör kaydeder; kaldırılmış bir bayrak ne çalıştırılacağını yazdırır.
 
@@ -698,7 +705,7 @@ Sunucunun sunduğu araçlar:
 
 | Araç | Ne yapar |
 |---|---|
-| `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. |
+| `make_plan` | Bir site için takip planı çıkarır (neyin takip edilmesi gerektiği), `aitd plan --site` ile aynıdır. Yalnızca bir tür event için sınırlamak üzere `topic` verin (`custom-events`, `ecommerce`, `forms`, `consent`). Plan kaydedilir ve kimliği `finish_audit` için `against` olarak verilebilir. Sunucuyu çalıştıran bilgisayarda ayarlı yapay zekâ sağlayıcısını kullanır ve birkaç dakika sürer. HTTP üzerinden erişilen bir sunucu bunu yalnızca `--allow-plan` ile başlatıldıysa sunar. |
 | `what_changed` | Bir site için yalnızca "son çalıştırmadan bu yana" farkını döndürür: kayıtlı son çalıştırmanın (`aitd run`) bir öncekine göre düzelen ve yeni sorunları. Tarayıcı ve yapay zekâ kullanmaz. Türkçe yanıt için `language` verin. |
 | `start_audit` | Bir URL'de yeni bir tarayıcı açar ve tüm takibi kaydetmeye başlar. Hedefini ve beklenen event'lerini almak için hazır bir yolculuk (`purchase`, `sign_up`, …) verin; kontrol edilecek platformları seçmek için `providers` verin. Asistan önce hangi platformların kontrol edileceğini size sorar. `live: true`, takip isteklerini sitenin gerçek hesaplarına geçirir; böylece GA4 Realtime ya da DebugView, Meta Events Manager veya Tag Assistant'ta kontrol edilebilirler. Test trafiği o zaman sitenin raporlarında görünür; sonuçlar ve rapor çalıştırmanın canlı olduğunu söyler. HTTP üzerinden sunucunun bunun için `--allow-live` ile başlatılması gerekir. İlk sayfa bir reklam tıklaması gibi, test kampanya parametreleriyle (`utm_source=aitd`, `gclid=aitd-gclid`, `fbclid=aitd-fbclid`, …) açılır; böylece `finish_audit` bunların yönlendirmelerden sağ çıkıp isteklere ulaştığını kontrol eder. `campaign: false` URL'yi olduğu gibi açar, `campaign: {"utm_source": "newsletter", "gclid": "test123"}` ise sizin değerlerinizi kullanır. Sunucunun bilgisayarında ayarlı bir test hesabı yer tutucularıyla kullanılır; `session: "saved"` ise `aitd login`'in kaydettiği oturumdan başlar (yalnızca yerel sunucular); bkz. [Giriş yapmak](#giriş-yapmak). `connect` onu kendi Chrome'unuzun yeni bir penceresinde çalıştırır (yalnızca yerel sunucular; bkz. [Kendi Chrome'unuzu kullanmak](#kendi-chromeunuzu-kullanmak)). |
 | `browser_action` | Tek bir tıklama, doldurma, seçme, gitme, kaydırma ya da bekleme. Adım numarasını, sayfayı, o adımın gönderdiği takip isteklerini (her biri bir `[h]` numarası, onay durumu — `gcs`'den, `ad_user_data` ve `ad_personalization` için `gcd`'den — ve GA4'ün onunla gönderdiği kimlik ve işaretlerle: `cid`, `sid`, `gcs`, `gcd`, `_fv`, `_ss`, `_nsi`, …), dataLayer push'larını (Consent Mode komutları `anahtar=değer` olarak eksiksiz, sayfa adresleri hiç kesilmeden) ve event olarak okunmayan çağrıları (ör. `gcs`, `gcd` ve tıklama kimlikleriyle Consent Mode ping'leri: `gclid`, reklam verisi karartma açıksa `gclid=0 (redacted)`, `_gcl_aw`'dan `gclaw`), ayrıca adımın eklediği, değiştirdiği ya da sildiği çerezleri adlarıyla, değiştiğinde de GA4 istemci kimliğini ve `_gcl_aw` ile `_fbc`'nin açılış tıklama kimliklerini tutup tutmadığını döndürür. Sonraki bir bekleme ya da kaydırma sırasında gelen page_view, sayfasını yükleyen adımda gecikmeli olarak işaretlenip gösterilir. Uzun oturumlar en eski sonuçlarını kaybettiği için sayfa görünümü varsayılan olarak kısadır: ekranın üstünde ya da altında en fazla 40 öğe; sayfa metni ya da öğe listesi son görünümden beri değişmediyse yerine bir not. Hepsi için `detail: "full"` verin. |
@@ -731,7 +738,7 @@ Sunucuyu uygulamanın MCP yapılandırmasına ekleyin. Claude Desktop için bu, 
 }
 ```
 
-Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini indirir; bu yaklaşık bir dakika sürer ve yalnızca bir kez olur. Önceden indirmek için: `npx -y playwright@1.56.1 install chromium`.
+Tarayıcı (Chromium), bir denetimi ilk kez çalıştırdığınızda kendini indirir; bu yaklaşık bir dakika sürer ve yalnızca bir kez olur. Önceden indirmek için: `npx -y playwright@1.65.1 install chromium`.
 
 Tek tıkla ya da tek satırla kurulum:
 
@@ -754,11 +761,16 @@ cloudflared tunnel --url http://localhost:8787     # ya da: ngrok http 8787; yaz
 npx -y @analitikisler/ai-tag-debugger mcp --http --port 8787 --public-url https://<tünel-adresiniz>
 ```
 
-Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol içeren bir URL yazdırır. Bu URL'yi uygulamada bir bağlayıcı olarak ekleyin. URL'yi bilen herkes bilgisayarınızdaki tarayıcıyı kullanabilir; bu yüzden gizli tutun ve işiniz bitince sunucuyu durdurun. Kendi gizli değeriniz (`--token`) en az 16 karakter olmalıdır.
+Sunucu, `https://<tünel-adresiniz>/mcp/<gizli>` gibi rastgele gizli bir yol içeren bir URL yazdırır. Bu URL'yi uygulamada bir bağlayıcı olarak ekleyin. URL'yi bilen herkes bilgisayarınızdaki tarayıcıyı kullanabilir; bu yüzden gizli tutun ve işiniz bitince sunucuyu durdurun. Kendi gizli değeriniz (`--token` ya da onu süreç listesinin dışında tutan `AITD_MCP_TOKEN` ortam değişkeni) en az 16 karakter olmalıdır.
+
+Rapor bağlantıları başkalarına iletilmek içindir, bu yüzden o gizli değeri taşımaz: `--public-url` ile, biten bir denetim `https://<tünel-adresiniz>/reports/<rapor anahtarı>/<denetim>/report.html` adresine bağlantı verir. Rapor anahtarı gizli değerden türetilir, yalnızca raporları açar ve aynı `--token` değerini kullandığınız sürece aynı kalır.
 
 HTTP modunda sunucu yerelde olduğundan daha kısıtlıdır:
 
 - Ölçümleme planlarını ya da ayar dosyalarını diskinizden okumaz (planı sohbette JSON metni olarak verin ya da `against: latest`, `first` ya da kimliğiyle kayıtlı bir planı adlandırın) ve `run_audit` sunulmaz. Yalnızca kendi yazdığı raporları sunar.
+- Sunucuyu `--allow-plan` ile başlatmadıkça `make_plan` da sunulmaz: plan çıkarmak, bilgisayarınızda ayarlı yapay zekâ sağlayıcı anahtarını harcar ve URL'yi bilen herkes bir plan isteyebilir.
+- `AITD_LOGIN_*` ne olursa olsun bir [test hesabı](#giriş-yapmak) sunmaz ve kaydedilmiş bir giriş oturumunu hiç kullanmaz.
+- Açık denetimler, henüz başlamakta olan denetimler, onay karşılaştırmaları ve planlar birlikte sayılarak en çok dört tarayıcı çalıştırır. Bunu aşan bir istek, biri bitene kadar reddedilir.
 - Tarayıcı yalnızca `http` ve `https` sayfalarını açar ve `localhost` ile özel ağ adreslerini (`192.168.x.x` ya da `169.254.169.254` gibi) reddeder; böylece URL, ağınızı incelemek için kullanılamaz. WebSocket'ler dahil tüm tarayıcı trafiği, her ana makineyi bir kez çözüp yalnızca kontrol ettiği adrese bağlanan küçük bir yerleşik proxy üzerinden geçer; denetim sırasında değişen bir DNS yanıtı kontrolü atlatamaz. Yerel bir staging sitesini bu şekilde yine de denetlemek için sunucuyu `--allow-private-network` ile başlatın.
 - Takip istekleri tarayıcının içinde yanıtlanır, bu yüzden denetimler denetlenen sitenin hesaplarına hiç ulaşmaz. `start_audit`'teki `live: true` onları yalnızca sunucu `--allow-live` ile başlatıldıysa geçirir.
 - 15 dakika açık kalan denetimler kapatılır ve istek gövdeleri 1 MB ile sınırlıdır.
@@ -770,10 +782,14 @@ Tünel gerektirmeyen barındırılmış bir sunucu, [Analitik İşler](https://a
 - Ajana kolay test verisi kullanması ve **asla gerçek ödeme bilgisi girmemesi** söylenir. Bir yolculuk gerçek bir ödeme ya da hesap gerektiriyorsa durur ve bunu bildirir.
 - [Nasıl çalışır](#nasıl-çalışır) bölümünde listelenen platformlara giden takip istekleri varsayılan olarak yerelde yanıtlanır; bu yüzden o analitik ve reklam hesaplarına test dönüşümleri ulaşmaz.
 - Tarayıcı, denetlenen sitede ve alt alan adlarında kalır; ayrıca varsa `allowed_hosts` içinde. Yalnızca `http` ve `https` sayfalarını açar.
-- Modele, sayfa içeriğinin veri olduğu ve talimat olmadığı söylenir. Bir istem kuralı, bir modelin asla yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini sınırlar.
-- Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgileriniz olmadan çalışır.
+- Denetlenen site ve `allowed_hosts` içindekiler genel internetteyse tarayıcı, bir HTTP sunucusunun kullandığı aynı yerleşik proxy üzerinden `localhost` ile özel ağ adreslerini (`192.168.x.x` ya da bulut meta veri adresi `169.254.169.254` gibi) reddeder; böylece sitedeki bir sayfa bir geliştirme sunucusuna, bir yönlendiriciye ya da bir CI çalıştırıcısının kimlik bilgilerine ulaşamaz. Kendisi yerel ya da özel olan bir site eskisi gibi denetlenir; ortamda bir proxy tanımlıysa (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`) her site de öyle, çünkü tarayıcının siteye ulaşmak için o proxy'ye ihtiyacı vardır. `--allow-private-network` ya da `"allow_private_network": true` bunu kapatır. Kendi Chrome'unuz (`--connect`) için geçerli değildir.
+- Bir çalıştırmanın dosyaları, bilgisayarınızda kalması gerekenleri içermez: ayar dosyasındaki `notify` hedefleri, `base_url`, `session_file` ve `connect`, `capture.json` dosyasına ya da kaydedilmiş bir siteye yazılmaz.
+- Modele, sayfa içeriğinin veri olduğu ve talimat olmadığı söylenir. Sitenin denetlenirken gönderdiği her şey için de aynısı geçerlidir: hit'ler, dataLayer push'ları ve bunlardan üretilen bulgular ile raporlar, sohbet uygulamanızın modeline ve bulguları açıklayan modele `<captured_data>` etiketleri arasında ulaşır; talimatları bunun veri olduğunu söyler. Bir istem kuralı, bir modelin asla yanıltılmayacağını garanti edemez; bu yüzden yukarıdaki gezinme sınırları, yanıltılmış bir modelin yapabileceklerini sınırlar.
+- Tarayıcı, ortamında API anahtarlarınız ve diğer gizli bilgileriniz olmadan ve Chromium'un kendi korumalı alanı (sandbox) açık olarak çalışır. Chromium korumalı alanını kullanamadığında (root olarak çalışmaz ve bazı konteynerlerin ve CI çalıştırıcılarının kapattığı kullanıcı ad alanlarına ihtiyaç duyar) araç bunu stderr'e bir kez yazar ve tarayıcıyı onsuz başlatır; `AITD_NO_SANDBOX=1` bu denemeyi atlar. Korumalı alanı korumak için aracı normal bir kullanıcı olarak çalıştırın.
+- Denetim tarayıcısında service worker'lar ve indirmeler kapalıdır: bir service worker'dan gönderilen takip isteği, aksi halde yerel yanıtın çevresinden dolaşıp gerçek hesaba ulaşırdı.
+- Bir sayfanın bir kayda ekleyebileceği şeyler sınırlıdır: 16 KB'ı aşan bir dataLayer push'unun yalnızca event adı ve boyutu saklanır, bir hit parametresi 4.096 karakterde kesilir ve yolculuk başına her biri 500 karakterlik 200 sayfa hatası saklanır. Bulguları açıklayan model, hit'leri yalnızca yaklaşık 100.000 token'a sığdıkları sürece bütün olarak alır; sonra adlarını, sonra sayılarını alır.
 - npm'den yapılan her kurulum (`npx`, `npm install -g`, Claude eklentisi), her sürümün test edildiği bağımlılık sürümlerinin aynısını alır: paket, her paketin sağlama toplamıyla bir `npm-shrinkwrap.json` taşır; böylece npm bağımlılıkların daha yeni sürümlerini ya da onların getirdiği bir şeyi kendiliğinden almaz.
-- Bir [test hesabı](#giriş-yapmak) yalnızca denetlenen sitenin sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
+- Bir [test hesabı](#giriş-yapmak) yalnızca ait olduğu sitenin (`AITD_LOGIN_SITE`) sayfalarına yazılır, modele hiç gösterilmez ve aracın sakladığı her şeyde yeniden yer tutucularına çevrilir. Kaydedilmiş bir giriş oturumunu yalnızca siz okuyabilirsiniz ve bir HTTP sunucusu onu hiç kullanmaz.
 - **Reklam eşleştirmesi için gönderilen kullanıcı verisi, `capture.json` dosyasına kaydedilmeden ya da raporda gösterilmeden önce gizlenir**: GA4 ve Google Ads geliştirilmiş dönüşümlerindeki e-postalar, telefonlar, adlar, adresler ve kullanıcı kimlikleri (`em`, `ph`, `uid`, …), Meta gelişmiş eşleştirme (`ud[*]`, `udff[*]`), TikTok `context.user` ve geliştirilmiş dönüşümler için sitenin dataLayer'a gönderdiği `user_data`. E-posta adresine benzeyen her değer, alanı ne olursa olsun gizlenir; yalnızca denetlenen sitenin `mailto:` bağlantısındaki ya da bir bağlantı alanındaki (`link_url`, `link_text`, `gtm.elementUrl`, …) kendi adresi istisnadır; örneğin bir GTM tıklama event'indeki iletişim bağlantısı, ziyaretçi verisi değildir. Her değer `[redacted: 64 chars, looks hashed]` gibi bir işaretçiye dönüşür; karma hâle getirilmemiş bir değer ise kişisel veri riski olarak raporlanır. `--keep-bodies` (`"keep_bodies": true`), istekleri gönderildiği gibi, hata ayıklama için saklar.
 - Saklanan istek gövdeleri istek başına 32 KB, yolculuk başına 2 MB ile sınırlıdır. Bu sınırın üzerinde rapor, gövdenin saklanmadığını söyler.
 - Yalnızca sahibi olduğunuz ya da test etme yetkiniz olan sitelere karşı çalıştırın.

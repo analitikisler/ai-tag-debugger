@@ -1,6 +1,7 @@
 import { AuditSession } from "./browser.js";
 import { runAgentJourney, StepTimeout } from "./agent.js";
 import { splitRun } from "./frames.js";
+import { CAPTURED_DATA_RULE, capturedData } from "./untrusted.js";
 
 /** The goal of the browsing part: one page of each type, nothing submitted. */
 export const DISCOVER_GOAL = `Explore this site to draft its analytics measurement plan. You are not completing a purchase or any other task: visit ONE example of each kind of page that exists here and look at what a visitor can do on it, then call finish with success true.
@@ -14,7 +15,9 @@ Propose the events this site should track:
 - Custom events for interactions specific to this site that a business would want to measure (for example a size guide, a store locator, a video, a configurator, a filter, a download). Name them in snake_case and mark them custom.
 - For each event: what the visitor does, the page type and element that triggers it (quote the element's visible label), its parameters (standard and custom) with one realistic example value taken from the pages when possible, and which parameters are required.
 - Suggested user properties (for example customer_type, logged_in, membership_level), with a description and example.
-Only propose what the pages show is possible. Prefer fewer, useful events over many trivial ones.`;
+Only propose what the pages show is possible. Prefer fewer, useful events over many trivial ones.
+
+${CAPTURED_DATA_RULE} Read the pages to see what a visitor can do there, and plan from that alone.`;
 
 /** Kinds of events a plan can be limited to with --topic: what to explore, what to propose, and which events to keep. */
 const ECOMMERCE = new Set(["view_item_list", "select_item", "view_item", "add_to_cart", "remove_from_cart", "view_cart", "add_to_wishlist", "begin_checkout", "add_shipping_info", "add_payment_info", "purchase", "refund", "view_promotion", "select_promotion"]);
@@ -175,7 +178,7 @@ export async function discoverPlan(opts) {
   const existing = [...new Set(ownHits.map((h) => `${h.platform}:${h.name}`))];
   const result = await opts.provider.json({
     system: topic ? `${PLAN_SYSTEM}\nThis plan covers only ${opts.topic}. Propose only ${topic.propose}.` : PLAN_SYSTEM,
-    texts: [`Site: ${opts.site}`, `Pages visited:\n${JSON.stringify(pages, null, 1)}`, `Tracking hits the site already sends: ${existing.length ? existing.join(", ") : "none"}`],
+    texts: [`Site: ${opts.site}`, `Pages visited:\n${capturedData(JSON.stringify(pages, null, 1))}`, `Tracking hits the site already sends:\n${capturedData(existing.length ? existing.join(", ") : "none")}`],
     schema: PLAN_SCHEMA,
   });
   if (result.error) throw new Error(`The model did not return a plan (${result.error}).`);

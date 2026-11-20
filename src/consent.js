@@ -185,7 +185,7 @@ export function scenarioLanding(config, campaign) {
 async function runState(config, state, opts) {
   const session = new AuditSession({
     viewport: "desktop", site: config.site, allowedHosts: config.allowed_hosts, storageState: config.session_file, connect: config.connect, providers: config.providers,
-    blockHits: config.block_hits !== false, headless: !opts.headed, ...(opts.blockPrivate ? { blockPrivate: opts.blockPrivate } : {}),
+    blockHits: config.block_hits !== false, headless: !opts.headed, ...(opts.blockPrivate !== undefined ? { blockPrivate: opts.blockPrivate } : config.allow_private_network ? { blockPrivate: false } : {}),
   });
   const landing = scenarioLanding(config, opts.campaign);
   try {
@@ -225,7 +225,8 @@ async function runState(config, state, opts) {
  * banner the tool can answer (the first choice found nothing to click), so the report leaves the section out.
  * opts.concurrency runs the other choices side by side, each in its own browser; default 1.
  * opts.campaign: the campaign parameters to open the start page with, or false for none (see scenarioLanding).
- * opts.blockPrivate: as for AuditSession, for an MCP server reachable over HTTP.
+ * opts.blockPrivate: as for AuditSession: true for an MCP server reachable over HTTP, false to never refuse private
+ * addresses, left out to refuse them when the site is public (unless the config's allow_private_network says no).
  * @returns {Promise<null | { cmp: string, landing: string, before: object, beforeFacts: object, states: Record<string, { via: string|null, after?: object, facts?: object, error?: string }> }>}
  */
 export async function runConsentScenarios(config, opts = {}) {
